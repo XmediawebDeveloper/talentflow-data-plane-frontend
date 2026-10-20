@@ -4500,10 +4500,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForDetails(null);
           }}
           onEdit={() => {
-            if (!canUpdateAssessment) {
-              toast.error('You do not have permission to edit assessments');
-              return;
-            }
+            if (!canUpdateAssessment) return;
             // Keep details view open, modal will overlay on top
             handleEditAssessment(selectedAssessmentForDetails);
           }}
@@ -4512,11 +4509,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForPreview(selectedAssessmentForDetails);
             setShowPreviewModal(true);
           }}
-          onShare={(isTenantAdmin || hasPermissionCode('assessments:share')) ? () => {
+          onShare={() => {
             // Keep details view open, modal will overlay on top
             setSelectedAssessmentForShare(selectedAssessmentForDetails);
             setShowShareModal(true);
-          } : undefined}
+          }}
+          canShare={isTenantAdmin || hasPermissionCode('assessments:share')}
+          canEdit={canUpdateAssessment}
           onViewResults={() => {
             setShowDetailsView(false);
             setSelectedAssessmentForResults(selectedAssessmentForDetails);
@@ -5851,14 +5850,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (buttonDisabled) {
-                      if (!canCreateAssessment) toast.error(disabledReason);
-                      return;
-                    }
+                    if (buttonDisabled) return;
                     setOpenMenuId(null);
                     handleOpenCloneModal(assessment);
                   }}
-                  disabled={buttonDisabled}
+                  disabled={buttonDisabled && canCreateAssessment}
+                  aria-disabled={buttonDisabled}
                   title={disabledReason || undefined}
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     buttonDisabled
@@ -5890,14 +5887,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (revokeDisabled) {
-                      if (!canUpdateAssessment) toast.error(revokeReason as string);
-                      return;
-                    }
+                    if (revokeDisabled) return;
                     setOpenMenuId(null);
                     handleOpenRevokeModal(assessment);
                   }}
-                  disabled={revokeDisabled}
+                  disabled={revokeDisabled && canUpdateAssessment}
+                  aria-disabled={revokeDisabled}
                   title={revokeReason}
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     revokeDisabled
@@ -5920,10 +5915,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {assessment.status === 'Archived' && (
               <button
                 onClick={() => {
-                  if (!canDeleteAssessment) {
-                    toast.error('You do not have permission to unarchive assessments');
-                    return;
-                  }
+                  if (!canDeleteAssessment) return;
                   handleUnarchiveAssessment(assessment.id);
                 }}
                 aria-disabled={!canDeleteAssessment}
@@ -5939,10 +5931,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {assessment.status !== 'Active' && assessment.status !== 'Draft' && assessment.status !== 'Archived' && (
               <button
                 onClick={() => {
-                  if (!canUpdateAssessment) {
-                    toast.error('You do not have permission to edit assessments');
-                    return;
-                  }
+                  if (!canUpdateAssessment) return;
                   handleActivateAssessment(assessment.id);
                 }}
                 aria-disabled={!canUpdateAssessment}
@@ -5958,10 +5947,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
             <button
               onClick={() => {
-                if (!canDeleteAssessment) {
-                  toast.error('You do not have permission to archive assessments');
-                  return;
-                }
+                if (!canDeleteAssessment) return;
                 handleArchiveAssessment(assessment.id);
               }}
               aria-disabled={!canDeleteAssessment}
@@ -5990,13 +5976,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (isDisabled) {
-                      toast.error(disabledReason);
-                      return;
-                    }
+                    if (isDisabled) return;
                     handleDeleteAssessment(assessment.id);
                   }}
-                  disabled={isDisabled}
+                  disabled={isDisabled && canDeleteAssessment}
+                  aria-disabled={isDisabled}
                   title={disabledReason}
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                     isDisabled
@@ -6194,7 +6178,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 setOpenMenuId(null);
                 handleEditAssessment(assessment);
               }}
-              disabled={editDisabled}
+              disabled={editDisabled && canUpdateAssessment}
+              aria-disabled={editDisabled}
               title={editReason || `${isDraftVersion ? 'Continue editing' : 'Edit'} assessment V${assessment.version ?? 1}`}
               className={itemClass(editGreyed)}
             >
@@ -6210,18 +6195,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             and one whose invites were revoked is sealed until duplicated. */}
         <button
           onClick={() => {
-            if (!canShare) {
-              setOpenMenuId(null);
-              toast.error('You do not have permission to share assessments');
-              return;
-            }
-            if (isShareBlocked) return;
+            if (!canShare || isShareBlocked) return;
             setOpenMenuId(null);
             setSelectedAssessmentForShare(assessment);
             setShowShareModal(true);
           }}
-          disabled={isShareBlocked}
-          aria-disabled={!canShare}
+          disabled={isShareBlocked && canShare}
+          aria-disabled={isShareBlocked || !canShare}
           title={!canShare ? 'You do not have permission to share assessments' : (shareBlockedReason || 'Share via email')}
           className={itemClass(isShareBlocked || !canShare)}
         >
@@ -6316,22 +6296,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 isUnlimited={isUnlimited}
               />
             )}
-            {canAccessHRQuestionBank && (
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => {
-                  // Tells the question bank which module to name in its breadcrumb.
-                  try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
-                  router.push('/recruitment/hr-question-bank');
-                }}
-                icon={<ClipboardList className="w-4 h-4" />}
-                className="sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm"
-              >
-                <span className="hidden sm:inline">HR Question Bank</span>
-                <span className="sm:hidden">Questions</span>
-              </Button>
-            )}
+            {/* RBAC: always shown; greyed with a tooltip without access. */}
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                if (!canAccessHRQuestionBank) return;
+                // Tells the question bank which module to name in its breadcrumb.
+                try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
+                router.push('/recruitment/hr-question-bank');
+              }}
+              aria-disabled={!canAccessHRQuestionBank}
+              title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : undefined}
+              icon={<ClipboardList className="w-4 h-4" />}
+              className={`sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm ${!canAccessHRQuestionBank ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span className="hidden sm:inline">HR Question Bank</span>
+              <span className="sm:hidden">Questions</span>
+            </Button>
             {/* Send Invite — same permission as the per-row Share action. Always
                 visible and enabled on every tab; whether anything can be sent is
                 checked on click (`handleSendInvite`), not read off the tab's rows. */}
@@ -6339,10 +6321,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               variant="secondary"
               size="md"
               onClick={() => {
-                if (!canUpdateAssessment) {
-                  toast.error('You do not have permission to edit assessments');
-                  return;
-                }
+                if (!canUpdateAssessment) return;
                 void handleSendInvite();
               }}
               loading={isPreparingInvite}
@@ -6353,7 +6332,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   : 'Send an assessment invitation'
               }
               icon={<Mail className="w-4 h-4" />}
-              className="sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm"
+              className={`sm:h-9 sm:px-3 sm:text-xs lg:h-10 lg:px-4 lg:text-sm ${!canUpdateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Send Invite</span>
               <span className="sm:hidden">Invite</span>
@@ -6367,10 +6346,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               variant="primary"
               size="md"
               onClick={() => {
-                if (!canCreateAssessment) {
-                  toast.error('You do not have permission to create assessments');
-                  return;
-                }
+                if (!canCreateAssessment) return;
                 handleOpenCreation();
               }}
               disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
@@ -8319,12 +8295,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                                 row has no report". */}
                                             {hasResult && (
                                               <DropdownMenuItem
-                                                className={`${assessmentDropdownMenuItemClass} ${!canDownloadInviteReport ? 'opacity-50' : ''}`}
+                                                className={`${assessmentDropdownMenuItemClass} ${!canDownloadInviteReport ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
                                                 disabled={!scored || downloadingInviteReportId === inv.id}
+                                                aria-disabled={!canDownloadInviteReport}
                                                 title={!canDownloadInviteReport ? 'You do not have permission to download assessment reports' : undefined}
-                                                onSelect={() => {
+                                                onSelect={(e) => {
                                                   if (!canDownloadInviteReport) {
-                                                    toast.error('You do not have permission to download assessment reports');
+                                                    e.preventDefault();
                                                     return;
                                                   }
                                                   downloadInviteReport(inv);
@@ -8670,13 +8647,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </span>
                               <button
                                 onClick={() => {
-                                  if (!canUpdateAssessment) {
-                                    toast.error('You do not have permission to edit assessment settings');
-                                    return;
-                                  }
+                                  if (!canUpdateAssessment) return;
                                   updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled });
                                 }}
-                                disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={isSavingTopics}
+                                aria-disabled={isSavingTopics || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
@@ -8724,13 +8699,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </span>
                               <button
                                 onClick={() => {
-                                  if (!canUpdateAssessment) {
-                                    toast.error('You do not have permission to edit assessment settings');
-                                    return;
-                                  }
+                                  if (!canUpdateAssessment) return;
                                   updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled });
                                 }}
-                                disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={isSavingTopics}
+                                aria-disabled={isSavingTopics || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
@@ -8778,13 +8751,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </span>
                               <button
                                 onClick={() => {
-                                  if (!canUpdateAssessment) {
-                                    toast.error('You do not have permission to edit assessment settings');
-                                    return;
-                                  }
+                                  if (!canUpdateAssessment) return;
                                   updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled });
                                 }}
-                                disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={isSavingTopics}
+                                aria-disabled={isSavingTopics || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
@@ -9247,10 +9218,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       variant="primary"
                       size="md"
                       onClick={() => {
-                        if (!canCreateAssessment) {
-                          toast.error('You do not have permission to create assessments');
-                          return;
-                        }
+                        if (!canCreateAssessment) return;
                         handleOpenCreation();
                       }}
                       aria-disabled={!canCreateAssessment}
@@ -10418,8 +10386,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <Button
                       variant="primary"
                       size="sm"
-                      disabled={!!blockedReason}
+                      disabled={!!blockedReason && canShare}
+                      aria-disabled={!!blockedReason}
                       title={blockedReason || 'Invite more candidates to this assessment'}
+                      className={!canShare ? 'opacity-50 cursor-not-allowed' : ''}
                       onClick={() => {
                         if (blockedReason) return;
                         // Remember where we came from so closing Share returns here.

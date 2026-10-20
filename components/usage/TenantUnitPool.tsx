@@ -101,6 +101,7 @@ type ExportType = 'consumption' | 'summary';
 export default function TenantUnitPool({ compact = false, showHistory = true }: TenantUnitPoolProps) {
   // Role-based access control
   const { user, isTenantAdmin, isBillingManager, isStandardUser, isRecruiter } = useAuth();
+  const canExport = isTenantAdmin || isRecruiter;
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -421,19 +422,23 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
               {overallStatus === 'critical' ? 'Low Units' : 'Running Low'}
             </span>
           )}
-          {/* Export button only for Tenant Admin & Recruiter */}
-          {(isTenantAdmin || isRecruiter) && (
-            <button
-              onClick={() => {
-                resetExportModal();
-                setShowExportModal(true);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
-          )}
+          {/* Export is for Tenant Admin & Recruiter — others see it greyed
+              with a hover tooltip (never hidden). */}
+          <button
+            onClick={() => {
+              if (!canExport) return;
+              resetExportModal();
+              setShowExportModal(true);
+            }}
+            aria-disabled={!canExport}
+            title={!canExport ? 'You do not have permission to export usage data' : undefined}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-white border border-gray-300 rounded-lg ${
+              canExport ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+            }`}
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </button>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}

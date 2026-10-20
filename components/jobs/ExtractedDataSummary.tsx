@@ -46,6 +46,7 @@ export function ExtractedSummaryCard({
           icon={BarChart3}
           tone="orange"
           spacing="mb-0"
+          inlineActions
           title="Extracted Data Summary"
           hint={`Click to ${open ? 'hide' : 'view'} structured requirements`}
           badge={aiExtracted ? (

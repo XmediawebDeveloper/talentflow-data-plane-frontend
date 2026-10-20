@@ -1,7 +1,7 @@
 'use client';
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, Lightbulb, Briefcase, MapPin, NotebookPen, ClipboardCheck, Clock, Building2, Wallet, Circle, ArrowLeftRight, Users, Lock, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Sparkles } from 'lucide-react';
-import UnsavedChangesModal from '@/components/UnsavedChangesModal';
+import LeaveJDDialog from '@/components/jobs/LeaveJDDialog';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -27,7 +27,7 @@ import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
 import type { IndustryValidationResponse } from '@/lib/services/jdService';
-import type { JDMergeTrailEntry } from '@/lib/services/jdService';
+import type { JDCreate, JDMergeTrailEntry, JDResponse } from '@/lib/services/jdService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
@@ -1833,6 +1833,34 @@ function jdContentKey(title: string, aiPrompt: string, manualJD: string, generat
   return JSON.stringify([title.trim(), aiPrompt.trim(), manualJD.trim(), generatedJD.trim()]);
 }
 
+/* The update that puts a JD back exactly as a saved copy of it (the leave
+   prompt's checkpoint). The backend PATCHes with exclude_unset, so a column the
+   copy left empty must be sent as an explicit null or the edit made since would
+   survive. Lists are always present on a JDResponse, so they need no null. */
+const RESTORABLE_JD_FIELDS = [
+  'title', 'description', 'employment_type', 'remote_type', 'must_have_skills', 'nice_to_have_skills',
+  'certifications', 'domain_keywords', 'salary_currency', 'compensation_type', 'must_have_comments',
+  'nice_to_have_comments', 'skill_merge_trail', 'coding_required', 'supported_languages',
+  'allow_overqualified', 'job_hopping_enabled', 'creation_stage', 'creation_method', 'locations',
+  'experience_mandatory', 'education_mandatory', 'industry_mandatory', 'location_mandatory',
+] as const satisfies readonly (keyof JDCreate)[];
+const NULLABLE_RESTORABLE_JD_FIELDS = [
+  'department', 'location', 'education_requirements', 'experience_min', 'experience_max', 'job_level',
+  'industry_type', 'industry_suggested_name', 'role_family', 'role_family_confidence', 'salary_min',
+  'salary_max', 'assessment_guidance', 'internal_comments', 'additional_details', 'ai_prompt',
+] as const satisfies readonly (keyof JDCreate)[];
+
+function buildRestorePayload(jd: JDResponse): Partial<JDCreate> {
+  const payload: Record<string, unknown> = {};
+  for (const field of RESTORABLE_JD_FIELDS) {
+    if (jd[field] !== undefined && jd[field] !== null) payload[field] = jd[field];
+  }
+  for (const field of NULLABLE_RESTORABLE_JD_FIELDS) {
+    payload[field] = jd[field] ?? null;
+  }
+  return payload as Partial<JDCreate>;
+}
+
 export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, isTitleLocked = false, titleLockedMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded, jdWorkflow = 'create' }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
@@ -1940,6 +1968,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Set once Discard is chosen, so an autosave already in flight cannot
   // leave a fresh draft behind after the user has left.
   const discardedRef = useRef(false);
+  // The record THIS mount created (autosave or a step save). Once its `id=` lands in
+  // the URL the parent re-fetches it and hands it back as `editingJD`, and the effect
+  // below used to read that as "a draft opened from the list" - so the leave prompt's
+  // Discard only reverted fields and the never-wanted draft stayed under Draft.
+  const createdInSessionIdRef = useRef<string | null>(null);
+  /* What "Discard current changes" in the leave prompt goes back to: the server's
+     copy of the JD at the last point the recruiter can return to - as opened (an
+     existing JD), the last step save (a job created in this visit), or their last
+     Save as Draft. `label` finishes the prompt's sentence "go back to ...". */
+  const leaveCheckpointRef = useRef<{ jd: JDResponse; label: string } | null>(null);
+  // The part of the checkpoint the leave prompt renders (refs cannot be read
+  // during render under this eslint config).
+  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string } | null>(null);
+  // Step-1 text as of that checkpoint; compared with the live text to tell
+  // whether an existing JD has actually been edited.
+  const checkpointContentKeyRef = useRef<string | null>(null);
+  // Step 2 edits are written to the DB as they happen; this records that any
+  // happened since the checkpoint.
+  const editedSinceCheckpointRef = useRef(false);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
@@ -2043,7 +2090,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (effectiveEditingJD.status === 'draft') {
         // Editing a draft - update it directly
         setEditingId(effectiveEditingJD.id);
-        setIsPreExistingDraft(true);
+        // The draft this visit created, handed back by the parent's re-fetch, is
+        // not one the recruiter opened - Discard must still be able to delete it.
+        setIsPreExistingDraft(effectiveEditingJD.id !== createdInSessionIdRef.current);
         setSourceJdId(null);
         console.log('[DEBUG] Setting editingId for draft:', effectiveEditingJD.id);
       } else if (effectiveEditingJD.status === 'published') {
@@ -2310,13 +2359,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
   const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
-  // Snapshot of `extractedData` as of the last time it was authoritative — either a
-  // fresh extraction, or a persisted JD just loaded for editing. Every edit on the
-  // Extract step (skill add/remove/move, requirements, salary, etc.) is written to
-  // the DB immediately rather than waiting for Save Draft, so "Discard Changes" has
-  // to actively revert both local state AND the DB row back to this snapshot -
-  // simply not saving further has nothing left to undo.
-  const extractedDataSnapshotRef = useRef<ExtractedData | null>(null);
   // Tracks which creation mode produced the CURRENT extractedData. If the user
   // switches AI<->Manual and re-extracts, the source content is fundamentally
   // different, so the extraction must NOT preserve the previous mode's values
@@ -2815,6 +2857,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Helper: mark extracted data as modified AND reset formatted flag so AI reformatting triggers
   const markExtractedDataModified = () => {
+    editedSinceCheckpointRef.current = true;
     setExtractedDataModified(true);
     setHasFormattedForReview(false);
   };
@@ -2988,6 +3031,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // than an in-app link click, so its resolution has no `pendingNavigation`
   // URL to push and must instead unwind the history trap set up below.
   const [isPendingBackNavigation, setIsPendingBackNavigation] = useState(false);
+  // Which leave-prompt action is in flight (its button shows the spinner).
+  const [leaveBusy, setLeaveBusy] = useState<'discard' | 'delete' | null>(null);
+  // Set by the hydration effect when the loaded JD is one the recruiter opened,
+  // so the change-tracking effect adopts the loaded text as the checkpoint text.
+  const adoptLoadedKeyAsCheckpointRef = useRef(false);
+
+  const setLeaveCheckpoint = (jd: JDResponse, label: string) => {
+    leaveCheckpointRef.current = { jd, label };
+    setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status });
+    checkpointContentKeyRef.current = currentContentKeyRef.current;
+    editedSinceCheckpointRef.current = false;
+  };
+  // A step save is a checkpoint only for a job created in this visit — it has
+  // no "as opened" version to return to. An existing JD keeps the version the
+  // recruiter opened: clicking Next is not a decision to keep the edits.
+  const markStepSaveCheckpoint = (jd: JDResponse | undefined, label: string) => {
+    if (!jd || jd.id !== createdInSessionIdRef.current) return;
+    setLeaveCheckpoint(jd, label);
+  };
 
   // Cancel JD creation state
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -3765,6 +3827,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             await jdService.delete(savedJd.id).catch(() => undefined);
             return;
           }
+          createdInSessionIdRef.current = savedJd.id;
           setEditingId(savedJd.id);
         }
 
@@ -3808,6 +3871,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (markLoadedContentSavedRef.current) {
       markLoadedContentSavedRef.current = false;
       savedContentKeyRef.current = key;
+      if (adoptLoadedKeyAsCheckpointRef.current) {
+        adoptLoadedKeyAsCheckpointRef.current = false;
+        checkpointContentKeyRef.current = key;
+      }
     }
   }, [jobTitle, aiPrompt, manualJD, generatedJD]);
 
@@ -3831,13 +3898,48 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, isPublished]);
 
-  // Intercept navigation clicks (menu items, links, etc.) if there are unsaved changes
+  /* Whether leaving now needs the leave prompt — on EVERY step, Review included.
+     A job created in this visit always does until the recruiter saves it
+     themselves: it already has a record (and a JD ID) they never asked for, and
+     leaving silently is how unwanted drafts piled up under Draft. An existing JD
+     (a draft or published JD opened for editing) only when something was actually
+     changed since the checkpoint. Before any record exists, only if something was
+     typed. Read through a ref by the listeners below, which register once. */
+  const needsLeavePrompt = (): boolean => {
+    if (isPublished || discardedRef.current) return false;
+    if (!editingId) return hasUnsavedChanges;
+    if (editingId === createdInSessionIdRef.current && !userSavedDraftRef.current) return true;
+    const textChanged = checkpointContentKeyRef.current !== null
+      && currentContentKeyRef.current !== checkpointContentKeyRef.current;
+    return textChanged || editedSinceCheckpointRef.current;
+  };
+  const needsLeavePromptRef = useRef(needsLeavePrompt);
+  useEffect(() => {
+    needsLeavePromptRef.current = needsLeavePrompt;
+  });
+
+  // The "as opened" checkpoint for an existing JD: the server's full copy, so
+  // Discard can put back every field (Step 1 text, Step 2 criteria, stage).
+  useEffect(() => {
+    const id = effectiveEditingJD?.id;
+    if (!id || id === createdInSessionIdRef.current || leaveCheckpointRef.current) return;
+    let cancelled = false;
+    jdService.get(id)
+      .then(jd => {
+        if (!cancelled && !leaveCheckpointRef.current) {
+          const label = 'the version you opened';
+          leaveCheckpointRef.current = { jd, label };
+          setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status });
+        }
+      })
+      .catch(error => console.error('[Leave] Could not load the JD checkpoint:', error));
+    return () => { cancelled = true; };
+  }, [effectiveEditingJD?.id]);
+
+  // Intercept navigation clicks (menu items, breadcrumbs, links) when leaving needs the prompt
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      // Only intercept on the first two steps (Create JD, Extract) — by the
-      // Review step the JD is already saved server-side at each transition,
-      // so there is nothing left to lose by navigating away.
-      if (!hasUnsavedChanges || isPublished || step === 'review') {
+      if (!needsLeavePromptRef.current()) {
         return;
       }
 
@@ -3867,7 +3969,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Attach to document to catch all clicks
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [hasUnsavedChanges, isPublished, step]);
+  }, []);
 
   // Intercept the browser Back/Forward buttons the same way the click
   // handler above intercepts in-app links. A plain `popstate` listener can't
@@ -3880,13 +3982,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Back press once more so the user's original intent goes through.
   //
   // Read via a ref (rather than effect deps) so the trap is planted exactly
-  // once for this page visit — re-running this effect on every
-  // hasUnsavedChanges/step change would stack extra trap entries and make the
-  // user press Back several times to actually leave.
-  const backGuardStateRef = useRef({ hasUnsavedChanges, isPublished, step });
-  useEffect(() => {
-    backGuardStateRef.current = { hasUnsavedChanges, isPublished, step };
-  }, [hasUnsavedChanges, isPublished, step]);
+  // once for this page visit — re-running this effect on every state change
+  // would stack extra trap entries and make the user press Back several
+  // times to actually leave.
 
   useEffect(() => {
     const TRAP_STATE = { __jdCreationBackGuard: true };
@@ -3904,8 +4002,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
-      const { hasUnsavedChanges, isPublished, step } = backGuardStateRef.current;
-      if (hasUnsavedChanges && !isPublished && step !== 'review') {
+      if (needsLeavePromptRef.current()) {
         // Cancel the visual back-navigation (there isn't one yet — the trap
         // absorbed it) and re-plant the trap for the next attempt.
         window.history.pushState(TRAP_STATE, '', window.location.href);
@@ -5105,7 +5202,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setExtractedData(extraction);
       // The backend's answer, not a second implementation of the rule here.
       setJdWelcomesFreshers(Boolean(params.experience_welcomes_freshers));
-      extractedDataSnapshotRef.current = extraction;
       lastExtractionSourceMode.current = mode;
       // We now hold the authoritative extracted data in state. Saving below sets
       // the JD id into the URL (ensureJDCreationUrl), which makes the page re-fetch
@@ -5221,11 +5317,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         } else {
           savedJd = await jdService.create(jdData);
           jdId = savedJd.id;
+          createdInSessionIdRef.current = savedJd.id;
           setEditingId(savedJd.id);
           console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
         }
 
         savedContentKeyRef.current = currentContentKeyRef.current;
+        markStepSaveCheckpoint(savedJd, 'the version saved when you finished Step 1 (Create)');
         if (jdId) {
           ensureJDCreationUrl(jdId, 'extract');
         }
@@ -6048,7 +6146,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       const isDuplicate = extractedData.locations.some(loc =>
         loc.city.trim().toLowerCase() === cityToAdd.toLowerCase() &&
-        loc.radius === radiusToAdd &&
         (loc.country || 'IN') === locationCountry
       );
 
@@ -6580,11 +6677,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         savedJd = await jdService.create(jdData);
         jdId = savedJd.id;
+        createdInSessionIdRef.current = savedJd.id;
         setEditingId(savedJd.id);
         console.log('[TalentFlow] JD created with review stage:', savedJd.id);
       }
 
       savedContentKeyRef.current = currentContentKeyRef.current;
+      markStepSaveCheckpoint(savedJd, 'the version saved when you finished Step 2 (Extract)');
       if (jdId) {
         ensureJDCreationUrl(jdId, 'review');
       }
@@ -6615,6 +6714,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } finally {
       isAdvancingRef.current = false;
     }
+  };
+
+  // Groups selected locations by state so the review step shows e.g.
+  // "Haryana: Ambala, Kurukshetra, Fatehabad" instead of flattening every
+  // "City, State" pair into one long comma-separated string.
+  const groupLocationsByState = (
+    locations: Array<{ city: string }>
+  ): Array<{ state: string; cities: string[] }> => {
+    const order: string[] = [];
+    const byState = new Map<string, string[]>();
+    locations.forEach(loc => {
+      if (!loc.city) return;
+      const parts = loc.city.split(',').map(p => p.trim());
+      const city = parts[0];
+      const state = parts.length > 1 ? parts.slice(1).join(', ') : 'Other';
+      if (!byState.has(state)) {
+        byState.set(state, []);
+        order.push(state);
+      }
+      byState.get(state)!.push(city);
+    });
+    return order.map(state => ({ state, cities: byState.get(state)! }));
   };
 
   // Helper function to get experience label from master data
@@ -7211,64 +7332,78 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  // Handle "Save Draft" button in unsaved changes dialog.
-  // The dialog stays open (isSaving shows its spinner) until the save
-  // resolves, and navigation only happens on success — otherwise a
-  // validation failure (e.g. empty job title) would close the dialog and
-  // send the user away while silently discarding their work.
-  const handleSaveAndNavigate = async () => {
-    setIsNavigatingBack(true);
+  // What the leave prompt shows and allows.
+  const leaveJobCode = leaveCheckpointMeta?.jobCode ?? effectiveEditingJD?.job_id ?? null;
+  const leaveIsPublishedJD = (leaveCheckpointMeta?.status ?? effectiveEditingJD?.status) === 'published';
+  const leaveDeleteBlockedReason = !editingId
+    ? 'Nothing has been saved yet, so there is no JD to delete.'
+    : leaveIsPublishedJD
+      ? 'A published JD cannot be deleted from here. Use Discard current changes, or manage it from Job Descriptions.'
+      : null;
 
-    // Save draft first; navigateAfter=false because we navigate to pendingNavigation below
-    const saved = await handleSaveDraft(false);
-
-    setShowUnsavedDialog(false);
-    setIsNavigatingBack(false);
-
-    // Only navigate to the stored URL if the save actually succeeded
-    if (saved) {
-      resolvePendingNavigation(pendingNavigation);
-    }
-
-    setPendingNavigation(null);
-    setIsPendingBackNavigation(false);
-  };
-
-  // Handle "Discard" button in unsaved changes dialog. Revert Extract-step
-  // fields (already committed to the DB the moment they were edited) back to
-  // their last-loaded snapshot before navigating away, so discarding actually
-  // discards instead of leaving those edits in place.
-  const handleDiscardAndNavigate = async () => {
+  // Leaves the page once the leave prompt is resolved.
+  const finishLeave = () => {
     setShowUnsavedDialog(false);
     setHasUnsavedChanges(false);
-    discardedRef.current = true;
-
-    if (editingId && !isPreExistingDraft && !userSavedDraftRef.current) {
-      // A new job this visit created (autosave / step save) and the user never
-      // saved: discarding it means deleting it, so it never reaches Drafts.
-      try {
-        await jdService.delete(editingId);
-      } catch (error) {
-        console.error('[Discard] Failed to delete the unsaved draft:', error);
-        toast.error({
-          title: 'Failed to discard job',
-          description: 'The job could not be removed and may still appear under Draft. Please delete it from Job Openings.',
-        });
-      }
-    } else {
-      await revertExtractedDataToSnapshot();
-    }
-
-    // Navigate without saving
     resolvePendingNavigation(pendingNavigation);
-
     setPendingNavigation(null);
     setIsPendingBackNavigation(false);
   };
 
-  // Handle dialog cancel (X button or clicking outside). Leaves the user
-  // exactly where they are — the popstate guard's history trap is left
-  // armed, so a subsequent Back press (or another link click) prompts again.
+  // Leave prompt → "Discard current changes". Puts the record back to the
+  // checkpoint (as opened / last step save / last Save as Draft) — every field
+  // in one write, since Step 1 autosaves and Step 2 writes each edit as it is
+  // made, so simply not saving further would undo nothing. With no record yet
+  // there is nothing to put back; the recruiter just leaves. Stays on the page
+  // if the write fails, rather than leaving with the edits still saved.
+  const handleLeaveDiscard = async () => {
+    setLeaveBusy('discard');
+    // Stops a pending autosave from writing the edits back after the revert.
+    discardedRef.current = true;
+    try {
+      const checkpoint = leaveCheckpointRef.current;
+      if (editingId && checkpoint) {
+        await jdService.update(editingId, buildRestorePayload(checkpoint.jd));
+      }
+      finishLeave();
+    } catch (error) {
+      discardedRef.current = false;
+      console.error('[Leave] Failed to discard changes:', error);
+      toast.error({
+        title: 'Could not discard changes',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    } finally {
+      setLeaveBusy(null);
+    }
+  };
+
+  // Leave prompt → "Delete this entire JD". Removes the record, so it never
+  // shows under Draft. Stays on the page if the server refuses (e.g. the JD is
+  // in use), rather than leaving the recruiter to think it was removed.
+  const handleLeaveDelete = async () => {
+    if (!editingId) return;
+    setLeaveBusy('delete');
+    discardedRef.current = true;
+    try {
+      await jdService.delete(editingId);
+      toast.info(`${leaveJobCode ?? 'The JD'} has been deleted`);
+      finishLeave();
+    } catch (error) {
+      discardedRef.current = false;
+      console.error('[Leave] Failed to delete the JD:', error);
+      toast.error({
+        title: 'Could not delete this JD',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    } finally {
+      setLeaveBusy(null);
+    }
+  };
+
+  // Leave prompt → Cancel. Leaves the user exactly where they are — the
+  // popstate guard's history trap is left armed, so a subsequent Back press
+  // (or another link click) prompts again.
   const handleCancelDialog = () => {
     setShowUnsavedDialog(false);
     setPendingNavigation(null);
@@ -7300,83 +7435,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } finally {
       setIsCancelling(false);
       setShowCancelDialog(false);
-    }
-  };
-
-  // The Extract-step fields (skills, requirements, salary, experience, education,
-  // industry, comments, certifications, domain keywords, locations, the mandatory
-  // toggles, job-hopping) mapped to the JD-service update payload. Shared by the
-  // discard revert below so a revert writes back exactly the shape a normal save
-  // would have written.
-  const buildExtractedDataApiPayload = (data: ExtractedData) => {
-    const experiencePayload = resolvePersistedExperiencePayload(data.experience);
-    return {
-      department: data.department || '',
-      location: data.locations.length > 0 ? data.locations[0].city : '',
-      employment_type: data.employmentType,
-      remote_type: data.workModel,
-      must_have_skills: data.mustHaveSkills,
-      nice_to_have_skills: data.niceToHaveSkills,
-      education_requirements: data.education ? { degree: data.education } : undefined,
-      experience_min: experiencePayload.experienceMin,
-      experience_max: experiencePayload.experienceMax,
-      ...buildIndustryPayload(data),
-      role_family: data.roleFamily || undefined,
-      role_family_confidence: data.roleFamilyConfidence ?? undefined,
-      salary_min: parseSalaryInput(data.salaryFrom) ?? null,
-      salary_max: parseSalaryInput(data.salaryTo) ?? null,
-      compensation_type: data.compensationType,
-      salary_currency: data.salaryCurrency,
-      job_level: experiencePayload.jobLevel,
-      assessment_guidance: data.assessmentGuidance || undefined,
-      additional_details: data.additionalDetails?.trim() ? data.additionalDetails : null,
-      internal_comments: data.internalRecruiterComments.join('\n') || undefined,
-      must_have_comments: data.mustHaveComments,
-      nice_to_have_comments: data.niceToHaveComments,
-      allow_overqualified: data.allowOverqualified,
-      certifications: data.certifications,
-      domain_keywords: data.domainKeywords,
-      locations: data.locations.map(loc => {
-        const parts = loc.city.split(', ');
-        return {
-          city: parts[0],
-          state: parts[1] || null,
-          country: loc.country || locationCountry,
-          radius_km: parseInt(loc.radius) || 50,
-          is_required: data.locationsRequired,
-        };
-      }),
-      experience_mandatory: data.experienceRequired || false,
-      education_mandatory: data.educationRequired || false,
-      industry_mandatory: data.industryTypeRequired || false,
-      location_mandatory: data.locationsRequired || false,
-      job_hopping_enabled: data.jobHoppingEnabled ?? true,
-    };
-  };
-
-  // Reverts every Extract-step field back to the last authoritative snapshot
-  // (a fresh extraction, or the persisted JD as loaded) — in memory AND in the
-  // DB. Each edit on this step (skill add/remove/move, requirement edit,
-  // salary, etc.) is written to the DB immediately rather than waiting for
-  // Save Draft, so undoing it locally alone would leave the already-committed
-  // edit sitting in the database untouched.
-  const revertExtractedDataToSnapshot = async () => {
-    const snapshot = extractedDataSnapshotRef.current;
-    if (!snapshot) return;
-
-    setExtractedData(snapshot);
-    setExtractedDataModified(false);
-
-    if (editingId) {
-      try {
-        await jdService.update(editingId, buildExtractedDataApiPayload(snapshot));
-      } catch (error) {
-        console.error('[Discard] Failed to revert extracted data on server:', error);
-        toast.error({
-          title: 'Failed to discard changes',
-          description: 'Your edits were reverted locally but could not be reverted on the server. Please refresh.',
-        });
-      }
     }
   };
 
@@ -7507,6 +7565,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // No editingId at all — genuinely a new JD.
         console.log('[DEBUG] Creating new draft (no editingId)');
         savedJd = await jdService.create(jdData);
+        createdInSessionIdRef.current = savedJd.id;
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
       }
@@ -7515,6 +7574,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setHasUnsavedChanges(false); // Clear unsaved changes after successful save
       userSavedDraftRef.current = true; // The user kept this draft — Discard must not delete it
       savedContentKeyRef.current = currentContentKeyRef.current;
+      setLeaveCheckpoint(savedJd, 'your last Save as Draft');
 
       // The backend silently refuses to move an already-Published JD to Draft
       // via this update path (it only allows Published -> Disabled/Archived),
@@ -7675,6 +7735,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // The hydrated content is what's saved — adopt it as the baseline on
       // the next content update (see the change-tracking effect).
       markLoadedContentSavedRef.current = true;
+      adoptLoadedKeyAsCheckpointRef.current = effectiveEditingJD.id !== createdInSessionIdRef.current;
       // Use functional updates to preserve user edits if they exist
       setJobTitle(prev => prev || effectiveEditingJD.title);
       // Only hydrate the AI-mode buffer for an AI-generated JD. Populating it for a
@@ -7851,7 +7912,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             effectiveEditingJD.location_mandatory ??
             (effectiveEditingJD.locations?.some(loc => loc.is_required) || false),
           };
-          extractedDataSnapshotRef.current = next;
           return next;
         });
 
@@ -11226,9 +11286,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
-                      {extractedData.locations.filter(loc => loc.city).length > 0 && (
-                        <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.locations.filter(loc => loc.city).map(loc => loc.city).join(', ')}</span>
-                      )}
+                      {groupLocationsByState(extractedData.locations).map(group => (
+                        <span key={group.state} className="flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />
+                          {group.state !== 'Other' ? `${group.state}: ${group.cities.join(', ')}` : group.cities.join(', ')}
+                        </span>
+                      ))}
                       {extractedData.experience && (
                         <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{getExperienceLabel(extractedData.experience)}</span>
                       )}
@@ -11267,6 +11330,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
             </div>
+
+            {/* JD22 - Additional Details, shown unconditionally (not tucked inside the
+                collapsed Extracted Data Summary below) so text typed on Step 2 is visibly
+                reflected here the moment Review loads, matching the always-visible card
+                the published JD view (JobDetailView) shows for the same field. */}
+            {extractedData.additionalDetails && (
+              <div className="min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 sm:p-6 mt-4 sm:mt-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Additional Details</h3>
+                  <span className={CANDIDATE_VISIBLE_BADGE_CLASS}>
+                    <Eye className="w-3 h-3 flex-shrink-0" />
+                    Visible to candidates
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
+              </div>
+            )}
 
             {/* Extracted Data Summary Preview - Collapsible. The shared summary
                 card (components/jobs/ExtractedDataSummary): the whole heading
@@ -11670,14 +11750,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         </div>
       </div>
 
-      {/* Unsaved Changes — the shared prompt, so this flow and AI Interview
-          config cannot drift apart in wording or in what the buttons do. */}
-      <UnsavedChangesModal
-        isOpen={showUnsavedDialog}
-        onClose={handleCancelDialog}
-        onDiscard={handleDiscardAndNavigate}
-        onSave={handleSaveAndNavigate}
-        isSaving={isSavingDraft}
+      {/* Leave prompt — Cancel / Discard current changes / Delete this entire JD,
+          raised by any link, breadcrumb or browser Back while needsLeavePrompt(). */}
+      <LeaveJDDialog
+        open={showUnsavedDialog}
+        jobCode={leaveJobCode}
+        jobTitle={jobTitle.trim() || undefined}
+        discardTarget={leaveCheckpointMeta?.label ?? null}
+        nothingSavedYet={!editingId}
+        deleteBlockedReason={leaveDeleteBlockedReason}
+        busy={leaveBusy}
+        onCancel={handleCancelDialog}
+        onDiscard={handleLeaveDiscard}
+        onDelete={handleLeaveDelete}
       />
 
       {/* Industry gate — Step 3's answer about an industry the master list does not

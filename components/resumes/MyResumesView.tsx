@@ -625,9 +625,11 @@ function DroppableFolderCard({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canUpload || !onUploadToFolder}
+                disabled={!onUploadToFolder}
+                aria-disabled={!canUpload}
                 onClick={(e) => runFolderAction(e, () => onUploadToFolder?.(folder.id), !canUpload || !onUploadToFolder)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canUpload ? 'You do not have permission to upload resumes' : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Upload className={`w-4 h-4 ${canUpload && onUploadToFolder ? 'text-menu-icon-download' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
@@ -635,21 +637,27 @@ function DroppableFolderCard({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canCreateSubfolder || !onCreateSubfolder}
+                // canCreateSubfolder = upload permission AND folder depth: no
+                // permission greys it with the permission hover (aria-disabled);
+                // max depth stays the native disabled "(max)" state.
+                disabled={(canUpload && !canCreateSubfolder) || !onCreateSubfolder}
+                aria-disabled={!canUpload}
                 onClick={(e) => runFolderAction(e, () => onCreateSubfolder?.(folder.id), !canCreateSubfolder || !onCreateSubfolder)}
-                title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canUpload ? 'You do not have permission to create folders' : !canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
-                {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
+                {canUpload && !canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
               </button>
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canRename || !onStartRename}
+                disabled={!onStartRename}
+                aria-disabled={!canRename}
                 onClick={(e) => runFolderAction(e, () => onStartRename?.(folder), !canRename || !onStartRename)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canRename ? 'You do not have permission to rename folders' : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Edit2 className={`w-4 h-4 ${canRename && onStartRename ? 'text-menu-icon-edit' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
@@ -658,9 +666,11 @@ function DroppableFolderCard({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canDelete || !onDeleteFolder}
+                disabled={!onDeleteFolder}
+                aria-disabled={!canDelete}
                 onClick={(e) => runFolderAction(e, () => onDeleteFolder?.(folder.id), !canDelete || !onDeleteFolder)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canDelete ? 'You do not have permission to delete folders' : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
@@ -3799,7 +3809,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               ? 'No resumes are available in this folder yet. Add a resume to get started.'
               : 'No resumes are available in this folder yet.'
         }
-        onAction={isArchivedResumesFolder || !canUploadMyResumes ? undefined : () => openUploadToFolder(folderId)}
+        onAction={isArchivedResumesFolder ? undefined : () => openUploadToFolder(folderId)}
+        actionDisabledReason={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
       />
     );
   };
@@ -3968,36 +3979,32 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          {canViewMyResumes && (
-            <button
-              onClick={openUploadHistoryModal}
-              disabled={!hasUploadHistory}
-              title={hasUploadHistory ? 'View upload history' : 'No uploads yet'}
-              className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm flex-1 sm:flex-initial ${
-                hasUploadHistory
-                  ? 'text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer'
-                  : 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              <span className="hidden sm:inline">Upload History</span>
-              <span className="sm:hidden">History</span>
-              {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan/60 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-cyan text-white text-2xs items-center justify-center">
-                    {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
-                  </span>
+          <button
+            onClick={() => { if (!canViewMyResumes) return; openUploadHistoryModal(); }}
+            disabled={canViewMyResumes && !hasUploadHistory}
+            aria-disabled={!canViewMyResumes}
+            title={!canViewMyResumes ? 'You do not have permission to view upload history' : hasUploadHistory ? 'View upload history' : 'No uploads yet'}
+            className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm flex-1 sm:flex-initial ${
+              hasUploadHistory && canViewMyResumes
+                ? 'text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer'
+                : 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden sm:inline">Upload History</span>
+            <span className="sm:hidden">History</span>
+            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan/60 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-cyan text-white text-2xs items-center justify-center">
+                  {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
                 </span>
-              )}
-            </button>
-          )}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => {
-              if (!canUploadMyResumes) {
-                toast.error('You do not have permission to upload resumes');
-                return;
-              }
+              if (!canUploadMyResumes) return;
               openUploadToFolder(undefined);
             }}
             aria-disabled={!canUploadMyResumes}
@@ -4212,11 +4219,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               canRenameFolder={canUpdateMyResumes}
               onDeleteFolder={handleDeleteFolder}
               canDeleteFolder={canDeleteMyResumes}
+              canUploadToFolder={canUploadMyResumes}
               onUploadToFolder={(folderId) => {
-                if (!canUploadMyResumes) {
-                  toast.error('You do not have permission to upload resumes');
-                  return;
-                }
+                if (!canUploadMyResumes) return;
                 setSelectedFolder(folderId);
                 openUploadToFolder(folderId);
               }}
@@ -4555,11 +4560,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         </p>
                       </div>
                         </div>
-                        {canUploadMyResumes && currentFolderCanCreateSubfolder ? (
+                        {currentFolderCanCreateSubfolder ? (
                           <button
                             type="button"
-                            onClick={() => openCardFolderInput(cardViewFolder)}
-                            className="inline-flex items-center justify-center gap-1 rounded-md border border-brand-blue/20 bg-white px-3 py-2 text-sm text-blue-600 shadow-sm shadow-brand-blue/5 transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-blue-700 sm:self-start"
+                            onClick={() => { if (!canUploadMyResumes) return; openCardFolderInput(cardViewFolder); }}
+                            aria-disabled={!canUploadMyResumes}
+                            title={!canUploadMyResumes ? 'You do not have permission to create folders' : undefined}
+                            className={`inline-flex items-center justify-center gap-1 rounded-md border bg-white px-3 py-2 text-sm shadow-sm shadow-brand-blue/5 transition-colors sm:self-start ${
+                              canUploadMyResumes
+                                ? 'border-brand-blue/20 text-blue-600 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-blue-700'
+                                : 'border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
                           >
                             <Plus className="w-4 h-4" />
                             New Subfolder
@@ -4661,10 +4672,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             <button
                               type="button"
                               onClick={() => {
-                                if (!canUploadMyResumes) {
-                                  toast.error('You do not have permission to upload resumes');
-                                  return;
-                                }
+                                if (!canUploadMyResumes) return;
                                 openCardFolderInput(null);
                               }}
                               aria-disabled={!canUploadMyResumes}
@@ -4822,8 +4830,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             highlightQuery={appliedSearchQuery}
                             enableRowReorder
                             reorderScopeKey={cardViewFolder || 'all'}
-                            onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
-                            onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
+                            onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                            onArchiveDisabled={!canArchiveMyResumes}
+                            onArchiveDisabledReason="You do not have permission to archive resumes"
+                            onUnarchive={(resumeId) => handleUnarchiveResumes([resumeId])}
+                            onUnarchiveDisabled={!canArchiveMyResumes}
+                            onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                             canShare={canShareMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
@@ -5630,14 +5642,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             }
                             /* Straight from history into the upload dialog — the
                                modal has to close first or the two would stack. */
-                            onAction={
-                              canUploadMyResumes
-                                ? () => {
-                                    handleCloseUploadHistory();
-                                    openUploadToFolder(undefined);
-                                  }
-                                : undefined
-                            }
+                            onAction={() => {
+                              handleCloseUploadHistory();
+                              openUploadToFolder(undefined);
+                            }}
+                            actionDisabledReason={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
                           />
 
                           {/* The Upload Resume popup's own Tip — the brand's amber,

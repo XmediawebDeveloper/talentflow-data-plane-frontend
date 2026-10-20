@@ -749,8 +749,15 @@ export default function BulkScoringProgressModal({
                 className="w-28 sm:w-32 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
               >
                 <option value="all">All Sources</option>
-                {/* Only show Internal DB option if user has permission */}
-                {hasInternalDBAccess && <option value="internal-db">Shared Database</option>}
+                {/* Shared Database option: always listed, greyed out (disabled,
+                    hover reason) when the user has no Internal DB access. */}
+                <option
+                  value="internal-db"
+                  disabled={!hasInternalDBAccess}
+                  title={!hasInternalDBAccess ? 'You do not have permission to view the Shared Database' : undefined}
+                >
+                  Shared Database
+                </option>
                 <option value="my-resumes">My Resumes</option>
               </select>
             </div>

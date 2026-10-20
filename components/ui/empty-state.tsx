@@ -11,6 +11,9 @@ interface EmptyStateProps {
     label: string;
     onClick: () => void;
     variant?: 'primary' | 'secondary';
+    /** Permission-locked: the button stays visible but greyed out, the click
+     *  is a no-op, and this text shows on hover. */
+    disabledReason?: string;
   };
   secondaryAction?: {
     label: string;
@@ -49,12 +52,16 @@ export function EmptyState({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 sm:gap-3">
             {action && (
               <button
-                onClick={action.onClick}
+                onClick={() => { if (action.disabledReason) return; action.onClick(); }}
+                aria-disabled={action.disabledReason ? true : undefined}
+                title={action.disabledReason || undefined}
                 className={`
                   inline-flex items-center justify-center h-10 px-5 rounded-lg transition-all duration-150 text-sm font-medium
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2
                   ${
-                    action.variant === 'secondary'
+                    action.disabledReason
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                      : action.variant === 'secondary'
                       ? 'bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
                       : 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md'
                   }

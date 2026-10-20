@@ -1008,7 +1008,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="rounded-full h-9"
+                      className="rounded-full sm:h-9"
                       aria-label={`Actions for ${selected.size} selected`}
                     >
                       {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -1073,8 +1073,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {onOpenInviteDialog && (() => {
                       const openInvite = (kind: 'assessment' | 'interview', allowed: boolean, deniedReason: string) => (e: Event) => {
                         if (!allowed) {
+                          // Locked: tooltip only (title on the item), no toast.
                           e.preventDefault();
-                          toast.error(deniedReason);
                           return;
                         }
                         const invitees = new Map<string, InviteCandidate>();
@@ -1090,14 +1090,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       return (
                         <>
                           <DropdownMenuItem
-                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            aria-disabled={!canCreateAssessments}
+                            title={canCreateAssessments ? undefined : assessmentDeniedReason}
                             onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
                           >
                             <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                             <span>Create / Send Assessment</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            aria-disabled={!mayInviteAIInterview}
+                            title={mayInviteAIInterview ? undefined : aiInterviewDeniedReason}
                             onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
                           >
                             <Video className="w-4 h-4 text-menu-icon-ai" />
@@ -1120,7 +1124,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // instead of shrinking to an icon.
           fitToContainer
           containerBreakpoint={portaled ? '5xl' : '4xl'}
-          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
+          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}

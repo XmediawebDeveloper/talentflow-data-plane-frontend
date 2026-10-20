@@ -5,7 +5,8 @@
  * Visualizes feature permission dependencies
  */
 
-import { getCatalogDependencyMatrix, ENTRY_POINT_GROUPS, getPermissionLabel } from '@/lib/constants/permissionCategories';
+import { getCatalogDependencyMatrix, ENTRY_POINT_GROUPS, getPermissionLabel, getPermissionParts } from '@/lib/constants/permissionCategories';
+import { getAllCatalogCodes, getCrossSectionDependents } from '@/lib/permissions/permissionRules';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Loader2,
@@ -42,7 +43,6 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
   const [isLoading, setIsLoading] = useState(true);
   const [matrix, setMatrix] = useState<DependencyMatrixResponse | null>(null);
   const [selectedFeature, setSelectedFeature] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'matrix' | 'tree'>('tree');
 
   useEffect(() => {
     if (isOpen) {
@@ -103,6 +103,25 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
     return nodes.sort((a, b) => a.level - b.level);
   }, [matrix]);
 
+  // Permissions whole other sections depend on (View Job Description → Resume
+  // Scoring, AI Talent Match, Assessment, AI Interview…), from the same rules the
+  // Edit User / role screens apply — so this list always matches what happens.
+  const sectionRules = useMemo(() =>
+    getAllCatalogCodes()
+      .map(code => {
+        const deps = getCrossSectionDependents(code);
+        if (deps.length === 0) return null;
+        const bySection = new Map<string, number>();
+        deps.forEach(d => {
+          const { section } = getPermissionParts(d);
+          bySection.set(section, (bySection.get(section) || 0) + 1);
+        });
+        return { code, total: deps.length, sections: Array.from(bySection.entries()) };
+      })
+      .filter((r): r is { code: string; total: number; sections: [string, number][] } => !!r)
+      .sort((a, b) => b.total - a.total),
+  []);
+
   // Get selected feature info
   const selectedFeatureInfo = useMemo(() => {
     if (!selectedFeature || !matrix) return null;
@@ -126,30 +145,6 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
       icon={<Network />}
       title="Permission Dependencies"
       subtitle="Which permissions need other permissions to work"
-      headerExtra={
-            <div className="flex items-center bg-white/10 rounded-lg p-0.5 sm:p-1 ring-1 ring-white/25">
-              <button
-                onClick={() => setViewMode('tree')}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
-                  viewMode === 'tree'
-                    ? 'bg-white text-brand-blue shadow-sm'
-                    : 'text-white/80 hover:text-white'
-                }`}
-              >
-                List
-              </button>
-              <button
-                onClick={() => setViewMode('matrix')}
-                className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all ${
-                  viewMode === 'matrix'
-                    ? 'bg-white text-brand-blue shadow-sm'
-                    : 'text-white/80 hover:text-white'
-                }`}
-              >
-                Table
-              </button>
-            </div>
-      }
       bodyClassName="!p-0 sm:!p-0 flex flex-col"
       footerStart={
           <div className="text-xs sm:text-sm text-gray-600 flex items-center gap-2 flex-wrap">
@@ -168,7 +163,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
             </div>
-          ) : viewMode === 'tree' ? (
+          ) : (
             <div className="flex-1 overflow-auto p-3 sm:p-6">
               {/* Tree View */}
               <div className="space-y-4 sm:space-y-6">
@@ -178,7 +173,38 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                     <p className="font-semibold text-gray-900">How it works</p>
                     <p>Some permissions only work together with others. When you give someone a permission, everything it needs is <strong>switched on for them automatically</strong>.</p>
                     <p>If you remove a permission that others need, you&apos;ll be <strong>asked to confirm</strong> — and the permissions that need it are removed too.</p>
+                    <p>Turning such a permission back on asks what to bring back: <strong>Only this</strong>, <strong>Restore previous</strong> (exactly what was on before, while the screen is still open) or <strong>Turn on all</strong>.</p>
                     <p className="text-gray-500">Click any permission to see what it needs and what needs it.</p>
+                  </div>
+                </div>
+
+                {/* Whole sections that need another permission */}
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-destructive/90 flex items-center justify-center shadow-sm">
+                      <AlertTriangle className="w-4 h-4 text-white" />
+                    </div>
+                    Turning these off turns off other sections
+                  </h3>
+                  <p className="mb-3 text-2xs sm:text-xs text-gray-500">
+                    The number is how many permissions in that section stop working. Turning it back on offers Only this / Restore previous / Turn on all.
+                  </p>
+                  <div className="space-y-2.5">
+                    {sectionRules.map(rule => (
+                      <div key={rule.code} className="flex items-start gap-2 flex-wrap text-xs sm:text-sm">
+                        <button type="button" onClick={() => setSelectedFeature(selectedFeature === rule.code ? null : rule.code)}>
+                          <Badge variant="info" className="text-2xs sm:text-xs">{getPermissionLabel(rule.code)}</Badge>
+                        </button>
+                        <span className="mt-0.5 text-2xs sm:text-xs text-gray-500">off →</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {rule.sections.map(([section, count]) => (
+                            <span key={section} className="text-2xs sm:text-xs px-2 py-0.5 rounded-full font-medium ring-1 bg-gray-50 text-gray-700 ring-gray-200">
+                              {section} ({count})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -322,108 +348,6 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                       ))}
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : (
-            /* Pane bounds, shell scrolls. Both used to scroll both axes, so the
-               min-w-[400px] table drew a horizontal bar inside a horizontally
-               scrolling pane, and --compact's 55vh cap sits above what this
-               dialog leaves the pane, so the pane scrolled vertically too and
-               took the sticky header and sticky Feature column with it. */
-            <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-3 sm:p-6">
-              {/* Matrix View */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
-                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
-                  <table className="w-full border-collapse min-w-[400px]">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="sticky left-0 bg-gray-50 p-2 sm:p-3 border-b border-r border-gray-200 text-2xs sm:text-xs font-medium text-gray-500 uppercase tracking-wider text-left">
-                          Permission
-                        </th>
-                        {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(code => (
-                          <th
-                            key={code}
-                            className="p-2 sm:p-3 border-b border-gray-200 text-2xs sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
-                            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-                          >
-                            {(matrix?.feature_names || {})[code] || code}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(rowCode => {
-                        const isRowSelected = selectedFeature === rowCode;
-                        return (
-                          <tr
-                            key={rowCode}
-                            className={`transition-colors ${
-                              isRowSelected
-                                ? 'bg-brand-blue/5 ring-1 ring-brand-blue/20'
-                                : 'hover:bg-brand-blue/[0.02]'
-                            }`}
-                          >
-                            <td className={`sticky left-0 p-2 sm:p-3 border-r border-gray-200 text-xs sm:text-sm font-medium whitespace-nowrap ${
-                              isRowSelected ? 'bg-brand-blue/5 text-brand-blue' : 'bg-white text-gray-700'
-                            }`}>
-                              <button
-                                onClick={() => setSelectedFeature(isRowSelected ? null : rowCode)}
-                                className="text-left hover:text-brand-blue transition-colors"
-                              >
-                                {(matrix?.feature_names || {})[rowCode] || rowCode}
-                              </button>
-                            </td>
-                            {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(colCode => {
-                              const isDependency = ((matrix?.dependencies || {})[rowCode] || []).includes(colCode);
-                              const isDependent = ((matrix?.reverse_dependencies || {})[rowCode] || []).includes(colCode);
-                              const isSelf = rowCode === colCode;
-
-                              return (
-                                <td
-                                  key={colCode}
-                                  className={`p-2 sm:p-3 text-center ${
-                                    isSelf
-                                      ? 'bg-gray-100'
-                                      : isDependency
-                                      ? 'bg-brand-blue/10'
-                                      : isDependent
-                                      ? 'bg-success-subtle'
-                                      : ''
-                                  }`}
-                                >
-                                  {isSelf ? (
-                                    <span className="text-gray-400">—</span>
-                                  ) : isDependency ? (
-                                    <span title="The permission in this row needs the one in this column">
-                                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue mx-auto" />
-                                    </span>
-                                  ) : isDependent ? (
-                                    <span title="The permission in this column needs the one in this row">
-                                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-success mx-auto rotate-180" />
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-200">·</span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Legend */}
-              <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 text-xs sm:text-sm">
-                <Badge variant="info" className="px-2.5 py-1 gap-1.5">
-                  <ArrowRight className="w-3 h-3" /> Row needs this column
-                </Badge>
-                <Badge variant="success" className="px-2.5 py-1 gap-1.5">
-                  <ArrowRight className="w-3 h-3 rotate-180" /> This column needs the row
-                </Badge>
-                <span className="text-gray-500">Read across a row to see what that permission needs.</span>
               </div>
             </div>
           )}

@@ -2,7 +2,6 @@
 
 import { BarChart3, TrendingUp, TrendingDown, Users, Briefcase, Clock, Target, Award, Calendar, Download, Filter, Eye, CheckCircle, XCircle, Activity, AlertCircle, ThumbsUp, MessageSquare, Zap, TrendingDown as Down } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
@@ -88,10 +87,7 @@ export default function Analytics() {
               variant="primary"
               icon={<Download className="w-4 h-4" />}
               onClick={() => {
-                if (!canExportAnalytics) {
-                  toast.error('You do not have permission to export analytics reports');
-                  return;
-                }
+                if (!canExportAnalytics) return;
               }}
               aria-disabled={!canExportAnalytics}
               title={!canExportAnalytics ? 'You do not have permission to export analytics reports' : undefined}

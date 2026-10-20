@@ -91,9 +91,15 @@ export default function ResumeDatabasePage() {
     window.history.replaceState(null, '', `/recruitment/resume-database?tab=${next}`);
   };
 
-  /* One tab is not a tab strip — a user with only one of the two permissions
-     sees the page without it, rather than a lone chip that looks broken. */
-  const showTabs = canSeeMyResumes && canSeeInternalDb;
+  /* Both pools readable — the tab counts are fetched only then (a pool the
+     user may not read is never queried). */
+  const bothPools = canSeeMyResumes && canSeeInternalDb;
+  /* RBAC: the tab strip is always shown once the page renders. A pool the
+     user lacks permission for stays VISIBLE as a greyed-out tab with a hover
+     tooltip — permission-gated tabs are never hidden. */
+  const showTabs = canSeeMyResumes || canSeeInternalDb;
+  const tabLocked = (tab: ResumeTab): boolean =>
+    !authLoading && (tab === 'my-resumes' ? !canSeeMyResumes : !canSeeInternalDb);
 
   /* Per-pool totals for the tab badges. One page_size=1 request each — the
      same probe the views use for their own totals — so switching tabs never
@@ -102,7 +108,7 @@ export default function ResumeDatabasePage() {
      uploads/deletes made on the other tab. */
   const [tabCounts, setTabCounts] = useState<Partial<Record<ResumeTab, number>>>({});
   useEffect(() => {
-    if (!showTabs) return;
+    if (!bothPools) return;
     let cancelled = false;
     const load = () => {
       (['my-resumes', 'internal-db'] as const).forEach((tab) => {
@@ -124,7 +130,7 @@ export default function ResumeDatabasePage() {
       cancelled = true;
       window.removeEventListener(RESUMES_CHANGED_EVENT, load);
     };
-  }, [showTabs, activeTab]);
+  }, [bothPools, activeTab]);
 
   const header = (
     <>
@@ -143,13 +149,22 @@ export default function ResumeDatabasePage() {
               // Own colour per pool — orange like the folder icons in the
               // tree, cyan like the system folders — so the two read apart.
               const iconColor = tab === 'my-resumes' ? 'text-brand-orange' : 'text-brand-cyan';
-              return (
+              const locked = tabLocked(tab);
+              /* Locked: native `disabled` on the trigger (Radix then refuses to
+                 select it), wrapped in a span so the tooltip still shows. */
+              const trigger = (
                 <TabsTrigger
                   key={tab}
                   value={tab}
-                  className="h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800"
+                  disabled={locked}
+                  aria-disabled={locked || undefined}
+                  className={
+                    locked
+                      ? 'h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-gray-400 cursor-not-allowed opacity-60 dark:text-slate-500'
+                      : 'h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800'
+                  }
                 >
-                  <Icon className={`h-4 w-4 ${iconColor}`} />
+                  <Icon className={`h-4 w-4 ${locked ? 'text-gray-400' : iconColor}`} />
                   {TAB_LABEL[tab]}
                   {tabCounts[tab] !== undefined && (
                     <span
@@ -164,6 +179,15 @@ export default function ResumeDatabasePage() {
                   )}
                 </TabsTrigger>
               );
+              return locked ? (
+                <span
+                  key={tab}
+                  title={`You do not have permission to view ${TAB_LABEL[tab]}`}
+                  className="inline-flex cursor-not-allowed"
+                >
+                  {trigger}
+                </span>
+              ) : trigger;
             })}
           </TabsList>
         </Tabs>

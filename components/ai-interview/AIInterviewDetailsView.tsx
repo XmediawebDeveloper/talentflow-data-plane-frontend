@@ -22,7 +22,7 @@ import {
   interviewDuplicateBlockedReason,
   interviewEditBlockedReason,
 } from '@/lib/utils/aiInterviewVersion';
-import { aiInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
+import { aiInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -566,6 +566,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       await onRefresh?.();
       toast.success(`New version created as a draft: ${result.cloned_title}`);
       // Open the new draft straight in Configure so it can be edited at once.
+      // Unsaved until Save as Draft: Discard anywhere in the wizard deletes it.
+      markUnsavedVersion(result.cloned_id);
       router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate config');
@@ -1456,10 +1458,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (!canShareAIInterviews) {
-                      toast.error('You do not have permission to invite candidates to an AI interview');
-                      return;
-                    }
+                    if (!canShareAIInterviews) return;
                     setShowShareModal(true);
                   }}
                   aria-disabled={!canShareAIInterviews}
@@ -1481,10 +1480,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     variant="secondary"
                     size="sm"
                     onClick={editBlockedReason ? undefined : () => router.push(aiInterviewConfigureHref(config.id, config.jd_id || ''))}
-                    disabled={!!editBlockedReason}
+                    disabled={!!editBlockedReason && canUpdateAIInterviews}
+                    aria-disabled={!!editBlockedReason}
                     aria-label="Edit AI interview"
                     title={editBlockedReason || 'Edit this version'}
-                    className="h-8 w-8 px-0 flex-shrink-0"
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Pencil className="w-4 h-4 text-menu-icon-edit" />
                   </Button>
@@ -1493,9 +1493,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     variant="secondary"
                     size="sm"
                     onClick={duplicateBlockedReason ? undefined : handleDuplicate}
-                    disabled={!!duplicateBlockedReason || actionLoading}
+                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
+                    aria-disabled={!!duplicateBlockedReason}
                     aria-label="Duplicate as a new version"
                     title={duplicateBlockedReason || 'Duplicate as a new version'}
+                    className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
                     icon={<Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-download" />}
                   >
                     Duplicate
@@ -1507,10 +1509,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (!canUpdateAIInterviews) {
-                      toast.error('You do not have permission to edit AI interviews');
-                      return;
-                    }
+                    if (!canUpdateAIInterviews) return;
                     // Resumes at the step the draft was left on.
                     router.push(aiInterviewDraftResumeHref(config));
                   }}
@@ -1541,7 +1540,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={handleUnarchive}
+                  onClick={canArchiveAIInterviews ? handleUnarchive : undefined}
                   disabled={actionLoading}
                   aria-disabled={!canArchiveAIInterviews}
                   title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}

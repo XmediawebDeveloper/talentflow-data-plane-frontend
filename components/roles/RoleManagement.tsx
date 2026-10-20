@@ -4,7 +4,6 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import CreateRoleForm from './CreateRoleForm';
 import EditRoleForm from './EditRoleForm';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
@@ -95,7 +94,7 @@ export default function RoleManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingRole, setViewingRole] = useState<RoleListItem | null>(null);
   const [viewingRolePermissions, setViewingRolePermissions] = useState<Permission[]>([]);
-  // CRUD is inline (side panels), not full-page redirects — per UI/UX guidelines.
+  // CRUD is inline (popups), not full-page redirects — per UI/UX guidelines.
   const [createOpen, setCreateOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleListItem | null>(null);
   // Two-step drill-in: 'cards' shows only the 4 stat tiles; clicking one expands
@@ -413,10 +412,7 @@ export default function RoleManagement() {
             <Button
               variant="primary"
               onClick={() => {
-                if (!canManageRoles) {
-                  toast.error('You do not have permission to manage roles');
-                  return;
-                }
+                if (!canManageRoles) return;
                 setCreateOpen(true);
               }}
               aria-disabled={!canManageRoles}
@@ -642,10 +638,7 @@ export default function RoleManagement() {
                                 {!protectedRoleCodes.includes(role.code) ? (
                                   <button
                                     onClick={() => {
-                                      if (!canManageRoles) {
-                                        toast.error('You do not have permission to manage roles');
-                                        return;
-                                      }
+                                      if (!canManageRoles) return;
                                       handleEditRole(role);
                                     }}
                                     aria-disabled={!canManageRoles}
@@ -673,10 +666,7 @@ export default function RoleManagement() {
                                 {!role.is_system ? (
                                   <button
                                     onClick={() => {
-                                      if (!canManageRoles) {
-                                        toast.error('You do not have permission to manage roles');
-                                        return;
-                                      }
+                                      if (!canManageRoles) return;
                                       handleDeleteRole(role.id);
                                     }}
                                     aria-disabled={!canManageRoles}
@@ -771,10 +761,7 @@ export default function RoleManagement() {
                           {!protectedRoleCodes.includes(role.code) && (
                             <button
                               onClick={() => {
-                                if (!canManageRoles) {
-                                  toast.error('You do not have permission to manage roles');
-                                  return;
-                                }
+                                if (!canManageRoles) return;
                                 handleEditRole(role);
                               }}
                               aria-disabled={!canManageRoles}
@@ -792,10 +779,7 @@ export default function RoleManagement() {
                           {!role.is_system && (
                             <button
                               onClick={() => {
-                                if (!canManageRoles) {
-                                  toast.error('You do not have permission to manage roles');
-                                  return;
-                                }
+                                if (!canManageRoles) return;
                                 handleDeleteRole(role.id);
                               }}
                               aria-disabled={!canManageRoles}
@@ -1061,30 +1045,22 @@ export default function RoleManagement() {
       </AppModal>
       </div>
 
-      {/* Create Role — inline side panel (CRUD is not a full-page redirect) */}
-      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
-        <SheetContent side="right" hideClose className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
-          <CreateRoleForm
-            embedded
-            onCancel={() => setCreateOpen(false)}
-            onSuccess={() => { setCreateOpen(false); loadData(); }}
-          />
-        </SheetContent>
-      </Sheet>
-
-      {/* Edit Role — inline side panel */}
-      <Sheet open={!!editingRole} onOpenChange={(open) => { if (!open) setEditingRole(null); }}>
-        <SheetContent side="right" hideClose className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
-          {editingRole && (
-            <EditRoleForm
-              roleId={editingRole.id}
-              embedded
-              onCancel={() => setEditingRole(null)}
-              onSuccess={() => { setEditingRole(null); loadData(); }}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Create / Edit Role — popups laid out like Edit User (AppModal inside the form) */}
+      {createOpen && (
+        <CreateRoleForm
+          embedded
+          onCancel={() => setCreateOpen(false)}
+          onSuccess={() => { setCreateOpen(false); loadData(); }}
+        />
+      )}
+      {editingRole && (
+        <EditRoleForm
+          roleId={editingRole.id}
+          embedded
+          onCancel={() => setEditingRole(null)}
+          onSuccess={() => { setEditingRole(null); loadData(); }}
+        />
+      )}
     </main>
   );
 }

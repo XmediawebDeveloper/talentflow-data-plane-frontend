@@ -192,3 +192,103 @@ export const planTurnOff = (codes: string[], current: Set<string>, alwaysOn: Set
 
 /** Screen label for a code ("Score Resume (Job Description)", "View My Resumes"). */
 export const labelOf = (code: string): string => getPermissionLabel(code);
+
+/** Section (category id) a code is shown in. */
+const sectionIdOf = (code: string): string | null => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code || cat.actions?.some((a) => a.code === code)) return cat.id;
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code || sub.actions.some((a) => a.code === code)) return cat.id;
+    }
+  }
+  return null;
+};
+
+/**
+ * Codes in OTHER sections that can't work without `code` (directly or through a
+ * View): e.g. View Job Description → all of Resume Scoring, AI Talent Match,
+ * Assessment, HR Question Bank and AI Interview.
+ */
+export const getCrossSectionDependents = (code: string): string[] => {
+  const section = sectionIdOf(code);
+  return getAllCatalogCodes().filter((c) => c !== code && sectionIdOf(c) !== section && withRequired([c]).has(code));
+};
+
+/**
+ * What a screen remembers while it is open: for each code an admin turned off,
+ * the codes that went with it. Turning that code on again can then restore the
+ * permissions exactly as they were.
+ */
+export type TurnOffMemory = Map<string, Set<string>>;
+
+export const rememberTurnOff = (memory: TurnOffMemory, codes: string[], before: Set<string>, after: Set<string>) => {
+  const removed = Array.from(before).filter((c) => !after.has(c));
+  codes.forEach((code) => {
+    if (before.has(code) && !after.has(code)) memory.set(code, new Set(removed.filter((c) => c !== code)));
+  });
+};
+
+/** Forget the memory of codes that are on again. */
+export const forgetTurnOff = (memory: TurnOffMemory, on: Set<string>) => {
+  Array.from(memory.keys()).forEach((code) => {
+    if (on.has(code)) memory.delete(code);
+  });
+};
+
+export interface TurnOnWithDependentsPlan {
+  /** Codes newly turned on (requested + required) that other sections depend on. */
+  triggers: string[];
+  /** Turn on just the request (plus what it needs). */
+  only: Set<string>;
+  /** Back to how things were before the trigger was turned off; null when nothing is remembered. */
+  restore: Set<string> | null;
+  /** Codes `restore` adds beyond `only`. */
+  restoreAdds: string[];
+  /** Everything that depends on the triggers, and their entry points. */
+  all: Set<string>;
+  /** Codes `all` adds beyond `only`. */
+  allAdds: string[];
+  /** Section names whose permissions `all` touches (for the summary line). */
+  sections: string[];
+}
+
+/**
+ * Turning on a code other sections depend on (View Job Description, View My
+ * Resumes…). Null when nothing in another section is affected — the caller then
+ * uses the normal turn-on flow.
+ */
+export const planTurnOnWithDependents = (
+  codes: string[],
+  current: Set<string>,
+  memory: TurnOffMemory,
+): TurnOnWithDependentsPlan | null => {
+  const base = planTurnOn(codes, current);
+  const newlyOn = Array.from(base.only).filter((c) => !current.has(c));
+  const triggers = newlyOn.filter((c) => getCrossSectionDependents(c).some((d) => !base.only.has(d)));
+  if (triggers.length === 0) return null;
+
+  const remembered = new Set<string>();
+  newlyOn.forEach((c) => memory.get(c)?.forEach((r) => remembered.add(r)));
+  const restore = remembered.size > 0
+    ? withoutOrphanEntryPoints(planTurnOn([...codes, ...Array.from(remembered)], current).only)
+    : null;
+
+  const dependents = Array.from(new Set(triggers.flatMap(getCrossSectionDependents)));
+  const all = planTurnOn([...codes, ...dependents], current).all;
+
+  const adds = (set: Set<string>) => Array.from(set).filter((c) => !base.only.has(c));
+  const restoreAdds = restore ? adds(restore) : [];
+  const allAdds = adds(all);
+  const sections = Array.from(new Set(dependents.map((c) => sectionIdOf(c))))
+    .map((id) => CUSTOM_PERMISSION_CATEGORIES.find((cat) => cat.id === id)?.name)
+    .filter((n): n is string => !!n);
+  return {
+    triggers,
+    only: base.only,
+    restore: restoreAdds.length > 0 ? restore : null,
+    restoreAdds,
+    all,
+    allAdds,
+    sections,
+  };
+};

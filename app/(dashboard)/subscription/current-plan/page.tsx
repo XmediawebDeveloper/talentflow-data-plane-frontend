@@ -654,17 +654,22 @@ function CurrentPlanContent() {
   const searchParams = useSearchParams();
   const { logout, user, isBillingManager, isTenantAdmin, hasPermission } = useAuth();
   const canUpgradePlan = hasPermission('canUpgradePlan');
+  // RBAC03: a Billing Manager sees the plans but cannot change them — the
+  // cards stay visible with every Choose/Upgrade button greyed (never hidden).
+  const planChangeLocked = !canUpgradePlan || isBillingManager;
 
-  // Subscription navigation tabs — surfaced on this page instead of the sidebar
-  const billingLinks = [
+  // Subscription navigation tabs — surfaced on this page instead of the sidebar.
+  // `visible: false` = no permission: the tab stays rendered, greyed, with a
+  // hover tooltip and a no-op click (never hidden).
+  const billingLinks: { id: string; label: string; icon: typeof BarChart3; href: string; visible: boolean; deniedMessage?: string }[] = [
     { id: 'current-plan', label: 'Upgrade Plans', icon: BarChart3, href: '/subscription/current-plan', visible: true },
-    { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage') },
-    { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory') },
-    { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory') },
-    { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory') },
-    { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage') },
-    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods') },
-  ].filter(link => link.visible);
+    { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage & quotas' },
+    { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory'), deniedMessage: 'You do not have permission to view billing history' },
+    { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory'), deniedMessage: 'You do not have permission to view refund history' },
+    { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory'), deniedMessage: 'You do not have permission to view dispute history' },
+    { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view unit disputes' },
+    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods'), deniedMessage: 'You do not have permission to view payment methods' },
+  ];
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -696,7 +701,7 @@ function CurrentPlanContent() {
      briefly for the element instead, and give up quietly after ~10s. */
   useEffect(() => {
     const section = searchParams.get('section');
-    if (section && section !== activeSection && billingLinks.some(link => link.id === section)) {
+    if (section && section !== activeSection && billingLinks.some(link => link.id === section && link.visible)) {
       setActiveSection(section as typeof activeSection);
     }
     if (searchParams.get('focus') !== 'quota-overview') return;
@@ -1495,6 +1500,12 @@ function CurrentPlanContent() {
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
     if (encodedPlanFromUrl && plans.length > 0 && !selectedPlanForPayment) {
+      // A Billing Manager (or anyone without canUpgradePlan) cannot change
+      // plans: drop the pricing-page plan link instead of starting a purchase.
+      if (planChangeLocked) {
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
       try {
         const decodedPlanId = decodePlanId(encodedPlanFromUrl);
         if (decodedPlanId) {
@@ -1512,7 +1523,7 @@ function CurrentPlanContent() {
         console.error('[CurrentPlan] Error auto-selecting plan:', err);
       }
     }
-  }, [encodedPlanFromUrl, plans, selectedPlanForPayment]);
+  }, [encodedPlanFromUrl, plans, selectedPlanForPayment, planChangeLocked]);
 
   const validatePaymentForm = (): boolean => {
     const errors: Partial<PaymentFormData> = {};
@@ -1558,6 +1569,8 @@ function CurrentPlanContent() {
   };
 
   const handleChoosePlan = (plan: DisplayPlan) => {
+    if (planChangeLocked) return;
+
     // Check if plan has any pricing (monthly OR annual)
     if (!plan.monthlyPrice && !plan.annualPrice) {
       setError('Cannot select a plan without a price');
@@ -2517,14 +2530,19 @@ function CurrentPlanContent() {
             <ScrollableTabs className="lg:hidden" ariaLabel="Subscription sections">
               {billingLinks.map((link) => {
                 const isActive = link.id === activeSection;
+                const locked = !link.visible;
                 return (
                   <button
                     key={link.id}
                     type="button"
-                    onClick={() => setActiveSection(link.id as typeof activeSection)}
+                    onClick={() => { if (!locked) setActiveSection(link.id as typeof activeSection); }}
                     aria-current={isActive ? 'page' : undefined}
+                    aria-disabled={locked}
+                    title={locked ? link.deniedMessage : undefined}
                     className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      isActive
+                      locked
+                        ? 'bg-gray-50 dark:bg-slate-800/60 text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                        : isActive
                         ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                         : 'bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100'
                     }`}
@@ -2540,14 +2558,19 @@ function CurrentPlanContent() {
             <nav className="hidden max-w-full flex-wrap gap-1.5 lg:flex" aria-label="Subscription tabs">
               {billingLinks.map((link) => {
                 const isActive = link.id === activeSection;
+                const locked = !link.visible;
                 return (
                   <button
                     key={link.id}
                     type="button"
-                    onClick={() => setActiveSection(link.id as typeof activeSection)}
+                    onClick={() => { if (!locked) setActiveSection(link.id as typeof activeSection); }}
                     aria-current={isActive ? 'page' : undefined}
+                    aria-disabled={locked}
+                    title={locked ? link.deniedMessage : undefined}
                     className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      isActive
+                      locked
+                        ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                        : isActive
                         ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                         : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100'
                     }`}
@@ -2851,8 +2874,8 @@ function CurrentPlanContent() {
           </div>
         )}
 
-        {/* Available Plans - Hidden for Billing Manager (RBAC03) */}
-        {!isBillingManager && plans.length > 0 && (
+        {/* Available Plans - shown to everyone; plan buttons greyed when locked (RBAC03) */}
+        {plans.length > 0 && (
           <>
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div className="min-w-0">
@@ -3114,10 +3137,15 @@ function CurrentPlanContent() {
                     {/* Spacer to push button to bottom */}
                     <div className="flex-grow" />
 
+                    {/* Native-disabled button: the permission tooltip sits on a wrapper. */}
+                    <span
+                      className="mt-auto block w-full"
+                      title={planChangeLocked && !isCurrentForToggle ? 'You do not have permission to change the subscription plan' : undefined}
+                    >
                     <button
-                      onClick={() => handleChoosePlan(plan)}
+                      onClick={() => { if (!planChangeLocked) handleChoosePlan(plan); }}
                       disabled={
-                        !canUpgradePlan ||
+                        planChangeLocked ||
                         isCurrentForToggle ||
                         isSelectingPlan ||
                         isSelectedPending ||
@@ -3130,7 +3158,7 @@ function CurrentPlanContent() {
                         (!isYearly && !plan.monthlyPrice && !!plan.annualPrice)
                       }
                       className={`mt-auto flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-colors ${
-                        !canUpgradePlan && !isCurrentForToggle
+                        planChangeLocked && !isCurrentForToggle
                           ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
                           : isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 cursor-not-allowed"
@@ -3148,7 +3176,7 @@ function CurrentPlanContent() {
                     >
                       {isCurrentForToggle ? (
                         'Current Plan'
-                      ) : !canUpgradePlan ? (
+                      ) : planChangeLocked ? (
                         'No Permission'
                       ) : isSelectedPending ? (
                         'Pending Payment'
@@ -3183,6 +3211,7 @@ function CurrentPlanContent() {
                         return tierComparison === -1 ? 'Downgrade' : 'Upgrade';
                       })()}
                     </button>
+                    </span>
                   </div>
                 );
                 };
