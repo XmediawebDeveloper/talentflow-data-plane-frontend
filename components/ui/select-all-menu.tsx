@@ -142,7 +142,10 @@ export function SortByControl<T extends string>({
           border, the label always shown, and a single ArrowUpDown that flips
           180° on descending. */}
       <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</span>
-      <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-1 transition-all">
+      {/* Below sm: the Job Openings mobile sort pill — p-0.5 + h-6 select,
+          12px text, 24px order button (JobsListing.tsx); sm and up as before.
+          max-sm:!text-xs because globals.css forces every <select> to 16px below 640px (iOS zoom guard), unlayered, which outranks a plain text-xs. */}
+      <div className="inline-flex items-center bg-brand-blue/5 dark:bg-brand-blue/10 rounded-lg p-0.5 sm:p-1 transition-all">
         <div className="relative">
           <select
             value={value}
@@ -150,18 +153,18 @@ export function SortByControl<T extends string>({
             aria-label="Sort by"
             // Fixed width: a native select sizes to its longest option, so the
             // two views' option lists made the row (and search box) shift.
-            className="appearance-none w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+            className="appearance-none w-[7.5rem] sm:w-[9.5rem] truncate h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
           >
             {options.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 dark:text-slate-400" />
+          <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500 dark:text-slate-400" />
         </div>
         <button
           type="button"
           onClick={onToggleOrder}
-          className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/10 hover:text-brand-blue dark:hover:bg-brand-blue/20 transition-colors cursor-pointer cursor-pointer"
+          className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded-md bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/10 hover:text-brand-blue dark:hover:bg-brand-blue/20 transition-colors cursor-pointer cursor-pointer"
           title={order === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
           aria-label={order === 'asc' ? 'Sort descending' : 'Sort ascending'}
         >

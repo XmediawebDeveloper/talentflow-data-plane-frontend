@@ -27,9 +27,17 @@ export const STEP2_SECTION_TONES = {
  * A Step 2 / Step 3 section card's heading row: toned icon tile, title, one-line
  * hint. `badge` sits beside the title, `actions` at the row's right end (wrapping
  * under it on a narrow screen); `spacing` replaces the default gap below.
+ *
+ * `inlineActions` keeps `actions` on the heading's line at every width, centred
+ * on the title + hint block — for a small affordance like a collapse chevron,
+ * which must never drop under the heading. The heading block takes the row's
+ * remaining width (`flex-1 min-w-0`) and its hint wraps inside it instead.
+ * Without it the row wraps (fine for Edit buttons), and because the heading
+ * block is sized to its text, a long hint on a phone pushed the actions onto a
+ * line of their own.
  */
 export const Step2SectionHeader = ({
-  icon: Icon, title, hint, tone = 'blue', badge, actions, spacing = 'mb-4 sm:mb-5',
+  icon: Icon, title, hint, tone = 'blue', badge, actions, spacing = 'mb-4 sm:mb-5', inlineActions = false,
 }: {
   icon: LucideIcon;
   title: string;
@@ -38,9 +46,10 @@ export const Step2SectionHeader = ({
   badge?: ReactNode;
   actions?: ReactNode;
   spacing?: string;
+  inlineActions?: boolean;
 }) => (
-  <div className={`flex flex-wrap items-start justify-between gap-3 ${spacing}`}>
-    <div className="flex items-start gap-3 min-w-0">
+  <div className={`flex ${inlineActions ? 'flex-nowrap items-center' : 'flex-wrap items-start'} justify-between gap-3 ${spacing}`}>
+    <div className={`flex items-start gap-3 min-w-0${inlineActions ? ' flex-1' : ''}`}>
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${STEP2_SECTION_TONES[tone].tile}`}>
         <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${STEP2_SECTION_TONES[tone].icon}`} />
       </div>
@@ -52,6 +61,8 @@ export const Step2SectionHeader = ({
         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5">{hint}</p>
       </div>
     </div>
-    {actions && <div className="flex-shrink-0">{actions}</div>}
+    {/* inlineActions: a flex wrapper, so the action centres on the heading
+        block rather than sitting on a text baseline a few px high. */}
+    {actions && <div className={`flex-shrink-0${inlineActions ? ' flex items-center' : ''}`}>{actions}</div>}
   </div>
 );

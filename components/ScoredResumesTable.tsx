@@ -2256,7 +2256,7 @@ Best regards`);
         <Button
           variant="secondary"
           size="sm"
-          className="rounded-full h-9"
+          className="rounded-full sm:h-9"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -2436,7 +2436,7 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
+          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Score — right beside More Filters in Job Details, where the header's
@@ -2453,7 +2453,7 @@ Best regards`);
               aria-disabled={!!scoreResumesDisabled}
               title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
-              className={`h-9 whitespace-nowrap ${scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}`}
+              className={`sm:h-9 whitespace-nowrap ${scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}`}
             >
               Score
             </Button>

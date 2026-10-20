@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
+import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
@@ -6543,6 +6543,9 @@ export default function AITalentMatchPage({
                   <div className={`flex flex-col items-start gap-3 ${jobListDisplayMode === 'grid' && !isJobExpanded ? 'flex-1' : 'sm:flex-row'}`}>
                     <div className="flex-1 min-w-0 w-full">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
+                        {/* Checkbox + Job ID + Job Name: one nowrap line at
+                            every width — see JOB_HEADLINE_ROW. */}
+                        <div className={JOB_HEADLINE_ROW}>
                         {/* Tick the job. Stops the click so it doesn't also
                             open / close the row. */}
                         {/* No candidates matched: the box stays, greyed and
@@ -6576,7 +6579,7 @@ export default function AITalentMatchPage({
                           </button>
                         )}
                         {jobData?.jobId && (
-                          <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobData.jobId}</JobIdBadge>
+                          <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jobData.jobId}>{jobData.jobId}</JobIdBadge>
                         )}
                         <h3
                           className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
@@ -6585,6 +6588,7 @@ export default function AITalentMatchPage({
                         >
                           {item.jobTitle}
                         </h3>
+                        </div>
                         {jobData?.currentVersion && (
                           <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>

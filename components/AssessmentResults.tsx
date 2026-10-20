@@ -2185,7 +2185,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <Button
                           variant="secondary"
                           size="sm"
-                          className="rounded-full h-9"
+                          className="rounded-full sm:h-9"
                           aria-label={`Actions for ${selectedRows.length} selected`}
                         >
                           {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -2327,7 +2327,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ariaLabel="Filter by result"
               />
             )}
-            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
+            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
             activeFilterCount={activeFilterCount}

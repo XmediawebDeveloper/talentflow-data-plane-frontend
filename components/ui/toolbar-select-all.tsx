@@ -63,9 +63,10 @@ export default function ToolbarSelectAll({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        /* h-9 so this pill matches the 36px toolbar band (search, the filter
-           pill, More Filters) instead of tabPill's default 32px. */
-        className={`${tabPill(selectedCount > 0)} h-9`}
+        /* sm:h-9 so this pill matches the 36px toolbar band (search, the filter
+           pill, More Filters) from sm up. Phones keep tabPill's own 28px — the
+           Job Openings toolbar's Select All, which the mobile rows follow. */
+        className={`${tabPill(selectedCount > 0)} sm:h-9`}
       >
         {allSelected && selectedCount > 0 ? (
           <CheckSquare className="w-3.5 h-3.5" />
