@@ -1,7 +1,7 @@
 "use client";
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
+import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList, MinusCircle } from 'lucide-react';
@@ -4146,6 +4146,9 @@ export default function ResumeScoringPage({
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
+                          {/* Checkbox + Job ID + Job Name: one nowrap line at
+                              every width — see JOB_HEADLINE_ROW. */}
+                          <div className={JOB_HEADLINE_ROW}>
                           {/* Tick the job for Export. Stops the click so it
                               doesn't also open / close the row. */}
                           {!item.isProcessing && (
@@ -4169,7 +4172,7 @@ export default function ResumeScoringPage({
                           {/* The scoring record's own JD code, else the full JD
                               record's — some scores come back without it. */}
                           {jdCodeOf(item) && (
-                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jdCodeOf(item)}</JobIdBadge>
+                            <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
@@ -4185,6 +4188,7 @@ export default function ResumeScoringPage({
                           >
                             {item.jobTitle}
                           </h3>
+                          </div>
                           {/* Version badge */}
                           {displayVersionNumber && displayVersionNumber >= 1 && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">

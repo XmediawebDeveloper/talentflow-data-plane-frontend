@@ -1,6 +1,6 @@
 'use client';
 
-import JobIdBadge from './JobIdBadge';
+import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from './JobIdBadge';
 import {
   Briefcase,
   Building2,
@@ -302,8 +302,11 @@ export default function JobOpeningSummary({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 mb-2">
+        {/* Job ID + Job Name share one nowrap line at every width — see
+            JOB_HEADLINE_ROW. The host's checkbox / radio sits level with it. */}
+        <div className={JOB_HEADLINE_ROW}>
         {job.job_id && (
-          <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>
+          <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>
         )}
         {/* The job name takes whatever the row leaves it and truncates there,
             with the whole name in `title` for a hover. `min-w-0` is what makes
@@ -313,17 +316,12 @@ export default function JobOpeningSummary({
             wherever a job name is drawn - see the Job Name cell in
             components/assessments/AllAssessmentsTable, where they were settled. */}
         <h3
-          /* basis-full on mobile so the name takes its OWN line and TRUNCATES to
-             the card width — in a flex-wrap row a lone long title otherwise has
-             no width to clip against and its nowrap content forces the whole card
-             wider than the screen (clipping the title AND the meta below), while
-             the status/method/version badges wrap cleanly onto the next line.
-             sm:basis-auto restores the inline behaviour on wider screens. */
-          className="basis-full sm:basis-auto text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
           title={job.title}
         >
           {job.title}
         </h3>
+        </div>
         {job.versionNumber && job.versionNumber >= 1 && (
           <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
             <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>

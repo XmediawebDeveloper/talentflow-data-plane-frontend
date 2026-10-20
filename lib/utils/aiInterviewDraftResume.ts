@@ -66,3 +66,38 @@ export async function resolveAIInterviewDraftResumeHref(id: string, jdId: string
   } catch { /* fall through to Configure */ }
   return configureHref(id, jdId);
 }
+
+/**
+ * Which AI interview versions are still UNSAVED — created by the wizard but not
+ * yet kept by the recruiter — so every wizard step's Discard can apply one rule:
+ *
+ *   - unsaved (a new interview's first draft, or the version Duplicate just
+ *     minted) → Discard deletes it; earlier versions are untouched;
+ *   - anything else (a draft the recruiter saved earlier and reopened, a
+ *     published / live version) → Discard leaves it as last saved.
+ *
+ * A version is marked when the wizard creates it (Configure's first save) or
+ * when Duplicate opens it, and unmarked only by Save as Draft. Continue moves
+ * through the wizard without "keeping" the version — it stays unsaved until
+ * the recruiter chooses to keep it.
+ *
+ * Held in sessionStorage, per version id: it survives a refresh, the browser's
+ * Back and Continue → Back to Configure, unlike a URL flag. Another tab or
+ * device does not see it, and then the safe default applies — the version is
+ * treated as saved, so Discard never deletes it.
+ */
+const key = (id: string) => `ai_interview_unsaved_version:${id}`;
+
+export function markUnsavedVersion(id: string): void {
+  try { sessionStorage.setItem(key(id), '1'); } catch { /* storage unavailable: treated as saved */ }
+}
+
+export function isUnsavedVersion(id: string | null | undefined): boolean {
+  if (!id) return false;
+  try { return sessionStorage.getItem(key(id)) === '1'; } catch { return false; }
+}
+
+export function clearUnsavedVersion(id: string | null | undefined): void {
+  if (!id) return;
+  try { sessionStorage.removeItem(key(id)); } catch { /* nothing to clear */ }
+}

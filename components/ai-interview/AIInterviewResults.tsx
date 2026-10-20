@@ -1008,7 +1008,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="rounded-full h-9"
+                      className="rounded-full sm:h-9"
                       aria-label={`Actions for ${selected.size} selected`}
                     >
                       {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -1124,7 +1124,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // instead of shrinking to an icon.
           fitToContainer
           containerBreakpoint={portaled ? '5xl' : '4xl'}
-          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
+          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
