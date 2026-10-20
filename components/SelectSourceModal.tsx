@@ -462,7 +462,6 @@ export default function SelectSourceModal({
   const renderNoResumesEmptyState = (folderId?: string) => {
     const isArchivedResumesFolder =
       !!folderId && folders.some(f => f.name === 'Archived Resumes' && !f.parent_id && f.id === folderId);
-    const canAdd = canUploadResumes && !isArchivedResumesFolder;
 
     return (
       <NoResumesEmptyState
@@ -473,7 +472,8 @@ export default function SelectSourceModal({
               ? 'No resumes are available in this folder yet. Add a resume to get started.'
               : 'No resumes are available in this folder yet.'
         }
-        onAction={canAdd ? () => setShowUploadModal(true) : undefined}
+        onAction={isArchivedResumesFolder ? undefined : () => setShowUploadModal(true)}
+        actionDisabledReason={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
       />
     );
   };
@@ -1192,14 +1192,18 @@ export default function SelectSourceModal({
         {/* Tabs */}
         <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex gap-1 sm:gap-2">
-            {/* Only show My Resumes tab if the Owner granted its Score Resume sub-action */}
-            {hasMyResumesScoreAccess && (
+            {/* My Resumes tab needs its Score Resume sub-action — without it the
+                tab stays visible but greyed out (hover explains). */}
             <button
-              onClick={() => handleTabChange('my-resumes')}
+              onClick={() => { if (!hasMyResumesScoreAccess) return; handleTabChange('my-resumes'); }}
+              aria-disabled={!hasMyResumesScoreAccess}
+              title={!hasMyResumesScoreAccess ? 'You do not have permission to score resumes from My Resumes' : undefined}
               className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                activeTab === 'my-resumes'
-                  ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
-                  : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
+                !hasMyResumesScoreAccess
+                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                  : activeTab === 'my-resumes'
+                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
+                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
               }`}
             >
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1213,29 +1217,30 @@ export default function SelectSourceModal({
                 {tabCounts.myResumes ?? ''}
               </span>
             </button>
-            )}
-            {/* Only show Internal Database tab if user has permission */}
-            {hasInternalDBAccess && (
-              <button
-                onClick={() => handleTabChange('internal-db')}
-                className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                  activeTab === 'internal-db'
+            {/* Shared Database tab: visible always, greyed out without access. */}
+            <button
+              onClick={() => { if (!hasInternalDBAccess) return; handleTabChange('internal-db'); }}
+              aria-disabled={!hasInternalDBAccess}
+              title={!hasInternalDBAccess ? 'You do not have permission to score resumes from the Shared Database' : undefined}
+              className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
+                !hasInternalDBAccess
+                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                  : activeTab === 'internal-db'
                     ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
                     : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
-                }`}
-              >
-                <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Shared Database</span>
-                <span className="sm:hidden">Shared DB</span>
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
-                  activeTab === 'internal-db'
-                    ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
-                    : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-                }`}>
-                  {tabCounts.internalDb ?? ''}
-                </span>
-              </button>
-            )}
+              }`}
+            >
+              <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Shared Database</span>
+              <span className="sm:hidden">Shared DB</span>
+              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
+                activeTab === 'internal-db'
+                  ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
+              }`}>
+                {tabCounts.internalDb ?? ''}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -1274,11 +1279,9 @@ export default function SelectSourceModal({
                 canCreateFolder={canUploadResumes}
                 onRenameFolder={handleRenameFolder}
                 canRenameFolder={canUpdateMyResumes}
+                canUploadToFolder={canUploadResumes}
                 onUploadToFolder={(folderId) => {
-                  if (!canUploadResumes) {
-                    toast.error('You do not have permission to upload resumes');
-                    return;
-                  }
+                  if (!canUploadResumes) return;
                   // The upload targets the selected folder (UploadModal's targetFolder).
                   setSelectedFolder(folderId);
                   setShowUploadModal(true);
@@ -1310,10 +1313,16 @@ export default function SelectSourceModal({
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
                   {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
-                  {activeTab === 'my-resumes' && canUploadResumes && (
+                  {activeTab === 'my-resumes' && (
                     <button
-                      onClick={() => setShowUploadModal(true)}
-                      className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium flex items-center gap-1.5 sm:gap-2"
+                      onClick={() => { if (!canUploadResumes) return; setShowUploadModal(true); }}
+                      aria-disabled={!canUploadResumes}
+                      title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
+                      className={`px-4 py-2 text-sm rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                        canUploadResumes
+                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
                     >
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span className="hidden sm:inline">Upload Resume</span>
@@ -1422,9 +1431,13 @@ export default function SelectSourceModal({
                      org-wide list to pick candidates from, not one this
                      modal manages), so only the read-only Preview/Download
                      actions carry over onto it. */
-                  onArchive={activeTab === 'my-resumes' && canArchiveMyResumes ? handleArchiveResume : undefined}
+                  onArchive={activeTab === 'my-resumes' ? handleArchiveResume : undefined}
+                  onArchiveDisabled={!canArchiveMyResumes}
+                  onArchiveDisabledReason="You do not have permission to archive resumes"
+                  onDeleteDisabled={!canDeleteMyResumes}
+                  onDeleteDisabledReason="You do not have permission to delete resumes"
                   onDelete={
-                    activeTab === 'my-resumes' && canDeleteMyResumes
+                    activeTab === 'my-resumes'
                       ? (id) => {
                           const row = resumes.find(r => r.id === id);
                           setDeleteResumeTarget({
@@ -1522,9 +1535,10 @@ export default function SelectSourceModal({
                 </button>
               )}
               <button
-                onClick={() => setShowScoreReview(true)}
+                onClick={() => { if (!canRunScoring) return; setShowScoreReview(true); }}
+                aria-disabled={!canRunScoring}
                 disabled={(() => {
-                  if (!canRunScoring) return true;
+                  if (!canRunScoring) return false; // greyed via aria-disabled so the hover reason shows
                   if (selectedResumes.length === 0) return true;
                   if (submitting) return true;
                   const selectedFolderData = folders.find(f => f.id === selectedFolder);
@@ -1535,7 +1549,9 @@ export default function SelectSourceModal({
                   return hasArchivedResumes;
                 })()}
                 title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
-                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-1.5 sm:gap-2"
+                className={`px-4 py-2 text-sm bg-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                  canRunScoring ? 'hover:bg-brand-blue-2' : 'opacity-50 cursor-not-allowed'
+                }`}
               >
                 {submitting ? (
                   <>

@@ -293,18 +293,14 @@ export default function TeamManagementPage() {
     ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', icon: History, enabled: true }] : []),
   ];
   const selectInnerTab = (t: { key: InnerTabKey; enabled: boolean; denyMsg?: string }) => {
-    if (!t.enabled) {
-      if (t.denyMsg) toast.error(t.denyMsg);
-      return;
-    }
+    // Locked tab: greyed with a hover tooltip; click is a no-op.
+    if (!t.enabled) return;
     setActiveTab(t.key);
   };
 
   const handleOpenCreateModal = async () => {
-    if (!canCreateTeams) {
-      toast.error('You do not have permission to create teams');
-      return;
-    }
+    // Locked: the button is greyed with a hover tooltip; click is a no-op.
+    if (!canCreateTeams) return;
 
     await fetchAvailableUsers();
     setShowCreateModal(true);
@@ -475,14 +471,12 @@ export default function TeamManagementPage() {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      if (!canCreateTeams) {
-                        toast.error('You do not have permission to create teams');
-                        return;
-                      }
+                      if (!canCreateTeams) return;
                       handleOpenCreateModal();
                     }}
                     aria-disabled={!canCreateTeams}
                     title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
+                    className={!canCreateTeams ? 'opacity-60 cursor-not-allowed' : ''}
                     icon={<Plus className="h-4 w-4" />}
                   >
                     Create Team
@@ -832,7 +826,8 @@ export default function TeamManagementPage() {
           }
           availableUsers={availableUsers.filter((user) => !teams.filter((team) => team.id !== selectedTeam?.id).some((team) => team.members?.some((member) => member.id === user.id)))}
           isSubmitting={isUpdating}
-          onDelete={canDeleteTeams ? handleOpenDeleteDialog : undefined}
+          onDelete={handleOpenDeleteDialog}
+          canDelete={canDeleteTeams}
           isDeleting={isDeleting}
         />
 

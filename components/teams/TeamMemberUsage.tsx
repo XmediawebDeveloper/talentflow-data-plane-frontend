@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { toast } from 'sonner';
 import {
   Users,
   FileText,
@@ -254,10 +253,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
           {membersUsage?.members && membersUsage.members.length > 0 && (
             <button
               onClick={() => {
-                if (!canExport) {
-                  toast.error('You do not have permission to export');
-                  return;
-                }
+                if (!canExport) return;
                 setShowExportModal(true);
               }}
               aria-disabled={!canExport}

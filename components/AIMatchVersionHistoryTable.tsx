@@ -126,10 +126,13 @@ interface AIMatchVersionHistoryTableProps {
   } | undefined;
   onRetry: () => void;
   onViewSession: (session: AIMatchSessionResponse) => void;
-  /** Omit to hide the "Run AI Match" menu item entirely (e.g. the caller
-   *  lacks ai_match:run) — pass it only when the action should be offered.
-   *  Still disabled by this component when the resolved job is Disabled. */
+  /** Omit to leave the "Run AI Match" menu item out (no run action in this
+   *  context). Still disabled by this component when the resolved job is
+   *  Disabled. */
   onRunMatch?: (session: AIMatchSessionResponse) => void;
+  /** Set when the user lacks the permission to run AI Match: the item stays
+   *  visible but greyed out, selecting it does nothing, and this shows on hover. */
+  runMatchDisabledReason?: string;
 }
 
 /**
@@ -146,6 +149,7 @@ export default function AIMatchVersionHistoryTable({
   onRetry,
   onViewSession,
   onRunMatch,
+  runMatchDisabledReason,
 }: AIMatchVersionHistoryTableProps) {
   if (loading && !versions) {
     // Skeleton mirroring this table's own 10 columns instead of a text spinner.
@@ -365,9 +369,14 @@ export default function AIMatchVersionHistoryTable({
                       </DropdownMenuItem>
                       {onRunMatch && (
                         <DropdownMenuItem
-                          className={actionsMenuItemClass}
+                          className={`${actionsMenuItemClass} ${runMatchDisabledReason ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                           disabled={job?.status?.toLowerCase() === 'disabled'}
-                          onSelect={() => onRunMatch(session)}
+                          aria-disabled={!!runMatchDisabledReason || undefined}
+                          title={runMatchDisabledReason || undefined}
+                          onSelect={(e) => {
+                            if (runMatchDisabledReason) { e.preventDefault(); return; }
+                            onRunMatch(session);
+                          }}
                         >
                           <Sparkles className="w-4 h-4 text-menu-icon-ai" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
@@ -471,9 +480,14 @@ export default function AIMatchVersionHistoryTable({
                   </DropdownMenuItem>
                   {onRunMatch && (
                     <DropdownMenuItem
-                      className={actionsMenuItemClass}
+                      className={`${actionsMenuItemClass} ${runMatchDisabledReason ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                       disabled={job?.status?.toLowerCase() === 'disabled'}
-                      onSelect={() => onRunMatch(session)}
+                      aria-disabled={!!runMatchDisabledReason || undefined}
+                      title={runMatchDisabledReason || undefined}
+                      onSelect={(e) => {
+                        if (runMatchDisabledReason) { e.preventDefault(); return; }
+                        onRunMatch(session);
+                      }}
                     >
                       <Sparkles className="w-4 h-4 text-menu-icon-ai" />
                       <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>

@@ -38,10 +38,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
   };
 
   const handleDelete = async () => {
-    if (onDeleteDisabled) {
-      toast.error(onDeleteDisabledReason || 'You do not have permission to delete resumes');
-      return;
-    }
+    if (onDeleteDisabled) return;
     if (await dialog.confirm({
       title: 'Delete Resume',
       message: 'Are you sure you want to delete this resume?\nThis action cannot be undone.',
@@ -171,7 +168,8 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 variant="destructive"
                 size="sm"
                 onClick={handleDelete}
-                disabled={onDeleteDisabled}
+                aria-disabled={!!onDeleteDisabled}
+                className={onDeleteDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
                 title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : undefined}
                 icon={<Trash2 className="w-4 h-4" />}
               >

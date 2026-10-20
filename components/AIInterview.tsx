@@ -2203,10 +2203,7 @@ export default function AIInterview() {
               {config.status === 'draft' && config.jd_id && (
                 <button
                   onClick={() => {
-                    if (!canUpdateAIInterviews) {
-                      toast.error('You do not have permission to edit AI interviews');
-                      return;
-                    }
+                    if (!canUpdateAIInterviews) return;
                     setOpenMenuId(null);
                     // Resumes at the step the draft was left on.
                     void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
@@ -2230,15 +2227,12 @@ export default function AIInterview() {
                 return (
                   <button
                     onClick={() => {
-                      if (editBlocked) {
-                        if (!canUpdateAIInterviews) toast.error(editBlocked);
-                        return;
-                      }
+                      if (editBlocked) return;
                       setOpenMenuId(null);
                       // A published version always edits from Configure, not Clusters.
                       router.push(aiInterviewConfigureHref(config.id, config.jd_id!));
                     }}
-                    disabled={!!editBlocked}
+                    disabled={!!editBlocked && canUpdateAIInterviews}
                     aria-disabled={!!editBlocked}
                     title={editBlocked || 'Edit this version'}
                     className={editBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
@@ -2251,10 +2245,7 @@ export default function AIInterview() {
               {isPublished && (
                 <button
                   onClick={() => {
-                    if (!canInviteAIInterviews) {
-                      toast.error('You do not have permission to invite candidates');
-                      return;
-                    }
+                    if (!canInviteAIInterviews) return;
                     setShareConfig(config); setOpenMenuId(null);
                   }}
                   aria-disabled={!canInviteAIInterviews}
@@ -2305,13 +2296,10 @@ export default function AIInterview() {
                 return (
                   <button
                     onClick={() => {
-                      if (dupBlocked) {
-                        if (!canCreateAIInterviews) toast.error(dupBlocked);
-                        return;
-                      }
+                      if (dupBlocked) return;
                       void handleCloneConfig(config);
                     }}
-                    disabled={!!dupBlocked}
+                    disabled={!!dupBlocked && canCreateAIInterviews}
                     aria-disabled={!!dupBlocked}
                     title={dupBlocked || 'Duplicate as a new version'}
                     className={dupBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
@@ -2325,10 +2313,7 @@ export default function AIInterview() {
               {normalizedStatus !== 'archived' && (
                 <button
                   onClick={() => {
-                    if (!canArchiveAIInterviews) {
-                      toast.error('You do not have permission to archive AI interviews');
-                      return;
-                    }
+                    if (!canArchiveAIInterviews) return;
                     handleArchiveConfig(config);
                   }}
                   aria-disabled={!canArchiveAIInterviews}
@@ -2342,10 +2327,7 @@ export default function AIInterview() {
               {normalizedStatus === 'archived' && (
                 <button
                   onClick={() => {
-                    if (!canArchiveAIInterviews) {
-                      toast.error('You do not have permission to unarchive AI interviews');
-                      return;
-                    }
+                    if (!canArchiveAIInterviews) return;
                     handleUnarchiveConfig(config);
                   }}
                   aria-disabled={!canArchiveAIInterviews}
@@ -2358,10 +2340,7 @@ export default function AIInterview() {
               )}
               <button
                 onClick={() => {
-                  if (!canDeleteAIInterviews) {
-                    toast.error('You do not have permission to delete AI interviews');
-                    return;
-                  }
+                  if (!canDeleteAIInterviews) return;
                   handleDeleteConfig(config);
                 }}
                 disabled={hasBeenShared}
@@ -2644,10 +2623,7 @@ export default function AIInterview() {
             )}
             <button
               onClick={() => {
-                if (!canAccessHRQuestionBank) {
-                  toast.error('You do not have permission to access the HR Question Bank');
-                  return;
-                }
+                if (!canAccessHRQuestionBank) return;
                 // Tells the question bank which module to name in its breadcrumb.
                 try { sessionStorage.setItem('questionBankSource', 'ai-interviews'); } catch { /* ignore */ }
                 router.push('/recruitment/hr-question-bank');
@@ -2667,10 +2643,7 @@ export default function AIInterview() {
               variant="secondary"
               size="md"
               onClick={() => {
-                if (!canShareAIInterviews) {
-                  toast.error('You do not have permission to invite candidates');
-                  return;
-                }
+                if (!canShareAIInterviews) return;
                 setShowInvitePicker(true);
               }}
               aria-disabled={!canShareAIInterviews}
@@ -2687,10 +2660,7 @@ export default function AIInterview() {
               variant="primary"
               size="md"
               onClick={() => {
-                if (!canCreateAIInterviews) {
-                  toast.error('You do not have permission to create AI interviews');
-                  return;
-                }
+                if (!canCreateAIInterviews) return;
                 router.push('/recruitment/ai-interviews/jd-selection');
               }}
               aria-disabled={!canCreateAIInterviews}
@@ -3121,10 +3091,7 @@ export default function AIInterview() {
                       variant="primary"
                       size="md"
                       onClick={() => {
-                        if (!canCreateAIInterviews) {
-                          toast.error('You do not have permission to create AI interviews');
-                          return;
-                        }
+                        if (!canCreateAIInterviews) return;
                         router.push('/recruitment/ai-interviews/jd-selection');
                       }}
                       aria-disabled={!canCreateAIInterviews}
@@ -3301,10 +3268,6 @@ export default function AIInterview() {
                                 aria-disabled={!canTrack}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (!canInviteAIInterviews) {
-                                    toast.error('You do not have permission to track invitations');
-                                    return;
-                                  }
                                   if (!canTrack || !trackTarget) return;
                                   // Every interview of this job, so the popup totals match this row.
                                   const lineage = [...configs, ...archivedConfigs].filter(
@@ -4817,11 +4780,15 @@ export default function AIInterview() {
                     variant="primary"
                     size="sm"
                     onClick={() => {
+                      if (!canInviteAIInterviews) return;
                       // Remember where we came from so closing Share returns here.
                       setShareReturnToInvites(viewInvitationsConfig);
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
+                    aria-disabled={!canInviteAIInterviews}
+                    title={!canInviteAIInterviews ? 'You do not have permission to invite candidates' : undefined}
+                    className={!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
                     icon={<Send className="w-3.5 h-3.5" />}
                   >
                     Invite More

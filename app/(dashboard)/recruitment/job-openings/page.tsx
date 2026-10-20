@@ -174,6 +174,7 @@ export default function JobOpeningsPage() {
   // JD's own "Score Resume" permission (jd:add_applicants).
   // Run AI Talent Match from the JD list needs AI Talent Match → Run and the
   // JD entry point "Run AI Talent Match" (jd:ai_match).
+  const canUpdateJdHere = isTenantAdmin || hasPermission('canUpdateJD');
   const canAIMatchFromJd = isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('jd:ai_match'));
   const canScoreFromJd = isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('jd:add_applicants'));
   const canManageMasters = hasPermission('canManageSettings');
@@ -379,6 +380,8 @@ export default function JobOpeningsPage() {
     // entered data invisible (not lost — just on a step this URL insisted on showing
     // instead of the one the record was on).
     if (job.status === 'Draft') {
+      // Drafts open in the editor — stay on this list without Edit permission.
+      if (!canUpdateJdHere) return;
       router.push(`/recruitment/jd-creation?id=${job.id}`);
     } else {
       router.push(`/recruitment/job-details?id=${job.id}`);
@@ -426,6 +429,7 @@ export default function JobOpeningsPage() {
     // the same note on handleViewJob above; this list's `job.creation_stage`
     // can be stale, and jd-creation's own fresh fetch is the source of truth.
     if (job.status === 'Draft') {
+      if (!canUpdateJdHere) return;
       router.push(`/recruitment/jd-creation?id=${job.id}`);
       return;
     }
@@ -466,6 +470,8 @@ export default function JobOpeningsPage() {
   // editor then opens on the new version; the previous version keeps all its
   // assessments/interviews/scores untouched.
   const handleCreateNewVersion = async () => {
+    // A new version is a new JD — needs Create JD permission, not just Edit.
+    if (!(isTenantAdmin || hasPermission('canCreateJD'))) return;
     const sourceId = editWarningDialog.jobId;
     if (!sourceId) return;
     setEditWarningDialog(prev => ({ ...prev, creating: true }));
@@ -844,7 +850,8 @@ export default function JobOpeningsPage() {
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
-        configHref={canManageMasters ? '/recruitment/job-openings/config' : undefined}
+        configHref="/recruitment/job-openings/config"
+        configDisabled={!canManageMasters}
       />
 
       {/* Archive confirm — the same component the Job Details page renders, so
@@ -916,6 +923,7 @@ export default function JobOpeningsPage() {
         jdId={editWarningDialog.jobId}
         creating={!!editWarningDialog.creating}
         atMaxVersions={(editWarningDialog.versionNumber ?? 1) >= 5}
+        canCreate={isTenantAdmin || hasPermission('canCreateJD')}
         cancelInFooter
         onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
         onCreateNewVersion={handleCreateNewVersion}

@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
+import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -650,7 +651,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
      the difference was expressed by writing a whole second variant of the
      className instead of by a flag. One shape, one place to change it.
 
-     `show` is the permission/role gate. `alwaysEnabled` is the separate
+     `show` is the role/audience gate (hides the row). `permitted: false` is
+     the RBAC gate: the row stays visible but greyed, with a hover tooltip and
+     a no-op click — permission-gated rows are never hidden. `alwaysEnabled` is the separate
      question of whether a lapsed subscription locks the row: docs and support
      stay reachable precisely because the plan lapsed. */
   const profileMenuItems: {
@@ -660,6 +663,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     subtitle: string;
     href: string;
     show?: boolean;
+    permitted?: boolean;
+    deniedMessage?: string;
     alwaysEnabled?: boolean;
   }[] = [
     {
@@ -682,7 +687,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       title: 'Company Profile',
       subtitle: 'Organization details',
       href: '/organization/company-profile',
-      show: isTenantAdmin || hasPermission('canManageSettings'),
+      permitted: isTenantAdmin || hasPermission('canManageSettings'),
+      deniedMessage: 'You do not have permission to manage the company profile',
     },
     {
       id: 'audit-log',
@@ -1323,8 +1329,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 <div className="max-h-[216px] flex-1 min-h-0 overflow-y-auto border-t border-gray-100 divide-y divide-gray-100">
                   {profileMenuItems
                     .filter(item => item.show !== false)
-                    .map(({ id, icon: ItemIcon, title, subtitle, href, alwaysEnabled }) => {
-                      const locked = subscriptionExpired && !alwaysEnabled;
+                    .map(({ id, icon: ItemIcon, title, subtitle, href, alwaysEnabled, permitted, deniedMessage }) => {
+                      const subscriptionLocked = subscriptionExpired && !alwaysEnabled;
+                      const permissionLocked = permitted === false;
+                      const locked = subscriptionLocked || permissionLocked;
                       return (
                         <button
                           key={id}
@@ -1333,9 +1341,11 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             setShowUserMenu(false);
                             router.push(href);
                           }}
-                          disabled={locked}
-                          className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 group transition-colors ${
-                            locked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-brand-blue/[0.04]'
+                          disabled={subscriptionLocked}
+                          aria-disabled={locked}
+                          title={!subscriptionLocked && permissionLocked ? (deniedMessage || PERMISSION_DENIED_MESSAGE) : undefined}
+                          className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 transition-colors ${locked ? '' : 'group'} ${
+                            subscriptionLocked ? 'opacity-40 cursor-not-allowed' : permissionLocked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-blue/[0.04]'
                           }`}
                         >
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 transition-colors group-hover:bg-brand-blue/15">

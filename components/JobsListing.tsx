@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Job } from '@/lib/types/types';
+import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -145,11 +146,13 @@ interface JobsListingProps {
   // Unlike a status deep-link this also clears the restored search/status/page, so
   // "all jobs" really means all of them.
   forceListView?: boolean;
-  /* Where the Config button goes. Undefined hides it — that is the permission
-     gate, same as the master-data links it replaced. It used to open an inline
-     panel of three links out to three near-identical pages; those three are now
-     sections of one Configuration page, so this is a plain link. */
+  /* Where the Config button goes. It used to open an inline panel of three
+     links out to three near-identical pages; those three are now sections of
+     one Configuration page, so this is a plain link. */
   configHref?: string;
+  /** RBAC: the viewer may not manage the job masters. Config stays VISIBLE but
+   *  greyed out with a hover tooltip (never hidden) and does not navigate. */
+  configDisabled?: boolean;
 }
 
 /**
@@ -184,7 +187,7 @@ const StatVersionsPlaceholder = () => (
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -869,7 +872,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   // fresh "Create" should not carry the previous filter selection back.
   const handleCreateNewJob = () => {
     if (onCreateNewDisabled) {
-      toast.error('You do not have permission to create job descriptions');
+      // Locked: tooltip only (no toast).
       return;
     }
     if (quotaInfo && quotaInfo.remaining <= 0) {
@@ -909,8 +912,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const hasStatusActions = showDisableAction || showReenableAction || showArchiveAction || showUnarchiveAction;
 
   /* One status item in the Actions dropdown. Greyed out when the user lacks
-     the permission (click explains why) or when none of the selected jobs
-     can take this action. */
+     the permission (hover tooltip explains why) or when none of the selected
+     jobs can take this action. */
   const renderBulkStatusItem = ({
     label,
     icon: Icon,
@@ -948,7 +951,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           type="button"
           onClick={() => {
             if (!allowed) {
-              toast.error(deniedMessage);
+              // Locked: tooltip only (no toast).
               return;
             }
             if (eligible === 0 || bulkStatusBusy) return;
@@ -1046,7 +1049,21 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               )}
               {(configHref || onCreateNew) && (
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-                  {configHref && (
+                  {configHref && configDisabled && (
+                    // Permission-locked: same Button, greyed out, tooltip only.
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      aria-disabled
+                      onClick={() => { /* locked: tooltip only */ }}
+                      title="You do not have permission to manage job configuration"
+                      className="w-full sm:w-auto opacity-50 cursor-not-allowed"
+                    >
+                      <Settings className="w-4 h-4" />
+                      Config
+                    </Button>
+                  )}
+                  {configHref && !configDisabled && (
                     // Config shares Create New Job's exact size/shape by using the
                     // same Button (size md). It stays `secondary` — a neutral nav
                     // action — against Create's `primary` CTA, per the design system.
@@ -1375,7 +1392,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         <button
                           onClick={() => {
                             if (!canExportJd) {
-                              toast.error('You do not have permission to export job descriptions');
+                              // Locked: tooltip only (no toast).
                               return;
                             }
                             handleBulkExport();
@@ -1386,14 +1403,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                             canExportJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
                           }`}
                         >
-                          <Download className="w-4 h-4 text-gray-700" />
+                          <Download className={`w-4 h-4 ${canExportJd ? 'text-gray-700' : 'text-gray-400'}`} />
                           Export Selected
                         </button>
                         {onBulkDelete && (
                           <button
                             onClick={() => {
                               if (!canDeleteJd) {
-                                toast.error('You do not have permission to delete job descriptions');
+                                // Locked: tooltip only (no toast).
                                 return;
                               }
                               void handleBulkDelete();
@@ -1509,6 +1526,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             <div className="space-y-3">
               {currentJobs.map(job => {
                 const versionKey = job.job_id || job.id;
+                /* A Draft only opens in the JD editor, so without Edit permission
+                   the card and its View icon are greyed and do nothing (RBAC:
+                   tooltip only) — the user stays on this list. */
+                const draftLocked = job.status.toLowerCase() === 'draft' && !canUpdateJd;
                 const versionsExpanded = versionLineage.isExpanded(versionKey);
                 /* Only jobs with MORE THAN ONE version get the control.
                    `versionNumber` is the row's own place in the lineage — the
@@ -1550,8 +1571,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
-                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob && canUpdateJd ? onEditJob(job) : onViewJob(job)}
+                    aria-disabled={draftLocked || undefined}
+                    title={draftLocked ? 'You do not have permission to edit draft job descriptions' : undefined}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 ${draftLocked ? 'cursor-not-allowed' : 'cursor-pointer'} p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    onClick={() => {
+                      if (draftLocked) return;
+                      if (job.status.toLowerCase() === 'draft' && onEditJob) onEditJob(job);
+                      else onViewJob(job);
+                    }}
                   >
                     {/* flex-wrap: checkbox + job info (+ the counts column from
                         md) share the first row, so the checkbox sits on the Job
@@ -1654,7 +1681,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   return;
                                 }
                                 if (!canUpdateJd) {
-                                  toast.error('You do not have permission to edit job descriptions');
+                                  // Locked: tooltip only (no toast).
                                   return;
                                 }
                                 onEditJob(job);
@@ -1679,9 +1706,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                             consistent action set. */}
                         <Button
                           variant="secondary"
-                          onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                          className="!h-7 !w-7 !p-0 rounded-md"
-                          aria-label="View" title="View"
+                          onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
+                          aria-disabled={draftLocked || undefined}
+                          className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+                          aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </Button>
@@ -1725,7 +1753,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (onAIMatchDisabled) {
-                                      toast.error(onAIMatchDisabledReason);
+                                      // Permission lock: tooltip only. Plan lock keeps its toast.
+                                      if (onAIMatchDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onAIMatchDisabledReason);
                                       return;
                                     }
                                     setActiveDropdown(null);
@@ -1744,7 +1773,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (onScoreResumesDisabled) {
-                                      toast.error(onScoreResumesDisabledReason);
+                                      // Permission lock: tooltip only. Plan lock keeps its toast.
+                                      if (onScoreResumesDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onScoreResumesDisabledReason);
                                       return;
                                     }
                                     onScoreResumes(job);
@@ -1764,7 +1794,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!canDisableJd) {
-                                      toast.error('You do not have permission to disable job descriptions');
+                                      // Locked: tooltip only (no toast).
                                       return;
                                     }
                                     requestDisableJob(job);
@@ -1783,7 +1813,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!canUpdateJd) {
-                                      toast.error('You do not have permission to update job descriptions');
+                                      // Locked: tooltip only (no toast).
                                       return;
                                     }
                                     onRepublishJob(job);
@@ -1805,7 +1835,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!canArchiveJd) {
-                                      toast.error('You do not have permission to archive job descriptions');
+                                      // Locked: tooltip only (no toast).
                                       return;
                                     }
                                     onArchiveJob(job);
@@ -1825,7 +1855,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!canArchiveJd) {
-                                      toast.error('You do not have permission to archive job descriptions');
+                                      // Locked: tooltip only (no toast).
                                       return;
                                     }
                                     onUnarchiveJob(job);
@@ -1845,7 +1875,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (!canDeleteJd) {
-                                      toast.error('You do not have permission to delete job descriptions');
+                                      // Locked: tooltip only (no toast).
                                       return;
                                     }
                                     onDeleteJob(job);
@@ -1937,7 +1967,13 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           versionDetails={versionLineage.versionDetails}
                           versionApplicants={versionLineage.versionApplicants}
                           statusOverrides={versionStatusOverrides}
-                          onRowClick={(versionId) => router.push(`/recruitment/job-details?id=${versionId}`)}
+                          onRowClick={(versionId) => {
+                            // A Draft version opens in the JD editor — blocked without Edit permission.
+                            const clicked = versionLineage.lineages[versionKey]?.find((v) => v.id === versionId);
+                            const clickedStatus = (versionStatusOverrides?.[versionId] || clicked?.status || '').toLowerCase();
+                            if (clickedStatus === 'draft' && !canUpdateJd) return;
+                            router.push(`/recruitment/job-details?id=${versionId}`);
+                          }}
                           renderAction={(versionJob) => (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -1968,7 +2004,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (onAIMatchDisabled) {
                                         e.preventDefault();
-                                        toast.error(onAIMatchDisabledReason);
+                                        // Permission lock: tooltip only. Plan lock keeps its toast.
+                                        if (onAIMatchDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onAIMatchDisabledReason);
                                         return;
                                       }
                                       onAIMatch(versionJob);
@@ -1986,7 +2023,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (onScoreResumesDisabled) {
                                         e.preventDefault();
-                                        toast.error(onScoreResumesDisabledReason);
+                                        // Permission lock: tooltip only. Plan lock keeps its toast.
+                                        if (onScoreResumesDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onScoreResumesDisabledReason);
                                         return;
                                       }
                                       onScoreResumes(versionJob);
@@ -2005,7 +2043,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (!canDisableJd) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to disable job descriptions');
+                                        // Locked: tooltip only (no toast).
                                         return;
                                       }
                                       requestDisableJob(versionJob);
@@ -2024,7 +2062,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (!canUpdateJd) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to update job descriptions');
+                                        // Locked: tooltip only (no toast).
                                         return;
                                       }
                                       onRepublishJob(versionJob);
@@ -2044,7 +2082,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (!canArchiveJd) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to archive job descriptions');
+                                        // Locked: tooltip only (no toast).
                                         return;
                                       }
                                       onArchiveJob(versionJob);
@@ -2063,7 +2101,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (!canArchiveJd) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to archive job descriptions');
+                                        // Locked: tooltip only (no toast).
                                         return;
                                       }
                                       onUnarchiveJob(versionJob);
@@ -2082,7 +2120,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     onSelect={(e) => {
                                       if (!canDeleteJd) {
                                         e.preventDefault();
-                                        toast.error('You do not have permission to delete job descriptions');
+                                        // Locked: tooltip only (no toast).
                                         return;
                                       }
                                       onDeleteJob(versionJob);

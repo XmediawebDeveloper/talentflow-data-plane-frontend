@@ -131,6 +131,12 @@ interface ScoredResume {
  *  white, brand-blue outline + text, filling solid brand-blue on hover. */
 const HEADER_ACTION_BTN =
   'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-brand-blue/60 bg-white text-brand-blue shadow-sm cursor-pointer transition-colors hover:bg-brand-blue hover:text-white hover:border-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-blue disabled:hover:border-brand-blue/60';
+/** HEADER_ACTION_BTN when the user lacks the permission: shown, greyed, no hover colour. */
+const HEADER_ACTION_BTN_LOCKED =
+  'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-400 shadow-sm cursor-not-allowed opacity-60';
+/** Create / Send / candidate action button when the user lacks the permission. */
+const CREATE_SEND_BUTTON_LOCKED_CLASS =
+  'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
 
 /** Email / phone / location chip — the resume view's contact badge
  *  (resume-view/[id]), on this card's white instead of its tinted one. */
@@ -1642,12 +1648,17 @@ Best regards`);
             <div className="flex flex-wrap items-center gap-2 ml-auto">
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
-              {RESUME_EMAIL_SHARE_ENABLED && canShareResume && viewResumeId && (
+              {RESUME_EMAIL_SHARE_ENABLED && viewResumeId && (
                 <button
                   type="button"
-                  onClick={openShareModal}
-                  title="Share resume"
-                  className={flatHeaderActions ? CANDIDATE_ACTION_BUTTON_CLASS : HEADER_ACTION_BTN}
+                  onClick={() => { if (!canShareResume) return; openShareModal(); }}
+                  aria-disabled={!canShareResume}
+                  title={canShareResume ? 'Share resume' : 'You do not have permission to share resumes'}
+                  className={
+                    !canShareResume
+                      ? (flatHeaderActions ? CREATE_SEND_BUTTON_LOCKED_CLASS : HEADER_ACTION_BTN_LOCKED)
+                      : (flatHeaderActions ? CANDIDATE_ACTION_BUTTON_CLASS : HEADER_ACTION_BTN)
+                  }
                 >
                   <Share2 className="w-4 h-4 flex-shrink-0" />
                   Share
@@ -1665,20 +1676,22 @@ Best regards`);
                 <>
                   <button
                     type="button"
-                    onClick={() => handleInviteForAssessment()}
-                    disabled={!canInviteAssessment}
+                    onClick={() => { if (!mayInviteAssessment) return; handleInviteForAssessment(); }}
+                    disabled={mayInviteAssessment && !canInviteAssessment}
+                    aria-disabled={!mayInviteAssessment}
                     title={inviteBlockedReason(mayInviteAssessment, assessmentPlanLocked)}
-                    className={CREATE_SEND_BUTTON_CLASS.assessment}
+                    className={mayInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : CREATE_SEND_BUTTON_LOCKED_CLASS}
                   >
                     <ClipboardList className="w-4 h-4 flex-shrink-0" />
                     Create / Send Assessment
                   </button>
                   <button
                     type="button"
-                    onClick={handleInviteForAIInterview}
-                    disabled={!canInviteAIInterview}
+                    onClick={() => { if (!mayInviteAIInterview) return; handleInviteForAIInterview(); }}
+                    disabled={mayInviteAIInterview && !canInviteAIInterview}
+                    aria-disabled={!mayInviteAIInterview}
                     title={inviteBlockedReason(mayInviteAIInterview, aiInterviewPlanLocked)}
-                    className={CREATE_SEND_BUTTON_CLASS.interview}
+                    className={mayInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : CREATE_SEND_BUTTON_LOCKED_CLASS}
                   >
                     <Video className="w-4 h-4 flex-shrink-0" />
                     Create / Send AI Interview
@@ -1689,7 +1702,8 @@ Best regards`);
                 <button
                   type="button"
                   onClick={() => canInvite && setShowInviteMenu(!showInviteMenu)}
-                  disabled={inviteDisabled}
+                  disabled={inviteDisabled && canInvite}
+                  aria-disabled={!canInvite}
                   title={
                     inviteDisabled
                       ? (!canInvite
@@ -1701,7 +1715,7 @@ Best regards`);
                   }
                   aria-haspopup="menu"
                   aria-expanded={showInviteMenu}
-                  className={HEADER_ACTION_BTN}
+                  className={canInvite ? HEADER_ACTION_BTN : HEADER_ACTION_BTN_LOCKED}
                 >
                   <UserPlus className="w-4 h-4 flex-shrink-0" />
                   Invite
@@ -1722,13 +1736,16 @@ Best regards`);
                         invite to, so the next step is discoverable and the
                         tooltip can name what's blocking it. */}
                     {mayInviteAssessment && assessmentMissing && renderCreateInviteItems('assessment')}
-                    {mayInviteAssessment && !assessmentMissing && (
+                    {!assessmentMissing && (
                       <button
                         role="menuitem"
-                        onClick={() => handleInviteForAssessment()}
-                        disabled={!canInviteAssessment}
-                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
-                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        onClick={() => { if (!mayInviteAssessment) return; handleInviteForAssessment(); }}
+                        disabled={mayInviteAssessment && !canInviteAssessment}
+                        aria-disabled={!mayInviteAssessment}
+                        title={!mayInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
+                          mayInviteAssessment ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
+                        }`}
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                           <ClipboardList className="w-4 h-4 text-brand-blue" />
@@ -1739,13 +1756,16 @@ Best regards`);
                       </button>
                     )}
                     {mayInviteAIInterview && aiInterviewMissing && renderCreateInviteItems('interview')}
-                    {mayInviteAIInterview && !aiInterviewMissing && (
+                    {!aiInterviewMissing && (
                       <button
                         role="menuitem"
-                        onClick={handleInviteForAIInterview}
-                        disabled={!canInviteAIInterview}
-                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
-                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        onClick={() => { if (!mayInviteAIInterview) return; handleInviteForAIInterview(); }}
+                        disabled={mayInviteAIInterview && !canInviteAIInterview}
+                        aria-disabled={!mayInviteAIInterview}
+                        title={!mayInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
+                          mayInviteAIInterview ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
+                        }`}
                       >
                         <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
                           <Video className="w-4 h-4 text-brand-cyan" />
@@ -1776,22 +1796,25 @@ Best regards`);
                 </button>
               )}
 
-              {canExport && (
-                <button
-                  type="button"
-                  onClick={handleDownloadScorecard}
-                  title="Download scorecard PDF"
-                  className={flatHeaderActions ? CANDIDATE_ACTION_BUTTON_CLASS : HEADER_ACTION_BTN}
-                >
-                  <Download className="w-4 h-4 flex-shrink-0" />
-                  {flatHeaderActions ? 'Scorecard' : (
-                    <>
-                      <span className="hidden lg:inline">Download Scorecard</span>
-                      <span className="lg:hidden">Scorecard</span>
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => { if (!canExport) return; handleDownloadScorecard(); }}
+                aria-disabled={!canExport}
+                title={canExport ? 'Download scorecard PDF' : 'You do not have permission to download the scorecard'}
+                className={
+                  !canExport
+                    ? (flatHeaderActions ? CREATE_SEND_BUTTON_LOCKED_CLASS : HEADER_ACTION_BTN_LOCKED)
+                    : (flatHeaderActions ? CANDIDATE_ACTION_BUTTON_CLASS : HEADER_ACTION_BTN)
+                }
+              >
+                <Download className="w-4 h-4 flex-shrink-0" />
+                {flatHeaderActions ? 'Scorecard' : (
+                  <>
+                    <span className="hidden lg:inline">Download Scorecard</span>
+                    <span className="lg:hidden">Scorecard</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 

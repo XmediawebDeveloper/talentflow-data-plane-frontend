@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { loadDotlottieWc, usePrefersReducedMotion } from '@/components/ui/success-animation';
+import { loadDotlottieWc, loadLottieData, usePrefersReducedMotion } from '@/components/ui/success-animation';
 
 interface LoadingScreenProps {
   message: string;
@@ -14,6 +14,8 @@ interface LoadingScreenProps {
 
 /** How long each stage stays active before the next one lights up. */
 const STEP_ADVANCE_MS = 5000;
+
+const LOADING_ANIMATION_URL = '/animations/loading.json';
 
 /**
  * `loading.json` is drawn on a 16:9 canvas, and its three dots only ever move
@@ -38,27 +40,30 @@ function StaticDots() {
 
 function LoadingAnimation() {
   const reducedMotion = usePrefersReducedMotion();
-  const [playerReady, setPlayerReady] = useState(false);
+  const [animationData, setAnimationData] = useState<string | null>(null);
 
   useEffect(() => {
     if (reducedMotion) return;
     let cancelled = false;
-    loadDotlottieWc()
-      .then(() => {
-        if (!cancelled) setPlayerReady(true);
+    // The player gets the JSON itself (see loadLottieData): given a `src` it
+    // fetches on its own and logs an AbortError whenever this screen is
+    // swapped out before that fetch finishes.
+    Promise.all([loadDotlottieWc(), loadLottieData(LOADING_ANIMATION_URL)])
+      .then(([, data]) => {
+        if (!cancelled) setAnimationData(data);
       })
       .catch(() => {
-        /* CDN fetch failed — stay on the static dots. */
+        /* CDN or animation fetch failed — stay on the static dots. */
       });
     return () => {
       cancelled = true;
     };
   }, [reducedMotion]);
 
-  if (reducedMotion || !playerReady) return <StaticDots />;
+  if (reducedMotion || !animationData) return <StaticDots />;
 
   const DotlottieWc = 'dotlottie-wc' as unknown as React.ElementType<{
-    src: string;
+    data: string;
     autoplay?: boolean;
     loop?: boolean;
     class?: string;
@@ -67,7 +72,7 @@ function LoadingAnimation() {
 
   return (
     <div className="absolute left-1/2 top-1/2" style={{ ...LOTTIE_BOX, transform: LOTTIE_FOCUS }} aria-hidden>
-      <DotlottieWc src="/animations/loading.json" autoplay loop class="block h-full w-full" />
+      <DotlottieWc data={animationData} autoplay loop class="block h-full w-full" />
     </div>
   );
 }

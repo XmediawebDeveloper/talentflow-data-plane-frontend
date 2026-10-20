@@ -321,10 +321,7 @@ export default function PaymentMethodsPage() {
         <div className="flex items-center justify-end mb-4">
           <button
             onClick={() => {
-              if (!canAdd) {
-                toast.error('You do not have permission to add payment methods');
-                return;
-              }
+              if (!canAdd) return;
               setShowAddModal(true);
             }}
             aria-disabled={!canAdd}
@@ -376,10 +373,7 @@ export default function PaymentMethodsPage() {
             <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add a payment method to manage your subscription</p>
             <button
               onClick={() => {
-                if (!canAdd) {
-                  toast.error('You do not have permission to add payment methods');
-                  return;
-                }
+                if (!canAdd) return;
                 setShowAddModal(true);
               }}
               aria-disabled={!canAdd}
@@ -434,10 +428,7 @@ export default function PaymentMethodsPage() {
                     {!method.is_default && (
                       <button
                         onClick={() => {
-                          if (!canEdit) {
-                            toast.error('You do not have permission to edit payment methods');
-                            return;
-                          }
+                          if (!canEdit) return;
                           setAsDefault(method.id);
                         }}
                         aria-disabled={!canEdit}
@@ -453,10 +444,7 @@ export default function PaymentMethodsPage() {
                     )}
                     <button
                       onClick={() => {
-                        if (!canDelete) {
-                          toast.error('You do not have permission to delete payment methods');
-                          return;
-                        }
+                        if (!canDelete) return;
                         deleteMethod(method.id);
                       }}
                       disabled={deleting === method.id || !canDelete}

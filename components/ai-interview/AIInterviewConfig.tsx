@@ -27,6 +27,8 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
+import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
@@ -926,6 +928,12 @@ function HRSection({
   onSelectedTypeOverridesChange,
   onBankAdd,
 }: HRSectionProps) {
+  // "HR Question Bank Add" under AI Interview (Roles & Permissions) — same
+  // gate Assessment's builder uses with assessments:add_question.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canAddQuestion = isTenantAdmin || hasPermissionCode('ai_interview:add_question');
+  // "HR Question Bank View" under AI Interview: shows the bank's questions to pick from.
+  const canViewQuestionBank = isTenantAdmin || hasPermissionCode('ai_interview:view_question_bank');
   const [hrWeightError, setHrWeightError] = useState(false);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [newQText, setNewQText] = useState('');
@@ -978,6 +986,10 @@ function HRSection({
   };
 
   const saveNewQuestion = async () => {
+    if (!canAddQuestion) {
+      toast.error('You do not have permission to add questions');
+      return;
+    }
     const text = newQText.trim().replace(/\s+/g, ' ');
     if (!text) {
       setQuestionError('Enter a question');
@@ -1116,7 +1128,9 @@ function HRSection({
               </div>
             )}
 
-            {/* Question list */}
+            {/* Question list — without "HR Question Bank View" it stays visible
+                but greyed and unclickable, with the reason on hover. */}
+            <PermissionLockedOverlay locked={!canViewQuestionBank} message='You do not have permission to view the HR Question Bank'>
             <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
               {bankQuestions.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-6">No questions in the bank yet. Add your first question below.</p>
@@ -1241,6 +1255,7 @@ function HRSection({
                 );})
               )}
             </div>
+            </PermissionLockedOverlay>
           </>
 
           {/* Add Question — available in both modes, persists to HR Question Bank */}
@@ -1323,8 +1338,13 @@ function HRSection({
             </div>
           ) : (
             <button
-              onClick={() => setAddingQuestion(true)}
-              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-brand-blue border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors"
+              onClick={() => {
+                if (!canAddQuestion) return;
+                setAddingQuestion(true);
+              }}
+              aria-disabled={!canAddQuestion}
+              title={!canAddQuestion ? 'You do not have permission to add questions' : undefined}
+              className={`flex items-center gap-1.5 text-xs border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full transition-colors ${canAddQuestion ? 'text-gray-500 hover:text-brand-blue hover:border-brand-blue/40 hover:bg-brand-blue/5' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
             >
               <Plus className="w-3.5 h-3.5" />
               Add Question

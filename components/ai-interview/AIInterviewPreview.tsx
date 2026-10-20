@@ -624,10 +624,7 @@ export default function AIInterviewPreview() {
                       variant="secondary"
                       type="button"
                       onClick={() => {
-                        if (!canInviteAIInterview) {
-                          toast.error('You do not have permission to invite candidates');
-                          return;
-                        }
+                        if (!canInviteAIInterview) return;
                         setShareOpen(true);
                       }}
                       aria-disabled={!canInviteAIInterview}
@@ -1243,10 +1240,7 @@ export default function AIInterviewPreview() {
                   variant="primary"
                   size="md"
                   onClick={() => {
-                    if (!canPublishAIInterview) {
-                      toast.error('You do not have permission to publish AI interviews');
-                      return;
-                    }
+                    if (!canPublishAIInterview) return;
                     setShowConfirm(true);
                   }}
                   disabled={publishing}

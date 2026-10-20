@@ -27,20 +27,22 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
   const { isTenantAdmin, hasPermission } = useAuth();
   const { hasPlanFeature, loading: planLoading } = usePlanFeaturesContext();
 
-  const tabs: { id: string; label: string; href: string; visible: boolean; planLocked?: boolean }[] = [
+  // `visible: false` = the user lacks the permission. Such tabs are still
+  // rendered — greyed, hover tooltip, not clickable — never hidden.
+  const tabs: { id: string; label: string; href: string; visible: boolean; deniedMessage?: string; planLocked?: boolean }[] = [
     // Visibility mirrors each destination page's own access guard exactly —
     // UserManagement.tsx checks canManageUsers/canViewUsers, UsageHistory.tsx
     // checks canViewUsage (also declared in lib/navigation/routeAccess.ts for
     // this same route prefix), RoleManagement.tsx checks canManageUsers. This
     // used to be isTenantAdmin-only for all three, hiding tabs a non-owner
     // admin with the right granular permissions could actually open.
-    { id: 'users', label: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers') },
-    { id: 'usage-history', label: 'Usage History', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage') },
-    { id: 'role-management', label: 'Roles & Permissions', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers') },
+    { id: 'users', label: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers'), deniedMessage: 'You do not have permission to view users' },
+    { id: 'usage-history', label: 'Usage History', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage history' },
+    { id: 'role-management', label: 'Roles & Permissions', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to manage roles & permissions' },
     // Plan-gated: stays visible but disabled (hover explains) when the plan lacks Teams.
-    { id: 'team-management', label: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), planLocked: !planLoading && !hasPlanFeature('teams') },
+    { id: 'team-management', label: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
     { id: 'team-chat', label: 'Chat', href: '/organization/team-chat', visible: true },
-  ].filter(tab => tab.visible);
+  ];
 
   // Nothing to switch between — don't render a lone tab.
   if (tabs.length <= 1) return null;
@@ -68,6 +70,18 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
                 aria-disabled="true"
                 title={DISABLED_REASON_MESSAGE.plan}
                 className={`${pill} border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-600 cursor-not-allowed`}
+              >
+                {tab.label}
+              </span>
+            );
+          }
+          if (!tab.visible) {
+            return (
+              <span
+                key={tab.id}
+                aria-disabled="true"
+                title={tab.deniedMessage || DISABLED_REASON_MESSAGE.permission}
+                className={`${pill} border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60`}
               >
                 {tab.label}
               </span>
@@ -105,6 +119,18 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
                 aria-disabled="true"
                 title={DISABLED_REASON_MESSAGE.plan}
                 className={`${base} border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed`}
+              >
+                {tab.label}
+              </span>
+            );
+          }
+          if (!tab.visible) {
+            return (
+              <span
+                key={tab.id}
+                aria-disabled="true"
+                title={tab.deniedMessage || DISABLED_REASON_MESSAGE.permission}
+                className={`${base} border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60`}
               >
                 {tab.label}
               </span>

@@ -478,10 +478,7 @@ export default function UnitDisputesPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
-                if (!canExportDisputes) {
-                  toast.error('You do not have permission to export disputes');
-                  return;
-                }
+                if (!canExportDisputes) return;
                 setShowExportModal(true);
               }}
               disabled={loading || filteredDisputes.length === 0 || !canExportDisputes}
@@ -509,10 +506,7 @@ export default function UnitDisputesPage() {
             </button>
             <button
               onClick={() => {
-                if (!canFileDispute) {
-                  toast.error('You do not have permission to file disputes');
-                  return;
-                }
+                if (!canFileDispute) return;
                 openFileModal();
               }}
               aria-disabled={!canFileDispute}
@@ -706,10 +700,7 @@ export default function UnitDisputesPage() {
             {!hasActiveFilters && (
               <button
                 onClick={() => {
-                  if (!canFileDispute) {
-                    toast.error('You do not have permission to file disputes');
-                    return;
-                  }
+                  if (!canFileDispute) return;
                   openFileModal();
                 }}
                 aria-disabled={!canFileDispute}

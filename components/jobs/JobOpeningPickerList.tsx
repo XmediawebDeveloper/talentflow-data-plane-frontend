@@ -608,9 +608,13 @@ export default function JobOpeningPickerList({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            // Permission-locked: tooltip only, no-op click.
+                            if (proceedDisabled) return;
                             onProceed();
                           }}
-                          disabled={proceedDisabled}
+                          /* aria-disabled (not native `disabled`) so the
+                             permission tooltip still shows on hover. */
+                          aria-disabled={proceedDisabled || undefined}
                           title={proceedDisabled ? 'You do not have permission to proceed' : undefined}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap ${
                             proceedDisabled
