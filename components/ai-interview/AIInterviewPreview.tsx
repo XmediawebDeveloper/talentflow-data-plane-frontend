@@ -23,6 +23,7 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import WizardDiscardButton from './WizardDiscardButton';
+import { isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
@@ -502,17 +503,25 @@ export default function AIInterviewPreview() {
         return;
       }
     }
+    clearUnsavedVersion(id);
     toast.success('Draft saved!');
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
 
+  /* Discard — the wizard's one rule (lib/utils/aiInterviewUnsavedVersion):
+     an UNSAVED draft (a new interview, or the version Duplicate just minted)
+     is deleted; a draft the recruiter saved earlier, or a published / live
+     version, is left as last saved — Discard never deletes it. */
+  const discardDeletesVersion = !!id && interview?.status === 'draft' && isUnsavedVersion(id);
   const handleDiscard = async () => {
-    if (!id) return;
-    try {
-      await aiInterviewService.delete(id);
-      toast.success('Draft discarded');
-    } catch {
-      // Silent
+    if (id && discardDeletesVersion) {
+      try {
+        await aiInterviewService.delete(id);
+        clearUnsavedVersion(id);
+        toast.success('Draft discarded');
+      } catch {
+        // Silent
+      }
     }
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
@@ -1223,7 +1232,7 @@ export default function AIInterviewPreview() {
                 <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
                   Back to Clusters
                 </Button>
-                <WizardDiscardButton onClick={handleDiscard} />
+                <WizardDiscardButton onClick={handleDiscard} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} />
               </div>
               {/* Phones stack the two actions full-width, Publish on top. */}
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">

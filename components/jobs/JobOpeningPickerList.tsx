@@ -512,14 +512,17 @@ export default function JobOpeningPickerList({
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                   }`}
                 >
-                  <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+                  {/* flex-wrap below sm: radio + job info share the first row,
+                      level with the Job ID / Job Name line; the buttons wrap
+                      under them at full width. */}
+                  <div className="flex flex-wrap sm:flex-nowrap items-start gap-3 sm:gap-4">
                     {/* A radio, because exactly one job is picked at a time.
                         Wrapped in its own label rather than the whole card:
                         the card now carries links and a versions toggle,
                         and a label around those would swallow their
                         clicks. */}
                     <label
-                      className={`flex items-center pt-1 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      className={`flex items-center h-5 sm:h-auto sm:pt-1 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                       title={selectable ? `Select the latest version (v${job.versionNumber ?? 1})` : reason}
                     >
                       <input
@@ -542,13 +545,7 @@ export default function JobOpeningPickerList({
                       <span className="sr-only">Select {job.title}</span>
                     </label>
 
-                    <div className="flex-1 min-w-0 w-full sm:w-auto">
-                      {/* w-full sm:w-auto: the parent stacks (flex-col items-start)
-                          on mobile, so without an explicit full width this column
-                          is sized to its content — a long job title then pushes the
-                          whole card past the screen edge, clipping the title and the
-                          meta. Full width on mobile lets the title/meta truncate and
-                          wrap within the card instead. */}
+                    <div className="flex-1 min-w-0">
                       {/* The job opening exactly as the Job Openings list
                           renders it — same fields in the same places.
 
@@ -605,7 +602,7 @@ export default function JobOpeningPickerList({
                         button sits right before the eye icon, both on one
                         row — so it fires from right where the pick was just
                         made instead of a summary further down the page. */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0 basis-full sm:basis-auto">
                       {lineageSelected && onProceed && (
                         <button
                           type="button"

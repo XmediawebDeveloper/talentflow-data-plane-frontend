@@ -278,6 +278,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     onDisableJob?.(job);
   };
   const listSectionRef = useRef<HTMLDivElement | null>(null);
+  // Phones scroll a card click to the jobs themselves (see the scroll effect);
+  // the sticky breadcrumb's real height is the offset they land under.
+  const jobsListRef = useRef<HTMLDivElement | null>(null);
+  const breadcrumbRef = useRef<HTMLElement | null>(null);
   // Wraps the Actions dropdown so an outside click can close it.
   const bulkActionsRef = useRef<HTMLDivElement | null>(null);
   
@@ -330,6 +334,16 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     if (listScrollRequest === 0 || pageView !== 'list') return;
 
     const frame = window.requestAnimationFrame(() => {
+      /* Below `sm` the toolbar stacks into ~460px of search, filters, tabs and
+         sort, so landing on `listSectionRef` (above the toolbar) left the jobs
+         below the fold and the recruiter looking at the tab pills. Phones land
+         on the list instead, clear of the sticky breadcrumb; from `sm` up the
+         toolbar is short enough to keep in view, so desktop is unchanged. */
+      if (window.matchMedia('(max-width: 639px)').matches && jobsListRef.current) {
+        jobsListRef.current.style.scrollMarginTop = `${(breadcrumbRef.current?.offsetHeight ?? 0) + 12}px`;
+        jobsListRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
@@ -1009,7 +1023,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
+        <PageBreadcrumb barRef={breadcrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
         {/* SaaS Header */}
         <div className="mb-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
@@ -1133,6 +1147,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             // Location, Industry and More Filters are evenly spaced on one line
             // and use the full available width.
             controlsFollowSearch
+            compactOnMobile
             onToggleFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
             filtersOpen={showAdvancedFilters}
             activeFilterCount={activeFiltersCount}
@@ -1446,7 +1461,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <span className="text-xs sm:text-sm text-gray-700">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
                     the sort control belongs to the same pill system. */}
-                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
+                {/* Phones get a 28px control (p-0.5 + h-6, 12px text) so the sort
+                    sits at the same scale as the tab pills; `sm` and up are as before.
+                    `max-sm:!text-xs` because globals.css forces every <select>
+                    to 16px below 640px, unlayered, which outranks a plain utility. */}
+                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-0.5 sm:p-1 transition-all">
                   <div className="relative">
                     <select
                       value={sortBy}
@@ -1454,7 +1473,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         const value = e.target.value as JobSortBy;
                         setSortBy(value);
                       }}
-                      className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-xs sm:text-sm text-gray-700 cursor-pointer"
+                      className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
                       <option value="applicants">Applicants</option>
@@ -1464,7 +1483,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       <option value="status">Status</option>
                       <option value="industry">Industry Type</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                    <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
                   </div>
                   <button
                     type="button"
@@ -1472,7 +1491,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       e.stopPropagation();
                       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                     }}
-                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
+                    className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
                     title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   >
                     <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
@@ -1483,7 +1502,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           </div>
         </div>
 
-        {/* Jobs Grid/List */}
+        {/* Jobs Grid/List — `jobsListRef` is the phone scroll target. */}
+        <div ref={jobsListRef} aria-hidden="true" />
         {currentJobs.length > 0 ? (
             // List View
             <div className="space-y-3">
@@ -1533,14 +1553,17 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob && canUpdateJd ? onEditJob(job) : onViewJob(job)}
                   >
-                    <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
+                    {/* flex-wrap: checkbox + job info (+ the counts column from
+                        md) share the first row, so the checkbox sits on the Job
+                        ID / Job Name line; the footer wraps under at full width. */}
+                    <div className="flex flex-wrap items-start gap-3 md:gap-x-4">
                       {/* Individual Select — just the checkbox (the Briefcase
                           job icon that used to sit beside it was removed).
-                          md:h-6 gives the checkbox the same 24px line-box as the
-                          title row (text-base), so on the desktop row it centers
-                          on the same line as the JD-ID / Role / Versions badges
-                          instead of sitting a few px higher. */}
-                      <div className="flex items-center flex-shrink-0 md:h-6">
+                          h-5 / sm:h-6 give the checkbox the title row's own
+                          line-box (text-sm 20px, text-base 24px from sm), so it
+                          centers on the same line as the JD-ID / Role / Versions
+                          badges instead of sitting a few px higher. */}
+                      <div className="flex items-center flex-shrink-0 h-5 sm:h-6">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
                           title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
@@ -1570,46 +1593,49 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         />
                       </div>
 
-                      {/* Actions — a full-height column: icon row pinned at
-                          the top, View Versions pinned at the bottom-right
-                          corner of the card. self-stretch + justify-between
-                          make the column span the row's full height (set by
-                          the job info beside it), so the button lands flush
-                          with the right edge, level with the card's last
-                          content row. */}
-                      <div className="flex flex-col items-end justify-between gap-2 self-stretch flex-shrink-0">
-                      {/* Top of the actions column: the count badges (vertical,
-                          colored stack) sit to the LEFT of the Edit / View / ⋮
-                          button row. */}
-                      <div className="flex items-start gap-3">
-                        {/* Applicants / Assessed / Interviewed — one below another,
-                            equal width (items-stretch), colored with the shared
-                            semantic tokens: info (applicants), success (assessed),
-                            warning (interviewed). text-xs matches the app's other
-                            chips/badges; capitalized labels. */}
-                        {hasCountBadges && (
-                          <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
-                            {applicantsCount != null && (
-                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong">
-                                <Users className="w-4 h-4" />
-                                {applicantsCount} {applicantsCount === 1 ? 'Applicant' : 'Applicants'}
-                              </span>
-                            )}
-                            {assessedCount != null && (
-                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-success-subtle text-success-strong">
-                                <ClipboardCheck className="w-4 h-4" />
-                                {assessedCount} Assessed
-                              </span>
-                            )}
-                            {interviewedCount != null && (
-                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning-strong">
-                                <Video className="w-4 h-4" />
-                                {interviewedCount} Interviewed
-                              </span>
-                            )}
-                          </div>
+                    {/* Applicants / Assessed / Interviewed — one below another,
+                        equal width (items-stretch), colored with the shared
+                        semantic tokens: info (applicants), success (assessed),
+                        warning (interviewed). text-xs matches the app's other
+                        chips/badges; capitalized labels. From md: the card's
+                        right-hand column. Below md: one nowrap line across the
+                        card, under the job info, in the micro tier
+                        (text-2xs, 14px icons, tighter padding); under 360px
+                        the icons drop so all three still fit a 320px phone —
+                        the label and colour still name each count. */}
+                    {hasCountBadges && (
+                      <div className="flex basis-full md:basis-auto flex-nowrap gap-1 md:flex-col md:items-stretch md:gap-1.5 flex-shrink-0">
+                        {applicantsCount != null && (
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-info-subtle text-info-strong">
+                            <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            {applicantsCount} {applicantsCount === 1 ? 'Applicant' : 'Applicants'}
+                          </span>
                         )}
-                      <div className="flex flex-wrap gap-2 items-start justify-end">
+                        {assessedCount != null && (
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-success-subtle text-success-strong">
+                            <ClipboardCheck className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            {assessedCount} Assessed
+                          </span>
+                        )}
+                        {interviewedCount != null && (
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
+                            <Video className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            {interviewedCount} Interviewed
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                      {/* Footer — one row along the card's bottom edge at every
+                          width: View Versions bottom-left, Edit / View / ⋮
+                          bottom-right (ml-auto, so they stay right when a job
+                          has no View Versions). basis-full puts it on its own
+                          line of the wrapping card row. All four controls are
+                          28px (h-7 / rounded-md / 1px border, 14px glyphs) so
+                          they read as one straight line. */}
+                      <div className="flex basis-full items-center gap-2">
+                      <div className="contents">
+                      <div className="order-last ml-auto flex flex-nowrap items-center gap-2">
                         {/* Edit Button - icon only. Shown on every row except
                             Archived/Disabled ones — those are already retired,
                             so there is nothing on them to edit in place.
@@ -1634,7 +1660,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                 onEditJob(job);
                               }}
                               aria-disabled={!canUpdateJd || atMaxVersions}
-                              className={`h-9 w-9 p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
                               aria-label="Edit"
                               title={
                                 atMaxVersions
@@ -1644,7 +1670,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     : 'Edit'
                               }
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3.5 h-3.5" />
                             </Button>
                           );
                         })()}
@@ -1654,10 +1680,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         <Button
                           variant="secondary"
                           onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                          className="h-9 w-9 p-0 rounded-md"
+                          className="!h-7 !w-7 !p-0 rounded-md"
                           aria-label="View" title="View"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5" />
                         </Button>
 
                         {/* Three-dot Menu */}
@@ -1671,11 +1697,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="h-9 w-9 p-0 rounded-md"
+                            className="!h-7 !w-7 !p-0 rounded-md"
                             aria-label="More actions"
                             title="More actions"
                           >
-                            <MoreVertical className="w-4 h-4" />
+                            <MoreVertical className="w-3.5 h-3.5" />
                           </Button>
                           {activeDropdown === job.id && (
                             <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
@@ -1838,8 +1864,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         </div>
                       </div>
                       </div>
-                        {/* View Versions — pinned at the bottom of the actions
-                            column, i.e. the card's bottom-right corner. Shown
+                        {/* View Versions — first in the footer, i.e. the card's
+                            bottom-left corner, level with the icons. Shown
                             only for jobs that have earlier versions: on a v1
                             job it would open onto a single entry repeating the
                             row above it. The label flips so the control says

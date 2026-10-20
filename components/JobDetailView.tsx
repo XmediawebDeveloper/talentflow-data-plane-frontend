@@ -3128,7 +3128,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
             </div>
 
-            <div className="flex items-center gap-3 ml-6">
+            {/* Below lg the header stacks (flex-col), so this group is its last
+                row: self-end puts Edit / Disable / Archive in the card's
+                bottom-right corner. The ml-6 gap is only for the lg row layout,
+                where it separates the group from the job info beside it — below
+                lg it indented the icons off the left edge instead. */}
+            <div className="flex items-center gap-3 self-end lg:self-auto lg:ml-6">
             {/* AI Talent Match Button - COMMENTED OUT (gated by aiTalentMatchAvailable) */}
             {false && aiTalentMatchAvailable && (job.status !== 'Disabled' ? (
               <button
@@ -3481,8 +3486,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {/* Overview Tab Content */}
       {activeTab === 'overview' && (
       <div ref={overviewSectionRef} className="grid grid-cols-1 lg:grid-cols-12 gap-5 scroll-mt-5">
-        {/* Left Column - Job Details */}
-        <div className="lg:col-span-8 space-y-5">
+        {/* Left Column - Job Details. tf-justify-mobile (globals.css):
+            every Overview section's text is justified on phones. */}
+        <div className="lg:col-span-8 space-y-5 tf-justify-mobile">
           {/* Complete Job Description */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             {/* JD Header - COMMENTED OUT
@@ -5763,8 +5769,9 @@ function AIMatchTabContent({
           activeFilterCount={aiMatchActiveFilterCount}
           filtersApplied={aiMatchActiveFilterCount > 0}
           onClearFilters={clearAiMatchFilters}
-          /* h-9 on the List/Grid switch so it matches the 36px toolbar band. */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
+          /* sm:h-9 on the List/Grid switch so it matches the 36px toolbar band
+             from sm; phones keep its own 28px (the Job Openings pill height). */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />}
           beforeSearch={
             <>
               {/* Select All — the shared ToolbarSelectAll (this page / all /
@@ -5791,7 +5798,7 @@ function AIMatchTabContent({
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="rounded-full h-9"
+                      className="rounded-full sm:h-9"
                       aria-label={`Actions for ${selectedIds.size} selected`}
                     >
                       Actions
@@ -5950,7 +5957,7 @@ function AIMatchTabContent({
               size="sm"
               onClick={onRunMatch}
               icon={<Sparkles className="w-4 h-4" />}
-              className="h-9 whitespace-nowrap"
+              className="sm:h-9 whitespace-nowrap"
             >
               Run Match
             </Button>

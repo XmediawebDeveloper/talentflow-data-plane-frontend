@@ -380,7 +380,7 @@ export default function AIInterviewJDSelection() {
                         >
                           <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4">
                             <label
-                              className={`flex items-center pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                              className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                               title={
                                 blockedByOtherPick
                                   ? otherPickReason
