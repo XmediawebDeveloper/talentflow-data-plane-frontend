@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useCallback, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import AppModal, { AppModalAction } from '@/components/ui/app-modal';
+import { getPermissionParts } from '@/lib/constants/permissionCategories';
+import { permissionActionOf, permissionBadgeClass } from './PermissionSectionsView';
 
 /**
  * Compact confirm popup for permission changes (turning a main permission on/off,
- * a section on/off). Fixed small size: a one-line summary, and the full list
- * behind "Show details" so long cascades never blow the popup up.
+ * a section on/off). Fixed small size: a one-line summary, then the affected
+ * permissions grouped section by section, scrolling inside a fixed-height box.
  *
  * Usage:
  *   const { ask, dialog } = usePermissionChangeDialog();
@@ -18,7 +20,8 @@ import AppModal, { AppModalAction } from '@/components/ui/app-modal';
 
 export interface PermissionChangeDetailGroup {
   heading: string;
-  items: string[];
+  /** Permission codes — shown as the same tiles as the Edit User screen. */
+  codes: string[];
 }
 
 export interface PermissionChangeOptions {
@@ -33,11 +36,9 @@ export interface PermissionChangeOptions {
 
 export function usePermissionChangeDialog() {
   const [opts, setOpts] = useState<PermissionChangeOptions | null>(null);
-  const [expanded, setExpanded] = useState(false);
   const resolver = useRef<((v: string | null) => void) | null>(null);
 
   const ask = useCallback((o: PermissionChangeOptions) => {
-    setExpanded(false);
     setOpts(o);
     return new Promise<string | null>((resolve) => {
       resolver.current = resolve;
@@ -50,7 +51,7 @@ export function usePermissionChangeDialog() {
     setOpts(null);
   };
 
-  const detailCount = opts?.details?.reduce((n, g) => n + g.items.length, 0) ?? 0;
+  const detailCount = opts?.details?.reduce((n, g) => n + g.codes.length, 0) ?? 0;
   const actions: AppModalAction[] = (opts?.actions ?? []).map((a) => ({
     label: a.label,
     variant: a.variant,
@@ -72,30 +73,43 @@ export function usePermissionChangeDialog() {
         <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
           <div>{opts.summary}</div>
           {detailCount > 0 && (
-            <div className="rounded-xl border border-gray-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => setExpanded((v) => !v)}
-                aria-expanded={expanded}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-brand-blue hover:bg-brand-blue/[0.04]"
-              >
-                {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                {expanded ? 'Hide details' : `Show details (${detailCount})`}
-              </button>
-              {expanded && (
-                <div className="max-h-48 space-y-3 overflow-y-auto border-t border-gray-100 dark:border-slate-700/60 px-3 py-2">
-                  {opts.details!.filter((g) => g.items.length > 0).map((g) => (
-                    <div key={g.heading}>
-                      <p className="mb-1 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">{g.heading}</p>
-                      <ul className="space-y-0.5">
-                        {g.items.map((item) => (
-                          <li key={item} className="text-xs text-gray-700 dark:text-slate-300">• {item}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
+            // Always shown (no expander), grouped section by section, scrolling
+            // inside a fixed-height box so long lists never grow the popup.
+            <div className="max-h-72 space-y-4 overflow-y-auto rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+              {opts.details!.filter((g) => g.codes.length > 0).map((g) => {
+                const bySection = new Map<string, string[]>();
+                g.codes.forEach((code) => {
+                  const { section } = getPermissionParts(code);
+                  bySection.set(section, [...(bySection.get(section) || []), code]);
+                });
+                return (
+                  <div key={g.heading} className="space-y-2.5">
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">{g.heading}</p>
+                    {Array.from(bySection.entries()).map(([section, codes]) => (
+                      <div key={section}>
+                        <p className="mb-1.5 text-xs font-semibold text-gray-800 dark:text-slate-200">{section}</p>
+                        {/* Same tile look as the Edit User permission grid. */}
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {codes.map((code) => {
+                            const { label } = getPermissionParts(code);
+                            return (
+                              <div
+                                key={code}
+                                className="flex items-center gap-2.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 p-2.5"
+                              >
+                                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${permissionBadgeClass(permissionActionOf(code))}`}>
+                                  <span className="text-xs font-semibold uppercase">{label[0] || 'P'}</span>
+                                </span>
+                                <p className="min-w-0 break-words text-sm font-semibold leading-snug text-gray-900 dark:text-slate-50">{label}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

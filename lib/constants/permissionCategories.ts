@@ -590,3 +590,19 @@ export const getEntryPoints = (main: string): string[] =>
 /** The main permission an entry point belongs to, or null. */
 export const getMainPermission = (entry: string): string | null =>
   ENTRY_POINT_GROUPS.find((g) => g.entries.includes(entry))?.main ?? null;
+
+/** A code's tile label and the section it lives in — e.g. { label: 'Score Resume',
+ *  section: 'Job Description' }, { label: 'View My Resumes', section: 'My Resumes' }. */
+export const getPermissionParts = (code: string): { label: string; section: string } => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return { label: `View ${cat.name}`, section: cat.name };
+    const action = cat.actions?.find((a) => a.code === code);
+    if (action) return { label: action.label, section: cat.name };
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) return { label: `View ${sub.name}`, section: cat.name };
+      const subAction = sub.actions.find((a) => a.code === code);
+      if (subAction) return { label: subAction.label === 'View' ? `View ${sub.name}` : subAction.label, section: sub.name };
+    }
+  }
+  return { label: code, section: '' };
+};

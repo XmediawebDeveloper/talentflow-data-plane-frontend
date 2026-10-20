@@ -21,6 +21,7 @@ import {
   labelOf,
   planTurnOff,
   planTurnOn,
+  isGroupFullyOn,
   withRequired,
   withoutOrphanEntryPoints,
 } from '@/lib/permissions/permissionRules';
@@ -237,9 +238,9 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
       tone: 'on',
       summary,
       details: [
-        { heading: 'Can also be started from', items: plan.offeredEntryPoints.flatMap((g) => g.entries.map(labelOf)) },
-        { heading: 'Also turned on (needed)', items: plan.autoRequired.map(labelOf) },
-        { heading: 'Not turned on (their main permission is off)', items: plan.skippedLocked.map(labelOf) },
+        { heading: 'Can also be started from', codes: plan.offeredEntryPoints.flatMap((g) => g.entries) },
+        { heading: 'Also turned on (needed)', codes: plan.autoRequired },
+        { heading: 'Not turned on (their main permission is off)', codes: plan.skippedLocked },
       ],
       actions:
         entryCount === 0
@@ -283,8 +284,8 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
       tone: 'off',
       summary: `This will also turn off ${parts.join(' and ')}.`,
       details: [
-        { heading: 'Entry points in other sections', items: plan.entryPointsOff.map(labelOf) },
-        { heading: 'Also turned off (they need it)', items: plan.dependentsOff.map(labelOf) },
+        { heading: 'Entry points in other sections', codes: plan.entryPointsOff },
+        { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
@@ -321,25 +322,32 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     return codes;
   };
 
-  const handleSelectAllCategory = (category: CustomPermissionCategory) => {
-    const categoryCodes = getAllCodesForCategory(category);
-    const allSelected = categoryCodes.every((code) => selectedPermissionCodes.has(code));
-    if (allSelected) {
-      void applyTurnOff(categoryCodes, category.name);
+  // Section / sub-section checkbox: everything selected -> turn ALL off;
+  // anything less (none or some) -> turn ALL on. Entry points whose main is
+  // off can't be selected, so they don't block "everything selected".
+  const handleSelectAllGroup = (codes: string[], label: string) => {
+    if (isGroupFullyOn(codes, selectedPermissionCodes)) {
+      void applyTurnOff(codes, label);
     } else {
-      void applyTurnOn(categoryCodes.filter((code) => !selectedPermissionCodes.has(code)), category.name);
+      void applyTurnOn(codes.filter((code) => !selectedPermissionCodes.has(code)), label);
     }
   };
 
-  const isCategoryAllSelected = (category: CustomPermissionCategory): boolean => {
-    const categoryCodes = getAllCodesForCategory(category);
-    return categoryCodes.length > 0 && categoryCodes.every((code) => selectedPermissionCodes.has(code));
-  };
+  const handleSelectAllCategory = (category: CustomPermissionCategory) =>
+    handleSelectAllGroup(getAllCodesForCategory(category), category.name);
+
+  const getAllCodesForSubCategory = (subCategory: CustomPermissionSubCategory): string[] => [
+    ...(subCategory.viewCode ? [subCategory.viewCode] : []),
+    ...subCategory.actions.map((action) => action.code),
+  ];
+
+  const isCategoryAllSelected = (category: CustomPermissionCategory): boolean =>
+    isGroupFullyOn(getAllCodesForCategory(category), selectedPermissionCodes);
 
   const isCategorySomeSelected = (category: CustomPermissionCategory): boolean => {
     const categoryCodes = getAllCodesForCategory(category);
     const selectedCount = categoryCodes.filter((code) => selectedPermissionCodes.has(code)).length;
-    return selectedCount > 0 && selectedCount < categoryCodes.length;
+    return selectedCount > 0 && !isGroupFullyOn(categoryCodes, selectedPermissionCodes);
   };
 
   const handleParentRoleChange = async (parentRoleId: string) => {
@@ -484,7 +492,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
           return (
             <section
               key={category.id}
-              className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm ring-1 ring-black/[0.02]"
+              className="overflow-hidden rounded-xl border border-gray-300 dark:border-slate-600 bg-white shadow-sm"
             >
               <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <div className="flex items-start gap-3">
@@ -547,8 +555,29 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                 {category.subCategories && (
                   <div className="space-y-4">
                     {category.subCategories.map((subCategory) => (
-                      <div key={subCategory.name} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+                      <div key={subCategory.name} className="ml-4 sm:ml-8 rounded-xl border border-gray-200 border-l-4 border-l-brand-blue/30 bg-gray-50/70 p-4">
                         <div className="mb-3 flex flex-wrap items-center gap-2">
+                          {(() => {
+                            const subCodes = getAllCodesForSubCategory(subCategory);
+                            const subAll = isGroupFullyOn(subCodes, selectedPermissionCodes);
+                            const subSome = !subAll && subCodes.some((code) => selectedPermissionCodes.has(code));
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleSelectAllGroup(subCodes, subCategory.name)}
+                                className={`inline-flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                                  subAll
+                                    ? 'border-brand-blue bg-brand-blue text-white'
+                                    : subSome
+                                    ? 'border-brand-cyan bg-brand-cyan text-white'
+                                    : 'border-gray-300 bg-white hover:border-brand-blue/40'
+                                }`}
+                                aria-label={`Select all permissions for ${subCategory.name}`}
+                              >
+                                {(subAll || subSome) && <Check className="h-3 w-3" />}
+                              </button>
+                            );
+                          })()}
                           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                             {subCategory.name}
                           </span>

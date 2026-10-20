@@ -29,7 +29,14 @@ export default function ResumeScoringJDSelection() {
   const loadJDs = useCallback(async () => {
     try {
       setLoadingJds(true);
-      const result = await jdService.list({ status: 'published', page: 1, page_size: 50 });
+      // Probe for the total, then pull every published JD in one request —
+      // the same pattern the Resume Scoring page uses for its job list. A
+      // flat page_size of 50 silently dropped every JD past the 50th.
+      const params = { status: 'published' as const };
+      const probe = await jdService.list({ ...params, page: 1, page_size: 1 });
+      const result = probe.total > (probe.items || []).length
+        ? await jdService.list({ ...params, page: 1, page_size: probe.total })
+        : probe;
       setJds(result.items || []);
     } catch (error) {
       console.error('Failed to load JDs:', error);

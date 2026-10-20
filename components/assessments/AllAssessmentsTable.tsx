@@ -334,6 +334,10 @@ interface AllAssessmentsTableProps {
    *  load settles — so the host's tab count is the same data as the list.
    *  `null` while loading or after a failed load. */
   onRowCountChange?: (count: number | null) => void;
+  /** Told after one of this table's own status actions (Archive, Unarchive,
+   *  Delete) succeeds, so the host can re-read what that action moved — its
+   *  stat cards and tab counts — rather than keep the pre-action figures. */
+  onMutated?: () => void;
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
@@ -348,7 +352,7 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
 const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0 }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -439,7 +443,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
       apiPage += 1;
     }
-    return collected.map(toRow);
+    /* Offset paging over a list that can change between batches (a row
+       created or archived mid-walk) can hand the same assessment back on two
+       pages — one row per id. */
+    const seen = new Set<string>();
+    return collected.filter((a) => !seen.has(a.id) && !!seen.add(a.id)).map(toRow);
   }, [fixedStatus]);
 
   /* Every state write lands in a promise callback rather than in the effect
@@ -764,6 +772,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           : prev.map((r) => (r.id === row.id ? { ...r, rawStatus: updated.rawStatus, status: updated.status } : r))));
       }
       refreshRows();
+      onMutated?.();
     } catch (err) {
       console.error(`Failed to ${verb} assessment:`, err);
       toast.error(`Failed to ${verb} assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);

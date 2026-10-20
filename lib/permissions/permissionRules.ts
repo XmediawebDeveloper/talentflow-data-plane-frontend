@@ -120,6 +120,16 @@ export const withoutOrphanEntryPoints = (codes: Iterable<string>): Set<string> =
   return set;
 };
 
+/**
+ * Section / sub-section toggle state: ON only when EVERY usable code in the group
+ * is selected. Entry points whose main is off can't be selected, so they don't
+ * count. A partly selected group reads as OFF — clicking it selects all.
+ */
+export const isGroupFullyOn = (codes: string[], current: Set<string>): boolean => {
+  const usable = codes.filter((c) => current.has(c) || !isEntryPointLocked(c, current));
+  return usable.length > 0 && usable.every((c) => current.has(c));
+};
+
 export interface TurnOnPlan {
   /** Final set if the user picks "only this" (requested + required, no extra entry points). */
   only: Set<string>;

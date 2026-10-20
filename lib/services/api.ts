@@ -169,6 +169,17 @@ export const clearTokens = () => {
     // Remove cookies with the same path used when setting them
     Cookies.remove('accessToken', { path: '/' });
     Cookies.remove('refreshToken', { path: '/' });
+
+    // Drop unsent support-ticket drafts (saved per user by SupportCenter) so the
+    // next person on this browser never sees them.
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('tf-support-ticket-draft:')) localStorage.removeItem(key);
+      }
+    } catch {
+      // Storage unavailable — nothing to clean up.
+    }
   }
 
   // Clear permission version using dedicated function
