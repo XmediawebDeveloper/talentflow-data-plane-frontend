@@ -1,20 +1,25 @@
 'use client';
 
 import { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
-import React, { useEffect, useState } from 'react';
+import { GroupCheckbox, groupCheckState } from '@/components/ui/group-checkbox';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Shield,
   Loader2,
   Check,
+  Minus,
   Lock,
   Sparkles,
   ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
+import { askTurnOnWithDependents, askUnlockEntryPoint, usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
 import {
+  forgetTurnOff,
+  rememberTurnOff,
+  TurnOffMemory,
   getAllCatalogCodes,
   getNeeds,
   isEntryPointLocked,
@@ -236,11 +241,25 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
   // Same rules as Edit User (lib/permissions/permissionRules.ts): needs are
   // turned on with a permission, a main offers its entry points, turning off
   // cascades with a confirm, and entry points are locked while their main is off.
+  // What each turn-off took with it, so turning it on again can restore it.
+  const turnOffMemory = useRef<TurnOffMemory>(new Map());
+
   const applyTurnOn = async (codes: string[], label: string) => {
     const plan = planTurnOn(codes, selectedPermissionCodes);
     if (codes.length === 1 && plan.skippedLocked.includes(codes[0])) {
-      const main = getMainPermission(codes[0]);
-      toast.info(`Turn on "${labelOf(main ?? '')}" first — "${labelOf(codes[0])}" can only be used while it is on.`);
+      // Locked entry point: offer to turn on its main (and what it needs).
+      const next = await askUnlockEntryPoint(ask, codes[0], selectedPermissionCodes);
+      if (next) setSelectedPermissionCodes(next);
+      return;
+    }
+    // Something other sections depend on (View Job Description…): offer
+    // [Only this] [Restore previous] [Turn on all].
+    const withDeps = await askTurnOnWithDependents(ask, codes, label, selectedPermissionCodes, turnOffMemory.current);
+    if (withDeps !== undefined) {
+      if (withDeps) {
+        forgetTurnOff(turnOffMemory.current, withDeps);
+        setSelectedPermissionCodes(withDeps);
+      }
       return;
     }
     const entryCount = plan.offeredEntryPoints.reduce((n, g) => n + g.entries.length, 0);
@@ -276,7 +295,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
             ],
     });
     if (!choice) return;
-    setSelectedPermissionCodes(choice === 'all' ? plan.all : plan.only);
+    const turnedOn = choice === 'all' ? plan.all : plan.only;
+    forgetTurnOff(turnOffMemory.current, turnedOn);
+    setSelectedPermissionCodes(turnedOn);
   };
 
   const applyTurnOff = async (codes: string[], label: string) => {
@@ -294,6 +315,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     });
     const extra = plan.entryPointsOff.length + plan.dependentsOff.length;
     if (extra === 0) {
+      rememberTurnOff(turnOffMemory.current, codes, selectedPermissionCodes, next);
       setSelectedPermissionCodes(next);
       return;
     }
@@ -315,6 +337,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
     if (choice !== 'off') return;
+    rememberTurnOff(turnOffMemory.current, codes, selectedPermissionCodes, next);
     setSelectedPermissionCodes(next);
   };
 
@@ -353,22 +376,14 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
   const renderGroupCheckbox = (codes: string[], label: string, size: 'md' | 'sm') => {
     const all = isGroupFullyOn(codes, selectedPermissionCodes);
-    const some = !all && codes.some((code) => selectedPermissionCodes.has(code));
     return (
-      <button
-        type="button"
+      <GroupCheckbox
+        size={size}
+        state={groupCheckState(all, codes.filter((code) => selectedPermissionCodes.has(code)).length)}
+        label={label}
         onClick={() => handleSelectAllGroup(codes, label)}
-        className={`inline-flex ${size === 'md' ? 'mt-0.5 h-5 w-5' : 'h-4 w-4'} shrink-0 items-center justify-center rounded border transition-colors ${
-          all
-            ? 'border-brand-blue bg-brand-blue text-white'
-            : some
-            ? 'border-brand-cyan bg-brand-cyan text-white'
-            : 'border-gray-300 bg-white hover:border-brand-blue/40'
-        }`}
-        aria-label={`Select all permissions for ${label}`}
-      >
-        {(all || some) && <Check className="h-3 w-3" />}
-      </button>
+        className={size === 'md' ? 'mt-0.5' : undefined}
+      />
     );
   };
 
@@ -437,7 +452,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     onClick: () => void
   ) => {
     // Entry point whose main permission is off: greyed out with a lock; clicking
-    // explains which main to turn on first (handled by applyTurnOn).
+    // offers to turn its main on too (popup, handled by applyTurnOn).
     const mainCode = getMainPermission(code);
     const locked = !isSelected && isEntryPointLocked(code, selectedPermissionCodes);
     if (locked) {
@@ -446,9 +461,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           key={code}
           type="button"
           onClick={onClick}
-          aria-disabled
-          title={`Turn on "${labelOf(mainCode ?? '')}" first`}
-          className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-400"
+          title={`Needs "${labelOf(mainCode ?? '')}" — click to turn both on`}
+          className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-400"
         >
           <Lock className="h-3.5 w-3.5" />
           <span>{label}</span>
@@ -502,8 +516,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
               }`}
             >
-              <span className={`flex h-4 w-4 items-center justify-center rounded border ${allSelected || someSelected ? 'border-white/50 bg-white/20' : 'border-gray-300 bg-white'}`}>
-                {(allSelected || someSelected) && <Check className="h-3 w-3" />}
+              <span className={`flex h-4 w-4 items-center justify-center rounded border ${allSelected ? 'border-white/50 bg-white/20' : someSelected ? 'border-brand-blue bg-white text-brand-blue' : 'border-gray-300 bg-white'}`}>
+                {allSelected ? <Check className="h-3 w-3" /> : someSelected ? <Minus className="h-3 w-3" strokeWidth={3} /> : null}
               </span>
               Select all permissions
             </button>

@@ -129,6 +129,9 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       // from (JD, My Resumes, Shared Database, AI Talent Match) is an ENTRY POINT
       // of this permission — see ENTRY_POINT_GROUPS, not a dependency.
       'scoring:score': ['jd:read', 'my_resumes:read'],
+      // 2026-10-20: the whole module needs JD access — turning View Job
+      // Description off turns Resume Scoring off (like Assessment / AI Interview).
+      'scoring:read': ['jd:read'],
     },
   },
   {
@@ -151,6 +154,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // Talent Match too.
     dependencies: {
       'ai_match:run': ['internal_db:read', 'jd:read'],
+      // 2026-10-20: the whole module needs JD access (see scoring:read).
+      'ai_match:read': ['jd:read'],
     },
   },
   {
@@ -222,9 +227,9 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'assessments:share', label: 'Share' },
       { code: 'assessments:download_report', label: 'Download Report' },
       { code: 'assessments:batch_download', label: 'Batch Download' },
-      { code: 'assessments:add_question', label: 'Add Question' },
-      { code: 'assessments:edit_question', label: 'Edit Question' },
-      { code: 'assessments:delete_question', label: 'Delete Question' },
+      { code: 'assessments:add_question', label: 'HR Question Bank Add' },
+      { code: 'assessments:edit_question', label: 'HR Question Bank Edit' },
+      { code: 'assessments:delete_question', label: 'HR Question Bank Delete' },
     ],
     // Rule: Create and Edit both require Job Description access — every
     // assessment is tied to a JD (app/services/permission_dependencies.py
@@ -238,7 +243,12 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // assessments:add_question -> assessments:update) — adding a question edits
     // the assessment, so ticking it without Edit left a combination the
     // server rejects.
+    //
+    // Rule (2026-10-20, like AI Interview): viewing Assessments requires Job
+    // Description access — turning View Job Description off turns the whole
+    // Assessment section off (and HR Question Bank, which needs Assessment View).
     dependencies: {
+      'assessments:read': ['jd:read'],
       'assessments:create': ['jd:read'],
       'assessments:update': ['jd:read'],
       'assessments:add_question': ['assessments:update'],
@@ -256,6 +266,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_interview:publish', label: 'Publish' },
       { code: 'ai_interview:archive', label: 'Archive' },
       { code: 'ai_interview:delete', label: 'Delete' },
+      // HR questions picked from / added to the HR Question Bank inside the
+      // AI Interview builder — same three as Assessment's.
+      { code: 'ai_interview:add_question', label: 'HR Question Bank Add' },
+      { code: 'ai_interview:edit_question', label: 'HR Question Bank Edit' },
+      { code: 'ai_interview:delete_question', label: 'HR Question Bank Delete' },
     ],
     // Rule: viewing or creating an AI interview requires Job Description
     // access — every AI interview is tied to a JD
@@ -293,6 +308,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       'ai_interview:publish': ['my_resumes:read'],
       'ai_interview:archive': ['my_resumes:read'],
       'ai_interview:delete': ['my_resumes:read'],
+      // Adding a question edits the interview (mirrors assessments:add_question).
+      'ai_interview:add_question': ['ai_interview:update'],
     },
   },
   {

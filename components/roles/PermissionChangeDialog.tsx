@@ -3,7 +3,8 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import AppModal, { AppModalAction } from '@/components/ui/app-modal';
-import { getPermissionParts } from '@/lib/constants/permissionCategories';
+import { getMainPermission, getPermissionParts } from '@/lib/constants/permissionCategories';
+import { labelOf, planTurnOn, planTurnOnWithDependents, TurnOffMemory } from '@/lib/permissions/permissionRules';
 import { permissionActionOf, permissionBadgeClass } from './PermissionSectionsView';
 
 /**
@@ -32,6 +33,106 @@ export interface PermissionChangeOptions {
   /** Action buttons, right of Cancel, in order (last = primary). */
   actions: { id: string; label: string; variant?: 'primary' | 'secondary' | 'destructive' }[];
   cancelLabel?: string;
+  /** Popup width; defaults to sm. */
+  size?: 'sm' | 'md';
+}
+
+/**
+ * A locked entry point was clicked (its main permission is off). Instead of a
+ * "turn on X first" toast, offer to turn on what it requires — the main and
+ * anything that needs — and, when the main has other entry points, all of them.
+ * Returns the new full set, or null when cancelled / nothing to unlock.
+ */
+export async function askUnlockEntryPoint(
+  ask: (o: PermissionChangeOptions) => Promise<string | null>,
+  code: string,
+  current: Set<string>,
+  hidden: Set<string> = new Set(),
+): Promise<Set<string> | null> {
+  const main = getMainPermission(code);
+  if (!main) return null;
+  const plan = planTurnOn([main, code], current);
+  if (!plan.only.has(code)) return null;
+  const required = [main, ...plan.autoRequired].filter((c) => !hidden.has(c));
+  const others = plan.offeredEntryPoints.flatMap((g) => g.entries);
+  const choice = await ask({
+    title: `Turn on "${labelOf(code)}"?`,
+    tone: 'on',
+    summary: (
+      <>
+        It only works while &quot;{labelOf(main)}&quot; is on. Turn on what it requires too?
+      </>
+    ),
+    details: [
+      { heading: 'Also turned on (required)', codes: required },
+      { heading: `"${labelOf(main)}" can also be started from`, codes: others },
+    ],
+    actions:
+      others.length > 0
+        ? [
+            { id: 'only', label: 'Turn on required', variant: 'secondary' },
+            { id: 'all', label: 'Turn on all' },
+          ]
+        : [{ id: 'only', label: 'Turn on' }],
+  });
+  if (!choice) return null;
+  return choice === 'all' ? plan.all : plan.only;
+}
+
+/**
+ * Turning on something other sections depend on (View Job Description → Resume
+ * Scoring, AI Talent Match, Assessment, AI Interview…). Those sections were
+ * switched off with it, so ask what to bring back:
+ *   [Cancel] [Only this] [Restore previous]* [Turn on all]
+ * (*only when this screen remembers what was turned off).
+ * Returns the new full set, null when cancelled, or undefined when no other
+ * section is affected (the caller then uses its normal turn-on flow).
+ */
+export async function askTurnOnWithDependents(
+  ask: (o: PermissionChangeOptions) => Promise<string | null>,
+  codes: string[],
+  label: string,
+  current: Set<string>,
+  memory: TurnOffMemory,
+  hidden: Set<string> = new Set(),
+): Promise<Set<string> | null | undefined> {
+  const plan = planTurnOnWithDependents(codes, current, memory);
+  if (!plan || plan.allAdds.length === 0) return undefined;
+  const visible = (list: string[]) => list.filter((c) => !hidden.has(c));
+  const sectionList = plan.sections.length > 1
+    ? `${plan.sections.slice(0, -1).join(', ')} and ${plan.sections[plan.sections.length - 1]}`
+    : plan.sections[0];
+  const triggerLabel = plan.triggers.length === 1 ? `"${labelOf(plan.triggers[0])}"` : 'these permissions';
+  const choice = await ask({
+    title: `Turn on "${label}"?`,
+    tone: 'on',
+    size: 'md',
+    summary: (
+      <>
+        {sectionList} need{plan.sections.length === 1 ? 's' : ''} {triggerLabel}
+        {plan.restore ? ', so they were turned off with it.' : '.'}{' '}
+        {plan.restore ? (
+          <>
+            <span className="font-semibold">Restore previous</span> puts back exactly what was on before;{' '}
+            <span className="font-semibold">Turn on all</span> turns on everything in those sections.
+          </>
+        ) : (
+          <>Turn those sections on too?</>
+        )}
+      </>
+    ),
+    details: plan.restore
+      ? [{ heading: 'Restore previous turns back on', codes: visible(plan.restoreAdds) }]
+      : [{ heading: 'Turn on all adds', codes: visible(plan.allAdds) }],
+    actions: [
+      { id: 'only', label: 'Only this', variant: 'secondary' },
+      ...(plan.restore ? [{ id: 'restore', label: 'Restore previous', variant: 'secondary' as const }] : []),
+      { id: 'all', label: 'Turn on all' },
+    ],
+  });
+  if (!choice) return null;
+  if (choice === 'restore' && plan.restore) return plan.restore;
+  return choice === 'all' ? plan.all : plan.only;
 }
 
 export function usePermissionChangeDialog() {
@@ -62,7 +163,7 @@ export function usePermissionChangeDialog() {
     <AppModal
       open={!!opts}
       onCancel={() => close(null)}
-      size="sm"
+      size={opts?.size ?? 'sm'}
       zIndexClass="z-[70]"
       icon={opts?.tone === 'on' ? <ShieldCheck /> : <ShieldAlert />}
       title={opts?.title ?? ''}
