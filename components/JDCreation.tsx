@@ -6146,7 +6146,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       const isDuplicate = extractedData.locations.some(loc =>
         loc.city.trim().toLowerCase() === cityToAdd.toLowerCase() &&
-        loc.radius === radiusToAdd &&
         (loc.country || 'IN') === locationCountry
       );
 
@@ -6715,6 +6714,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } finally {
       isAdvancingRef.current = false;
     }
+  };
+
+  // Groups selected locations by state so the review step shows e.g.
+  // "Haryana: Ambala, Kurukshetra, Fatehabad" instead of flattening every
+  // "City, State" pair into one long comma-separated string.
+  const groupLocationsByState = (
+    locations: Array<{ city: string }>
+  ): Array<{ state: string; cities: string[] }> => {
+    const order: string[] = [];
+    const byState = new Map<string, string[]>();
+    locations.forEach(loc => {
+      if (!loc.city) return;
+      const parts = loc.city.split(',').map(p => p.trim());
+      const city = parts[0];
+      const state = parts.length > 1 ? parts.slice(1).join(', ') : 'Other';
+      if (!byState.has(state)) {
+        byState.set(state, []);
+        order.push(state);
+      }
+      byState.get(state)!.push(city);
+    });
+    return order.map(state => ({ state, cities: byState.get(state)! }));
   };
 
   // Helper function to get experience label from master data
@@ -11265,9 +11286,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
-                      {extractedData.locations.filter(loc => loc.city).length > 0 && (
-                        <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{extractedData.locations.filter(loc => loc.city).map(loc => loc.city).join(', ')}</span>
-                      )}
+                      {groupLocationsByState(extractedData.locations).map(group => (
+                        <span key={group.state} className="flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />
+                          {group.state !== 'Other' ? `${group.state}: ${group.cities.join(', ')}` : group.cities.join(', ')}
+                        </span>
+                      ))}
                       {extractedData.experience && (
                         <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />{getExperienceLabel(extractedData.experience)}</span>
                       )}
@@ -11306,6 +11330,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
             </div>
+
+            {/* JD22 - Additional Details, shown unconditionally (not tucked inside the
+                collapsed Extracted Data Summary below) so text typed on Step 2 is visibly
+                reflected here the moment Review loads, matching the always-visible card
+                the published JD view (JobDetailView) shows for the same field. */}
+            {extractedData.additionalDetails && (
+              <div className="min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 sm:p-6 mt-4 sm:mt-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Additional Details</h3>
+                  <span className={CANDIDATE_VISIBLE_BADGE_CLASS}>
+                    <Eye className="w-3 h-3 flex-shrink-0" />
+                    Visible to candidates
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
+              </div>
+            )}
 
             {/* Extracted Data Summary Preview - Collapsible. The shared summary
                 card (components/jobs/ExtractedDataSummary): the whole heading
