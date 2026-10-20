@@ -1500,6 +1500,12 @@ function CurrentPlanContent() {
   // Auto-select plan from URL parameter (from pricing page flow)
   useEffect(() => {
     if (encodedPlanFromUrl && plans.length > 0 && !selectedPlanForPayment) {
+      // A Billing Manager (or anyone without canUpgradePlan) cannot change
+      // plans: drop the pricing-page plan link instead of starting a purchase.
+      if (planChangeLocked) {
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
       try {
         const decodedPlanId = decodePlanId(encodedPlanFromUrl);
         if (decodedPlanId) {
@@ -1517,7 +1523,7 @@ function CurrentPlanContent() {
         console.error('[CurrentPlan] Error auto-selecting plan:', err);
       }
     }
-  }, [encodedPlanFromUrl, plans, selectedPlanForPayment]);
+  }, [encodedPlanFromUrl, plans, selectedPlanForPayment, planChangeLocked]);
 
   const validatePaymentForm = (): boolean => {
     const errors: Partial<PaymentFormData> = {};
@@ -1563,6 +1569,8 @@ function CurrentPlanContent() {
   };
 
   const handleChoosePlan = (plan: DisplayPlan) => {
+    if (planChangeLocked) return;
+
     // Check if plan has any pricing (monthly OR annual)
     if (!plan.monthlyPrice && !plan.annualPrice) {
       setError('Cannot select a plan without a price');

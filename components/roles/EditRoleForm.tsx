@@ -1,15 +1,15 @@
 'use client';
 
-import { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
-import { GroupCheckbox, groupCheckState } from '@/components/ui/group-checkbox';
+import AppModal, { MODAL_FOOTER_BUTTON_CLASS, MODAL_FOOTER_ROW_CLASS } from '@/components/ui/app-modal';
+import { Input } from '@/components/ui/input';
+import PermissionTilesEditor from '@/components/roles/PermissionTilesEditor';
+import { PermissionSectionsSkeleton } from '@/components/roles/PermissionSectionsView';
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Shield,
   Loader2,
-  Check,
-  Minus,
   Lock,
   Sparkles,
   ArrowUpRight,
@@ -21,8 +21,6 @@ import {
   rememberTurnOff,
   TurnOffMemory,
   getAllCatalogCodes,
-  getNeeds,
-  isEntryPointLocked,
   labelOf,
   planTurnOff,
   planTurnOn,
@@ -42,7 +40,6 @@ import {
 } from '@/lib/types/rbac';
 import {
   CUSTOM_PERMISSION_CATEGORIES,
-  getMainPermission,
   type CustomPermissionCategory,
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
@@ -157,6 +154,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  const [originalPermissionCodes, setOriginalPermissionCodes] = useState<Set<string>>(new Set());
   // Compact confirm popup for cascading permission changes (shared with Edit User).
   const { ask, dialog } = usePermissionChangeDialog();
   // Set once the editable Role Name field is left, so its error shows the
@@ -189,7 +187,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         setPermissions(permissionsData.permissions);
 
         if (roleData.permissions) {
-          setSelectedPermissionCodes(normalizeRoleCodes(roleData.permissions.map((permission) => permission.code)));
+          const loaded = normalizeRoleCodes(roleData.permissions.map((permission) => permission.code));
+          setSelectedPermissionCodes(loaded);
+          setOriginalPermissionCodes(loaded);
         }
       } catch (error: unknown) {
         console.error('Failed to load role data:', error);
@@ -360,33 +360,6 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     }
   };
 
-  const getAllCodesForCategory = (category: CustomPermissionCategory): string[] => [
-    ...(category.viewCode ? [category.viewCode] : []),
-    ...(category.actions?.map((action) => action.code) || []),
-    ...(category.subCategories?.flatMap((sub) => [
-      ...(sub.viewCode ? [sub.viewCode] : []),
-      ...sub.actions.map((action) => action.code),
-    ]) || []),
-  ];
-
-  const getAllCodesForSubCategory = (subCategory: CustomPermissionSubCategory): string[] => [
-    ...(subCategory.viewCode ? [subCategory.viewCode] : []),
-    ...subCategory.actions.map((action) => action.code),
-  ];
-
-  const renderGroupCheckbox = (codes: string[], label: string, size: 'md' | 'sm') => {
-    const all = isGroupFullyOn(codes, selectedPermissionCodes);
-    return (
-      <GroupCheckbox
-        size={size}
-        state={groupCheckState(all, codes.filter((code) => selectedPermissionCodes.has(code)).length)}
-        label={label}
-        onClick={() => handleSelectAllGroup(codes, label)}
-        className={size === 'md' ? 'mt-0.5' : undefined}
-      />
-    );
-  };
-
   const handleSelectAll = () => {
     const allCodes = getAllCustomPermissionCodes();
     const allSelected = allCodes.every((code) => selectedPermissionCodes.has(code));
@@ -444,195 +417,121 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     }
   };
 
-  const renderPermissionPill = (
-    code: string,
-    label: string,
-    isSelected: boolean,
-    hasDependencies: boolean,
-    onClick: () => void
-  ) => {
-    // Entry point whose main permission is off: greyed out with a lock; clicking
-    // offers to turn its main on too (popup, handled by applyTurnOn).
-    const mainCode = getMainPermission(code);
-    const locked = !isSelected && isEntryPointLocked(code, selectedPermissionCodes);
-    if (locked) {
-      return (
-        <button
-          key={code}
-          type="button"
-          onClick={onClick}
-          title={`Needs "${labelOf(mainCode ?? '')}" — click to turn both on`}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-400"
-        >
-          <Lock className="h-3.5 w-3.5" />
-          <span>{label}</span>
-        </button>
-      );
-    }
-    return (
-    <button
-      key={code}
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
-        isSelected
-          ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
-          : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
-      }`}
-    >
-      <span>{label}</span>
-      {hasDependencies && (
-        <span className={`text-2xs ${isSelected ? 'text-white/80' : 'text-gray-400'}`} title="Auto-enables dependencies">
-          *
-        </span>
-      )}
-    </button>
-    );
-  };
-
   const renderPermissionCategories = () => {
     const allCodes = getAllCustomPermissionCodes();
     const allSelected = allCodes.every((code) => selectedPermissionCodes.has(code));
-    const someSelected = selectedPermissionCodes.size > 0 && !allSelected;
+    const activeCount = allCodes.filter((code) => selectedPermissionCodes.has(code)).length;
 
     return (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 ring-1 ring-black/[0.02]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900">Permission Library</h3>
-              <p className="text-xs text-gray-500">
-                {selectedPermissionCodes.size} of {allCodes.length} permissions selected
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
-                allSelected
-                  ? 'border-brand-blue bg-brand-blue text-white shadow-md shadow-brand-blue/20'
-                  : someSelected
-                  ? 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-blue'
-                  : 'border-gray-200 bg-white text-gray-700 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
-              }`}
-            >
-              <span className={`flex h-4 w-4 items-center justify-center rounded border ${allSelected ? 'border-white/50 bg-white/20' : someSelected ? 'border-brand-blue bg-white text-brand-blue' : 'border-gray-300 bg-white'}`}>
-                {allSelected ? <Check className="h-3 w-3" /> : someSelected ? <Minus className="h-3 w-3" strokeWidth={3} /> : null}
-              </span>
-              Select all permissions
-            </button>
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-slate-400">
+            <Shield className="h-3.5 w-3.5 text-brand-blue" />
+            Permissions
+          </label>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" onClick={handleSelectAll} className="min-w-[96px]">
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </Button>
+            <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/20">
+              {activeCount} active
+            </span>
           </div>
         </div>
-
-        {CUSTOM_PERMISSION_CATEGORIES.map((category) => (
-          <section
-            key={category.id}
-            className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white shadow-sm"
-          >
-            <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div className="flex items-start gap-3">
-              {renderGroupCheckbox(getAllCodesForCategory(category), category.name, 'md')}
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-sm font-semibold text-gray-900">{category.name}</h3>
-                  {category.isMenuToggle && (
-                    <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
-                      Menu toggle
-                    </span>
-                  )}
-                </div>
-                {category.description && (
-                  <p className="mt-1 text-xs text-gray-500">{category.description}</p>
-                )}
-              </div>
-              </div>
-              <span className="inline-flex items-center rounded-full bg-gray-50 px-3 py-1.5 text-xs text-gray-500 ring-1 ring-gray-200">
-                {getAllCodesForCategory(category).filter((code) => selectedPermissionCodes.has(code)).length}/{getAllCodesForCategory(category).length} selected
-              </span>
-            </div>
-
-            <div className="space-y-5 p-4 sm:p-5">
-              {category.actions && (
-                <div className="flex flex-wrap gap-2">
-                  {category.viewCode && selectedPermissionCodes.has(category.viewCode) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
-                      <Check className="h-3 w-3" />
-                      View enabled
-                    </span>
-                  )}
-                  {category.actions.map((action) =>
-                    renderPermissionPill(
-                      action.code,
-                      action.label,
-                      selectedPermissionCodes.has(action.code),
-                      getNeeds(action.code).length > 0,
-                      () => handlePermissionToggle(action.code)
-                    )
-                  )}
-                </div>
-              )}
-
-              {category.subCategories && (
-                <div className="space-y-4">
-                  {category.subCategories.map((subCategory) => (
-                    <div key={subCategory.name} className="ml-4 sm:ml-8 rounded-2xl border border-gray-200 border-l-4 border-l-brand-blue/30 bg-gray-50/70 p-4">
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        {renderGroupCheckbox(getAllCodesForSubCategory(subCategory), subCategory.name, 'sm')}
-                        <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-                          {subCategory.name}
-                        </span>
-                        {subCategory.viewCode && selectedPermissionCodes.has(subCategory.viewCode) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
-                            <Check className="h-3 w-3" />
-                            View enabled
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {subCategory.actions.map((action) =>
-                          renderPermissionPill(
-                            action.code,
-                            action.label,
-                            selectedPermissionCodes.has(action.code),
-                            getNeeds(action.code).length > 0,
-                            () => handlePermissionToggle(action.code)
-                          )
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        ))}
-
-        <div className="rounded-2xl border border-brand-blue/15 bg-brand-blue/[0.04] p-4 text-sm text-gray-600">
-          <span className="font-semibold text-gray-900">View permission</span> remains coupled to selected action scopes so the role stays internally consistent.
-        </div>
-
-        {selectedPermissionCodes.size > 0 && (
-          <div className="rounded-2xl border border-brand-teal/15 bg-brand-teal/[0.06] p-4">
-            <div className="mb-3 text-sm font-semibold text-gray-900">
-              Selected permissions ({selectedPermissionCodes.size})
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Array.from(selectedPermissionCodes)
-                .sort()
-                .map((code) => (
-                  <span
-                    key={code}
-                    className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-teal ring-1 ring-brand-teal/15"
-                  >
-                    {code}
-                  </span>
-                ))}
-            </div>
-          </div>
-        )}
+        <PermissionTilesEditor
+          selected={selectedPermissionCodes}
+          onToggleCode={handlePermissionToggle}
+          onToggleGroup={handleSelectAllGroup}
+        />
       </div>
     );
   };
+
+  // Opened from Role Management: a popup laid out like Edit User (no side panel).
+  if (embedded) {
+    const hasUnsaved = selectedPermissionCodes.size !== originalPermissionCodes.size
+      || Array.from(selectedPermissionCodes).some((c) => !originalPermissionCodes.has(c));
+    return (
+      <>
+        {dialog}
+        <AppModal
+          open
+          size="lg"
+          zIndexClass="z-50"
+          onCancel={handleClose}
+          cancelDisabled={isSaving}
+          icon={<Shield />}
+          title="Edit Role"
+          subtitle={role?.name}
+          headerExtra={role?.is_system ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-2xs font-medium text-white ring-1 ring-white/25">
+              <Lock className="h-3 w-3" /> System role
+            </span>
+          ) : undefined}
+          footerStart={hasUnsaved ? (
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-2xs sm:text-xs font-medium text-brand-orange">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-orange" />
+              Unsaved changes
+            </span>
+          ) : undefined}
+          actions={[
+            {
+              label: 'Save Changes',
+              onClick: handleSubmit,
+              disabled: isSaving || isLoading || !role,
+              icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
+            },
+          ]}
+        >
+          {isLoading || !role ? (
+            <PermissionSectionsSkeleton sections={3} Skeleton={Skeleton} />
+          ) : (
+            <div className="space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Name</label>
+                  <Input
+                    value={role.name}
+                    onChange={(e) => setRole({ ...role, name: e.target.value.toUpperCase() })}
+                    onBlur={() => setNameTouched(true)}
+                    aria-invalid={!!showNameError}
+                    disabled={role.is_system}
+                  />
+                  {showNameError && <span className="mt-1.5 block text-xs font-medium text-destructive">{nameError}</span>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Code</label>
+                  <Input value={role.code} disabled />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                  <Input
+                    value={role.description || ''}
+                    onChange={(e) => setRole({ ...role, description: e.target.value })}
+                    placeholder="What this role is for"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Copy permissions from</label>
+                  <select
+                    value={role.parent_role_id || ''}
+                    onChange={(e) => handleParentRoleChange(e.target.value)}
+                    className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/40 focus:ring-2 focus:ring-brand-blue/20"
+                  >
+                    <option value="">None</option>
+                    {roles.filter((r) => r.id !== role.id).map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
+                  </select>
+                </div>
+              </div>
+              {renderPermissionCategories()}
+            </div>
+          )}
+        </AppModal>
+      </>
+    );
+  }
 
   if (isLoading || !role) {
     // Skeleton mirroring the role editor: gradient hero, the Role Details form

@@ -1506,6 +1506,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             <div className="space-y-3">
               {currentJobs.map(job => {
                 const versionKey = job.job_id || job.id;
+                /* A Draft only opens in the JD editor, so without Edit permission
+                   the card and its View icon are greyed and do nothing (RBAC:
+                   tooltip only) — the user stays on this list. */
+                const draftLocked = job.status.toLowerCase() === 'draft' && !canUpdateJd;
                 const versionsExpanded = versionLineage.isExpanded(versionKey);
                 /* Only jobs with MORE THAN ONE version get the control.
                    `versionNumber` is the row's own place in the lineage — the
@@ -1547,8 +1551,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
-                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob && canUpdateJd ? onEditJob(job) : onViewJob(job)}
+                    aria-disabled={draftLocked || undefined}
+                    title={draftLocked ? 'You do not have permission to edit draft job descriptions' : undefined}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 ${draftLocked ? 'cursor-not-allowed' : 'cursor-pointer'} p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    onClick={() => {
+                      if (draftLocked) return;
+                      if (job.status.toLowerCase() === 'draft' && onEditJob) onEditJob(job);
+                      else onViewJob(job);
+                    }}
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
                       {/* Individual Select — just the checkbox (the Briefcase
@@ -1670,9 +1680,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                             consistent action set. */}
                         <Button
                           variant="secondary"
-                          onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                          className="h-9 w-9 p-0 rounded-md"
-                          aria-label="View" title="View"
+                          onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
+                          aria-disabled={draftLocked || undefined}
+                          className={`h-9 w-9 p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+                          aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -1930,7 +1941,13 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           versionDetails={versionLineage.versionDetails}
                           versionApplicants={versionLineage.versionApplicants}
                           statusOverrides={versionStatusOverrides}
-                          onRowClick={(versionId) => router.push(`/recruitment/job-details?id=${versionId}`)}
+                          onRowClick={(versionId) => {
+                            // A Draft version opens in the JD editor — blocked without Edit permission.
+                            const clicked = versionLineage.lineages[versionKey]?.find((v) => v.id === versionId);
+                            const clickedStatus = (versionStatusOverrides?.[versionId] || clicked?.status || '').toLowerCase();
+                            if (clickedStatus === 'draft' && !canUpdateJd) return;
+                            router.push(`/recruitment/job-details?id=${versionId}`);
+                          }}
                           renderAction={(versionJob) => (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

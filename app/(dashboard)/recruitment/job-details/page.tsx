@@ -330,6 +330,12 @@ function JobDetailsContent() {
 
       // For Draft JDs, redirect to JD creation with the current stage
       if (data.status === 'draft' || (data.status as string) === 'Draft') {
+        // A Draft only opens in the editor; without Edit permission (e.g. a
+        // direct link) go back to the list instead of the JD editor.
+        if (!(isTenantAdmin || hasPermission('canUpdateJD'))) {
+          router.replace('/recruitment/job-openings');
+          return;
+        }
         const stage = data.creation_stage || 'create';
         router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}${fromAiInterview ? '&from=ai-interview' : ''}`);
         return;
