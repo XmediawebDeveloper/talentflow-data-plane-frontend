@@ -461,7 +461,8 @@ export interface QuestionEvaluation {
       execution?: { earned: number; total: number; status?: string; reason?: string };
       output?: { earned: number; total: number; status?: string; reason?: string };
       total_marks?: number;
-      [key: string]: { earned: number; total: number; status?: string; reason?: string } | number | undefined;
+      pass_requirement?: string;
+      [key: string]: { earned: number; total: number; status?: string; reason?: string } | number | string | undefined;
     };
     [key: string]: any;
   };
