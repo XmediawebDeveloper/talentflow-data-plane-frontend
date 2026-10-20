@@ -6039,16 +6039,32 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const handleAddLocation = () => {
     if (newLocation.city.trim()) {
       const cityToAdd = newLocation.city.trim();
+      const radiusToAdd = newLocation.radius || '50';
 
       if (!validateEnglishOnlyExtractedValue(cityToAdd, 'Locations')) {
         return;
       }
 
+      const isDuplicate = extractedData.locations.some(loc =>
+        loc.city.trim().toLowerCase() === cityToAdd.toLowerCase() &&
+        loc.radius === radiusToAdd &&
+        (loc.country || 'IN') === locationCountry
+      );
+
+      if (isDuplicate) {
+        setValidationErrors(prev => ({
+          ...prev,
+          locations: 'This location has already been added',
+        }));
+        return;
+      }
+
+      setValidationErrors(prev => ({ ...prev, locations: undefined }));
       setExtractedData(prev => ({
         ...prev,
         locations: [...prev.locations, {
           city: cityToAdd,
-          radius: newLocation.radius || '50',
+          radius: radiusToAdd,
           country: locationCountry,
         }],
       }));
