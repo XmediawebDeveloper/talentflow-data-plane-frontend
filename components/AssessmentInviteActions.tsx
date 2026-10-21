@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import {
@@ -656,12 +657,18 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
 
   const emailTrimmed = form.candidate_email.trim();
   const emailError = emailTrimmed.length > 0 && !isValidEmailFormat(emailTrimmed) ? EMAIL_FORMAT_ERROR : null;
+  const nameError =
+    form.candidate_name.trim().length > 0 && !isValidCandidateName(form.candidate_name) ? NAME_FORMAT_ERROR : null;
 
   const save = async () => {
     const name = form.candidate_name.trim();
     const email = form.candidate_email.trim();
     if (!name || !email) {
       toast.error('Candidate name and email are required');
+      return;
+    }
+    if (!isValidCandidateName(name)) {
+      toast.error(NAME_FORMAT_ERROR);
       return;
     }
     if (!isValidEmailFormat(email)) {
@@ -718,8 +725,14 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
               type="text"
               value={form.candidate_name}
               onChange={(e) => setForm((f) => ({ ...f, candidate_name: e.target.value }))}
-              className="w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+              aria-invalid={nameError ? 'true' : undefined}
+              className={`w-full min-w-0 h-[38px] px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                nameError
+                  ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
+                  : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
+              }`}
             />
+            {nameError && <p className="mt-1 text-xs text-destructive">{nameError}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
@@ -742,7 +755,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
             variant="primary"
             size="md"
             onClick={save}
-            disabled={saving || !!emailError}
+            disabled={saving || !!emailError || !!nameError}
             icon={saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
           >
             Save & Send

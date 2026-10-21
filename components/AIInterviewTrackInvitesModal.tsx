@@ -19,7 +19,8 @@ import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
-import { emailValidationError } from '@/lib/utils/email';
+import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import AIInterviewInviteTable, {
@@ -853,15 +854,17 @@ export default function AIInterviewTrackInvitesModal({
 
   const editEmailTrimmed = editForm.candidate_email.trim();
   const editEmailError =
-    editEmailTrimmed.length > 0 ? emailValidationError(editEmailTrimmed) : null;
+    editEmailTrimmed.length > 0 && !isValidEmailFormat(editEmailTrimmed) ? EMAIL_FORMAT_ERROR : null;
+  const editNameError =
+    editForm.candidate_name.trim().length > 0 && !isValidCandidateName(editForm.candidate_name) ? NAME_FORMAT_ERROR : null;
   const handleSaveEdit = async () => {
     const inv = editTarget;
     if (!inv) return;
     const name = editForm.candidate_name.trim();
     const email = editForm.candidate_email.trim();
     if (!name || !email) { toast.error('Candidate name and email are required'); return; }
-    const emailError = emailValidationError(email);
-    if (emailError) { toast.error(emailError); return; }
+    if (!isValidCandidateName(name)) { toast.error(NAME_FORMAT_ERROR); return; }
+    if (!isValidEmailFormat(email)) { toast.error(EMAIL_FORMAT_ERROR); return; }
     setSavingEdit(true);
     try {
       await aiInterviewService.updateInvitation(inv.id, { candidate_name: name, candidate_email: email });
@@ -909,8 +912,14 @@ export default function AIInterviewTrackInvitesModal({
               type="text"
               value={editForm.candidate_name}
               onChange={(e) => setEditForm((f) => ({ ...f, candidate_name: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+              aria-invalid={editNameError ? 'true' : undefined}
+              className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                editNameError
+                  ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
+                  : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
+              }`}
             />
+            {editNameError && <p className="mt-1 text-xs text-destructive">{editNameError}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
@@ -936,7 +945,7 @@ export default function AIInterviewTrackInvitesModal({
             variant="primary"
             size="md"
             onClick={handleSaveEdit}
-            disabled={savingEdit || !!editEmailError}
+            disabled={savingEdit || !!editEmailError || !!editNameError}
             icon={savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
           >
             Save & Send
