@@ -26,6 +26,7 @@ import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
@@ -2238,33 +2239,44 @@ export default function AIInterview() {
                 <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
               </button>
-              {!jdLocked && (<>
               {/* Continue Editing — moved here from the job row, which now
-                  reports the job as a whole, as the Assessments Job List does. */}
-              {config.status === 'draft' && config.jd_id && (
-                <button
-                  onClick={() => {
-                    if (!canUpdateAIInterviews) return;
-                    setOpenMenuId(null);
-                    // Resumes at the step the draft was left on.
-                    void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
-                  }}
-                  aria-disabled={!canUpdateAIInterviews}
-                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
-                  className={canUpdateAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <Pencil className="w-4 h-4 flex-shrink-0 text-menu-icon-edit" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
-                </button>
-              )}
+                  reports the job as a whole, as the Assessments Job List does.
+                  A disabled job lists the same items as a live one, greyed with
+                  the reason, so the menu keeps its shape whatever the job status. */}
+              {config.status === 'draft' && config.jd_id && (() => {
+                const continueBlocked = jdLocked
+                  ? JD_DISABLED_ACTION_MESSAGE
+                  : !canUpdateAIInterviews
+                    ? 'You do not have permission to edit AI interviews'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (continueBlocked) return;
+                      setOpenMenuId(null);
+                      // Resumes at the step the draft was left on.
+                      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!continueBlocked}
+                    title={continueBlocked}
+                    className={continueBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Pencil className={`w-4 h-4 flex-shrink-0 ${continueBlocked ? '' : 'text-menu-icon-edit'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
+                  </button>
+                );
+              })()}
               {/* Edit — a published version nobody has been invited to can still
                   be edited. Once any invite exists the version is locked (every
                   candidate sits the same interview) and the tooltip says to
                   duplicate it instead — the Assessments Edit rule. */}
               {isPublished && config.jd_id && (() => {
-                const editBlocked = !canUpdateAIInterviews
-                  ? 'You do not have permission to edit AI interviews'
-                  : interviewEditBlockedReason(config);
+                const editBlocked = jdLocked
+                  ? JD_DISABLED_ACTION_MESSAGE
+                  : !canUpdateAIInterviews
+                    ? 'You do not have permission to edit AI interviews'
+                    : interviewEditBlockedReason(config);
                 return (
                   <button
                     onClick={() => {
@@ -2273,7 +2285,7 @@ export default function AIInterview() {
                       // A published version always edits from Configure, not Clusters.
                       router.push(aiInterviewConfigureHref(config.id, config.jd_id!));
                     }}
-                    disabled={!!editBlocked && canUpdateAIInterviews}
+                    disabled={!!editBlocked && (jdLocked || canUpdateAIInterviews)}
                     aria-disabled={!!editBlocked}
                     title={editBlocked || 'Edit this version'}
                     className={editBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
@@ -2283,21 +2295,28 @@ export default function AIInterview() {
                   </button>
                 );
               })()}
-              {isPublished && (
-                <button
-                  onClick={() => {
-                    if (!canInviteAIInterviews) return;
-                    setShareConfig(config); setOpenMenuId(null);
-                  }}
-                  aria-disabled={!canInviteAIInterviews}
-                  title={!canInviteAIInterviews ? 'You do not have permission to invite candidates' : ''}
-                  className={canInviteAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <Send className="w-4 h-4 flex-shrink-0 text-menu-icon-share" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
-                </button>
-              )}
-              </>)}
+              {isPublished && (() => {
+                const inviteBlocked = jdLocked
+                  ? JD_DISABLED_ACTION_MESSAGE
+                  : !canInviteAIInterviews
+                    ? 'You do not have permission to invite candidates'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (inviteBlocked) return;
+                      setShareConfig(config); setOpenMenuId(null);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!inviteBlocked}
+                    title={inviteBlocked}
+                    className={inviteBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Send className={`w-4 h-4 flex-shrink-0 ${inviteBlocked ? '' : 'text-menu-icon-share'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
+                  </button>
+                );
+              })()}
               {/* Track / View Results — always listed, but disabled (reason in
                   the tooltip) until at least one invite exists: before that
                   there is nothing to track and no session to score. */}
@@ -2325,47 +2344,25 @@ export default function AIInterview() {
                 <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
-              {jdLocked ? (
-                <>
-                  <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-                  {([
-                    ['Edit', Pencil],
-                    ['Invite', Send],
-                    ['Duplicate', Copy],
-                    [normalizedStatus === 'archived' ? 'Unarchive' : 'Archive', normalizedStatus === 'archived' ? ArchiveRestore : Archive],
-                    ['Delete', Trash2],
-                  ] as const).map(([label, Icon]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      disabled
-                      aria-disabled
-                      title={JD_DISABLED_ACTION_MESSAGE}
-                      className={VERSION_MENU_ITEM_DISABLED_CLASS}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
-                    </button>
-                  ))}
-                </>
-              ) : (<>
               {/* Duplicate — creates the next version. Disabled (reason in the
                   tooltip) for a draft, for a version nobody was invited to
                   (edit it instead), while another draft is open in the lineage,
                   and at the version cap: the Assessments Duplicate gate. */}
               {(() => {
-                const dupBlocked = interviewDuplicateBlockedReason(
-                  config,
-                  [...configs, ...archivedConfigs],
-                  canCreateAIInterviews,
-                );
+                const dupBlocked = jdLocked
+                  ? JD_DISABLED_ACTION_MESSAGE
+                  : interviewDuplicateBlockedReason(
+                    config,
+                    [...configs, ...archivedConfigs],
+                    canCreateAIInterviews,
+                  );
                 return (
                   <button
                     onClick={() => {
                       if (dupBlocked) return;
                       void handleCloneConfig(config);
                     }}
-                    disabled={!!dupBlocked && canCreateAIInterviews}
+                    disabled={!!dupBlocked && (jdLocked || canCreateAIInterviews)}
                     aria-disabled={!!dupBlocked}
                     title={dupBlocked || 'Duplicate as a new version'}
                     className={dupBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
@@ -2376,58 +2373,59 @@ export default function AIInterview() {
                 );
               })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-              {normalizedStatus !== 'archived' && (
-                <button
-                  onClick={() => {
-                    if (!canArchiveAIInterviews) return;
-                    handleArchiveConfig(config);
-                  }}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to archive AI interviews' : ''}
-                  className={canArchiveAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <Archive className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
-                </button>
-              )}
-              {normalizedStatus === 'archived' && (
-                <button
-                  onClick={() => {
-                    if (!canArchiveAIInterviews) return;
-                    handleUnarchiveConfig(config);
-                  }}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
-                  className={canArchiveAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  if (!canDeleteAIInterviews) return;
-                  handleDeleteConfig(config);
-                }}
-                disabled={hasBeenShared}
-                aria-disabled={!canDeleteAIInterviews || hasBeenShared}
-                title={
-                  !canDeleteAIInterviews
+              {(() => {
+                const isArchived = normalizedStatus === 'archived';
+                const archiveBlocked = jdLocked
+                  ? JD_DISABLED_ACTION_MESSAGE
+                  : !canArchiveAIInterviews
+                    ? `You do not have permission to ${isArchived ? 'unarchive' : 'archive'} AI interviews`
+                    : '';
+                const ArchiveIcon = isArchived ? ArchiveRestore : Archive;
+                return (
+                  <button
+                    onClick={() => {
+                      if (archiveBlocked) return;
+                      if (isArchived) handleUnarchiveConfig(config);
+                      else handleArchiveConfig(config);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!archiveBlocked}
+                    title={archiveBlocked}
+                    className={archiveBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <ArchiveIcon className={`w-4 h-4 flex-shrink-0 ${archiveBlocked ? '' : 'text-menu-icon-archive'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>{isArchived ? 'Unarchive' : 'Archive'}</span>
+                  </button>
+                );
+              })()}
+              {(() => {
+                const deleteBlocked = jdLocked
+                  ? JD_DISABLED_ACTION_MESSAGE
+                  : !canDeleteAIInterviews
                     ? 'You do not have permission to delete AI interviews'
                     : hasBeenShared
                       ? 'Cannot delete — candidates have already started this interview'
-                      : ''
-                }
-                className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
-                  !canDeleteAIInterviews || hasBeenShared
-                    ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                    : 'text-destructive hover:bg-gray-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Trash2 className="w-4 h-4 flex-shrink-0" />
-                <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
-              </button>
-              </>)}
+                      : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (deleteBlocked) return;
+                      handleDeleteConfig(config);
+                    }}
+                    disabled={jdLocked || hasBeenShared}
+                    aria-disabled={!!deleteBlocked}
+                    title={deleteBlocked}
+                    className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
+                      deleteBlocked
+                        ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                        : 'text-destructive hover:bg-gray-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Trash2 className="w-4 h-4 flex-shrink-0" />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
+                  </button>
+                );
+              })()}
             </div>,
             document.body,
           )}
@@ -4898,11 +4896,12 @@ export default function AIInterview() {
           per-version rows, so the warning cannot drift between the two. */}
       <DeleteAIInterviewModal
         isOpen={!!deleteTarget}
-        title={deleteTarget ? `${deleteTarget.jd_title || deleteTarget.position || 'Untitled'} - AI Interview` : ''}
+        jobShortId={deleteTarget?.jd_short_id}
+        jobTitle={deleteTarget ? deleteTarget.jd_title || deleteTarget.position || 'Untitled' : ''}
+        jobVersion={deleteTarget?.jd_version}
         version={deleteTarget?.jd_id ? interviewVersionRows(deleteTarget.jd_id).find((r) => r.id === deleteTarget.id)?.version : undefined}
         createdAt={deleteTarget?.created_at}
-        totalQuestions={deleteTarget?.total_questions}
-        durationMinutes={deleteTarget?.duration_minutes}
+        createdBy={deleteTarget?.created_by_name}
         isLoading={deleteLoading}
         jdDisabled={isJdDisabled(deleteTarget?.jd_status)}
         onConfirm={confirmDeleteConfig}
@@ -4991,9 +4990,12 @@ export default function AIInterview() {
       </ConfirmationDialog>
 
       {/* Revoke confirmation — flips status to REVOKED; old link stops working immediately */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={!!revokeInviteTarget}
-        onClose={() => { if (!revokingInviteFor) setRevokeInviteTarget(null); }}
+        kind="interview"
+        email={revokeInviteTarget?.candidate_email}
+        isLoading={!!revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id}
+        onCancel={() => { if (!revokingInviteFor) setRevokeInviteTarget(null); }}
         onConfirm={async () => {
           const inv = revokeInviteTarget;
           if (!inv) return;
@@ -5009,15 +5011,6 @@ export default function AIInterview() {
             setRevokeInviteTarget(null);
           }
         }}
-        title="Revoke Interview Link?"
-        description={
-          revokeInviteTarget
-            ? `This will immediately expire the interview link sent to ${revokeInviteTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
-            : ''
-        }
-        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Confirm'}
-        cancelText="Cancel"
-        variant="danger"
       />
 
       {/* Bulk revoke confirmation — revokes every checked invitation. Each one is

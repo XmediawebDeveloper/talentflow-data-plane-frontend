@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import {
   Dialog,
@@ -762,9 +762,12 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
 }) {
   const [revoking, setRevoking] = useState(false);
   return (
-    <ConfirmationDialog
+    <RevokeLinkModal
       isOpen={!!target}
-      onClose={() => { if (!revoking) onClose(); }}
+      kind="assessment"
+      email={target?.candidate_email}
+      isLoading={revoking}
+      onCancel={() => { if (!revoking) onClose(); }}
       onConfirm={async () => {
         if (!target) return;
         setRevoking(true);
@@ -772,22 +775,13 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
           await assessmentService.revokeInvitation(getAssessmentId(target), target.id);
           toast.success(`Invitation for ${target.candidate_email} has been revoked`);
           await onRevoked();
-          onClose();
         } catch (err: any) {
           toast.error(err?.message || 'Failed to revoke invitation');
         } finally {
           setRevoking(false);
+          onClose();
         }
       }}
-      title="Revoke Invitation Link?"
-      description={
-        target
-          ? `This will immediately expire the assessment link sent to ${target.candidate_email}. The candidate will no longer be able to access it using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
-          : ''
-      }
-      confirmText={revoking ? 'Revoking…' : 'Confirm'}
-      cancelText="Cancel"
-      variant="danger"
     />
   );
 }

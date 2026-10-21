@@ -132,6 +132,7 @@ import {
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
+import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 
 
@@ -480,6 +481,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
+  const { confirmDelete, deleteConfirmModal } = useDeleteRecordConfirm('Assessment');
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
@@ -3781,13 +3783,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
 
-    if (!await dialog.confirm({
-      title: 'Delete Assessment',
-      message: 'Are you sure you want to delete this assessment?\nThis action cannot be undone.',
-      variant: 'delete',
-      confirmText: 'Delete Assessment',
-      item: assessment ? { label: 'ASSESSMENT', name: assessment.title } : undefined,
-      warningNote: 'Deleting this assessment will permanently remove it and cannot be restored.',
+    if (!await confirmDelete({
+      jobShortId: assessment?.jd_short_id,
+      jobTitle: assessment?.jd_title || assessment?.title || 'Untitled',
+      jobVersion: assessment?.jd_version,
+      version: assessment?.version,
+      createdAt: assessment?.created_at,
+      createdBy: assessment?.created_by_name,
     })) return;
 
     try {
@@ -10453,6 +10455,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         onRevoked={refreshInviteSurfaces}
       />
       {archiveConfirmModal}
+      {deleteConfirmModal}
 
       <EditInvitationModal
         target={editInviteTarget}

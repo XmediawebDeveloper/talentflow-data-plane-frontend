@@ -1562,9 +1562,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </Button>
               )}
               <div {...draftLockProps} className={draftLocked ? `flex items-center gap-2 ${draftLockProps.className}` : 'contents'}>
-              {/* Archived: Share, then Unarchive (no Refresh at any status). Share
+              {/* Archived: Invite, then Unarchive (no Refresh at any status). Invite
                   stays visible but disabled — Assessment Details' archived
-                  header, where archived records cannot be shared. */}
+                  header, where archived records cannot be shared. Same label
+                  as the Active header and the list menu. */}
               {config.status === 'archived' && (
                 <>
                 <Button
@@ -1574,7 +1575,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   title="Archived interviews cannot be shared"
                   icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
-                  Share
+                  Invite
                 </Button>
                 <Button
                   variant="secondary"

@@ -8,7 +8,6 @@ import {
   Archive, ArchiveRestore, BarChart, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +42,7 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
+import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
 
 /* Same batch size and same reason as the Assessments dashboard's own list: the
@@ -357,8 +357,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
-  const dialog = useGlobalDialog();
   const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
+  const { confirmDelete, deleteConfirmModal } = useDeleteRecordConfirm('Assessment');
   const fixedLabel = fixedStatusLabel(fixedStatus);
   /* Both lines of the page header. Read only when this table is on its OWN
      route — see the header block below, which `embedded` drops whole. On the
@@ -808,13 +808,13 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       toast.error('Cannot delete — candidates have already been invited to this assessment');
       return;
     }
-    if (!await dialog.confirm({
-      title: 'Delete Assessment',
-      message: 'Are you sure you want to delete this assessment?\nThis action cannot be undone.',
-      variant: 'delete',
-      confirmText: 'Delete Assessment',
-      item: { label: 'ASSESSMENT', name: row.title },
-      warningNote: 'Deleting this assessment will permanently remove it and cannot be restored.',
+    if (!await confirmDelete({
+      jobShortId: row.raw.jd_short_id,
+      jobTitle: row.jobName || row.title,
+      jobVersion: row.jobVersion,
+      version: row.assessmentVersion,
+      createdAt: row.createdAt,
+      createdBy: row.raw.created_by_name,
     })) return;
     void runStatusAction(row, 'delete', () => assessmentService.delete(row.id), 'Assessment deleted');
   };
@@ -1438,6 +1438,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         </div>
       </div>
       {archiveConfirmModal}
+      {deleteConfirmModal}
     </div>
   );
 }
