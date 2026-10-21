@@ -83,6 +83,13 @@ function DetailsContent() {
   const fromCandidateResults = searchParams.get('from') === 'candidate-results';
   // Same idea for the Invitation Status tab's View Details.
   const fromInvitationStatus = searchParams.get('from') === 'invitation-status';
+  /* Opened from a job row's Result (every interview version of the job):
+     Back and the interview crumb return to that job-wide list, not to the
+     one interview this candidate sat. */
+  const jobResultsRoot = searchParams.get('from') === 'job-results' ? searchParams.get('root') : null;
+  const resultsHref = jobResultsRoot
+    ? `/recruitment/ai-interviews/${encodeURIComponent(jobResultsRoot)}/results?scope=job`
+    : `/recruitment/ai-interviews/${configId}/results`;
   /** The AI Interviews tab this result was opened from, if any. */
   const originTabHref = fromCandidateResults ? CANDIDATE_RESULTS_HREF
     : fromInvitationStatus ? INVITATION_STATUS_HREF
@@ -114,7 +121,8 @@ function DetailsContent() {
   // candidate would silently re-add the Results crumb mid-session.
   const buildNavUrl = (entry: { id: string; configId?: string }) =>
     `/recruitment/ai-interviews/${entry.configId || configId}/results/details?session_id=${entry.id}` +
-    (fromCandidateResults ? '&from=candidate-results' : fromInvitationStatus ? '&from=invitation-status' : '');
+    (fromCandidateResults ? '&from=candidate-results' : fromInvitationStatus ? '&from=invitation-status'
+      : jobResultsRoot ? `&from=job-results&root=${encodeURIComponent(jobResultsRoot)}` : '');
 
   useEffect(() => {
     if (!sessionId) {
@@ -140,7 +148,7 @@ function DetailsContent() {
   }, [sessionId]);
 
   const handleBack = () => {
-    router.push(resumeTrail.backHref ?? originTabHref ?? `/recruitment/ai-interviews/${configId}/results`);
+    router.push(resumeTrail.backHref ?? originTabHref ?? resultsHref);
   };
   const backLabel = resumeTrail.active ? 'Back to Resume'
     : fromCandidateResults ? 'Back to Candidate Results'
@@ -198,7 +206,7 @@ function DetailsContent() {
         // Same label the Results page shows for this interview, so the crumb
         // the recruiter clicks through reads identically here.
         label: session.position || session.jd_title || 'Results',
-        href: `/recruitment/ai-interviews/${configId}/results`,
+        href: resultsHref,
       }]}
       /* Opened from the cross-interview Candidate Results tab: no interview
          crumb, and "AI Interviews" leads back to that tab — the list the

@@ -2,8 +2,36 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import AIInterviewResults from '@/components/ai-interview/AIInterviewResults';
-import { aiInterviewService, isJdDisabled } from '@/lib/services/aiInterviewService';
+import AIInterviewResults, { type ResultsJobScopeEntry } from '@/components/ai-interview/AIInterviewResults';
+import { aiInterviewService, isJdDisabled, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+
+/* Every interview of `own`'s job, any status, each with its job and interview
+   version — the set the AI Interviews job row groups (by Job ID, else job
+   version id) and its Track popup reads. There is no list-by-job endpoint, so
+   every config is fetched and bucketed, as AIInterviewResults' own lookup does. */
+async function loadJobScope(own: AIInterviewResponse): Promise<ResultsJobScopeEntry[]> {
+  const lineageKey = (c: AIInterviewResponse) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
+  const live: AIInterviewResponse[] = [];
+  for (let apiPage = 1; ; apiPage += 1) {
+    const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
+    const items = batch.items || [];
+    live.push(...items);
+    if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
+  }
+  const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
+  const archived = archivedProbe.total > archivedProbe.items.length
+    ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
+    : archivedProbe.items;
+  const all = [...live, ...archived];
+  const lineage = all.filter((c) => lineageKey(c) === lineageKey(own));
+  if (!lineage.some((c) => c.id === own.id)) lineage.push(own);
+  return lineage.map((c) => ({
+    configId: c.id,
+    jobVersion: c.jd_version ?? 1,
+    interviewVersion: interviewVersionOrdinal(c, all),
+  }));
+}
 import type { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -86,8 +114,11 @@ function AIInterviewResultsContent() {
   // the breadcrumb and Back stay anchored to that job.
   const fromJobDetails = searchParams.get('from') === 'job-details';
   // Opened from a version row's View Results: one version, so no version
-  // columns or filters. A job row's View Results carries no scope.
+  // columns or filters. A job row's Result opens `scope=job`: every interview
+  // version of the job, as that row's Track popup lists them.
   const versionScoped = searchParams.get('scope') === 'version';
+  const jobScoped = searchParams.get('scope') === 'job';
+  const [jobScope, setJobScope] = useState<ResultsJobScopeEntry[] | null>(null);
 
   const [configTitle, setConfigTitle] = useState('');
   const [jdTitle, setJdTitle] = useState('');
@@ -110,6 +141,8 @@ function AIInterviewResultsContent() {
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
           setJdDisabled(isJdDisabled(response.jd_status));
+          // Failing that lookup still shows this interview's own results.
+          if (jobScoped) setJobScope(await loadJobScope(response).catch(() => null));
         } else {
           setError('AI Interview config not found');
         }
@@ -120,7 +153,7 @@ function AIInterviewResultsContent() {
       }
     };
     fetchConfig();
-  }, [configId]);
+  }, [configId, jobScoped]);
 
   const handleBack = () => {
     router.push(
@@ -167,6 +200,7 @@ function AIInterviewResultsContent() {
       jdTitle={jdTitle}
       jdShortId={jdShortId}
       hideVersionDetails={versionScoped}
+      jobScope={jobScope}
       readOnly={jdDisabled}
       onBack={handleBack}
       breadcrumbItems={breadcrumbItems}
