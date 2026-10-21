@@ -4668,6 +4668,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               formatCandidateName={formatCandidateFirstName}
               jdShortId={job.job_id}
               emptyStateAction={aiInterviewEmptyActions}
+              readOnly={job.status === 'Disabled'}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
               jdTitle={aiInterviewConfig.jd_title || ''}

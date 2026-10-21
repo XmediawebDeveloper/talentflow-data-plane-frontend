@@ -2,6 +2,7 @@
 
 import { Trash2, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import AIInterviewConfigSummaryCard from '@/components/ai-interview/AIInterviewConfigSummaryCard';
 
 export interface DeleteAIInterviewModalProps {
@@ -15,6 +16,8 @@ export interface DeleteAIInterviewModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  /** The interview's job is disabled: Confirm stays off until it is enabled again. */
+  jdDisabled?: boolean;
 }
 
 /**
@@ -32,6 +35,7 @@ export default function DeleteAIInterviewModal({
   onConfirm,
   onCancel,
   isLoading = false,
+  jdDisabled = false,
 }: DeleteAIInterviewModalProps) {
   if (!isOpen) return null;
 
@@ -74,7 +78,7 @@ export default function DeleteAIInterviewModal({
           <Button variant="secondary" onClick={onCancel} disabled={isLoading} className="px-6">
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={isLoading} className="px-6">
+          <Button variant="destructive" onClick={() => { if (!jdDisabled) onConfirm(); }} disabled={isLoading || jdDisabled} title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined} className="px-6">
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />

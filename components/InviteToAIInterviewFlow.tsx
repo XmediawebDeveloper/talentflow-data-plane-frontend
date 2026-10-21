@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle, Loader2, Mail, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import JobInterviewVersionPicker, { latestActiveInterviewConfig } from '@/components/ai-interview/JobInterviewVersionPicker';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -196,6 +196,10 @@ export default function InviteToAIInterviewFlow({
 
   const proceedToShare = () => {
     if (pickedCount === 0) return;
+    if (pickedConfigs.some((c) => isJdDisabled(c.jd_status))) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (noPresetCandidates) {
       startSharing([]);
       return;

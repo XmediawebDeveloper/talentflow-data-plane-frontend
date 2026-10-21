@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewResults from '@/components/ai-interview/AIInterviewResults';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled } from '@/lib/services/aiInterviewService';
 import type { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -93,6 +93,7 @@ function AIInterviewResultsContent() {
   const [jdTitle, setJdTitle] = useState('');
   const [jdId, setJdId] = useState('');
   const [jdShortId, setJdShortId] = useState('');
+  const [jdDisabled, setJdDisabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +109,7 @@ function AIInterviewResultsContent() {
           // belongs to is the authoritative link target for the breadcrumb.
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
+          setJdDisabled(isJdDisabled(response.jd_status));
         } else {
           setError('AI Interview config not found');
         }
@@ -165,6 +167,7 @@ function AIInterviewResultsContent() {
       jdTitle={jdTitle}
       jdShortId={jdShortId}
       hideVersionDetails={versionScoped}
+      readOnly={jdDisabled}
       onBack={handleBack}
       breadcrumbItems={breadcrumbItems}
     />
