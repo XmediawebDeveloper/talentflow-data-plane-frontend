@@ -159,8 +159,8 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
       </span>
       {/* Location — under `hideEmpty` (Job Openings cards) it is omitted entirely
           when absent, rather than rendering a '-' placeholder. A single location
-          shows its name directly; more than one collapses to a count, with every
-          name available in a hover tooltip rather than overflowing the row. */}
+          shows its name directly; more than one shows the first name plus "+N more",
+          with every name available in a hover tooltip rather than overflowing the row. */}
       {(!hideEmpty || hasLocation) && (
         <span className="flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -175,7 +175,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
               }
             >
               <span className="underline decoration-dotted decoration-gray-400 dark:decoration-slate-500 underline-offset-2">
-                {locationNames.length} Locations
+                {locationNames[0]} +{locationNames.length - 1} more
               </span>
             </Tooltip>
           ) : (
