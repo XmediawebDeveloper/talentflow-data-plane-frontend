@@ -1,5 +1,6 @@
 'use client';
 
+import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import React, { Fragment, useState, useCallback, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -32,6 +33,7 @@ interface StepConsentProps {
   jdDescription?: string | null;
   jdDepartment?: string | null;
   jdLocation?: string | null;
+  jdLocations?: Array<{ city: string; state?: string | null }> | null;
   /** Slug, e.g. "information_technology" — shown as words in the tagline. */
   jdIndustryType?: string | null;
   jdEmploymentType?: string | null;
@@ -104,6 +106,7 @@ export default function StepConsent({
   jdExperienceLevel,
   jdDescription,
   jdLocation,
+  jdLocations,
   jdIndustryType,
   jdEmploymentType,
   jdRemoteType,
@@ -196,7 +199,8 @@ export default function StepConsent({
     value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   const metaItems: { icon: IconComponent; text: string }[] = [
-    ...(jdLocation ? [{ icon: MapPin, text: jdLocation }] : []),
+    // One entry per state ("State: City, City") - every saved location, not just the first.
+    ...formatLocationGroups(jdLocations, jdLocation).map((text) => ({ icon: MapPin, text })),
     // The industry, not the department, describes the role here.
     ...(jdIndustryType?.trim() ? [{ icon: Factory, text: humanize(jdIndustryType.trim()) }] : []),
     ...(expStr ? [{ icon: Award, text: `${expStr} experience` }] : []),
@@ -268,7 +272,7 @@ export default function StepConsent({
                 {(candidateName || candidateEmail) && (
                   /* No card: a thin rule on its left (desktop) sets it apart,
                      then an initials avatar, the name and the email. */
-                  <div className="flex items-center gap-2.5 min-w-0 self-start sm:self-center sm:max-w-[45%] sm:border-l sm:border-gray-200 sm:pl-4 sm:py-0.5">
+                  <div className="flex items-center gap-2.5 min-w-0 self-start sm:self-center sm:shrink-0 sm:max-w-[45%] sm:border-l sm:border-gray-200 sm:pl-4 sm:py-0.5">
                     <span
                       aria-hidden
                       className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue text-xs font-semibold shrink-0"
@@ -280,7 +284,7 @@ export default function StepConsent({
                         <p className="text-sm font-semibold text-gray-900 truncate" title={candidateName}>{candidateName}</p>
                       )}
                       {candidateEmail && (
-                        <p className="text-xs text-gray-500 truncate" title={candidateEmail}>{candidateEmail}</p>
+                        <p className="text-xs text-gray-500 break-all" title={candidateEmail}>{candidateEmail}</p>
                       )}
                     </div>
                   </div>

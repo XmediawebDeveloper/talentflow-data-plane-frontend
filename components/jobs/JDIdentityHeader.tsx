@@ -5,6 +5,7 @@ import type { JDResponse } from '@/lib/services/jdService';
 import { formatJobExperienceBadge, formatExperienceRange } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 
 /**
  * The identity card that heads the Job Details page — JD id, title and status
@@ -145,10 +146,12 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
             {jd.location && (
               <>
-                <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 shrink-0 text-purple-600" />
-                  <span>{jd.location}</span>
-                </div>
+                {formatLocationGroups(jd.locations, jd.location).map((label) => (
+                  <div key={label} className="flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 shrink-0 text-purple-600" />
+                    <span>{label}</span>
+                  </div>
+                ))}
                 <span className="text-gray-300">&bull;</span>
               </>
             )}
