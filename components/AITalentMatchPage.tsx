@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -8042,14 +8042,6 @@ export default function AITalentMatchPage({
                 setFilterExperienceMax('');
               }}
               className="mb-0"
-              countBadge={
-                <ListCountBadge
-                  filtered={filteredCandidates.length}
-                  total={matchedCandidates.length}
-                  noun="candidate"
-                  selected={selectedCandidates.length}
-                />
-              }
               filterPanel={
                 <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4">
                   <div className="flex flex-wrap gap-4">
@@ -8128,129 +8120,150 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
               }
-              /* Customize Columns right after More Filters — list view only
-                 (the grid has no columns), hidden on the narrowest screens
-                 like Resume Scoring's. */
-              afterFiltersActions={resultsDisplayMode === 'list' ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowResultsColumnModal(true)}
-                  icon={<SlidersHorizontal className="w-4 h-4" />}
-                  className="hidden sm:flex whitespace-nowrap"
-                >
-                  <span className="hidden md:inline">Customize Columns</span>
-                  <span className="md:hidden">Columns</span>
-                </Button>
-              ) : undefined}
             >
-              {/* With a selection, Score / Invite lead the actions, set apart
-                  from the filter controls by a divider. */}
-              {selectedCandidates.length > 0 && (
-                <>
-                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                  <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        if (!canRunScoring) {
-                          return;
-                        }
-                        // Review first: the candidates, their versions and
-                        // the job, in the shared Score Resume dialog.
-                        void handleSubmitToScoring();
-                      }}
-                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                      aria-disabled={!canRunScoring}
-                      title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
-                      icon={<ClipboardList className="w-3.5 h-3.5" />}
-                      className={`whitespace-nowrap ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      Score ({selectedCandidates.length})
-                    </Button>
-                  {/* "Invite" replaces the old standalone Assessment button —
-                      a dropdown of the two invite destinations, so a bulk
-                      AI Interview invite has the same entry point the row
-                      menu already offers per candidate. */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />} className="whitespace-nowrap">
-                        Invite ({selectedCandidates.length})
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                      {(() => {
-                        /* The job on screen — an invite for a job with no AI
-                           Assessment / AI Interview yet is greyed, with
-                           "＋ Create …" under it (create → back → invite). */
-                        const resultsSessionId = selectedHistoryItem?.id ?? historyItemForSelectedJob?.id ?? '';
-                        const rows = matchedCandidates
-                          .filter(c => selectedCandidates.includes(c.id))
-                          .map(c => toInviteRow(resultsSessionId, selectedJob, c));
-                        const target = [inviteTargetJobOf(selectedJob, resultsJobTitle)];
-                        const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
-                          setCreateInviteTarget({ kind, job, rows, view: 'results' });
-                        return (
-                          <>
-                            {renderInviteTargetItems({
-                              kind: 'assessment',
-                              target: resolveInviteTargetState('assessment', target, () => true),
-                              label: 'Create / Send Assessment',
-                              itemClass: actionsMenuItemClass,
-                              allowed: canInviteAssessmentFromMatch,
-                              deniedReason: ASSESSMENT_INVITE_DENIED,
-                              onInvite: (e) => {
-                                if (!canInviteAssessmentFromMatch) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                openInviteForRows('assessment', selectedJob, rows);
-                              },
-                              onCreate: create('assessment'),
-                            })}
-                            {renderInviteTargetItems({
-                              kind: 'interview',
-                              target: resolveInviteTargetState('interview', target, () => true),
-                              label: 'Create / Send AI Interview',
-                              itemClass: actionsMenuItemClass,
-                              allowed: canInviteAIInterviewFromMatch,
-                              deniedReason: AI_INTERVIEW_INVITE_DENIED,
-                              onInvite: (e) => {
-                                if (!canInviteAIInterviewFromMatch) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                openInviteForRows('interview', selectedJob, rows);
-                              },
-                              onCreate: create('interview'),
-                            })}
-                          </>
-                        );
-                      })()}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  if (!canExport) {
-                    return;
-                  }
-                  if (candidatesToExport.length === 0) {
-                    toast.error('No candidates to export');
-                    return;
-                  }
-                  setShowCandidateExportModal(true);
-                }}
-                aria-disabled={!canExport}
-                title={!canExport ? 'You do not have permission to export' : undefined}
-                icon={<FileDown className="w-4 h-4" />}
-                className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                Export
-              </Button>
+              {/* One Actions dropdown (matching Resume Scoring's bulk bar):
+                  Score, Export and Invite live inside it — shown only once
+                  candidates are ticked — instead of three separate buttons. */}
+              {selectedCandidates.length > 0 && (() => {
+                const resultsSessionId = selectedHistoryItem?.id ?? historyItemForSelectedJob?.id ?? '';
+                const rows = matchedCandidates
+                  .filter(c => selectedCandidates.includes(c.id))
+                  .map(c => toInviteRow(resultsSessionId, selectedJob, c));
+                const target = [inviteTargetJobOf(selectedJob, resultsJobTitle)];
+                const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
+                  setCreateInviteTarget({ kind, job, rows, view: 'results' });
+                const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
+                // Whether this job already has an AI Assessment / AI Interview
+                // set up: true → only Send applies, false → only Create applies,
+                // undefined (still loading) → neither is gated on it.
+                const asmtConfigured = inviteTargets.hasAssessment(selectedJob);
+                const intvConfigured = inviteTargets.hasAIInterview(selectedJob);
+                return (
+                  <>
+                    <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                          aria-label={`Actions for ${selectedCandidates.length} selected`}
+                        >
+                          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                          </span>
+                          Actions ({selectedCandidates.length})
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                        {/* Light grey header strip: how many the actions run on. */}
+                        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                          {selectedCandidates.length} selected
+                        </div>
+                        {/* Score — the shared Score Resume dialog for the ticked candidates. */}
+                        <DropdownMenuItem
+                          className={`${actionsMenuItemClass} ${(!canRunScoring || unitsShort) ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                          aria-disabled={!canRunScoring || undefined}
+                          disabled={canRunScoring && unitsShort}
+                          title={!canRunScoring ? 'You do not have permission to score resumes' : unitsShort ? 'Insufficient units for this selection' : undefined}
+                          onSelect={(e) => {
+                            if (!canRunScoring) { e.preventDefault(); return; }
+                            void handleSubmitToScoring();
+                          }}
+                        >
+                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
+                        </DropdownMenuItem>
+                        {/* Export — the ticked candidates. */}
+                        <DropdownMenuItem
+                          className={`${actionsMenuItemClass} ${!canExport ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                          aria-disabled={!canExport || undefined}
+                          title={!canExport ? 'You do not have permission to export' : undefined}
+                          onSelect={(e) => {
+                            if (!canExport) { e.preventDefault(); return; }
+                            if (candidatesToExport.length === 0) { toast.error('No candidates to export'); return; }
+                            setShowCandidateExportModal(true);
+                          }}
+                        >
+                          <FileDown className="w-4 h-4 text-menu-icon-download" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                        {/* Assessment — Create and Send as separate items. The one
+                            that doesn't apply to this job (already set up → can't
+                            Create; not set up → nothing to Send) is disabled. */}
+                        {(() => {
+                          const createDisabled = !canInviteAssessmentFromMatch || asmtConfigured === true;
+                          const sendDisabled = !canInviteAssessmentFromMatch || asmtConfigured === false;
+                          return (
+                            <>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={createDisabled || undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : asmtConfigured === true ? 'This job already has an assessment' : undefined}
+                                onSelect={(e) => {
+                                  if (createDisabled) { e.preventDefault(); return; }
+                                  create('assessment')(target[0]);
+                                }}
+                              >
+                                <Plus className="w-4 h-4 text-menu-icon-view" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create Assessment</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={sendDisabled || undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : asmtConfigured === false ? 'No assessment set up for this job yet' : undefined}
+                                onSelect={(e) => {
+                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  openInviteForRows('assessment', selectedJob, rows);
+                                }}
+                              >
+                                <ClipboardList className="w-4 h-4 text-menu-icon-view" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Send Assessment</span>
+                              </DropdownMenuItem>
+                            </>
+                          );
+                        })()}
+                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                        {/* AI Interview — Create and Send as separate items, same rule. */}
+                        {(() => {
+                          const createDisabled = !canInviteAIInterviewFromMatch || intvConfigured === true;
+                          const sendDisabled = !canInviteAIInterviewFromMatch || intvConfigured === false;
+                          return (
+                            <>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={createDisabled || undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : intvConfigured === true ? 'This job already has an AI interview' : undefined}
+                                onSelect={(e) => {
+                                  if (createDisabled) { e.preventDefault(); return; }
+                                  create('interview')(target[0]);
+                                }}
+                              >
+                                <Plus className="w-4 h-4 text-menu-icon-ai" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create AI Interview</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={sendDisabled || undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : intvConfigured === false ? 'No AI interview set up for this job yet' : undefined}
+                                onSelect={(e) => {
+                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  openInviteForRows('interview', selectedJob, rows);
+                                }}
+                              >
+                                <Video className="w-4 h-4 text-menu-icon-ai" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Send AI Interview</span>
+                              </DropdownMenuItem>
+                            </>
+                          );
+                        })()}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                );
+              })()}
               <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} />
             </ListToolbar>
 

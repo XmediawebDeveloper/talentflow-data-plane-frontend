@@ -4627,26 +4627,6 @@ export default function AIInterview() {
                 ]}
               />
 
-              {/* Row clicks and View Details open the candidate result only for
-                  Completed / Auto Completed invites — same note and banner
-                  treatment as the assessment tracker, so the recruiter knows
-                  why other rows don't navigate anywhere. */}
-              <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-                <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
-                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  <p className="flex-1 min-w-0 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                    <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
-                  </p>
-                  {/* Completion rate — moved here from the selection bar, where
-                      it sat apart from the note that explains which results
-                      exist. Solid and bold so it reads at a glance. */}
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
-                    <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
-                    {invitationOverview ? `${completionRate}%` : '—'} Completion
-                  </span>
-                </div>
-              </div>
-
               <InviteFilterBar
                 filters={inviteFilters}
                 onChange={(nextFilters) => {

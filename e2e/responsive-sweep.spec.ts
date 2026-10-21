@@ -132,6 +132,13 @@ test('responsive sweep', async ({ page }) => {
         }
       }
 
+      if (process.env.CLICK_TARGET) {
+        try {
+          await page.getByText(new RegExp(process.env.CLICK_TARGET)).first().click({ timeout: 5000 });
+          await page.waitForTimeout(500);
+        } catch { /* target not present */ }
+      }
+
       if (!NOSHOT) {
         const target = process.env.SCROLL_TARGET;
         for (const w of SHOT_WIDTHS) {
