@@ -2,7 +2,7 @@
 
 import { Briefcase, MapPin } from 'lucide-react';
 import type { JDResponse } from '@/lib/services/jdService';
-import { mapJDToJob, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
+import { mapJDToJob, formatLastUpdated, formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -74,10 +74,12 @@ export default function JDHeaderCard({ jd }: { jd: JDResponse }) {
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
             {job.location && (
               <>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <MapPin className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  <span className="[overflow-wrap:anywhere]">{job.location}</span>
-                </div>
+                {formatLocationGroups(job.locations, job.location).map((label) => (
+                  <div key={label} className="flex items-center gap-1.5 min-w-0">
+                    <MapPin className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    <span className="[overflow-wrap:anywhere]">{label}</span>
+                  </div>
+                ))}
                 <span className="text-gray-300">•</span>
               </>
             )}

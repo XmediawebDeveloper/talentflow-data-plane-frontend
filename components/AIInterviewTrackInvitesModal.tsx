@@ -834,6 +834,11 @@ export default function AIInterviewTrackInvitesModal({
                 </button>
               </>
             )}
+            {!embedded && (
+              <Button variant="secondary" size="sm" onClick={onClose}>
+                Cancel
+              </Button>
+            )}
             {onInviteMore && !embedded && (
               <Button
                 variant="primary"

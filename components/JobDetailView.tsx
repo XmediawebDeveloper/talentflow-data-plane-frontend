@@ -11,7 +11,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
+import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -3033,12 +3033,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               {/* Row 2: Location + Education + Employment Type + Work Mode + Posted Date + Posted By + Version */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
                 {/* Location */}
-                {job.location && (
+                {formatLocationGroups(job.locations, job.location).length > 0 && (
                   <>
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-4 h-4 text-brand-blue" />
-                      <span>{job.location}</span>
-                    </div>
+                    {formatLocationGroups(job.locations, job.location).map((label) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-brand-blue" />
+                        <span>{label}</span>
+                      </div>
+                    ))}
                     <span className="text-gray-300">•</span>
                   </>
                 )}
@@ -3622,12 +3624,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <span>{job.department}</span>
                   </div>
                 )}
-                {job.location && (
-                <div className="flex items-center gap-1.5">
+                {formatLocationGroups(job.locations, job.location).map((label) => (
+                <div key={label} className="flex items-center gap-1.5">
                   <MapPin className="w-4 h-4 text-brand-blue" />
-                  <span>{job.location}</span>
+                  <span>{label}</span>
                 </div>
-                )}
+                ))}
                 <div className="flex items-center gap-1.5">
                   <Calendar className="w-4 h-4 text-blue-600" />
                   <span>Posted {job.postedDate
@@ -5353,6 +5355,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdTitle={job.title}
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
+          // Revoke / Edit follow the same gate as Invite on this page.
+          canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && job.status !== 'Disabled'}
+          // Footer Invite More - this page's own Invite to Assessment dialog.
+          onInviteMore={canInviteToAssessment && permissions.canCreateAssessments && canInviteJdAssessment ? () => {
+            setShowTrackInvitesModal(false);
+            openCreateSendAssessment();
+          } : undefined}
           // Keep the whole flow on this page: swap the popup for the same
           // inline detail view the Assessment Result tab opens, rather than
           // routing out to /assessments/{id}/results/details.

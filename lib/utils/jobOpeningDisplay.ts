@@ -703,3 +703,33 @@ export const truncateJobTitle = (title?: string | null, max = 25): string => {
   const trimmed = title.trim();
   return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}...` : trimmed;
 };
+
+/**
+ * A JD's locations grouped by state, one label per state — e.g.
+ * "Tamil Nadu: Chengalpattu", "Karnataka: Belagavi" — the same shape the JD
+ * review step shows. A city with no state is listed under its own bare name.
+ * Falls back to the legacy flat `location` string when there is no array.
+ */
+export const formatLocationGroups = (
+  locations?: Array<{ city?: string | null; state?: string | null }> | null,
+  fallback?: string | null,
+): string[] => {
+  const order: string[] = [];
+  const byState = new Map<string, string[]>();
+  (locations || []).forEach((loc) => {
+    const parts = (loc?.city || '').split(',').map((p) => p.trim()).filter(Boolean);
+    if (parts.length === 0) return;
+    const city = parts[0];
+    const state = (loc.state || parts.slice(1).join(', ')).trim() || 'Other';
+    if (!byState.has(state)) {
+      byState.set(state, []);
+      order.push(state);
+    }
+    byState.get(state)!.push(city);
+  });
+  if (order.length === 0) return fallback?.trim() ? [fallback.trim()] : [];
+  return order.map((state) => {
+    const cities = byState.get(state)!.join(', ');
+    return state === 'Other' ? cities : `${state}: ${cities}`;
+  });
+};
