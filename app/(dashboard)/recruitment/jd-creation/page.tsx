@@ -692,7 +692,7 @@ function JDCreationContent() {
     : fromAssessment
       ? [
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Assessments', href: '/recruitment/assessments' },
+          { label: 'AI Assessments', href: '/recruitment/assessments' },
           { label: 'Create AI Assessment', href: ASSESSMENT_CREATE_HREF },
           ...jdLeafCrumbs,
         ]

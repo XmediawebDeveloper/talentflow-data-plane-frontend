@@ -60,14 +60,14 @@ export default function DeleteRecordModal({
   ].filter((part): part is string => !!part);
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-3 sm:p-6">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-record-title"
-        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 w-full max-w-[95vw] sm:max-w-2xl animate-scale-in max-h-[calc(100dvh-1.5rem)] flex flex-col tf-round-edges"
+        className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges"
       >
-        <div className="flex-1 min-h-0 px-4 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto text-center">
+        <div className="flex-1 min-h-0 px-5 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto text-center">
           <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full bg-destructive-subtle flex items-center justify-center">
             <Trash2 className="w-6 h-6 sm:w-7 sm:h-7 text-destructive" />
           </div>
@@ -115,7 +115,7 @@ export default function DeleteRecordModal({
           </div>
         </div>
 
-        <div className="px-4 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
+        <div className="px-5 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
           <Button variant="secondary" onClick={onCancel} disabled={isLoading} className="w-full sm:w-auto sm:min-w-[128px] px-6">
             Cancel
           </Button>

@@ -1039,7 +1039,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       // navigate to the route it is already on — nothing happened, and the
       // crumb looked broken. `onBack` closes the inline view, and on the
       // standalone /assessments/create route it navigates back for real.
-      { label: 'Assessments', onClick: handleLeaveAttempt },
+      { label: 'AI Assessments', onClick: handleLeaveAttempt },
       ...buildStepCrumbs(),
     ];
   };

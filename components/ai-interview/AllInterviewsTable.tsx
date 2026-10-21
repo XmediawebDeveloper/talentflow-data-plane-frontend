@@ -17,12 +17,14 @@ import {
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
-import ListCountBadge from '@/components/ui/list-count-badge';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
+import type { JDLineageVersion } from '@/lib/services/jdService';
+import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -185,6 +187,40 @@ export function JobDisabledBadge() {
       className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 text-gray-600 bg-gray-100 ring-gray-200 dark:text-slate-300 dark:bg-slate-800 dark:ring-slate-700"
     >
       Job Disabled
+    </span>
+  );
+}
+
+/** Which job badge (if any) to show beside a job name: the JD's own Disabled /
+ *  Archived status, unless another version of the same job is still Published
+ *  or Republished — one closed version does not speak for a live job.
+ *  `versions` undefined (not loaded yet) falls back to the JD's own status. */
+export function jobLockBadgeFor(
+  jdStatus: string | null | undefined,
+  versions: JDLineageVersion[] | undefined,
+): 'disabled' | 'archived' | null {
+  const own = isJdDisabled(jdStatus)
+    ? 'disabled'
+    : String(jdStatus || '').toLowerCase() === 'archived'
+      ? 'archived'
+      : null;
+  if (!own || !versions?.length) return own;
+  const anyLive = versions.some((v) => {
+    const label = jobVersionDisplayStatus(v.status, v.current_version);
+    return label === 'Published' || label === 'Republished';
+  });
+  return anyLive ? null : own;
+}
+
+/* Marks a job whose JD is archived — same shape as JobDisabledBadge, in the
+   Archived status pill's colours. */
+export function JobArchivedBadge() {
+  return (
+    <span
+      title={JD_ARCHIVED_ACTION_MESSAGE}
+      className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20"
+    >
+      Job Archived
     </span>
   );
 }
@@ -554,6 +590,18 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
+  /* Every version's status for the rows on this page whose job reads Disabled
+     or Archived — the job badge is judged on the whole job (jobLockBadgeFor). */
+  const jdLineage = useJobVersionLineage();
+  const { ensureFilterLineages } = jdLineage;
+  useEffect(() => {
+    ensureFilterLineages(
+      pageRows
+        .filter((row) => row.jdId && (isJdDisabled(row.config.jd_status) || String(row.config.jd_status || '').toLowerCase() === 'archived'))
+        .map((row) => ({ key: row.jdId!, jobId: row.jdId! })),
+    );
+  }, [pageRows, ensureFilterLineages]);
+
   // Row selection — the CheckSquare / Square column the Candidate Results tab
   // opens with. Selection survives paging; it is pruned to the rows that
   // still exist after a reload or a narrower filter.
@@ -801,16 +849,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
               </span>
             )}
           </button>
-
-          {/* Count badge after More Filters — the Assessments page's: rows
-              left after search + filters, of all rows, or the ticked count. */}
-          <ListCountBadge
-            filtered={sorted.length}
-            total={rows.length}
-            noun="interview"
-            selected={selectedIds.size}
-            className="flex-shrink-0 text-center"
-          />
         </div>
 
         {filtersOpen && (
@@ -1091,7 +1129,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                         >
                           {row.jobName}
                         </span>
-                        {isJdDisabled(row.config.jd_status) && <JobDisabledBadge />}
+                        {(() => {
+                          const lockBadge = jobLockBadgeFor(row.config.jd_status, row.jdId ? jdLineage.filterLineages[row.jdId] : undefined);
+                          return lockBadge === 'disabled' ? <JobDisabledBadge />
+                            : lockBadge === 'archived' ? <JobArchivedBadge /> : null;
+                        })()}
                       </div>
                     </td>
 

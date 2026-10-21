@@ -33,7 +33,6 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { DateField } from '@/components/ui/date-field';
-import ListCountBadge from '@/components/ui/list-count-badge';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -966,7 +965,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               className="mb-4 md:mb-6"
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
-                { label: 'Assessments', href: '/recruitment/assessments' },
+                { label: 'AI Assessments', href: '/recruitment/assessments' },
                 { label: 'All Assessments' },
               ]}
             />
@@ -1031,9 +1030,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               filtersApplied={hasAnyFilter(filters)}
               onClearFilters={clearAll}
               className="mb-0"
-              countBadge={
-                <ListCountBadge filtered={sorted.length} total={rows.length} noun="assessment" />
-              }
             />
 
             {/* The six filter controls. A panel rather than an always-open row:

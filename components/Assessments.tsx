@@ -2246,7 +2246,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!inviteHasResult(inv)) return;
     const cid = inv.candidate_display_id ? `&cid=${encodeURIComponent(inv.candidate_display_id)}` : '';
     const name = inv.candidate_name ? `&candidate_name=${encodeURIComponent(inv.candidate_name)}` : '';
-    router.push(`/recruitment/assessments/${inv._assessment_id}/results/details?candidate_id=${inv.attempt_id}${cid}${name}`);
+    // `from` marks the cross-assessment origin, as the Candidate Results tab
+    // does: a flat trail, and "Assessments" / Back return to this tab.
+    router.push(`/recruitment/assessments/${inv._assessment_id}/results/details?candidate_id=${inv.attempt_id}${cid}${name}&from=invitation-status`);
   };
 
   /* Download Report — assessmentService.exportPDF, the same call (and the same
@@ -5595,8 +5597,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   ].filter((id) => completedCandidatesByAssessment[id] === undefined);
   /* All / Active / Draft / Archived always draw the flat table. */
   const showFlatAssessmentTable = isFlatAssessmentTab(activeTab);
-  /** Every job in this tab's loaded set, before search and filters. */
-  const allJobsCount = collapseByLineage(assessments).length;
   const activeTabOwnsListContent =
     showFlatAssessmentTable ||
     ['completed-candidates', 'invitation-status', 'settings'].includes(activeTab);
@@ -6258,7 +6258,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Assessments' }]} />
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-5">
           <div className="flex items-start gap-3">
@@ -6603,17 +6603,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 filtersApplied={assessmentFiltersActive}
                 onClearFilters={clearAssessmentFilters}
                 className="mb-0"
-                /* JOBS, as the noun says - the rows this list draws
-                   (`collapsedAssessments`) of every job in the loaded set.
-                   It counted assessment records, so a Grouped view of 71
-                   jobs read "107 of 107 jobs". */
-                countBadge={
-                  <ListCountBadge
-                    filtered={collapsedAssessments.length}
-                    total={allJobsCount}
-                    noun="job"
-                  />
-                }
               />
 
               {showAssessmentFilters && (
@@ -7023,10 +7012,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                              as AI Interview's Candidate Results uses it),
                              riding the badge slot so it is the row's last,
                              far-right control. */
-                          <>
-                            <ListCountBadge filtered={total} total={resultsTotal} noun="result" />
-                            <ListViewToggle value={completedCandidatesDisplayMode} onChange={setCompletedCandidatesDisplayMode} />
-                          </>
+                          <ListViewToggle value={completedCandidatesDisplayMode} onChange={setCompletedCandidatesDisplayMode} />
                         }
                       />
 

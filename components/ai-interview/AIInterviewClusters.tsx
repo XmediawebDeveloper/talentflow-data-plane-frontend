@@ -3117,7 +3117,8 @@ export default function AIInterviewClusters() {
                       { label: 'Dashboard', href: '/dashboard' },
                       { label: 'Job Descriptions', href: '/recruitment/job-openings' },
                       { label: config?.jd_title || config?.position || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(config.jd_id)}` },
-                      { label: 'AI Interview Clusters' },
+                      { label: 'Create AI Interview' },
+                      { label: 'Clusters' },
                     ]
                   : [
                       { label: 'Dashboard', href: '/dashboard' },

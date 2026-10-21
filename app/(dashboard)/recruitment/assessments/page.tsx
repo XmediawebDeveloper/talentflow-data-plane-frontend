@@ -38,7 +38,12 @@ export default function AssessmentsRoute() {
       : tabParam === 'draft' ? ('draft' as const)
         // Total Jobs — where a saved draft lands (with `?focus=`).
         : tabParam === 'jobs' ? ('jobs' as const)
-          : undefined;
+          /* The cross-assessment Candidate Results / Invitation Status tabs —
+             where a candidate's Result Details returns to (its "Assessments"
+             crumb and Back). */
+          : tabParam === 'completed-candidates' ? ('completed-candidates' as const)
+            : tabParam === 'invitation-status' ? ('invitation-status' as const)
+              : undefined;
 
   // Capture create-flow params on first mount so they survive the URL strip
   // below. Without this, the loading spinner blocks <Assessments> from mounting
