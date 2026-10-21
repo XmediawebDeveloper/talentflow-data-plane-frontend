@@ -22,7 +22,7 @@ import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
-import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { emailValidationError } from '@/lib/utils/email';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
@@ -5069,9 +5069,7 @@ export default function AIInterview() {
       {editInviteTarget && (() => {
         const editInviteEmailTrimmed = editInviteForm.candidate_email.trim();
         const editInviteEmailError =
-          editInviteEmailTrimmed.length > 0 && !isValidEmailFormat(editInviteEmailTrimmed)
-            ? EMAIL_FORMAT_ERROR
-            : null;
+          editInviteEmailTrimmed.length > 0 ? emailValidationError(editInviteEmailTrimmed) : null;
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col">
@@ -5125,8 +5123,9 @@ export default function AIInterview() {
                     toast.error('Candidate name and email are required');
                     return;
                   }
-                  if (!isValidEmailFormat(email)) {
-                    toast.error(EMAIL_FORMAT_ERROR);
+                  const emailError = emailValidationError(email);
+                  if (emailError) {
+                    toast.error(emailError);
                     return;
                   }
                   setSavingEditInvite(true);

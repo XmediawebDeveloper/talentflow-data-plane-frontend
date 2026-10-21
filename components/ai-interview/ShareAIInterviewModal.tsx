@@ -17,7 +17,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
-import { isValidEmailFormat } from '@/lib/utils/email';
+import { isValidEmailFormat, emailValidationError } from '@/lib/utils/email';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ListPagination from '@/components/ListPagination';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
@@ -768,7 +768,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       return;
     }
     if (!isValidEmail(candidate.email)) {
-      toast.error('Please enter a valid email address');
+      toast.error(emailValidationError(candidate.email));
       return;
     }
     // Copy Link creates a real invitation server-side, so it has to respect the
@@ -857,8 +857,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       // Validate all email addresses
       const invalidEmails = candidatesWithData.filter((c) => !isValidEmail(c.email));
       if (invalidEmails.length > 0) {
-        const invalidEmailList = invalidEmails.map((c) => c.email).join(', ');
-        toast.error(`Invalid email address(es): ${invalidEmailList}. Please enter valid email addresses.`);
+        // One bad address gets its own message (a misspelt provider names the fix).
+        toast.error(invalidEmails.length === 1
+          ? `${invalidEmails[0].email}: ${emailValidationError(invalidEmails[0].email)}`
+          : `Invalid email address(es): ${invalidEmails.map((c) => c.email).join(', ')}. Please enter valid email addresses.`);
         setIsSubmitting(false);
         return;
       }
@@ -1450,7 +1452,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               />
                             </div>
                             {candidate.source !== 'database' && candidate.email.trim() && !isValidEmail(candidate.email) && (
-                              <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>
+                              <p className="text-xs text-destructive mt-1">{emailValidationError(candidate.email)}</p>
                             )}
                             {candidate.source !== 'database' && candidate.email.trim() && isValidEmail(candidate.email) && isDuplicateEmail(candidate.id, candidate.email) && (
                               <p className="text-xs text-destructive mt-1">This email is already in the list</p>
