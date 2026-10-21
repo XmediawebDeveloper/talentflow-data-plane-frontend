@@ -27,7 +27,7 @@
  * to run under it as-is.
  */
 import assert from 'assert';
-import { isValidEmailFormat, emailValidationError, EMAIL_FORMAT_ERROR } from '../email';
+import { isValidEmailFormat, suggestEmailDomain, EMAIL_FORMAT_ERROR } from '../email';
 
 type Case = [string | null | undefined, boolean, string];
 
@@ -94,11 +94,7 @@ for (const [email, expected, reason] of CASES) {
 assert.strictEqual(failures, 0, `${failures} of ${CASES.length} email format cases failed`);
 
 assert.strictEqual(EMAIL_FORMAT_ERROR, 'Please enter a valid email address.');
-assert.strictEqual(
-  emailValidationError('naveengovindhan1@gmail.om'),
-  'Please enter a valid email address. Did you mean naveengovindhan1@gmail.com?',
-);
-assert.strictEqual(emailValidationError('user@example'), EMAIL_FORMAT_ERROR);
-assert.strictEqual(emailValidationError('user@example.com'), null);
+assert.strictEqual(suggestEmailDomain('gmail.om'), 'gmail.com');
+assert.strictEqual(suggestEmailDomain('example.com'), null);
 
 console.log(`email.test.ts: all ${CASES.length} cases passed`);

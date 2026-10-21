@@ -22,7 +22,8 @@ import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
-import { emailValidationError } from '@/lib/utils/email';
+import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
@@ -5069,7 +5070,13 @@ export default function AIInterview() {
       {editInviteTarget && (() => {
         const editInviteEmailTrimmed = editInviteForm.candidate_email.trim();
         const editInviteEmailError =
-          editInviteEmailTrimmed.length > 0 ? emailValidationError(editInviteEmailTrimmed) : null;
+          editInviteEmailTrimmed.length > 0 && !isValidEmailFormat(editInviteEmailTrimmed)
+            ? EMAIL_FORMAT_ERROR
+            : null;
+        const editInviteNameError =
+          editInviteForm.candidate_name.trim().length > 0 && !isValidCandidateName(editInviteForm.candidate_name)
+            ? NAME_FORMAT_ERROR
+            : null;
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col">
@@ -5089,8 +5096,16 @@ export default function AIInterview() {
                   type="text"
                   value={editInviteForm.candidate_name}
                   onChange={(e) => setEditInviteForm((f) => ({ ...f, candidate_name: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  aria-invalid={editInviteNameError ? 'true' : undefined}
+                  className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                    editInviteNameError
+                      ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
+                      : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
+                  }`}
                 />
+                {editInviteNameError && (
+                  <p className="mt-1 text-xs text-destructive">{editInviteNameError}</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
@@ -5123,9 +5138,12 @@ export default function AIInterview() {
                     toast.error('Candidate name and email are required');
                     return;
                   }
-                  const emailError = emailValidationError(email);
-                  if (emailError) {
-                    toast.error(emailError);
+                  if (!isValidCandidateName(name)) {
+                    toast.error(NAME_FORMAT_ERROR);
+                    return;
+                  }
+                  if (!isValidEmailFormat(email)) {
+                    toast.error(EMAIL_FORMAT_ERROR);
                     return;
                   }
                   setSavingEditInvite(true);
@@ -5154,7 +5172,7 @@ export default function AIInterview() {
                     setSavingEditInvite(false);
                   }
                 }}
-                disabled={savingEditInvite || !!editInviteEmailError}
+                disabled={savingEditInvite || !!editInviteEmailError || !!editInviteNameError}
                 icon={savingEditInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
               >
                 Save & Send
