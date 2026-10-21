@@ -670,7 +670,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
 
         {/* Footer */}
         <div
-          className="shrink-0"
+          className="shrink-0 plan-modal-footer"
           style={{
             padding: '20px 32px',
             borderTop: '1px solid var(--tf-border)',
@@ -678,6 +678,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
             flexShrink: 0,
           }}
         >
@@ -699,7 +701,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           <button
             onClick={handleConfirmSelection}
             disabled={!selectedPlanId || isProcessing}
-            className={`tf-auth-btn tf-auth-btn--auto${isProcessing ? ' tf-auth-btn--busy' : ''}`}
+            className={`tf-auth-btn tf-auth-btn--auto plan-modal-cta${isProcessing ? ' tf-auth-btn--busy' : ''}`}
             style={{ padding: '0 32px', flexShrink: 0 }}
           >
             {isProcessing ? (
@@ -716,7 +718,11 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @media (max-width: 480px) {
+          .plan-modal-footer { flex-direction: column; align-items: stretch; padding: 16px !important; }
+          .plan-modal-footer .plan-modal-cta { width: 100%; padding: 0 16px !important; justify-content: center; }
+        }`}</style>
     </div>
   );
 }

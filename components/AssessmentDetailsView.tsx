@@ -2910,24 +2910,6 @@ export default function AssessmentDetailsView({
               ]}
             />
 
-            {/* Why most rows do not navigate — the popup's banner, verbatim. */}
-            <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-              <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
-                <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                  <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
-                </p>
-                {/* Completion rate lives here, not in the card row: the row is
-                    the status FILTER and this was the one tile that filtered
-                    nothing. Same placement and treatment as the AI interview
-                    tracker (2026-09-30). */}
-                <span className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  {inviteStats.total > 0 ? Math.round((inviteStats.completed / inviteStats.total) * 100) : 0}% Completion
-                </span>
-              </div>
-            </div>
-
             <InviteFilterBar
               filters={inviteFilters}
               onChange={(nextFilters) => {
