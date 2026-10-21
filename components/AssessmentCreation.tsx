@@ -17,6 +17,7 @@ import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
@@ -24,7 +25,7 @@ import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import CodingRoundLanguageModal from '@/components/assessments/CodingRoundLanguageModal';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
+import PublishedSummaryCard, { PublishedActions } from '@/components/ui/published-summary-card';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
 import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
 import AssessmentJobBinding from '@/components/assessments/AssessmentJobBinding';
@@ -633,6 +634,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // add/edit/delete-question affordance this builder actually has (the bank
   // has no per-question edit or delete UI here to gate).
   const canAddQuestion = isTenantAdmin || hasPermissionCode('assessments:add_question');
+  // "HR Question Bank View" under Assessment: shows the bank's questions in the
+  // HR section. Without it the list is hidden — the questions still load so the
+  // default / saved HR questions are kept when the assessment is saved.
+  const canViewQuestionBank = isTenantAdmin || hasPermissionCode('assessments:view_question_bank');
+  // Publish Assessment is checked against assessments:update by the backend.
+  // Without it the Publish button stays visible, greyed, tooltip only.
+  const canPublishAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   // Locked only once plan features have loaded — `available` is false while
   // loading, which used to toast "not available" and blank the form on every load.
   const { isPlanLocked } = usePlanLock();
@@ -1357,10 +1365,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
      had no other caller, so leaving them would have been dead code. */
 
   const openAddHRQuizModal = () => {
-    if (!canAddQuestion) {
-      toast.error('You do not have permission to add questions');
-      return;
-    }
+    // Locked: the Add Quiz button is greyed with a tooltip; click is a no-op.
+    if (!canAddQuestion) return;
     const hrSection = sections.find(s => s.name === 'HR');
     if (!hrSection?.enabled) return;
 
@@ -2978,6 +2984,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         jd_id: resultAssessment.jd_id,
         jd_short_id: resultAssessment.jd_short_id,
         jd_version: resultAssessment.jd_version,
+        jd_title: resultAssessment.jd_title,
         job: selectedJob,
         duration: resultAssessment.duration_minutes,
         sections: sections.filter(section => section.enabled).map(section => ({
@@ -3477,10 +3484,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <Button
                   variant="primary"
                   onClick={() => {
-                    if (!canCreateJd) {
-                      toast.error('You do not have permission to create job descriptions');
-                      return;
-                    }
+                    if (!canCreateJd) return;
                     handleCreateNewJD();
                   }}
                   aria-disabled={!canCreateJd}
@@ -3724,7 +3728,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             sibling version that does not — and off while
                             another job holds the pick. */}
                         <label
-                          className={`flex items-center pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                           title={
                             blockedByOtherPick
                               ? otherPickReason
@@ -4171,10 +4175,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       <Button
                         variant="primary"
                         onClick={() => {
-                          if (!canCreateJd) {
-                            toast.error('You do not have permission to create job descriptions');
-                            return;
-                          }
+                          if (!canCreateJd) return;
                           handleCreateNewJD();
                         }}
                         aria-disabled={!canCreateJd}
@@ -4350,6 +4351,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
         </div>
 
+        {/* No "HR Question Bank View": the list stays visible but greyed and
+            unclickable, with the reason on hover (never hidden). */}
+        <PermissionLockedOverlay locked={!canViewQuestionBank} message='You do not have permission to view the HR Question Bank'>
         <div className="space-y-1.5 max-h-72 overflow-y-auto">
           {hrQuestionBank.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
@@ -4394,6 +4398,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             );
           })}
         </div>
+        </PermissionLockedOverlay>
 
         {/* The "synced with the HR Question Bank" note is not repeated here.
             It now sits immediately after the selected-questions count on the
@@ -5348,16 +5353,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       and publish calls run. The same two gates still apply. */}
                   <Button
                     variant="primary"
-                    onClick={() => handleGenerateAssessment(false)}
+                    onClick={() => {
+                      if (!canPublishAssessment) return;
+                      handleGenerateAssessment(false);
+                    }}
                     disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
+                    aria-disabled={!canPublishAssessment || !isPercentageValid || !hasValidHRSelection || isGenerating}
                     title={
-                      !isPercentageValid
+                      !canPublishAssessment
+                        ? 'You do not have permission to publish assessments'
+                        : !isPercentageValid
                         ? 'Section percentages must total 100%'
                         : !hasValidHRSelection
                           ? 'Select at least one HR question before publishing'
                           : ''
                     }
-                    className="flex-1"
+                    className={`flex-1 ${!canPublishAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {generatingAction === 'publish' ? (
                       <>
@@ -5567,12 +5578,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
    * configuration included, now belongs to the Configure step it was read off.
    */
   if (step === 'publish' && publishedAssessment) {
-    /* The same name this step's breadcrumb leaf carries — see
-       `publishedAssessmentName`. It was built here from `title` unstripped,
-       so a v3 assessment announced itself as "… - Version 3" on the panel
-       while every list naming it had dropped the suffix. */
-    const assessmentName = publishedAssessmentName();
-
     /* The JOB this assessment was published for, and WHICH VERSION of it.
        The published record is asked first — `jd_short_id` and `jd_version` are
        the backend's own record of the binding — and the selected JD answers
@@ -5582,6 +5587,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
        here matches the v6 they were just looking at. */
     const jobIdForPublished = publishedAssessment.jd_short_id || selectedJob?.job_id || '';
     const jobVersionForPublished = publishedAssessment.jd_version ?? selectedJob?.versionNumber;
+    const roleForPublished = stripVersionFromTitle(publishedAssessment.jd_title || selectedJob?.title || '');
 
     return (
       <div className="flex-1 overflow-x-clip bg-slate-50">
@@ -5612,60 +5618,33 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <SuccessAnimation />
               </div>
 
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-2 sm:mb-3">
+              <h2 className={`text-xl sm:text-2xl font-bold text-gray-900 tracking-tight ${fromInviteOrigin ? 'mb-2 sm:mb-3' : 'mb-4 sm:mb-5'}`}>
                 Assessment Published!
               </h2>
-              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-5">
-                Your assessment has been successfully published and is now live.
-                {fromInviteOrigin && ` Next, send it to the candidates you picked in ${inviteOriginLabel}.`}
-              </p>
+              {fromInviteOrigin && (
+                <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-5">
+                  Next, send it to the candidates you picked in {inviteOriginLabel}.
+                </p>
+              )}
 
-              {/* Narrower than the page it sits on: the name reads as one
-                  line of a form rather than a band across a 1400px card, and
-                  the buttons below line up under it. */}
-              <div className={`mx-auto mb-5 sm:mb-6 w-full ${fromInviteOrigin ? 'max-w-xl' : 'max-w-3xl'} bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] px-4 sm:px-5 py-3 sm:py-3.5 flex items-start gap-3 sm:gap-4 text-left`}>
-                <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-brand-blue" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm text-gray-500">Assessment</div>
-                  <div className="text-sm sm:text-base font-semibold text-gray-900 break-words">
-                    {assessmentName}
-                  </div>
-                  {/* WHAT WAS PUBLISHED, AND AGAINST WHAT.
-                      Three separate identities, each named so it cannot be
-                      read as another: the job, the job VERSION the assessment
-                      was built against, and the assessment's own version. The
-                      row carried one bare `v1` chip, which said none of that —
-                      and a lone "v1" beside a job the recruiter knows as v6
-                      reads as a wrong number rather than as the first
-                      assessment of that job, which is what it is. Assessment
-                      versions are their own sequence; they do not track the
-                      JD's.
-                      All three are read off the published record (the job
-                      version falls back to the JD version actually selected,
-                      which is the same version in the numbering every JD badge
-                      shows), and any one of them that the record does not
-                      carry is left out rather than guessed at.
-                      One wrapped row under the name, not a chip floated to the
-                      right edge: the badges then sit on the text's own left
-                      margin and stay aligned with it however many of them
-                      there are and however narrow the screen. */}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {jobIdForPublished && <JobIdBadge>{jobIdForPublished}</JobIdBadge>}
-                    {jobVersionForPublished != null && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-gray-700 ring-1 ring-gray-200">
-                        Job v{jobVersionForPublished}
-                      </span>
-                    )}
-                    {publishedAssessment.version != null && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                        Assessment v{publishedAssessment.version}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* WHAT WAS PUBLISHED, AND AGAINST WHAT, on one line:
+                  "JD-294 - Java Developer - V1 - Assessment V2". The bare V is
+                  the job VERSION the assessment was built against; the
+                  assessment's own version is named as such, since assessment
+                  versions are their own sequence and do not track the JD's.
+                  All read off the published record, the selected JD answering
+                  for what the record leaves out; a part neither carries is
+                  left out rather than guessed at. As wide as its line and no
+                  wider — a short role leaves no empty band on the right — up
+                  to the page's old card width, past which the role truncates. */}
+              <PublishedSummaryCard
+                className={`mx-auto mb-5 sm:mb-6 w-fit max-w-full ${fromInviteOrigin ? 'sm:max-w-xl' : 'sm:max-w-3xl'}`}
+                icon={<FileText className="w-5 h-5 text-brand-blue" />}
+                jobId={jobIdForPublished}
+                jobName={roleForPublished}
+                jobVersion={jobVersionForPublished}
+                ownVersion={publishedAssessment.version != null ? `Assessment V${publishedAssessment.version}` : null}
+              />
 
               {/* The ways on from here, weighted as the design weights them:
                   two outlined routes in the brand ink and one filled primary,
@@ -5676,10 +5655,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   does not need were the widest thing on it after the
                   headline; one set of paddings across all three also means
                   their heights cannot drift apart at a breakpoint. */}
-              {/* Same width as the card above, buttons sharing it equally — so the
-                  row lines up edge to edge with the card instead of floating
-                  centred under a wider box. */}
-              <div className={`mx-auto w-full ${fromInviteOrigin ? 'max-w-xl' : 'max-w-3xl'} flex flex-col sm:flex-row gap-2.5 sm:gap-3 justify-center [&>button]:sm:flex-1 [&>button]:justify-center`}>
+              {/* The shared compact row (PublishedActions) — the same sizes
+                  Job Published and AI Interview Published use. */}
+              <PublishedActions>
                 {/* Both of these leave the flow for a real page, so they are
                     gated on the id the publish call returned - without it
                     there is nothing to open. */}
@@ -5725,10 +5703,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     onClick={goToAssessmentsList}
                     icon={<ArrowRight className="w-4 h-4" />}
                   >
-                    Go to Assessments
+                    Go to All Assessments
                   </Button>
                 )}
-              </div>
+              </PublishedActions>
             </div>
           </div>
         </div>

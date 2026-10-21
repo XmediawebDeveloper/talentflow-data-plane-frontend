@@ -1,6 +1,7 @@
 'use client'
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
+import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
@@ -17,7 +18,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip, Plus
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip, Plus, ClipboardList, Video
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -234,6 +235,18 @@ import CandidateActivityCard from '@/components/resumes/CandidateActivityCard';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
+import {
+  INTERNAL_DB_PERMISSIONS,
+  MY_RESUMES_PERMISSIONS,
+  RESUME_TAB_LABEL,
+  RESUME_VIEW_SOURCE_PARAM,
+  resumeDatabaseTabHref,
+  type ResumeTab,
+} from '@/lib/constants/resumePools';
+
+/** Create / Send button when the user lacks the permission: shown, greyed, hover explains. */
+const PERMISSION_LOCKED_BUTTON_CLASS =
+  'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
 
 export default function ResumeViewPage() {
   const params = useParams();
@@ -263,7 +276,9 @@ export default function ResumeViewPage() {
   // to the right place — for the two resume pools that now means the right TAB
   // of Resume Database. The originating list stores this in sessionStorage as
   // `resumeNavSource`; its values are unchanged ('my-resumes' is the tab, not a
-  // route, since the /recruitment/my-resumes page became a redirect).
+  // route — /recruitment/my-resumes is a redirect into that tab).
+  // `viewSource` also decides which permission set the page's actions use;
+  // the breadcrumb reads `crumbPool` below instead.
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
   const [jobDetailsTitle, setJobDetailsTitle] = useState('');
@@ -275,8 +290,17 @@ export default function ResumeViewPage() {
   /** The Job Details job and tab this resume was opened from. */
   const [jobDetailsJobId, setJobDetailsJobId] = useState<string | null>(null);
   const [jobDetailsTab, setJobDetailsTab] = useState<string | null>(null);
+  /* The resume pool the breadcrumb leads back to, from the link's `?source=`.
+     Read from the URL only — never from sessionStorage, which keeps whichever
+     list was used last in the tab and so named the wrong pool for a resume
+     opened from search, an upload or a scoring screen. Null = not opened from
+     a pool (or opened from another module, below). */
+  const [crumbPool, setCrumbPool] = useState<ResumeTab | null>(null);
   useEffect(() => {
     try {
+      const pool = new URLSearchParams(window.location.search).get(RESUME_VIEW_SOURCE_PARAM);
+      setCrumbPool(pool === 'my-resumes' || pool === 'internal-db' ? pool : null);
+
       const s = sessionStorage.getItem('resumeNavSource');
       if (s === 'my-resumes' || s === 'resume-database' || s === 'ai-talent-match' || s === 'job-details') {
         setViewSource(s);
@@ -301,14 +325,47 @@ export default function ResumeViewPage() {
       }
     } catch { /* ignore */ }
   }, []);
-  /* My Resumes and Internal Database are tabs of one Resume Database page, so
-     the trail names both the page and the tab the recruiter actually came
-     from, and the link carries `?tab=` to land them back on it rather than on
-     whichever tab happens to be their default. */
+  /* The job the resume was opened from (Job Details, or one job's AI Talent
+     Match list), named from the job record — title and job version — rather
+     than the title the opener left in sessionStorage. The stored title stands
+     in only until the record arrives, or if it cannot be loaded. */
+  const crumbJobId =
+    viewSource === 'job-details' ? jobDetailsJobId
+    : viewSource === 'ai-talent-match' ? aiMatchJobId
+    : null;
+  const [crumbJob, setCrumbJob] = useState<{ id: string; title: string; version: number | null } | null>(null);
+  useEffect(() => {
+    if (crumbPool || !crumbJobId) return;
+    let cancelled = false;
+    jdService.get(crumbJobId)
+      .then((jd) => {
+        if (cancelled || !jd?.title) return;
+        setCrumbJob({ id: crumbJobId, title: jd.title, version: mapJDToJob(jd).versionNumber ?? null });
+      })
+      .catch(() => { /* keep the opener's stored title */ });
+    return () => { cancelled = true; };
+  }, [crumbPool, crumbJobId]);
+  const crumbJobLabel = (storedTitle: string, fallback: string) =>
+    crumbJob && crumbJob.id === crumbJobId
+      ? `${crumbJob.title}${crumbJob.version != null ? ` · V${crumbJob.version}` : ''}`
+      : storedTitle || fallback;
+
+  /* My Resumes and the Shared Database are tabs of one Resume Database page:
+     Resume Database › <the tab the resume was opened from>. The two crumbs go
+     to different places — the page, then that tab (`?tab=`) — instead of both
+     to the tab. A pool the user cannot see is never named, and a resume not
+     opened from a pool (search, an upload, a scoring screen) gets the page
+     alone rather than a guessed tab. */
+  const canSeePool = (pool: ResumeTab) =>
+    isTenantAdmin ||
+    (pool === 'my-resumes' ? MY_RESUMES_PERMISSIONS : INTERNAL_DB_PERMISSIONS).some((k) => hasPermission(k));
+  const resumeDatabaseCrumb = { label: 'Resume Database', href: '/recruitment/resume-database' };
   const sourceCrumbs =
-    viewSource === 'my-resumes' ? [
-      { label: 'Resume Database', href: '/recruitment/resume-database?tab=my-resumes' },
-      { label: 'My Resumes', href: '/recruitment/resume-database?tab=my-resumes' },
+    crumbPool ? [
+      resumeDatabaseCrumb,
+      ...(canSeePool(crumbPool)
+        ? [{ label: RESUME_TAB_LABEL[crumbPool], href: resumeDatabaseTabHref(crumbPool) }]
+        : []),
     ]
     // The "Match Details" step only exists when the resume was opened from a
     // specific job's match list. The candidate roll-up spans jobs and stores no
@@ -316,7 +373,7 @@ export default function ResumeViewPage() {
     : viewSource === 'ai-talent-match' ? [
       { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
       ...(aiMatchDetailsReturnUrl
-        ? [{ label: aiMatchJobTitle || 'Match Details', href: aiMatchDetailsReturnUrl }]
+        ? [{ label: crumbJobLabel(aiMatchJobTitle, 'Match Details'), href: aiMatchDetailsReturnUrl }]
         : []),
     ]
     // Every step the recruiter walked, not just the last one: the jobs list,
@@ -324,12 +381,13 @@ export default function ResumeViewPage() {
     // record, and skipped the list the job was reached from.
     : viewSource === 'job-details' ? [
       { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-      { label: jobDetailsTitle || 'Job Details', href: jobDetailsReturnUrl || '/recruitment/job-openings' },
+      { label: crumbJobLabel(jobDetailsTitle, 'Job Details'), href: jobDetailsReturnUrl || '/recruitment/job-openings' },
     ]
-    : [
-      { label: 'Resume Database', href: '/recruitment/resume-database?tab=internal-db' },
-      { label: 'Shared Database', href: '/recruitment/resume-database?tab=internal-db' },
-    ];
+    : [resumeDatabaseCrumb];
+  /* Keeps `?source=` on links back to this page and on to its neighbours, so
+     the trail does not fall back to the page alone after Prev / Next or a
+     return from Candidate Activity. */
+  const sourceQuery = crumbPool ? `?${RESUME_VIEW_SOURCE_PARAM}=${crumbPool}` : '';
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -381,7 +439,9 @@ export default function ResumeViewPage() {
   // Plan gates DISABLE (hover explains), they never hide: permission decides
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
-    isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'));
+    isTenantAdmin ||
+    (hasPermission('canRunScoring') &&
+      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score'));
   const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'
@@ -402,7 +462,16 @@ export default function ResumeViewPage() {
         viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
       )
     );
-  const canInviteAIInterview = isTenantAdmin || hasPermission('canInviteAIInterviews');
+  // "Invite to AI Interview" is its own permission per resume source (My
+  // Resumes / Shared Database), plus AI Interview's own Invite.
+  const canInviteAIInterview =
+    isTenantAdmin ||
+    (hasPermission('canInviteAIInterviews') &&
+      (viewSource === 'resume-database'
+        ? hasPermissionCode('internal_db:invite_ai_interview')
+        : viewSource === 'my-resumes'
+          ? hasPermissionCode('my_resumes:invite_ai_interview')
+          : true));
   const assessmentPlanLocked = isPlanLocked('assessment');
   const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
@@ -600,7 +669,7 @@ export default function ResumeViewPage() {
      pair as AI Talent Match's / Resume Scoring's Actions menu. */
   const renderCreateInviteItems = (kind: InviteHandoffKind) => {
     const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-    const Icon = kind === 'assessment' ? Mail : Sparkles;
+    const Icon = kind === 'assessment' ? ClipboardList : Video;
     return (
       <>
         <div role="menuitem" aria-disabled="true" className="w-full flex items-start gap-3 px-3 py-2 text-left text-gray-400 cursor-not-allowed">
@@ -1254,6 +1323,8 @@ Best regards`);
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
               <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-3" />
               <Skeleton className="h-3 w-20" />
               <Skeleton className="h-3 w-3" />
               <Skeleton className="h-3 w-28" />
@@ -1369,8 +1440,8 @@ Best regards`);
               <RecordPager
                 currentIndex={navIndex}
                 totalCount={navList.length}
-                onPrev={prevId ? () => router.replace(`/recruitment/resume-view/${prevId}`) : undefined}
-                onNext={nextId ? () => router.replace(`/recruitment/resume-view/${nextId}`) : undefined}
+                onPrev={prevId ? () => router.replace(`/recruitment/resume-view/${prevId}${sourceQuery}`) : undefined}
+                onNext={nextId ? () => router.replace(`/recruitment/resume-view/${nextId}${sourceQuery}`) : undefined}
               />
             ) : undefined}
           />
@@ -1496,10 +1567,16 @@ Best regards`);
                     the action bar above the card had. */}
                 <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    {RESUME_EMAIL_SHARE_ENABLED && canShareResume && (
+                    {RESUME_EMAIL_SHARE_ENABLED && (
                       <button
-                        onClick={handleShare}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
+                        onClick={() => { if (!canShareResume) return; handleShare(); }}
+                        aria-disabled={!canShareResume}
+                        title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
+                        className={`flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg transition-colors text-sm ${
+                          canShareResume
+                            ? 'text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            : 'text-gray-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
                         <Share2 className="w-4 h-4" />
                         Share
@@ -1508,47 +1585,48 @@ Best regards`);
                     {/* From a job's AI Talent Match Result: the Invite menu's two
                         actions as their own buttons — Job Details' Create / Send
                         popup for that job, with this candidate. */}
-                    {fromJobAIMatch && canInviteAssessment && (
+                    {fromJobAIMatch && (
                       <button
-                        onClick={() => openCreateSend('assessment')}
+                        onClick={() => { if (!canInviteAssessment) return; openCreateSend('assessment'); }}
                         disabled={!jobForInvite || assessmentPlanLocked}
-                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                          !jobForInvite || assessmentPlanLocked
-                            ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-white border border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5'
-                        }`}
+                        aria-disabled={!canInviteAssessment}
+                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                        className={canInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
-                        <Mail className="w-4 h-4" />
+                        <ClipboardList className="w-4 h-4" />
                         Create / Send Assessment
                       </button>
                     )}
-                    {fromJobAIMatch && canInviteAIInterview && (
+                    {fromJobAIMatch && (
                       <button
-                        onClick={() => openCreateSend('interview')}
+                        onClick={() => { if (!canInviteAIInterview) return; openCreateSend('interview'); }}
                         disabled={!jobForInvite || aiInterviewPlanLocked}
-                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                          !jobForInvite || aiInterviewPlanLocked
-                            ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
-                            : 'bg-white border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/5'
-                        }`}
+                        aria-disabled={!canInviteAIInterview}
+                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                        className={canInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
-                        <Sparkles className="w-4 h-4" />
+                        <Video className="w-4 h-4" />
                         Create / Send AI Interview
                       </button>
                     )}
-                    {canInvite && !fromJobAIMatch && (
+                    {!fromJobAIMatch && (
                       <div className="relative" ref={inviteMenuRef}>
                         <button
-                          onClick={() => setShowInviteMenu(!showInviteMenu)}
-                          disabled={loadingInvite || invitePlanLocked}
-                          title={invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                          onClick={() => { if (!canInvite) return; setShowInviteMenu(!showInviteMenu); }}
+                          disabled={loadingInvite || (canInvite && invitePlanLocked)}
+                          aria-disabled={!canInvite}
+                          title={
+                            assessmentPlanLocked && aiInterviewPlanLocked
+                              ? PLAN_LOCKED_MESSAGE
+                              : !canInvite
+                                ? 'You do not have permission to invite candidates'
+                                : invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined
+                          }
                           aria-haspopup="menu"
                           aria-expanded={showInviteMenu}
                           className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                            invitePlanLocked
-                              ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
+                            invitePlanLocked || !canInvite
+                              ? `bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed${!canInvite ? ' opacity-60' : ''}`
                               : 'bg-white border border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5'
                           }`}
                         >
@@ -1559,34 +1637,36 @@ Best regards`);
 
                         {showInviteMenu && (
                           <div role="menu" className={`absolute left-0 top-full mt-2 ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
-                            {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : canInviteAssessment && (
+                            {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : (
                               <button
                                 role="menuitem"
-                                onClick={() => startInvite('assessment')}
+                                onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
                                 disabled={assessmentPlanLocked}
-                                title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                                aria-disabled={!canInviteAssessment}
+                                title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                                  assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-blue/5'
+                                  assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                                 }`}
                               >
                                 <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                                  <Mail className="w-4 h-4 text-brand-blue" />
+                                  <ClipboardList className="w-4 h-4 text-brand-blue" />
                                 </span>
                                 <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
                               </button>
                             )}
-                            {canInviteAIInterview && !aiInterviewPlanLocked && aiInterviewMissing ? renderCreateInviteItems('interview') : canInviteAIInterview && (
+                            {canInviteAIInterview && !aiInterviewPlanLocked && aiInterviewMissing ? renderCreateInviteItems('interview') : (
                               <button
                                 role="menuitem"
-                                onClick={() => startInvite('ai-interview')}
+                                onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
                                 disabled={aiInterviewPlanLocked}
-                                title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                                aria-disabled={!canInviteAIInterview}
+                                title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                                 className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                                  aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-blue/5'
+                                  aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                                 }`}
                               >
                                 <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
-                                  <Sparkles className="w-4 h-4 text-brand-cyan" />
+                                  <Video className="w-4 h-4 text-brand-cyan" />
                                 </span>
                                 <span className="min-w-0 text-sm font-medium text-gray-900">AI Interview</span>
                               </button>
@@ -1598,14 +1678,15 @@ Best regards`);
                     {/* Not offered when the resume was opened FROM an AI Talent Match
                         result — the AI Talent Match page's or a job's AI Talent Match
                         Result tab — the candidate is already a match there. */}
-                    {canRunAITalentMatch && viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
+                    {viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
                       <button
-                        onClick={handleAITalentMatch}
+                        onClick={() => { if (!canRunAITalentMatch) return; handleAITalentMatch(); }}
                         disabled={aiMatchPlanLocked}
-                        title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                        aria-disabled={!canRunAITalentMatch}
+                        title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : !canRunAITalentMatch ? 'You do not have permission to run AI Talent Match' : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-                          aiMatchPlanLocked
-                            ? 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed'
+                          aiMatchPlanLocked || !canRunAITalentMatch
+                            ? `bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed${!canRunAITalentMatch ? ' opacity-60' : ''}`
                             : 'bg-white border border-brand-cyan/40 text-brand-cyan hover:bg-brand-cyan/5'
                         }`}
                       >
@@ -1615,10 +1696,16 @@ Best regards`);
                     )}
                     {/* Not offered when opened from an AI Talent Match result — the
                         AI Talent Match page's or a job's AI Talent Match Result tab. */}
-                    {canDeleteResume && viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
+                    {viewSource !== 'ai-talent-match' && !fromJobAIMatch && (
                       <button
-                        onClick={handleDelete}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors text-sm"
+                        onClick={() => { if (!canDeleteResume) return; handleDelete(); }}
+                        aria-disabled={!canDeleteResume}
+                        title={!canDeleteResume ? 'You do not have permission to delete resumes' : undefined}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
+                          canDeleteResume
+                            ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'
+                            : 'bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete
@@ -1638,14 +1725,15 @@ Best regards`);
                         {loadingScoreTable ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                         View Score Table
                       </button>
-                    ) : canApplyResumeToJob && (
+                    ) : (
                       <button
-                        onClick={handleApplyToJob}
+                        onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                         disabled={applyPlanLocked || jobScoreStatus === 'checking'}
-                        title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
+                        aria-disabled={!canApplyResumeToJob}
+                        title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
                         className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
-                          applyPlanLocked || jobScoreStatus === 'checking'
-                            ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                          applyPlanLocked || jobScoreStatus === 'checking' || !canApplyResumeToJob
+                            ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
                             : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         }`}
                       >
@@ -1661,14 +1749,15 @@ Best regards`);
                       <FileText className="w-4 h-4" />
                       Scored Resumes
                     </button>
-                  ) : canApplyResumeToJob && (
+                  ) : (
                     <button
-                      onClick={handleApplyToJob}
+                      onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                       disabled={applyPlanLocked}
-                      title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+                      aria-disabled={!canApplyResumeToJob}
+                      title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
                       className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
-                        applyPlanLocked
-                          ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                        applyPlanLocked || !canApplyResumeToJob
+                          ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
                           : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                       }`}
                     >
@@ -2313,7 +2402,7 @@ Best regards`);
             // "Dashboard › Resume Database › My Resumes › <candidate>".
             trail={[
               ...sourceCrumbs.filter((c): c is { label: string; href: string } => !!c.href),
-              { label: resume?.name || 'Resume Details', href: `/recruitment/resume-view/${resumeId}` },
+              { label: resume?.name || 'Resume Details', href: `/recruitment/resume-view/${resumeId}${sourceQuery}` },
             ]}
             /* File Properties — the icon that opens its drawer. */
             headerAction={

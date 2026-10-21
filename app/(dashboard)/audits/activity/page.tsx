@@ -26,7 +26,7 @@ import {
   Globe,
   type LucideIcon,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -129,7 +129,14 @@ export default function ActivityLogsPage() {
     },
   );
 
+  /* Bumped by every fetchRecentActivity run, so only the latest request
+     applies — the mount fetch (default limit) and the one after the saved
+     limit is restored used to race. */
+  const fetchSeqRef = useRef(0);
+
   const fetchRecentActivity = useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     setLoading(true);
     setError(null);
 
@@ -146,6 +153,7 @@ export default function ActivityLogsPage() {
           'Content-Type': 'application/json',
         },
       });
+      if (isStale()) return;
 
       if (!response.ok) {
         // Handle 401 - logout and redirect to login
@@ -159,12 +167,14 @@ export default function ActivityLogsPage() {
       }
 
       const data = await response.json();
+      if (isStale()) return;
       setLogs(data || []);
     } catch (err: any) {
+      if (isStale()) return;
       console.error('Error fetching activity:', err);
       setError(err.message || 'Failed to load activity');
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [limit]);
 

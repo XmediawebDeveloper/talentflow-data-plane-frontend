@@ -39,7 +39,7 @@ import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -58,6 +58,7 @@ import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
+import { useBreadcrumbOffset } from './AIInterviewStepIndicator';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -155,9 +156,11 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   fullscreen_exit:          { label: 'Fullscreen Exit',      icon: <Maximize2 className="w-4 h-4" />,     color: 'text-brand-blue', bg: 'bg-brand-blue/10', border: 'border-brand-blue/20' },
   screenshot_attempt:       { label: 'Screenshot Attempt',   icon: <Camera className="w-4 h-4" />,        color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
   screen_recording_attempt: { label: 'Screen Recording',     icon: <Video className="w-4 h-4" />,         color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
-  face_mismatch:            { label: 'Face Mismatch',        icon: <User className="w-4 h-4" />,          color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  face_mismatch:            { label: 'Face Mismatch',        icon: <User className="w-4 h-4" />,          color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   face_identity_changed:    { label: 'Identity Changed',     icon: <UserX className="w-4 h-4" />,         color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
-  voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10', border: 'border-brand-orange/20' },
+  face_verification_unavailable: { label: 'Face ID Check Not Run', icon: <UserX className="w-4 h-4" />,    color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
+  face_unverifiable:        { label: 'Face Not Verifiable',  icon: <UserX className="w-4 h-4" />,         color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
+  voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   screen_share_stopped:     { label: 'Screen Share Stopped', icon: <Monitor className="w-4 h-4" />,       color: 'text-destructive',    bg: 'bg-destructive-subtle',    border: 'border-destructive-line'    },
   interview_terminated:     { label: 'Interview Terminated — Left Screen', icon: <ShieldAlert className="w-4 h-4" />, color: 'text-destructive', bg: 'bg-destructive-subtle', border: 'border-destructive-line' },
@@ -575,6 +578,10 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
 }
 
 export default function CandidateResultsView({ interview, onBack, tabInUrl = true, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail, breadcrumbItems }: CandidateResultsViewProps) {
+  // Measured height of the sticky breadcrumb, published as --crumb-h so a
+  // second sticky layer (Question Analysis' All / Sections bar) pins just below
+  // it even when the pager wraps the bar onto two lines.
+  const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   // Default to the combined "Evaluation Report" (key 'eval'). The old
   // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
   // content is merged into the Eval tab. The render blocks are kept so any
@@ -1171,8 +1178,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // background this banner does NOT show at all — `evaluationPending` renders the
   // "Generating results" spinner instead (see the partial-banner gate below).
   const [reEvaluating, setReEvaluating] = useState(false);
+  // A disabled JD's results stay viewable, but re-evaluating is an action.
+  const jdDisabled = isJdDisabled(liveSession.jd_status);
   const handleReEvaluate = async () => {
     if (reEvaluating) return;
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     setReEvaluating(true);
     const _t = toast.loading('Re-evaluating the interview — this can take a minute…');
     try {
@@ -1182,7 +1195,9 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       toast.success('Interview re-evaluated. The full results are now available.', { id: _t });
     } catch (err: any) {
       const status = err?.response?.status;
-      const detail = err?.response?.data?.detail;
+      const rawDetail = err?.response?.data?.detail;
+      // A disabled-JD refusal arrives as {error, message}, not a string.
+      const detail = typeof rawDetail === 'string' ? rawDetail : rawDetail?.message;
       const msg =
         status === 409 ? (detail || 'This interview has already been re-evaluated.')
         : status === 400 ? (detail || 'Re-evaluation is only available once the candidate reached the end of the interview.')
@@ -1959,7 +1974,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     // against the app's one real scroller, same as the working list pages.
     <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div
+          className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl"
+          style={breadcrumbHeight ? ({ '--crumb-h': `${breadcrumbHeight}px` } as React.CSSProperties) : undefined}
+        >
           {/* Breadcrumb — a DIRECT child of the card, not wrapped in a row with
               the pager, so `sticky` has the card's full height to travel within.
               Boxed inside a breadcrumb-height flex row it could never stick,
@@ -1970,6 +1988,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               which leaves the bar exactly as it was. */}
           <PageBreadcrumb
             className="mb-4 md:mb-6"
+            barRef={breadcrumbBarRef}
             items={candidateBreadcrumbItems}
             actions={totalCount != null && totalCount > 0 ? (
               <RecordPager
@@ -2278,8 +2297,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 size="sm"
                 type="button"
                 onClick={handleReEvaluate}
-                disabled={reEvaluating}
-                title="The candidate answered all questions — re-run the full evaluation. This can be done only once."
+                disabled={reEvaluating || jdDisabled}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : 'The candidate answered all questions — re-run the full evaluation. This can be done only once.'}
                 className="shrink-0"
               >
                 {reEvaluating ? 'Re-Evaluating…' : 'Re-Evaluate'}
@@ -5142,7 +5161,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     'camera_disabled', 'camera_obstructed', 'microphone_disabled',
                     'copy_attempt', 'paste_attempt',
                     'voice_detected', 'multiple_voices',
-                    'face_mismatch', 'face_identity_changed',
+                    'face_mismatch', 'face_identity_changed', 'face_unverifiable', 'face_verification_unavailable',
                     'voice_mismatch', 'voice_identity_changed',
                     'screenshot_attempt', 'screen_recording_attempt', 'screen_share_stopped',
                   ];

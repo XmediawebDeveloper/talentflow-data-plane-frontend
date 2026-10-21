@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
@@ -30,6 +30,7 @@ import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
+import { isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import ClusterGeneratingState, { CLUSTER_GENERATING_ID } from './ClusterGeneratingState';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { closestDuplicate } from '@/lib/skillDuplicates';
@@ -1068,7 +1069,8 @@ function CategorySection({
 export default function AIInterviewClusters() {
   const router = useWizardRouter();
   /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
-  const embedded = !!useEmbeddedWizard();
+  const wizardNav = useEmbeddedWizard();
+  const embedded = !!wizardNav;
   /* Step indicator pins below the sticky breadcrumb rather than under it. */
   const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   const searchParams = useWizardSearchParams();
@@ -1234,6 +1236,14 @@ export default function AIInterviewClusters() {
     const load = async () => {
       try {
         const draft = await aiInterviewService.get(id);
+        // A disabled JD's interview is view-only — no editing its clusters
+        // until the job is enabled again; show its read-only details instead.
+        if (isJdDisabled(draft.jd_status)) {
+          toast.error(JD_DISABLED_ACTION_MESSAGE);
+          if (wizardNav) wizardNav.exit();
+          else router.replace(`/recruitment/ai-interviews/${draft.id}`);
+          return;
+        }
         setConfig(draft);
 
         // Parse rounds_config for skills
@@ -2447,6 +2457,7 @@ export default function AIInterviewClusters() {
             }
           }
 
+          si.wizard_step = CURRENT_STEP;
           const _updated = await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
@@ -2802,6 +2813,7 @@ export default function AIInterviewClusters() {
           console.warn('[Clusters] AI skill distribution failed; falling back to local preview', distErr);
         }
       }
+      si.wizard_step = CURRENT_STEP;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -2924,6 +2936,8 @@ export default function AIInterviewClusters() {
       if (isFlexible) {
         si.flexible_finalized = isFinalized;
       }
+      // A draft saved here reopens here, not on Configure.
+      si.wizard_step = CURRENT_STEP;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -2933,7 +2947,11 @@ export default function AIInterviewClusters() {
         // trail should show "Saved as Draft" / "Draft Updated" once — see
         // update_interview in routers/ai_interview.py.
         save_and_exit: true,
+        // Editing a published (uninvited) version: saving it as a draft takes
+        // it off "published" instead of leaving it live.
+        ...(config.status === 'published' && { status: 'draft' }),
       });
+      clearUnsavedVersion(id);
       toast.success('Draft saved!');
       router.push(exitHref);
     } catch {
@@ -2943,13 +2961,20 @@ export default function AIInterviewClusters() {
     }
   };
 
+  /* Discard — the wizard's one rule (lib/utils/aiInterviewUnsavedVersion):
+     an UNSAVED draft (a new interview, or the version Duplicate just minted)
+     is deleted; a draft the recruiter saved earlier, or a published / live
+     version, is left as last saved — Discard never deletes it. */
+  const discardDeletesVersion = !!id && config?.status === 'draft' && isUnsavedVersion(id);
   const handleDiscard = async () => {
-    if (!id) return;
-    try {
-      await aiInterviewService.delete(id);
-      toast.success('Draft discarded');
-    } catch {
-      // Silent
+    if (id && discardDeletesVersion) {
+      try {
+        await aiInterviewService.delete(id);
+        clearUnsavedVersion(id);
+        toast.success('Draft discarded');
+      } catch {
+        // Silent
+      }
     }
     router.push(exitHref);
   };
@@ -4205,7 +4230,7 @@ export default function AIInterviewClusters() {
                   <span className="sm:hidden">Back</span>
                   <span className="hidden sm:inline">Back to Configure</span>
                 </Button>
-                <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} />
+                <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} />
               </div>
               <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
                 <Button

@@ -39,6 +39,13 @@ export async function getPermissionModules(): Promise<Record<string, string>> {
 // Role APIs
 // ============================================
 
+/**
+ * Role names are always shown and saved in CAPITALS (client rule 2026-10-17),
+ * including the built-in roles and names typed in lower case. Normalised here,
+ * where role data enters the app, so every screen gets the same form.
+ */
+export const formatRoleName = (name: string | null | undefined): string => (name ?? '').toUpperCase();
+
 export async function getRoles(): Promise<{
   roles: RoleListItem[];
   total: number;
@@ -47,7 +54,8 @@ export async function getRoles(): Promise<{
 
   // Ensure core system roles are always marked as system roles
   const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer'];
-  const roles = response.data.roles.map((role: RoleListItem) => {
+  const roles = response.data.roles.map((raw: RoleListItem) => {
+    const role = { ...raw, name: formatRoleName(raw.name), parent_role_name: raw.parent_role_name ? formatRoleName(raw.parent_role_name) : raw.parent_role_name };
     if (systemRoleCodes.includes(role.code.toLowerCase())) {
       return { ...role, is_system: true };
     }
@@ -65,7 +73,7 @@ export async function getRoleById(roleId: number): Promise<Role> {
 
   // Ensure core system roles are always marked as system roles
   const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer'];
-  const role = response.data;
+  const role = { ...response.data, name: formatRoleName(response.data.name) };
   if (systemRoleCodes.includes(role.code.toLowerCase())) {
     return { ...role, is_system: true };
   }
@@ -74,12 +82,13 @@ export async function getRoleById(roleId: number): Promise<Role> {
 }
 
 export async function createRole(data: RoleCreateRequest): Promise<Role> {
-  const response = await api.post(`${RBAC_BASE_URL}/roles`, data);
+  const response = await api.post(`${RBAC_BASE_URL}/roles`, { ...data, name: formatRoleName(data.name).trim() });
   return response.data;
 }
 
 export async function updateRole(roleId: number, data: RoleUpdateRequest): Promise<Role> {
-  const response = await api.put(`${RBAC_BASE_URL}/roles/${roleId}`, data);
+  const payload = data.name !== undefined && data.name !== null ? { ...data, name: formatRoleName(data.name).trim() } : data;
+  const response = await api.put(`${RBAC_BASE_URL}/roles/${roleId}`, payload);
   return response.data;
 }
 

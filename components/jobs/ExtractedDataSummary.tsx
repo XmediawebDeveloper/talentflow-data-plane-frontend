@@ -46,6 +46,7 @@ export function ExtractedSummaryCard({
           icon={BarChart3}
           tone="orange"
           spacing="mb-0"
+          inlineActions
           title="Extracted Data Summary"
           hint={`Click to ${open ? 'hide' : 'view'} structured requirements`}
           badge={aiExtracted ? (
@@ -162,9 +163,14 @@ export interface ExtractedDataSummaryProps {
   /** Industry label; the tile is shown only when there is one. */
   industry?: string | null;
   industryNote?: string;
-  /** Location text; the tile is shown only when there is one. */
+  /** Location text; the tile is shown only when there is one. Used as a
+   *  fallback when `locations` below is absent/empty. */
   location?: string | null;
   locationNote?: string;
+  /** Every saved location (city/state/country/radius_km), rendered one chip
+   *  per entry with its radius. Takes priority over `location` when non-empty,
+   *  since `location` alone cannot distinguish "one city" from "first of many". */
+  locations?: Array<{ city?: string | null; radius_km?: number | null }> | null;
   /** Already-labelled values ("Full Time", "Hybrid", "Not specified"). */
   employmentType: string;
   workMode: string;
@@ -196,12 +202,14 @@ export default function ExtractedDataSummary({
   industryNote,
   location,
   locationNote,
+  locations,
   employmentType,
   workMode,
   scoring,
   aiExtracted = false,
   defaultOpen = false,
 }: ExtractedDataSummaryProps) {
+  const locationChips = (locations || []).filter((loc) => loc.city);
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -281,14 +289,26 @@ export default function ExtractedDataSummary({
 
       <SummarySection icon={MapPin} tone="cyan" title="Location & Work Setup" last>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-          {location && (
+          {(locationChips.length > 0 || location) && (
             <div className={`${SUMMARY_TILE} sm:col-span-2`}>
               <h4 className={SUMMARY_FIELD_LABEL}>Location</h4>
               <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-800 dark:text-slate-200">
-                  <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{location}</span>
-                </span>
+                {locationChips.length > 0 ? (
+                  locationChips.map((loc, index) => (
+                    <span key={index} className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-800 dark:text-slate-200">
+                      <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
+                      <span className="min-w-0 [overflow-wrap:anywhere]">{loc.city}</span>
+                      {loc.radius_km != null && (
+                        <span className="text-xs text-gray-500 dark:text-slate-400">({loc.radius_km} km radius)</span>
+                      )}
+                    </span>
+                  ))
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-800 dark:text-slate-200">
+                    <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{location}</span>
+                  </span>
+                )}
               </div>
               {locationNote && <p className={SUMMARY_NOTE}>{locationNote}</p>}
             </div>

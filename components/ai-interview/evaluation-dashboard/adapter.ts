@@ -312,7 +312,12 @@ function isUndeliveredHistoryRow(q: any): boolean {
   return rt === 'not_asked'
     || rt === 'not_delivered'
     || rt === 'unasked'
-    || rt === 'auto_skipped_by_coverage';
+    || rt === 'auto_skipped_by_coverage'
+    || !!q?.not_delivered
+    // The backend's un-reached padding row. Older evaluations could carry a
+    // runtime skip label on it (mis-bound to a silence-skipped question), which
+    // rendered it as asked + "auto-skipped" with a 0.0 score.
+    || /^\(not asked\b.*planned question\b/i.test(String(q?.question || '').trim());
 }
 
 /** The row's response type, except a skip label is overridden when the row
@@ -417,10 +422,22 @@ function buildClustersFromConfig(
   //  A skill counts as delivered if ANY entry for it was delivered: Sanity
   //  Testing is asked on delivered Q5 AND recovered onto un-reached Q9, and the
   //  delivered occurrence is what matters.
+  //  Entries on HR questions are ignored: HR never probes a skill, but older
+  //  evaluations tagged HR turns with skills from their wording (an unanswered
+  //  "Are you willing to work night shift" → FRMS) and showed them Covered.
+  //  A technical question that was asked counts even if it went unanswered
+  //  (Covered = asked; product rule confirmed 2026-10-17).
+  const hrQuestionNumbers = new Set<string>();
+  for (const q of questionHistory) {
+    if (String(q?.round_type || '').toLowerCase() === 'hr' || q?.hr_question_id) {
+      hrQuestionNumbers.add(String(q?.question_number ?? ''));
+    }
+  }
   const qsmDelivered = new Set<string>();
   const qsmSeen = new Set<string>();
-  for (const entries of Object.values((eval_?.question_skill_map || {}) as Record<string, any>)) {
+  for (const [qnum, entries] of Object.entries((eval_?.question_skill_map || {}) as Record<string, any>)) {
     if (!Array.isArray(entries)) continue;
+    if (hrQuestionNumbers.has(String(qnum))) continue;
     for (const e of entries) {
       const k = String(e?.skill || '').toLowerCase().trim();
       if (!k) continue;
@@ -2958,7 +2975,14 @@ export function buildDashboardData(params: {
     const askedNumOf = new Map<PerQuestionDetail, number>();
     ranked.forEach(({ row }, rank) => askedNumOf.set(row, rank + 1));
     for (const key of ['mth', 'nth', 'hr'] as const) {
-      buckets[key] = buckets[key].map((row, idx) => ({ ...row, qNum: idx + 1, askedNum: askedNumOf.get(row) }));
+      buckets[key] = buckets[key].map((row, idx) => ({
+        ...row,
+        qNum: idx + 1,
+        askedNum: askedNumOf.get(row),
+        // Never asked → never scored (older evaluations stored a recovered
+        // score on these slots). Adds 0 to its section's planned-count average.
+        ...(row.notDelivered ? { questionScore: 0 } : {}),
+      }));
     }
 
     return [...buckets.mth, ...buckets.nth, ...buckets.hr];

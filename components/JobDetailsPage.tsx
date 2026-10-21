@@ -1,6 +1,7 @@
 'use client';
 
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -140,14 +141,20 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
     return tenant.features[feature as keyof typeof tenant.features] === true;
   };
 
+  // Entry-point permissions (raw codes): starting AI Talent Match / scoring FROM a
+  // job description needs the JD-level entry point as well as the main
+  // permission — same rule as JobDetailView.
+  const { hasPermissionCode } = useAuth();
+  const isAdminUser = user?.role === 'tenant_admin';
+
   // Get permissions for Quick Actions (using camelCase as per tenant.ts)
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
-    canRunAiMatch: hasPermission('canRunAiMatch'),
+    canRunAiMatch: hasPermission('canRunAiMatch') && (isAdminUser || hasPermissionCode('jd:ai_match')),
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
-    canRunScoring: hasPermission('canRunScoring'),
+    canRunScoring: hasPermission('canRunScoring') && (isAdminUser || hasPermissionCode('jd:add_applicants')),
   };
 
   // Get feature flags for Quick Actions
@@ -727,7 +734,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 {/* 1. Invite for Assessment - Permission + Feature flag */}
                 {permissions.canCreateAssessments && (
                   <QuickActionButton
-                    icon={<Users className="w-4 h-4" />}
+                    icon={<ClipboardList className="w-4 h-4" />}
                     label="Invite for Assessment"
                     onClick={() => router.push(`/recruitment/assessments/create?jd_id=${job.id}`)}
                     disabled={!features.assessment}

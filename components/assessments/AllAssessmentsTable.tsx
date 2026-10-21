@@ -334,6 +334,10 @@ interface AllAssessmentsTableProps {
    *  load settles — so the host's tab count is the same data as the list.
    *  `null` while loading or after a failed load. */
   onRowCountChange?: (count: number | null) => void;
+  /** Told after one of this table's own status actions (Archive, Unarchive,
+   *  Delete) succeeds, so the host can re-read what that action moved — its
+   *  stat cards and tab counts — rather than keep the pre-action figures. */
+  onMutated?: () => void;
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
@@ -348,7 +352,7 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
 const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0 }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -439,7 +443,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
       apiPage += 1;
     }
-    return collected.map(toRow);
+    /* Offset paging over a list that can change between batches (a row
+       created or archived mid-walk) can hand the same assessment back on two
+       pages — one row per id. */
+    const seen = new Set<string>();
+    return collected.filter((a) => !seen.has(a.id) && !!seen.add(a.id)).map(toRow);
   }, [fixedStatus]);
 
   /* Every state write lands in a promise callback rather than in the effect
@@ -764,6 +772,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           : prev.map((r) => (r.id === row.id ? { ...r, rawStatus: updated.rawStatus, status: updated.status } : r))));
       }
       refreshRows();
+      onMutated?.();
     } catch (err) {
       console.error(`Failed to ${verb} assessment:`, err);
       toast.error(`Failed to ${verb} assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -773,10 +782,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   };
 
   const archiveRow = async (row: AssessmentRow) => {
-    if (!canDeleteAssessment) {
-      toast.error('You do not have permission to archive assessments');
-      return;
-    }
+    // Locked menu item is greyed with a tooltip; this is only a backstop.
+    if (!canDeleteAssessment) return;
     if (!await confirmArchive({
       title: `${row.jobName || row.title || 'Untitled'} - Assessment`,
       version: row.assessmentVersion,
@@ -789,20 +796,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      status write through PUT /assessments/{id}, so Unarchive is the same
      write back to `published` — the Active status Archive is offered from. */
   const unarchiveRow = (row: AssessmentRow) => {
-    if (!canDeleteAssessment) {
-      toast.error('You do not have permission to unarchive assessments');
-      return;
-    }
+    if (!canDeleteAssessment) return;
     void runStatusAction(row, 'unarchive', () => assessmentService.update(row.id, { status: 'published' }), 'Assessment restored to Active');
   };
 
   /* The page's own delete rules: drafts only (the endpoint's), and never once
      a candidate has been invited. */
   const deleteRow = async (row: AssessmentRow) => {
-    if (!canDeleteAssessment) {
-      toast.error('You do not have permission to delete assessments');
-      return;
-    }
+    if (!canDeleteAssessment) return;
     if (row.invitations > 0 || row.completed > 0) {
       toast.error('Cannot delete — candidates have already been invited to this assessment');
       return;
@@ -852,7 +853,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     const actions: RowAction[] = [];
     switch (row.rawStatus) {
       case 'published': {
-        const archive: RowAction = { key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive', run: () => void archiveRow(row) };
+        const archive: RowAction = {
+          key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
+          disabled: !canDeleteAssessment,
+          title: !canDeleteAssessment ? 'You do not have permission to archive assessments' : undefined,
+          run: () => void archiveRow(row),
+        };
         /* With the host's extras (the Active tab), the Total Jobs order:
            View, Edit, Share/Invite, Track, View Results, Duplicate, Revoke,
            then Archive. Without them, the menu as it was. */
@@ -865,10 +871,13 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         /* No Publish on any tab: a draft is published from the Configure
            page its Edit opens, the Total Jobs Edit's flow. */
         /* The All tab has its own Edit, on every row — added below. */
-        if (fixedStatus && canUpdateAssessment) {
+        /* RBAC: shown to everyone; greyed with a tooltip without edit permission. */
+        if (fixedStatus) {
           actions.push({
             // A draft is unfinished — its Edit reads "Continue Editing".
             key: 'edit', label: 'Continue Editing', icon: Pencil, iconClassName: 'text-menu-icon-edit',
+            disabled: !canUpdateAssessment,
+            title: !canUpdateAssessment ? 'You do not have permission to edit assessments' : undefined,
             /* Straight to the Configure page for this assessment — the route
                the All tab's Edit and the page's own `handleEditAssessment`
                use. Without `step=configure&jd_id` the create flow opened on
@@ -882,7 +891,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         break;
       case 'archived':
         actions.push(
-          { key: 'unarchive', label: 'Unarchive', icon: ArchiveRestore, iconClassName: 'text-menu-icon-archive', run: () => unarchiveRow(row) },
+          {
+            key: 'unarchive', label: 'Unarchive', icon: ArchiveRestore, iconClassName: 'text-menu-icon-archive',
+            disabled: !canDeleteAssessment,
+            title: !canDeleteAssessment ? 'You do not have permission to unarchive assessments' : undefined,
+            run: () => unarchiveRow(row),
+          },
           view,
         );
         if (row.completed > 0) actions.push(results);
@@ -918,7 +932,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     /* Last, as on the page's own menu: the one action that cannot be undone.
        On every Draft, and on every row of the Archived tab. */
     if (row.rawStatus === 'draft' || fixedStatus === 'archived') {
-      actions.push({ key: 'delete', label: 'Delete', icon: Trash2, iconClassName: 'text-destructive', destructive: true, run: () => void deleteRow(row) });
+      actions.push({
+        key: 'delete', label: 'Delete', icon: Trash2, iconClassName: 'text-destructive', destructive: true,
+        disabled: !canDeleteAssessment,
+        title: !canDeleteAssessment ? 'You do not have permission to delete assessments' : undefined,
+        run: () => void deleteRow(row),
+      });
     }
     return actions;
   };
@@ -1375,14 +1394,20 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
                               {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run, destructive, disabled, title }) => (
+                                /* A disabled action (permission or state) stays listed,
+                                   greyed, and keeps its reason on hover: aria-disabled
+                                   rather than Radix `disabled`, whose pointer-events:none
+                                   swallowed the title tooltip. The click is a no-op. */
                                 <DropdownMenuItem
                                   key={key}
-                                  onClick={run}
-                                  disabled={disabled || busyRowId === row.id}
+                                  onClick={disabled ? undefined : run}
+                                  onSelect={disabled ? (e) => e.preventDefault() : undefined}
+                                  disabled={busyRowId === row.id}
+                                  aria-disabled={disabled || undefined}
                                   title={title}
-                                  className={`gap-2${destructive ? ' text-destructive focus:text-destructive' : ''}`}
+                                  className={`gap-2${disabled ? ' text-gray-400 cursor-not-allowed opacity-60' : destructive ? ' text-destructive focus:text-destructive' : ''}`}
                                 >
-                                  <Icon className={`w-4 h-4 ${iconClassName}`} />
+                                  <Icon className={`w-4 h-4 ${disabled ? 'text-gray-300' : iconClassName}`} />
                                   <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                                 </DropdownMenuItem>
                               ))}

@@ -273,7 +273,7 @@ export async function exportEvalReportPDF(
 
       let status: { label: string; color: RGB; isScore: boolean };
       if (key === 'hr') status = { label: 'For Reference', color: faint, isScore: false };
-      else if (q.notDelivered) status = { label: `Not Delivered · ${formatScore1(q.questionScore)}/10`, color: scoreRGB(q.questionScore), isScore: false };
+      else if (q.notDelivered) status = { label: 'Not Delivered · 0.0/10', color: scoreRGB(0), isScore: false };
       else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
       else if (_nonEnglish) status = { label: 'Not Scored (non-English)', color: faint, isScore: false };
       else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) {
@@ -423,7 +423,7 @@ export async function exportEvalReportPDF(
   // Each flag the result page raises as a banner: long form for the
   // appendix callouts, short form for the page-1 status line.
   const integrityFlags: { long: string; short: string }[] = [];
-  const voiceHits = violations.filter((v) => v.event_type === 'multiple_voices' || v.event_type === 'voice_identity_changed');
+  const voiceHits = violations.filter((v) => ['multiple_voices', 'voice_identity_changed', 'voice_mismatch'].includes(v.event_type));
   if (voiceHits.length > 0) {
     const at = timeOf(voiceHits[0].timestamp);
     integrityFlags.push({
@@ -431,11 +431,17 @@ export async function exportEvalReportPDF(
       short: `Multiple speakers (${voiceHits.length}x${at ? `, first at ${at}` : ''})`,
     });
   }
-  const faceHits = violations.filter((v) => ['multiple_faces', 'face_identity_changed'].includes(v.event_type));
+  const faceHits = violations.filter((v) => ['multiple_faces', 'face_identity_changed', 'face_mismatch'].includes(v.event_type));
   if (faceHits.length > 0) {
     integrityFlags.push({
       long: `Another person or a different face was seen on camera (${times(faceHits.length)}).`,
       short: `Another person on camera (${faceHits.length}x)`,
+    });
+  }
+  if (violations.some((v) => v.event_type === 'face_verification_unavailable')) {
+    integrityFlags.push({
+      long: 'Face identity verification did not run in this interview, so a change of person on camera could not be detected. Review the recording.',
+      short: 'Face identity check not run',
     });
   }
   if (vs.phoneSeen) integrityFlags.push({ long: 'A mobile phone was detected on camera.', short: 'Phone on camera' });
@@ -899,8 +905,8 @@ function skillStatus(score: number, notAssessed = false): { label: string; cls: 
 /** Skill table for one section of the Skills Assessment Summary. `wide` (when
  *  it's the only section and has the full card width) adds Cluster, a 0–10
  *  score bar and a Status column. */
-function SkillTable({ title, rows, tagClass, wide = false }: {
-  title: string; rows: FlatSkill[]; tagClass: (tag: string) => string; wide?: boolean;
+function SkillTable({ title, rows, wide = false }: {
+  title: string; rows: FlatSkill[]; wide?: boolean;
 }) {
   return (
   <div className="rounded-xl border border-gray-200 dark:border-slate-600/70 overflow-hidden min-w-0">
@@ -911,7 +917,6 @@ function SkillTable({ title, rows, tagClass, wide = false }: {
           <tr className="bg-slate-50 dark:bg-slate-800/60 text-xs text-gray-500 dark:text-slate-400">
             <th className="text-left font-medium px-4 py-2">Skill</th>
             {wide && <th className="text-left font-medium px-2 py-2 hidden md:table-cell">Cluster</th>}
-            <th className="text-center font-medium px-2 py-2 w-14">Type</th>
             <th className="text-center font-medium px-2 py-2 w-16">Weight</th>
             <th className={`font-medium px-4 py-2 ${wide ? 'text-left w-56' : 'text-right w-16'}`}>Score</th>
             {wide && <th className="text-left font-medium px-4 py-2 w-40 hidden sm:table-cell">Status</th>}
@@ -922,7 +927,6 @@ function SkillTable({ title, rows, tagClass, wide = false }: {
             <tr key={i}>
               <td className="px-4 py-2 text-gray-800 dark:text-slate-200">{s.name}</td>
               {wide && <td className="px-2 py-2 text-gray-500 dark:text-slate-400 hidden md:table-cell">{s.cluster || '—'}</td>}
-              <td className="px-2 py-2 text-center"><span className={`inline-block text-2xs font-bold px-1.5 py-0.5 rounded ${tagClass(s.tag)}`}>{s.tag}</span></td>
               <td className="px-2 py-2 text-center text-gray-500 dark:text-slate-400 tabular-nums">{s.weight}</td>
               {wide ? (
                 <td className="px-4 py-2">
@@ -1228,7 +1232,6 @@ export function EvalReportCombined({
                 title={`Must-Have Skills (${flatMustHave.length} skill${flatMustHave.length !== 1 ? 's' : ''} evaluated)`}
                 wide={singleSkillTable}
                 rows={flatMustHave}
-                tagClass={(t) => t === 'P1' ? 'bg-brand-blue text-white' : t === 'P2' ? 'bg-brand-blue/75 text-white' : 'bg-brand-blue/15 text-brand-blue'}
               />
             )}
             {showNiceToHaveTable && (
@@ -1236,7 +1239,6 @@ export function EvalReportCombined({
                 title={`Nice-to-Have Skills (${flatNiceToHave.length} skill${flatNiceToHave.length !== 1 ? 's' : ''} evaluated)`}
                 wide={singleSkillTable}
                 rows={flatNiceToHave}
-                tagClass={(t) => t === 'P1' ? 'bg-brand-orange text-white' : t === 'P2' ? 'bg-brand-orange/75 text-white' : 'bg-brand-orange/15 text-brand-orange-deep'}
               />
             )}
           </div>

@@ -529,10 +529,7 @@ export default function SecurityPage() {
             <Button
               variant="primary"
               onClick={() => {
-                if (!canManage) {
-                  toast.error('You do not have permission to change the password');
-                  return;
-                }
+                if (!canManage) return;
                 handleChangePassword();
               }}
               disabled={Boolean(isChangingPassword || (passwordForm.newPassword && passwordStrength < 3) || !canManage)}
@@ -566,10 +563,7 @@ export default function SecurityPage() {
             {!show2FASetup && (
               <button
                 onClick={() => {
-                  if (!canManage) {
-                    toast.error('You do not have permission to manage security settings');
-                    return;
-                  }
+                  if (!canManage) return;
                   (settings.two_factor_enabled ? handleDisable2FA : handleEnable2FA)();
                 }}
                 disabled={is2FALoading || !canManage}
@@ -742,17 +736,11 @@ export default function SecurityPage() {
             <select
               value={settings.session_timeout_minutes?.toString() || '30'}
               onChange={(e) => {
-                if (!canManage) {
-                  toast.error('You do not have permission to manage security settings');
-                  return;
-                }
+                if (!canManage) return;
                 handleSessionTimeoutChange(e.target.value);
               }}
               onMouseDown={(e) => {
-                if (!canManage) {
-                  e.preventDefault();
-                  toast.error('You do not have permission to manage security settings');
-                }
+                if (!canManage) e.preventDefault();
               }}
               disabled={isSavingTimeout}
               aria-disabled={!canManage}
@@ -800,10 +788,7 @@ export default function SecurityPage() {
             {sessions.filter(s => !s.is_current).length > 0 && (
               <button
                 onClick={() => {
-                  if (!canManage) {
-                    toast.error('You do not have permission to manage security settings');
-                    return;
-                  }
+                  if (!canManage) return;
                   handleRevokeAllOtherSessions();
                 }}
                 aria-disabled={!canManage}
@@ -851,10 +836,7 @@ export default function SecurityPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          if (!canManage) {
-                            toast.error('You do not have permission to manage security settings');
-                            return;
-                          }
+                          if (!canManage) return;
                           handleRevokeSession(session.id);
                         }}
                         aria-disabled={!canManage}

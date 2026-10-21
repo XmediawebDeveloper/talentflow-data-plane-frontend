@@ -4,7 +4,6 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Users, Check, X, Edit2, Save, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
-import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -386,10 +385,7 @@ export default function PermissionsPage() {
                       <Button
                         variant="primary"
                         onClick={() => {
-                          if (!canManage) {
-                            toast.error('You do not have permission to manage roles');
-                            return;
-                          }
+                          if (!canManage) return;
                           startEditing();
                         }}
                         aria-disabled={!canManage}

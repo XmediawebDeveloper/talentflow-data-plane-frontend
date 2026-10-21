@@ -373,13 +373,10 @@ export default function ResumeVersionsModal({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (onApplyToJobDisabled) {
-                                toast.error(onApplyToJobDisabledReason || 'You do not have permission to score resumes');
-                                return;
-                              }
+                              if (onApplyToJobDisabled) return;
                               onApplyToJob(version);
                             }}
-                            disabled={onApplyToJobDisabled}
+                            aria-disabled={!!onApplyToJobDisabled}
                             className={`p-2 rounded-lg transition-colors ${
                               onApplyToJobDisabled
                                 ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'

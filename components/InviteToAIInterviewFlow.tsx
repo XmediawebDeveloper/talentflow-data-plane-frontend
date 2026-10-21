@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Brain, CheckCircle, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Mail, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import JobInterviewVersionPicker, { latestActiveInterviewConfig } from '@/components/ai-interview/JobInterviewVersionPicker';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -196,6 +196,10 @@ export default function InviteToAIInterviewFlow({
 
   const proceedToShare = () => {
     if (pickedCount === 0) return;
+    if (pickedConfigs.some((c) => isJdDisabled(c.jd_status))) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (noPresetCandidates) {
       startSharing([]);
       return;
@@ -310,7 +314,7 @@ export default function InviteToAIInterviewFlow({
           <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                <Brain className="w-4 h-4 text-brand-blue" />
+                <Video className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Invite to AI Interview</h2>

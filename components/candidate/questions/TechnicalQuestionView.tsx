@@ -24,7 +24,9 @@ interface TechnicalQuestionViewProps {
 
 export function TechnicalQuestionView({ question, answer, onAnswerChange, isLocked = false }: TechnicalQuestionViewProps) {
   const isMultipleChoice = question.question_type === 'multiple_choice';
-  const isSingleChoice = question.question_type === 'single_choice';
+  // 'mcq' is the older name for single choice; without it here those
+  // questions fell through to the free-text box instead of showing options.
+  const isSingleChoice = question.question_type === 'single_choice' || question.question_type === 'mcq';
   const isTextQuestion = question.question_type === 'text' || question.question_type === 'short_answer';
   const isMCQ = (isSingleChoice || isMultipleChoice) && question.options && question.options.length > 0;
 
@@ -196,6 +198,14 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
           <Lock className="w-4 h-4" />
           <span>This answer has been submitted and cannot be edited.</span>
         </div>
+      )}
+
+      {/* Answer-mode hint: the checkbox shape alone was the only cue that a
+          multi-select question can have several correct answers. */}
+      {!isLocked && (
+        <p className="text-sm font-medium text-gray-600">
+          {isMultipleChoice ? 'Select all that apply.' : 'Select one answer.'}
+        </p>
       )}
 
       {/* Options */}

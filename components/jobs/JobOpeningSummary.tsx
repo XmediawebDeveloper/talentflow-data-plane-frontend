@@ -1,6 +1,6 @@
 'use client';
 
-import JobIdBadge from './JobIdBadge';
+import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from './JobIdBadge';
 import {
   Briefcase,
   Building2,
@@ -16,6 +16,7 @@ import {
   Video,
 } from 'lucide-react';
 import type { Job } from '@/lib/types/types';
+import { Tooltip } from '@/components/ui/tooltip';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { formatSalaryRange, formatCompensationPeriod } from '@/lib/utils/salary';
 import {
@@ -135,7 +136,13 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true }: { job
  *  Exported so a list that is not a Job Openings row (AI Talent Match's
  *  Matched Jobs) can print the same JD details line. */
 export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; hideEmpty?: boolean }) {
-  const hasLocation = !!(job.location && job.location.trim());
+  // Per-city names when the full array is available (every current JD); hosts
+  // that only ever set the legacy joined `location` string (older cached data)
+  // fall back to showing that string as-is, same as before this array existed.
+  const locationNames = (job.locations || [])
+    .map((loc) => loc?.city?.trim())
+    .filter((city): city is string => !!city);
+  const hasLocation = locationNames.length > 0 || !!(job.location && job.location.trim());
   const salaryText = formatSalaryRange({ min: job.salary_min, max: job.salary_max, currency: job.salary_currency });
   const hasSalary = !!salaryText;
   return (
@@ -151,11 +158,29 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
         {formatIndustryType(job.industry_type)}
       </span>
       {/* Location — under `hideEmpty` (Job Openings cards) it is omitted entirely
-          when absent, rather than rendering a '-' placeholder. */}
+          when absent, rather than rendering a '-' placeholder. A single location
+          shows its name directly; more than one collapses to a count, with every
+          name available in a hover tooltip rather than overflowing the row. */}
       {(!hideEmpty || hasLocation) && (
         <span className="flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {hasLocation ? job.location : '-'}
+          {locationNames.length > 1 ? (
+            <Tooltip
+              content={
+                <div className="flex flex-col gap-0.5">
+                  {locationNames.map((name, index) => (
+                    <span key={index}>{name}</span>
+                  ))}
+                </div>
+              }
+            >
+              <span className="underline decoration-dotted decoration-gray-400 dark:decoration-slate-500 underline-offset-2">
+                {locationNames.length} Locations
+              </span>
+            </Tooltip>
+          ) : (
+            hasLocation ? (locationNames[0] || job.location) : '-'
+          )}
         </span>
       )}
       {/* Salary — same conditional treatment: shown only when there is a value. */}
@@ -277,8 +302,11 @@ export default function JobOpeningSummary({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 mb-2">
+        {/* Job ID + Job Name share one nowrap line at every width — see
+            JOB_HEADLINE_ROW. The host's checkbox / radio sits level with it. */}
+        <div className={JOB_HEADLINE_ROW}>
         {job.job_id && (
-          <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>
+          <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>
         )}
         {/* The job name takes whatever the row leaves it and truncates there,
             with the whole name in `title` for a hover. `min-w-0` is what makes
@@ -288,17 +316,12 @@ export default function JobOpeningSummary({
             wherever a job name is drawn - see the Job Name cell in
             components/assessments/AllAssessmentsTable, where they were settled. */}
         <h3
-          /* basis-full on mobile so the name takes its OWN line and TRUNCATES to
-             the card width — in a flex-wrap row a lone long title otherwise has
-             no width to clip against and its nowrap content forces the whole card
-             wider than the screen (clipping the title AND the meta below), while
-             the status/method/version badges wrap cleanly onto the next line.
-             sm:basis-auto restores the inline behaviour on wider screens. */
-          className="basis-full sm:basis-auto text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
           title={job.title}
         >
           {job.title}
         </h3>
+        </div>
         {job.versionNumber && job.versionNumber >= 1 && (
           <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
             <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>

@@ -16,13 +16,13 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import {
   interviewVersionOrdinal as storedInterviewVersionOrdinal,
   interviewDuplicateBlockedReason,
   interviewEditBlockedReason,
 } from '@/lib/utils/aiInterviewVersion';
-import { aiInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import { aiInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
@@ -155,7 +155,7 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
 interface AIInterviewDetailsViewProps {
   config: AIInterviewResponse;
   onBack: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   currentIndex?: number;
   totalCount?: number;
   onPrev?: () => void;
@@ -203,6 +203,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
+  // A disabled JD keeps its interview visible but read-only: every action
+  // below is blocked until the job is enabled again (the backend refuses too).
+  const jdDisabled = isJdDisabled(config.jd_status);
   /* In the URL (`?detailTab=`), so a refresh reopens the same tab; a link's
      own `initialTab` is the default. Moving to another version is a new URL
      without the param, so it opens on the requested tab again. Not in the
@@ -366,6 +369,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   }, [config.id]);
 
+  /* A send / copied link from the Share dialog: reload the activity list, the
+     header's invite counts and the Invites-tab tracker at once, instead of
+     leaving them stale until the tracker's next poll or a page refresh. */
+  const [inviteRefreshTick, setInviteRefreshTick] = useState(0);
+  const refreshAfterInvite = useCallback(() => {
+    loadActivity();
+    void onRefresh?.();
+    setInviteRefreshTick((t) => t + 1);
+  }, [loadActivity, onRefresh]);
+
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
     if (configureOnly) return;
@@ -505,10 +518,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     () => (config.jd_id ? siblingConfigsByJdId.get(config.jd_id) ?? [] : []),
     [siblingConfigsByJdId, config.jd_id],
   );
-  const duplicateBlockedReason = interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
-  const editBlockedReason = !canUpdateAIInterviews
-    ? 'You do not have permission to edit AI interviews'
-    : interviewEditBlockedReason(config);
+  const duplicateBlockedReason = jdDisabled
+    ? JD_DISABLED_ACTION_MESSAGE
+    : interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
+  const editBlockedReason = jdDisabled
+    ? JD_DISABLED_ACTION_MESSAGE
+    : !canUpdateAIInterviews
+      ? 'You do not have permission to edit AI interviews'
+      : interviewEditBlockedReason(config);
 
   // Lazy-fetch the full JD record when the View JD tab is opened — cached
   // per config.jd_id so switching tabs (or back to it) doesn't re-fetch.
@@ -538,6 +555,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Quick actions
   const handleCopyLink = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (config.interview_link) {
       const fullLink = `${window.location.origin}${config.interview_link}`;
       await navigator.clipboard.writeText(fullLink);
@@ -553,10 +574,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       const result = await aiInterviewService.clone(config.id);
+      await onRefresh?.();
       toast.success(`New version created as a draft: ${result.cloned_title}`);
-      onRefresh?.();
-      // Land on the new draft, where Continue Editing resumes it.
-      router.push(`/recruitment/ai-interviews/${result.cloned_id}`);
+      // Open the new draft straight in Configure so it can be edited at once.
+      // Unsaved until Save as Draft: Discard anywhere in the wizard deletes it.
+      markUnsavedVersion(result.cloned_id);
+      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate config');
     } finally {
@@ -565,11 +588,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleArchive = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      setConfirmAction(null);
+      return;
+    }
     setActionLoading(true);
     try {
       await aiInterviewService.archive(config.id);
+      await onRefresh?.();
       toast.success('Config archived');
-      onRefresh?.();
     } catch (error: any) {
       toast.error(error.message || 'Failed to archive');
     } finally {
@@ -581,6 +609,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   /* The AI Interviews list's Unarchive (AIInterview.tsx handleUnarchiveConfig):
      the backend restores it to Draft or Active, the toast names which. */
   const handleUnarchive = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (!canArchiveAIInterviews) {
       toast.error('You do not have permission to unarchive AI interviews');
       return;
@@ -588,12 +620,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     setActionLoading(true);
     try {
       const restored = await aiInterviewService.unarchive(config.id);
+      await onRefresh?.();
       toast.success(
         restored.status === 'draft'
           ? 'Configuration restored to Draft'
           : 'Configuration restored to Active'
       );
-      onRefresh?.();
     } catch (error: any) {
       toast.error(error.message || 'Failed to unarchive');
     } finally {
@@ -602,6 +634,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleDelete = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      setConfirmAction(null);
+      return;
+    }
     setActionLoading(true);
     try {
       await aiInterviewService.delete(config.id);
@@ -1262,6 +1299,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           card, brand-blue border/ring, a solid ID pill + plain-weight title
           + status on row 1, and a quiet bulleted fact line ending on the
           mode/round/version chips on row 2. */}
+      {jdDisabled && (
+        <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>{JD_DISABLED_ACTION_MESSAGE} You can still view its details and results.</span>
+        </div>
+      )}
       <div className="mb-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -1446,15 +1489,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (!canShareAIInterviews) {
-                      toast.error('You do not have permission to invite candidates to an AI interview');
+                    if (jdDisabled) {
+                      toast.error(JD_DISABLED_ACTION_MESSAGE);
                       return;
                     }
+                    if (!canShareAIInterviews) return;
                     setShowShareModal(true);
                   }}
-                  aria-disabled={!canShareAIInterviews}
-                  className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
-                  title={!canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
+                  aria-disabled={jdDisabled || !canShareAIInterviews}
+                  className={jdDisabled || !canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
                   icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
                   Invite
@@ -1470,11 +1514,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewDraftResumeHref(config))}
-                    disabled={!!editBlockedReason}
+                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewConfigureHref(config.id, config.jd_id || ''))}
+                    disabled={!!editBlockedReason && canUpdateAIInterviews}
+                    aria-disabled={!!editBlockedReason}
                     aria-label="Edit AI interview"
                     title={editBlockedReason || 'Edit this version'}
-                    className="h-8 w-8 px-0 flex-shrink-0"
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Pencil className="w-4 h-4 text-menu-icon-edit" />
                   </Button>
@@ -1483,9 +1528,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     variant="secondary"
                     size="sm"
                     onClick={duplicateBlockedReason ? undefined : handleDuplicate}
-                    disabled={!!duplicateBlockedReason || actionLoading}
+                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
+                    aria-disabled={!!duplicateBlockedReason}
                     aria-label="Duplicate as a new version"
                     title={duplicateBlockedReason || 'Duplicate as a new version'}
+                    className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
                     icon={<Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-download" />}
                   >
                     Duplicate
@@ -1497,17 +1544,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (!canUpdateAIInterviews) {
-                      toast.error('You do not have permission to edit AI interviews');
+                    if (jdDisabled) {
+                      toast.error(JD_DISABLED_ACTION_MESSAGE);
                       return;
                     }
+                    if (!canUpdateAIInterviews) return;
                     // Resumes at the step the draft was left on.
                     router.push(aiInterviewDraftResumeHref(config));
                   }}
-                  aria-disabled={!canUpdateAIInterviews}
-                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
+                  aria-disabled={jdDisabled || !canUpdateAIInterviews}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${jdDisabled || !canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
@@ -1531,12 +1579,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={handleUnarchive}
+                  onClick={canArchiveAIInterviews ? handleUnarchive : undefined}
                   disabled={actionLoading}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
+                  aria-disabled={jdDisabled || !canArchiveAIInterviews}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
                   icon={actionLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-archive" />}
-                  className={`${!canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`${jdDisabled || !canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Unarchive
                 </Button>
@@ -2256,6 +2304,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <AIInterviewResults
                 embedded
                 showStats
+                readOnly={jdDisabled}
                 // This page is one interview version — the rows all share it.
                 hideVersionDetails
                 configId={config.id}
@@ -2282,6 +2331,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               jdTitle={config.jd_title || config.position || 'Untitled'}
               jdShortId={config.jd_short_id}
               hideVersionDetails
+              // Resend / revoke / edit here also change the activity list and
+              // the header's invite counts — refresh both at once.
+              onChanged={async () => { await Promise.all([loadActivity(), onRefresh?.()]); }}
+              refreshSignal={inviteRefreshTick}
               // Completed rows offer View Result — swap the popup for the
               // same inline candidate result view the Results tab opens.
               onViewResult={(inv) => handleCandidateClick(inv.id)}
@@ -2294,13 +2347,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Share — a dialog off the header's Share button / Invites tab's
           "Invite More", not embedded in a tab. */}
-      {config.status === 'published' && canShareAIInterviews && (
+      {config.status === 'published' && canShareAIInterviews && !jdDisabled && (
         <ShareAIInterviewModal
           isOpen={showShareModal}
           config={config}
           interviewVersion={interviewVersionOrdinal}
           onClose={() => setShowShareModal(false)}
-          onInviteSent={() => { loadActivity(); }}
+          onInvitesChanged={refreshAfterInvite}
+          onInviteSent={refreshAfterInvite}
         />
       )}
 

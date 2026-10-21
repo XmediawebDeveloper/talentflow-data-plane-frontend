@@ -1079,8 +1079,8 @@ function buildVerdict(
 
   // 2. Someone else present
   if (summary.someoneElse) {
-    const voiceTypes = ['multiple_voices', 'voice_identity_changed'];
-    const faceTypes = ['multiple_faces', 'face_identity_changed'];
+    const voiceTypes = ['multiple_voices', 'voice_identity_changed', 'voice_mismatch'];
+    const faceTypes = ['multiple_faces', 'face_identity_changed', 'face_mismatch'];
     const voiceCount = voiceTypes.reduce((n, t) => n + (find(t)?.count ?? 0), 0);
     const faceCount = faceTypes.reduce((n, t) => n + (find(t)?.count ?? 0), 0);
     const parts: string[] = [];

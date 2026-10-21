@@ -117,6 +117,8 @@ export default function UnitDisputesPage() {
   const [logPage, setLogPage] = useState(0);
   const [logTotal, setLogTotal] = useState(0);
   const LOG_PAGE_SIZE = 10;
+  // Page size for walking every dispute in fetchDisputes (the API's old fixed limit).
+  const DISPUTES_PAGE_SIZE = 100;
   const logTotalPages = Math.max(1, Math.ceil(logTotal / LOG_PAGE_SIZE));
 
   // 1-based text for the Go-to-page input — logPage itself stays 0-based.
@@ -193,17 +195,31 @@ export default function UnitDisputesPage() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/disputes?limit=100&offset=0`, { headers });
+      /* Page through every dispute. Only the first 100 used to load, so the
+         stat cards and the list both silently stopped at 100. A page shorter
+         than the limit (or the server's `total`, when it sends one) ends the
+         walk; a page that brings nothing new — a server ignoring `offset` —
+         ends it too, so this can't loop. */
+      const all: UnitDispute[] = [];
+      const seen = new Set<string>();
+      for (let offset = 0; ; offset += DISPUTES_PAGE_SIZE) {
+        const response = await fetch(`${API_URL}/disputes?limit=${DISPUTES_PAGE_SIZE}&offset=${offset}`, { headers });
 
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+
+        if (!response.ok) throw new Error('Failed to fetch disputes');
+
+        const result = await response.json();
+        const page: UnitDispute[] = result.data?.disputes || result.data?.items || [];
+        const fresh = page.filter((d) => !seen.has(d.id));
+        fresh.forEach((d) => { seen.add(d.id); all.push(d); });
+        const total = typeof result.data?.total === 'number' ? result.data.total : null;
+        if (page.length < DISPUTES_PAGE_SIZE || fresh.length === 0 || (total !== null && all.length >= total)) break;
       }
-
-      if (!response.ok) throw new Error('Failed to fetch disputes');
-
-      const result = await response.json();
-      setDisputes(result.data?.disputes || result.data?.items || []);
+      setDisputes(all);
     } catch (err) {
       console.error('[UnitDisputes] Error:', err);
       setError('Failed to load unit disputes. Please try again.');
@@ -462,10 +478,7 @@ export default function UnitDisputesPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
-                if (!canExportDisputes) {
-                  toast.error('You do not have permission to export disputes');
-                  return;
-                }
+                if (!canExportDisputes) return;
                 setShowExportModal(true);
               }}
               disabled={loading || filteredDisputes.length === 0 || !canExportDisputes}
@@ -493,10 +506,7 @@ export default function UnitDisputesPage() {
             </button>
             <button
               onClick={() => {
-                if (!canFileDispute) {
-                  toast.error('You do not have permission to file disputes');
-                  return;
-                }
+                if (!canFileDispute) return;
                 openFileModal();
               }}
               aria-disabled={!canFileDispute}
@@ -690,10 +700,7 @@ export default function UnitDisputesPage() {
             {!hasActiveFilters && (
               <button
                 onClick={() => {
-                  if (!canFileDispute) {
-                    toast.error('You do not have permission to file disputes');
-                    return;
-                  }
+                  if (!canFileDispute) return;
                   openFileModal();
                 }}
                 aria-disabled={!canFileDispute}

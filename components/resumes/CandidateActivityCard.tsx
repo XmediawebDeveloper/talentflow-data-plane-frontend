@@ -226,12 +226,14 @@ export default function CandidateActivityCard({
     return () => { cancelled = true; };
   }, [resumeId]);
 
-  // Permission decides which tabs exist; the plan only greys them.
-  const tabs = useMemo(
+  // Every tab is always shown: a module the user cannot read (permission) or
+  // that the plan excludes is greyed out with a hover reason, never hidden.
+  const tabs = useMemo(() => (data ? TABS : []), [data]);
+  const allowedTabs = useMemo(
     () => (data ? TABS.filter(t => data[t.key].allowed) : []),
     [data]
   );
-  const usable = tabs.filter(t => !isPlanLocked(t.plan));
+  const usable = allowedTabs.filter(t => !isPlanLocked(t.plan));
 
   useEffect(() => {
     if (!data || active) return;
@@ -240,12 +242,11 @@ export default function CandidateActivityCard({
     setActive((withRows || usable[0])?.key ?? null);
   }, [data, usable, active]);
 
-  // No module readable: nothing to show — unless the host put a control in the
-  // header, which then stays reachable on the card's header alone.
-  const noModules = !loading && !failed && tabs.length === 0;
-  if (noModules && !headerAction) return null;
+  // No module readable: the tabs still show (greyed, with the permission
+  // reason on hover) and the body says why there is nothing to list.
+  const noModules = !loading && !failed && allowedTabs.length === 0;
 
-  const total = data ? tabs.reduce((n, t) => n + (isPlanLocked(t.plan) ? 0 : data[t.key].items.length), 0) : 0;
+  const total = data ? allowedTabs.reduce((n, t) => n + (isPlanLocked(t.plan) ? 0 : data[t.key].items.length), 0) : 0;
 
   const renderRows = () => {
     if (!data || !active) return null;
@@ -429,22 +430,24 @@ export default function CandidateActivityCard({
         </div>
       ) : failed || !data ? (
         <p className="text-sm text-destructive py-6 text-center">Could not load candidate activity. Please refresh to try again.</p>
-      ) : noModules ? (
-        <p className="text-sm text-gray-500 py-6 text-center">You do not have access to this candidate&apos;s activity.</p>
       ) : (
         <>
           <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-100 mb-4 -mx-1 px-1">
             {tabs.map(({ key, label, Icon, plan }) => {
-              const locked = isPlanLocked(plan);
+              const planLocked = isPlanLocked(plan);
+              // Plan message wins when both apply.
+              const permissionLocked = !planLocked && !data[key].allowed;
+              const locked = planLocked || permissionLocked;
               const selected = active === key;
               return (
                 <button
                   key={key}
                   role="tab"
                   aria-selected={selected}
-                  disabled={locked}
-                  title={locked ? PLAN_LOCKED_MESSAGE : undefined}
-                  onClick={() => setActive(key)}
+                  disabled={planLocked}
+                  aria-disabled={permissionLocked || undefined}
+                  title={planLocked ? PLAN_LOCKED_MESSAGE : permissionLocked ? `You do not have permission to view ${label}` : undefined}
+                  onClick={() => { if (locked) return; setActive(key); }}
                   className={`flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
                     locked
                       ? 'border-transparent text-gray-300 cursor-not-allowed'
@@ -464,7 +467,9 @@ export default function CandidateActivityCard({
               );
             })}
           </div>
-          {active ? renderRows() : (
+          {active ? renderRows() : noModules ? (
+            <p className="text-sm text-gray-500 py-6 text-center">You do not have access to this candidate&apos;s activity.</p>
+          ) : (
             <p className="text-sm text-gray-500 py-6 text-center">{PLAN_LOCKED_MESSAGE}</p>
           )}
         </>

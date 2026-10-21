@@ -8,8 +8,10 @@ interface UploadHistoryEmptyStateProps {
    *  to rather than wherever the container happens to wrap. */
   lines: string[];
   actionLabel?: string;
-  /** Omitted when the viewer can't upload — the CTA would be a dead end. */
   onAction?: () => void;
+  /** Set when the viewer can't upload: the CTA stays visible but greyed out,
+   *  clicks do nothing, and this text shows on hover. */
+  actionDisabledReason?: string;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function UploadHistoryEmptyState({
   lines,
   actionLabel = 'Upload Resumes',
   onAction,
+  actionDisabledReason,
 }: UploadHistoryEmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-brand-blue/20 bg-white px-4 py-10 text-center sm:py-14">
@@ -45,8 +48,14 @@ export default function UploadHistoryEmptyState({
       {onAction && (
         <button
           type="button"
-          onClick={onAction}
-          className="mt-6 inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-brand-blue px-5 py-2.5 text-sm font-medium text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
+          onClick={() => { if (actionDisabledReason) return; onAction(); }}
+          aria-disabled={!!actionDisabledReason}
+          title={actionDisabledReason || undefined}
+          className={`mt-6 inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 ${
+            actionDisabledReason
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+              : 'cursor-pointer bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30'
+          }`}
         >
           <Plus className="h-4 w-4" />
           {actionLabel}

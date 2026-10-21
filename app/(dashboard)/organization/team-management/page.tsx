@@ -41,6 +41,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -59,6 +60,8 @@ const getErrorDetail = (error: unknown): string | undefined => {
 };
 
 export default function TeamManagementPage() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -290,18 +293,14 @@ export default function TeamManagementPage() {
     ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', icon: History, enabled: true }] : []),
   ];
   const selectInnerTab = (t: { key: InnerTabKey; enabled: boolean; denyMsg?: string }) => {
-    if (!t.enabled) {
-      if (t.denyMsg) toast.error(t.denyMsg);
-      return;
-    }
+    // Locked tab: greyed with a hover tooltip; click is a no-op.
+    if (!t.enabled) return;
     setActiveTab(t.key);
   };
 
   const handleOpenCreateModal = async () => {
-    if (!canCreateTeams) {
-      toast.error('You do not have permission to create teams');
-      return;
-    }
+    // Locked: the button is greyed with a hover tooltip; click is a no-op.
+    if (!canCreateTeams) return;
 
     await fetchAvailableUsers();
     setShowCreateModal(true);
@@ -450,8 +449,8 @@ export default function TeamManagementPage() {
       <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
-          <OrganizationTabs />
+          <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
+          <OrganizationTabs stickyTop={orgCrumbHeight} />
           <div className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
             <PageHeader
               icon={<Users className="h-5 w-5" />}
@@ -472,14 +471,12 @@ export default function TeamManagementPage() {
                   <Button
                     variant="primary"
                     onClick={() => {
-                      if (!canCreateTeams) {
-                        toast.error('You do not have permission to create teams');
-                        return;
-                      }
+                      if (!canCreateTeams) return;
                       handleOpenCreateModal();
                     }}
                     aria-disabled={!canCreateTeams}
                     title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
+                    className={!canCreateTeams ? 'opacity-60 cursor-not-allowed' : ''}
                     icon={<Plus className="h-4 w-4" />}
                   >
                     Create Team
@@ -829,7 +826,8 @@ export default function TeamManagementPage() {
           }
           availableUsers={availableUsers.filter((user) => !teams.filter((team) => team.id !== selectedTeam?.id).some((team) => team.members?.some((member) => member.id === user.id)))}
           isSubmitting={isUpdating}
-          onDelete={canDeleteTeams ? handleOpenDeleteDialog : undefined}
+          onDelete={handleOpenDeleteDialog}
+          canDelete={canDeleteTeams}
           isDeleting={isDeleting}
         />
 

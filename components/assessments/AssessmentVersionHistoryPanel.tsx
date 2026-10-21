@@ -611,10 +611,11 @@ interface JobVersionGroup {
   hasAssessment: boolean;
   /** Summed across this version's assessments, so the totals on the job row
    *  are exactly what its Assessment Versions table adds up to. */
-  totalInvitations: number;
+  /** `null` while any row's count is still unknown (see `sumKnown`). */
+  totalInvitations: number | null;
   /** Finished attempts across this version's assessments - read beside the
    *  invitations it is a subset of: sent, then completed. */
-  totalCompleted: number;
+  totalCompleted: number | null;
 }
 
 export function StatusChip({ label }: { label: string }) {
@@ -663,6 +664,15 @@ export function LatestBadge() {
 }
 
 /** A number over the noun it counts — the reference's metric cell. */
+/** A version's total — `null` (shown as a dash) while any row's count is
+ *  still unknown, so a partial sum is never shown and then corrected. Hosts
+ *  that leave a count unset until it is fetched (the AI Interview list) rely
+ *  on this; assessment rows always carry both counts. */
+const sumKnown = (values: (number | undefined)[]): number | null =>
+  values.some((v) => typeof v !== 'number') ? null : values.reduce<number>((sum, v) => sum + (v as number), 0);
+
+const UnknownMetric = () => <span className="text-sm text-gray-400">—</span>;
+
 function MetricCell({ value, label }: { value: number; label: string }) {
   // Number and label on one line, never wrapped — the Assessments / Invitations
   // Sent / Completed columns read as a single "1 Assessment" phrase rather than
@@ -1035,8 +1045,8 @@ export default function AssessmentVersionHistoryPanel({
       createdOn: lineageEntry?.created_at || detail?.created_at,
       createdBy: detail?.created_by_name,
       assessments: versionAssessments,
-      totalInvitations: versionAssessments.reduce((sum, a) => sum + (a.invitations_count ?? 0), 0),
-      totalCompleted: versionAssessments.reduce((sum, a) => sum + (a.completed_count ?? 0), 0),
+      totalInvitations: sumKnown(versionAssessments.map((a) => a.invitations_count)),
+      totalCompleted: sumKnown(versionAssessments.map((a) => a.completed_count)),
     };
   });
 
@@ -1257,10 +1267,14 @@ export default function AssessmentVersionHistoryPanel({
                           <MetricCell value={count} label={count === 1 ? vocabulary.childSingular : vocabulary.childPlural} />
                         </td>
                         <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
-                          <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />
+                          {group.totalInvitations === null
+                            ? <UnknownMetric />
+                            : <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />}
                         </td>
                         <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
-                          <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />
+                          {group.totalCompleted === null
+                            ? <UnknownMetric />
+                            : <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />}
                         </td>
                         {/* Actions — an ordinary last column, reached by
                             scrolling sideways like any other. It is deliberately
@@ -1448,7 +1462,7 @@ export default function AssessmentVersionHistoryPanel({
                                           ).map((assessment) => {
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
                                             const statusLabel = vocabulary.statusLabel(assessment.status);
-                                            const invitations = assessment.invitations_count ?? 0;
+                                            const invitations = assessment.invitations_count;
                                             const isPicked = isAssessmentPicked(assessment.id);
                                             /* The one row still in play once a
                                                pick exists. Matched on the row's
@@ -1556,7 +1570,9 @@ export default function AssessmentVersionHistoryPanel({
                                                   </td>
                                                 )}
                                                 <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                  <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
+                                                  {typeof invitations === 'number'
+                                                    ? <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
+                                                    : <UnknownMetric />}
                                                 </td>
                                                 {vocabulary.childCompletedColumn && (
                                                   <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">

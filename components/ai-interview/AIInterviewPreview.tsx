@@ -10,7 +10,7 @@ import {
   Share2, ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
@@ -23,6 +23,7 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import WizardDiscardButton from './WizardDiscardButton';
+import { isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
@@ -33,6 +34,9 @@ import ShareAIInterviewModal from './ShareAIInterviewModal';
 import SuccessAnimation from '@/components/ui/success-animation';
 import type { Job } from '@/lib/types/types';
 import { formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { resolveAIInterviewVersion } from '@/lib/utils/aiInterviewJobOrder';
+import PublishedSummaryCard, { PublishedActions } from '@/components/ui/published-summary-card';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -281,6 +285,10 @@ export default function AIInterviewPreview() {
      screen in place of the review. */
   const [published, setPublished] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  /* This interview's own version (V1, V2..) for the published screen — the
+     same sibling ordinal the All Interviews table shows, resolved once the
+     publish lands. Undefined until then, and the row is left out. */
+  const [interviewVersion, setInterviewVersion] = useState<number | undefined>(undefined);
 
   /* Load data */
   const loadInterview = useCallback(async () => {
@@ -288,6 +296,14 @@ export default function AIInterviewPreview() {
     setLoading(true);
     try {
       const data = await aiInterviewService.get(id);
+      // A disabled JD's interview is view-only — no publishing or editing it
+      // until the job is enabled again; show its read-only details instead.
+      if (isJdDisabled(data.jd_status)) {
+        toast.error(JD_DISABLED_ACTION_MESSAGE);
+        if (wizardNav) wizardNav.exit();
+        else router.replace(`/recruitment/ai-interviews/${data.id}`);
+        return;
+      }
       setInterview(data);
 
       // Parse rounds_config
@@ -316,7 +332,7 @@ export default function AIInterviewPreview() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, router, wizardNav]);
 
   useEffect(() => {
     loadInterview();
@@ -326,6 +342,17 @@ export default function AIInterviewPreview() {
   const mode: 'fixed' | 'flexible' = interviewMode;
   const duration = interview?.duration_minutes ?? 30;
   const position = interview?.position ?? interview?.jd_title ?? 'Untitled Position';
+
+  const interviewId = interview?.id;
+  const interviewJdId = interview?.jd_id;
+  useEffect(() => {
+    if (!published || !interviewId) return;
+    let cancelled = false;
+    resolveAIInterviewVersion({ id: interviewId, jd_id: interviewJdId })
+      .then((v) => { if (!cancelled) setInterviewVersion(v); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [published, interviewId, interviewJdId]);
 
   const mthRound = rounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
   const nthRound = rounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
@@ -467,17 +494,42 @@ export default function AIInterviewPreview() {
   }, [published, listHref, router, embedded]);
 
   const handleSaveAsDraft = async () => {
+    // Stamp this step so the draft reopens on Preview; a published version
+    // being edited is also taken off "published".
+    if (id && interview) {
+      try {
+        let si: Record<string, unknown> = {};
+        try { si = JSON.parse(interview.special_instructions || '{}') ?? {}; } catch { /* keep {} */ }
+        si.wizard_step = CURRENT_STEP;
+        await aiInterviewService.update(id, {
+          special_instructions: JSON.stringify(si),
+          save_and_exit: true,
+          ...(interview.status === 'published' && { status: 'draft' as const }),
+        });
+      } catch {
+        toast.error('Failed to save draft');
+        return;
+      }
+    }
+    clearUnsavedVersion(id);
     toast.success('Draft saved!');
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
 
+  /* Discard — the wizard's one rule (lib/utils/aiInterviewUnsavedVersion):
+     an UNSAVED draft (a new interview, or the version Duplicate just minted)
+     is deleted; a draft the recruiter saved earlier, or a published / live
+     version, is left as last saved — Discard never deletes it. */
+  const discardDeletesVersion = !!id && interview?.status === 'draft' && isUnsavedVersion(id);
   const handleDiscard = async () => {
-    if (!id) return;
-    try {
-      await aiInterviewService.delete(id);
-      toast.success('Draft discarded');
-    } catch {
-      // Silent
+    if (id && discardDeletesVersion) {
+      try {
+        await aiInterviewService.delete(id);
+        clearUnsavedVersion(id);
+        toast.success('Draft discarded');
+      } catch {
+        // Silent
+      }
     }
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
@@ -507,6 +559,7 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Published ───────────── */
   if (published) {
+    const publishedRole = stripVersionFromTitle(interview.jd_title || interview.position || '');
     return (
       <>
         <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
@@ -531,86 +584,74 @@ export default function AIInterviewPreview() {
               />
               <AIInterviewStepIndicator currentStep={CURRENT_STEP} topOffset={breadcrumbHeight} />
 
-              <div className="mx-auto w-full max-w-2xl py-4 sm:py-6 text-center">
+              <div className="py-4 sm:py-6 text-center">
                 {/* The published tick, animated — the same Lottie every other
                     "published" screen plays (JD creation among them). It
                     replaces the tinted disc outright: it brings its own circle
                     and throws particles past its edge, and a ring behind it
                     would draw a hard line straight through the burst. */}
-                <div className="flex justify-center">
-                  <SuccessAnimation className="w-16 h-16 sm:w-20 sm:h-20" />
+                <div className="flex justify-center mb-4 sm:mb-5">
+                  <SuccessAnimation />
                 </div>
 
-                <h1 className="mt-3 text-lg sm:text-xl font-bold text-gray-900 tracking-tight">
+                {/* Laid out as Assessment Published is: headline, the one-line
+                    card, the compact row of ways on — with the handoff hint
+                    only when there is a next step elsewhere to name. */}
+                <h1 className={`text-xl sm:text-2xl font-bold text-gray-900 tracking-tight ${fromInviteOrigin ? 'mb-2 sm:mb-3' : 'mb-4 sm:mb-5'}`}>
                   AI Interview Published!
                 </h1>
-                <p className="mt-2 text-xs sm:text-sm text-gray-500 max-w-lg mx-auto">
-                  Your AI interview has been successfully published and is now live.
-                  {fromInviteOrigin
-                    ? ` Next, send it to the candidates you picked in ${inviteOriginLabel}.`
-                    : ' You can invite candidates and track their responses.'}
-                </p>
+                {fromInviteOrigin && (
+                  <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-5">
+                    Next, send it to the candidates you picked in {inviteOriginLabel}.
+                  </p>
+                )}
 
-                {/* What was published */}
-                <div className="mt-5 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50/60 p-3 sm:p-4 flex flex-col items-center text-center">
-                  <div className="min-w-0 max-w-full">
-                    <p className="text-sm sm:text-base font-semibold text-gray-900 truncate">
-                      {[
-                        interview.jd_short_id,
-                        position,
-                        'AI Interview',
-                        interview.jd_version != null ? `v${interview.jd_version}` : null,
-                      ].filter(Boolean).join(' · ')}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
-                        {mode === 'fixed' ? duration : bufferEnabled ? 35 : 30} mins
-                      </span>
-                      {mode === 'fixed' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
-                          {totalPreviewQuestions} Questions
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                {/* What was published: "[JD-294] Java Developer [V1] [AI
+                    Interview V2]", the bare V being the job version and the
+                    interview's own version named as such. */}
+                <PublishedSummaryCard
+                  className={`mx-auto mb-5 sm:mb-6 w-fit max-w-full ${fromInviteOrigin ? 'sm:max-w-xl' : 'sm:max-w-3xl'}`}
+                  icon={<Video className="w-5 h-5 text-brand-blue" />}
+                  jobId={interview.jd_short_id}
+                  jobName={publishedRole}
+                  jobVersion={interview.jd_version}
+                  ownVersion={interviewVersion != null ? `AI Interview V${interviewVersion}` : null}
+                />
 
-                <div className={`mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 ${fromInviteOrigin ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
-                  <button
+                <PublishedActions>
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(id)}`)}
-                    className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                    icon={<Eye className="w-4 h-4" />}
                   >
-                    <Eye className="w-4 h-4" />
                     View Interview
-                  </button>
+                  </Button>
                   {!fromInviteOrigin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!canInviteAIInterview) {
-                        toast.error('You do not have permission to invite candidates');
-                        return;
-                      }
-                      setShareOpen(true);
-                    }}
-                    aria-disabled={!canInviteAIInterview}
-                    title={!canInviteAIInterview ? 'You do not have permission to invite candidates' : undefined}
-                    className={`inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors ${!canInviteAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share Invite Link
-                  </button>
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      onClick={() => {
+                        if (!canInviteAIInterview) return;
+                        setShareOpen(true);
+                      }}
+                      aria-disabled={!canInviteAIInterview}
+                      title={!canInviteAIInterview ? 'You do not have permission to invite candidates' : undefined}
+                      className={!canInviteAIInterview ? 'opacity-50 cursor-not-allowed' : ''}
+                      icon={<Share2 className="w-4 h-4" />}
+                    >
+                      Share Invite Link
+                    </Button>
                   )}
-                  <button
+                  <Button
+                    variant="primary"
                     type="button"
                     onClick={() => (fromInviteOrigin ? router.replace(listHref) : router.push(listHref))}
-                    className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                    icon={<ArrowRight className="w-4 h-4" />}
                   >
-                    <ArrowRight className="w-4 h-4" />
-                    {fromInviteOrigin ? handoffContinueLabel() : 'Go to AI Interviews'}
-                  </button>
-                </div>
+                    {fromInviteOrigin ? handoffContinueLabel() : 'Go to All AI Interviews'}
+                  </Button>
+                </PublishedActions>
               </div>
             </div>
           </div>
@@ -1196,7 +1237,7 @@ export default function AIInterviewPreview() {
                 <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
                   Back to Clusters
                 </Button>
-                <WizardDiscardButton onClick={handleDiscard} />
+                <WizardDiscardButton onClick={handleDiscard} label={discardDeletesVersion ? 'Discard' : 'Discard changes'} />
               </div>
               {/* Phones stack the two actions full-width, Publish on top. */}
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
@@ -1207,10 +1248,7 @@ export default function AIInterviewPreview() {
                   variant="primary"
                   size="md"
                   onClick={() => {
-                    if (!canPublishAIInterview) {
-                      toast.error('You do not have permission to publish AI interviews');
-                      return;
-                    }
+                    if (!canPublishAIInterview) return;
                     setShowConfirm(true);
                   }}
                   disabled={publishing}

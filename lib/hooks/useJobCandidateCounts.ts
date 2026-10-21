@@ -18,7 +18,8 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
  *
  * `null` until the first tally lands, so the cards show nothing rather than a
  * misleading 0. After that the cached tally shows at once (see below). A
- * failed source counts as empty.
+ * failed source keeps its previously cached numbers (empty if there are none)
+ * rather than overwriting them with zeros.
  */
 export type JobCandidateCounts = Record<string, { assessed: number; interviewed: number }>;
 
@@ -38,7 +39,8 @@ async function paginate<T>(
   return all;
 }
 
-async function loadAssessed(): Promise<Record<string, number>> {
+/** `null` when the source failed — see `tally`. */
+async function loadAssessed(): Promise<Record<string, number> | null> {
   const byJd: Record<string, number> = {};
   try {
     const assessments = await paginate((page) => assessmentService.list({ page, page_size: PAGE_SIZE }));
@@ -46,11 +48,12 @@ async function loadAssessed(): Promise<Record<string, number>> {
       if (!a.jd_id) continue;
       byJd[a.jd_id] = (byJd[a.jd_id] || 0) + (a.completed_count || 0);
     }
-  } catch { /* no assessments source — every job reads 0 */ }
+  } catch { return null; /* no assessments source this time */ }
   return byJd;
 }
 
-async function loadInterviewed(): Promise<Record<string, number>> {
+/** `null` when the source failed — see `tally`. */
+async function loadInterviewed(): Promise<Record<string, number> | null> {
   const byJd: Record<string, number> = {};
   try {
     // completed_count / terminated_count are batch-aggregated server-side
@@ -65,7 +68,7 @@ async function loadInterviewed(): Promise<Record<string, number>> {
       const jdId = config.jd_id;
       byJd[jdId] = (byJd[jdId] || 0) + (config.completed_count || 0) + (config.terminated_count || 0);
     }
-  } catch { /* no interviews source — every job reads 0 */ }
+  } catch { return null; /* no interviews source this time */ }
   return byJd;
 }
 
@@ -87,7 +90,18 @@ const readCache = (): JobCandidateCounts | null => {
 };
 
 async function tally(): Promise<JobCandidateCounts> {
-  const [assessed, interviewed] = await Promise.all([loadAssessed(), loadInterviewed()]);
+  const [freshAssessed, freshInterviewed] = await Promise.all([loadAssessed(), loadInterviewed()]);
+  /* A source that failed (any page) keeps what the last good tally had for
+     it, so one flaky request cannot write zeros over real counts in the
+     cache and sessionStorage. With no earlier tally it reads empty (0). */
+  const previous = typeof window === 'undefined' ? null : readCache();
+  const fromPrevious = (field: 'assessed' | 'interviewed') => {
+    const byJd: Record<string, number> = {};
+    for (const [id, row] of Object.entries(previous ?? {})) byJd[id] = row[field];
+    return byJd;
+  };
+  const assessed = freshAssessed ?? fromPrevious('assessed');
+  const interviewed = freshInterviewed ?? fromPrevious('interviewed');
   const merged: JobCandidateCounts = {};
   for (const id of new Set([...Object.keys(assessed), ...Object.keys(interviewed)])) {
     merged[id] = { assessed: assessed[id] || 0, interviewed: interviewed[id] || 0 };

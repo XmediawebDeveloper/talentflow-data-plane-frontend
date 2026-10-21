@@ -17,6 +17,8 @@ import { useRouter } from 'next/navigation';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
+import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
+import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -167,14 +169,21 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     // update) must not disconnect a healthy WebSocket.
   }, [user]);
 
+  /* Bumped by every fetchNotifications run, so a response for a tab the user
+     has since left (or an older poll) can't overwrite the newer list. */
+  const notificationsFetchSeqRef = useRef(0);
+
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
+    const seq = ++notificationsFetchSeqRef.current;
+    const isStale = () => seq !== notificationsFetchSeqRef.current;
     setNotificationsLoading(true);
     try {
       const response = await notificationService.getNotifications(
         20, 0, activeNotificationTab === 'unread'
       );
+      if (isStale()) return;
       setNotifications(response.notifications);
       setUnreadCount(response.unread_count);
       // Only the All tab's response counts everything; the Unread tab's total
@@ -183,7 +192,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
-      setNotificationsLoading(false);
+      if (!isStale()) setNotificationsLoading(false);
     }
   }, [user, activeNotificationTab]);
 
@@ -530,7 +539,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
         totalRemaining += (quota.total_remaining as number) || 0;
         totalLimit += (quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0);
-        totalUsed += quota.subscription?.used || 0;
+        // Same "used" as each row of the breakdown below: plan plus add-on
+        // consumption, matching a limit that includes add-on units. Raw
+        // counters rather than `limit - remaining` — see the rows' note.
+        totalUsed += ((quota.subscription?.used as number) ?? 0) + ((quota.addon?.total_consumed as number) ?? 0);
       }
     });
 
@@ -640,7 +652,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
      the difference was expressed by writing a whole second variant of the
      className instead of by a flag. One shape, one place to change it.
 
-     `show` is the permission/role gate. `alwaysEnabled` is the separate
+     `show` is the role/audience gate (hides the row). `permitted: false` is
+     the RBAC gate: the row stays visible but greyed, with a hover tooltip and
+     a no-op click — permission-gated rows are never hidden. `alwaysEnabled` is the separate
      question of whether a lapsed subscription locks the row: docs and support
      stay reachable precisely because the plan lapsed. */
   const profileMenuItems: {
@@ -650,6 +664,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     subtitle: string;
     href: string;
     show?: boolean;
+    permitted?: boolean;
+    deniedMessage?: string;
     alwaysEnabled?: boolean;
   }[] = [
     {
@@ -662,9 +678,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     {
       id: 'plan',
       icon: CreditCard,
-      title: 'Current Plan',
+      title: 'Upgrade Plans',
       subtitle: 'Billing & subscription',
       href: '/subscription/current-plan',
+      deniedMessage: 'You do not have permission to view the subscription plan',
     },
     {
       id: 'company',
@@ -672,7 +689,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       title: 'Company Profile',
       subtitle: 'Organization details',
       href: '/organization/company-profile',
-      show: isTenantAdmin || hasPermission('canManageSettings'),
+      deniedMessage: 'You do not have permission to manage the company profile',
     },
     {
       id: 'audit-log',
@@ -680,6 +697,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       title: 'Audit Log',
       subtitle: 'View your recent activity',
       href: '/audits/activity',
+      deniedMessage: 'You do not have permission to view the audit log',
     },
     {
       id: 'audit-trail',
@@ -707,8 +725,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       subtitle: 'Help & support requests',
       href: '/support-tickets',
       alwaysEnabled: true,
+      deniedMessage: 'You do not have permission to view support tickets',
     },
   ];
+  // Every row is greyed by the SAME rule the page guard (RouteGuard) uses, so a
+  // row is never clickable when its page would refuse the user, and never greyed
+  // when the page would open. An explicit `permitted` still wins.
+  profileMenuItems.forEach((item) => {
+    if (item.permitted === undefined) {
+      item.permitted = isRouteAuthorized(item.href, { isTenantAdmin, hasPermission });
+    }
+  });
 
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
@@ -1313,8 +1340,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 <div className="max-h-[216px] flex-1 min-h-0 overflow-y-auto border-t border-gray-100 divide-y divide-gray-100">
                   {profileMenuItems
                     .filter(item => item.show !== false)
-                    .map(({ id, icon: ItemIcon, title, subtitle, href, alwaysEnabled }) => {
-                      const locked = subscriptionExpired && !alwaysEnabled;
+                    .map(({ id, icon: ItemIcon, title, subtitle, href, alwaysEnabled, permitted, deniedMessage }) => {
+                      const subscriptionLocked = subscriptionExpired && !alwaysEnabled;
+                      const permissionLocked = permitted === false;
+                      const locked = subscriptionLocked || permissionLocked;
                       return (
                         <button
                           key={id}
@@ -1323,9 +1352,11 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             setShowUserMenu(false);
                             router.push(href);
                           }}
-                          disabled={locked}
-                          className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 group transition-colors ${
-                            locked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-brand-blue/[0.04]'
+                          disabled={subscriptionLocked}
+                          aria-disabled={locked}
+                          title={!subscriptionLocked && permissionLocked ? (deniedMessage || PERMISSION_DENIED_MESSAGE) : undefined}
+                          className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 transition-colors ${locked ? '' : 'group'} ${
+                            subscriptionLocked ? 'opacity-40 cursor-not-allowed' : permissionLocked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-brand-blue/[0.04]'
                           }`}
                         >
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 transition-colors group-hover:bg-brand-blue/15">

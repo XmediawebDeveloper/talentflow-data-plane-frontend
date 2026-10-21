@@ -7,6 +7,7 @@ import { SurfaceCard, SectionHeading } from '@/components/ui/section-container';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   CUSTOM_PERMISSION_CATEGORIES,
+  getMainPermission,
   type CustomPermissionAction,
   type CustomPermissionCategory,
   type CustomPermissionSubCategory,
@@ -17,9 +18,9 @@ import { ArrowLeft,
   Plus,
   Pencil,
   Ban,
-  X,
   Mail,
   Calendar,
+  Clock,
   Loader2,
   UserCog,
   Check,
@@ -39,7 +40,7 @@ import { ArrowLeft,
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
-import rbacService from '@/lib/services/rbacService';
+import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
@@ -58,13 +59,26 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { planTurnOn, planTurnOff, withoutOrphanEntryPoints, isEntryPointLocked, isGroupFullyOn, labelOf, rememberTurnOff, forgetTurnOff, TurnOffMemory } from '@/lib/permissions/permissionRules';
+import { askTurnOnWithDependents, askUnlockEntryPoint, usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
+import AppModal from '@/components/ui/app-modal';
+import PermissionSectionsView, {
+  PermissionSectionsSkeleton,
+  fetchRoleShownCounts,
+  AlwaysOnPermissionsNote,
+  withAlwaysOnPermissions,
+  countGrantedPermissions,
+  permissionBadgeClass,
+} from '@/components/roles/PermissionSectionsView';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { GroupCheckbox, groupCheckState } from '@/components/ui/group-checkbox';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 // Types
 interface UserPermissions {
@@ -167,9 +181,9 @@ const getPermissionDependencies = (code: string): string[] => {
 // Helper to get a human-readable display name for a permission code
 const getPermissionDisplayName = (code: string): string => {
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
-    if (cat.viewCode === code) return cat.name;
+    if (cat.viewCode === code) return `View ${cat.name}`;
     const action = cat.actions?.find(a => a.code === code);
-    if (action) return action.label;
+    if (action) return `${action.label} (${cat.name})`;
     for (const sub of cat.subCategories || []) {
       if (sub.viewCode === code) return `View ${sub.name}`;
       const subAction = sub.actions.find(a => a.code === code);
@@ -191,6 +205,35 @@ const getCategoryViewCodeFor = (code: string): string | null => {
   return null;
 };
 
+// Complete a permission set with everything it needs — the same rules applied
+// when ticking by hand (category dependencies + each code's section View),
+// repeated until nothing new is added. Used when loading a role's defaults
+// (Reset / role chip) so the popup shows exactly what Save will store: the
+// server completes missing dependencies on save, so a role with gaps used to
+// show e.g. 93 before Save and 95 after reopening.
+const withRequiredPermissions = (codes: Iterable<string>): Set<string> => {
+  const result = new Set(codes);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const code of Array.from(result)) {
+      const needed = [getCategoryViewCodeFor(code), ...getPermissionDependencies(code)];
+      for (const dep of needed) {
+        if (dep && !result.has(dep)) {
+          result.add(dep);
+          changed = true;
+        }
+        const depView = dep ? getCategoryViewCodeFor(dep) : null;
+        if (depView && !result.has(depView)) {
+          result.add(depView);
+          changed = true;
+        }
+      }
+    }
+  }
+  return result;
+};
+
 // Helper to get which currently-enabled permission CODES block disabling the
 // given code (same traversal as getBlockingPermissions below, but returns the
 // raw codes so a cascade-disable can actually remove them from the set).
@@ -202,6 +245,21 @@ const getBlockingPermissionCodes = (code: string, currentCodes: Set<string>): st
         if (deps.includes(code) && currentCodes.has(depender)) {
           blockers.push(depender);
         }
+      }
+    }
+    // A section's View is needed by every action in that section: turning the
+    // View off (directly or as a cascade) must turn its actions off too, or the
+    // section is left with actions on but no way to open it.
+    if (cat.viewCode === code) {
+      cat.actions?.forEach(a => { if (currentCodes.has(a.code)) blockers.push(a.code); });
+      cat.subCategories?.forEach(sub => {
+        if (sub.viewCode && currentCodes.has(sub.viewCode)) blockers.push(sub.viewCode);
+        sub.actions.forEach(a => { if (currentCodes.has(a.code)) blockers.push(a.code); });
+      });
+    }
+    for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) {
+        sub.actions.forEach(a => { if (currentCodes.has(a.code)) blockers.push(a.code); });
       }
     }
   }
@@ -383,14 +441,15 @@ const hashString = (str: string): number => {
 
 // Get role label - use RBAC name or fallback to defaults
 const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
-  const rbacRole = availableRoles.find(r => r.code.toLowerCase() === role.toLowerCase());
-  if (rbacRole) return rbacRole.name;
-  return defaultRoleLabels[role.toLowerCase()] || role.charAt(0).toUpperCase() + role.slice(1);
+  const rbacRole = availableRoles.find(r => (r.code || '').toLowerCase() === (role || '').toLowerCase());
+  // Role names are always shown in CAPITALS (see formatRoleName in rbacService).
+  if (rbacRole) return formatRoleName(rbacRole.name);
+  return formatRoleName(defaultRoleLabels[(role || '').toLowerCase()] || role || '');
 };
 
 // Get role badge color - system roles use default colors, custom roles get distinct colors from palette
 const getRoleBadgeColor = (role: string, availableRoles: RoleListItem[]): string => {
-  const roleCode = role.toLowerCase();
+  const roleCode = (role || '').toLowerCase();
 
   // Check if it's a known system role with predefined color
   if (defaultRoleBadgeColors[roleCode]) {
@@ -419,6 +478,39 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   can_view_analytics: 'View Analytics',
   can_manage_settings: 'Manage Settings',
   can_manage_users: 'Manage Users',
+};
+
+// The users list sends ~85 legacy `can_*` flags, not just the 9 above. Any flag
+// without a label rendered as an EMPTY pill, and alias flags (`*_granular`, and
+// the combined "manage/access/upload" ones that repeat their parts) inflated
+// "+N more". Every flag now gets a readable label; aliases are dropped.
+const PERMISSION_FLAG_WORDS: Record<string, string> = {
+  jd: 'JD', hr: 'HR', ai: 'AI', api: 'API', pdf: 'PDF', db: 'Database',
+};
+const humanizePermissionFlag = (key: string): string =>
+  key
+    .replace(/^can_/, '')
+    .split('_')
+    .filter(Boolean)
+    .map((w) => PERMISSION_FLAG_WORDS[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+const getUserPermissionPills = (permissions: object | null | undefined): string[] => {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  const add = (label: string) => {
+    if (label && !seen.has(label)) { seen.add(label); labels.push(label); }
+  };
+  const granted = Object.entries(permissions || {}).filter(([key, value]) => value && !key.endsWith('_granular'));
+  // Labelled flags first (the familiar Create JD / Manage JD / ...), then the rest.
+  granted.forEach(([key]) => {
+    const label = permissionLabels[key as keyof UserPermissions];
+    if (label) add(label);
+  });
+  granted.forEach(([key]) => {
+    if (!(key in permissionLabels)) add(humanizePermissionFlag(key));
+  });
+  return labels;
 };
 
 const defaultPermissions: UserPermissions = {
@@ -516,6 +608,8 @@ const mockUsers: ApiUser[] = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function UserManagement() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
@@ -525,26 +619,104 @@ export default function UserManagement() {
   // confirm cascading the disable to those dependents too. Returns the full
   // set of codes to remove (the requested ones plus every dependent pulled
   // in transitively) on "Yes", or null if the admin chose "No" (no changes).
+  const { ask: askPermissionChange, dialog: permissionChangeDialog } = usePermissionChangeDialog();
+
+  // Turning permissions OFF (tile, View, section): shared rules decide what else
+  // must go — permissions that need them, the section's actions (for a View) and
+  // a main permission's entry points in other sections. Compact popup, full list
+  // behind "Show details". Returns the codes to remove, or null if cancelled.
+  // What each turn-off in the open Edit User took with it, so turning it on
+  // again can restore it ("Restore previous"). Cleared when another user opens.
+  const turnOffMemory = useRef<TurnOffMemory>(new Map());
+
   const confirmCascadeDisable = async (
     label: string,
     codesBeingDisabled: string[],
     currentCodes: Set<string>
   ): Promise<Set<string> | null> => {
-    const blockerCodes = [
-      ...new Set(codesBeingDisabled.flatMap(c => getBlockingPermissionCodes(c, currentCodes))),
-    ];
-    if (blockerCodes.length === 0) return new Set(codesBeingDisabled);
+    const plan = planTurnOff(codesBeingDisabled, currentCodes, MANDATORY_PERMISSION_CODES);
+    const removal = new Set(Array.from(currentCodes).filter(c => !plan.next.has(c)));
+    codesBeingDisabled.forEach(c => { if (!MANDATORY_PERMISSION_CODES.has(c)) removal.add(c); });
+    const remember = () => rememberTurnOff(
+      turnOffMemory.current, codesBeingDisabled, currentCodes,
+      new Set(Array.from(currentCodes).filter(c => !removal.has(c))),
+    );
+    const extra = plan.entryPointsOff.length + plan.dependentsOff.length;
+    if (extra === 0) { remember(); return removal; }
 
-    const blockerNames = [...new Set(blockerCodes.map(getPermissionDisplayName))];
-    const confirmed = await dialog.confirm({
-      title: `Disable "${label}"?`,
-      message: `"${label}" is required by ${blockerNames.join(', ')}. Disabling it will also turn off: ${blockerNames.join(', ')}.`,
-      variant: 'warning',
-      confirmText: 'Yes, Disable All',
-      cancelText: 'No',
+    const parts: string[] = [];
+    if (plan.entryPointsOff.length) {
+      parts.push(`${plan.entryPointsOff.length} permission${plan.entryPointsOff.length === 1 ? '' : 's'} from other modules`);
+    }
+    if (plan.dependentsOff.length) {
+      parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
+    }
+    const choice = await askPermissionChange({
+      title: `Turn off "${label}"?`,
+      tone: 'off',
+      summary: <>This will also turn off {parts.join(' and ')}.</>,
+      details: [
+        { heading: 'Permissions from other modules', codes: plan.entryPointsOff },
+        { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
+      ],
+      actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],
     });
-    if (!confirmed) return null;
-    return computeCascadeRemovals(codesBeingDisabled, currentCodes);
+    if (choice !== 'off') return null;
+    remember();
+    return removal;
+  };
+
+  // Turning permissions ON (tile, View, section). Locked entry points (main off)
+  // are refused/skipped; turning a MAIN on offers to turn its entry points in
+  // other sections on too ([Cancel] [Only this] [Turn on all]). Returns the new
+  // full set, or null if nothing should change.
+  const turnOnWithPrompt = async (codes: string[], label: string): Promise<Set<string> | null> => {
+    const current = editSelectedPermissionCodes;
+    const plan = planTurnOn(codes, current);
+    if (codes.length === 1 && plan.skippedLocked.includes(codes[0])) {
+      // Locked entry point: offer to turn on its main (and what it needs).
+      return askUnlockEntryPoint(askPermissionChange, codes[0], current, MANDATORY_PERMISSION_CODES);
+    }
+    // Something other sections depend on (View Job Description…): offer
+    // [Only this] [Restore previous] [Turn on all].
+    const withDeps = await askTurnOnWithDependents(
+      askPermissionChange, codes, label, current, turnOffMemory.current, MANDATORY_PERMISSION_CODES,
+    );
+    if (withDeps !== undefined) {
+      if (withDeps) forgetTurnOff(turnOffMemory.current, withDeps);
+      return withDeps;
+    }
+    const offered = plan.offeredEntryPoints.flatMap(g => g.entries);
+    if (offered.length > 0 || plan.skippedLocked.length > 0) {
+      const summary = offered.length > 0
+        ? (plan.offeredEntryPoints.length === 1
+            ? <>&quot;{labelOf(plan.offeredEntryPoints[0].main)}&quot; can also be started from {offered.length} other section{offered.length === 1 ? '' : 's'}. Turn {offered.length === 1 ? 'it' : 'those'} on too?</>
+            : <>{offered.length} permissions from other modules can be turned on too. Turn them on?</>)
+        : <>Some permissions in this section were not turned on because their main permission is off.</>;
+      const choice = await askPermissionChange({
+        title: `Turn on "${label}"?`,
+        tone: 'on',
+        summary,
+        details: [
+          { heading: 'Can also be started from', codes: offered },
+          { heading: 'Also turned on (needed)', codes: plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c)) },
+          { heading: 'Not turned on (their main permission is off)', codes: plan.skippedLocked },
+        ],
+        actions: offered.length > 0
+          ? [{ id: 'only', label: 'Only this', variant: 'secondary' }, { id: 'all', label: 'Turn on all' }]
+          : [{ id: 'only', label: 'Turn on' }],
+      });
+      if (!choice) return null;
+      const turnedOn = choice === 'all' ? plan.all : plan.only;
+      forgetTurnOff(turnOffMemory.current, turnedOn);
+      return turnedOn;
+    }
+    forgetTurnOff(turnOffMemory.current, plan.only);
+    const auto = plan.autoRequired.filter(c => !MANDATORY_PERMISSION_CODES.has(c));
+    if (auto.length > 0) {
+      toast.info(`Also turned on: ${auto.map(labelOf).join(', ')} — needed by "${label}"`);
+    }
+    return plan.only;
   };
 
   // Granular action gates. Tenant admins always pass; delegated admins pass when
@@ -563,16 +735,25 @@ export default function UserManagement() {
   // (GET /users/count), used by the Active/Inactive stat cards below instead
   // of `users.filter(...)` — `users` only ever holds the current page of
   // `GET /users` (default page_size=20), so filtering it undercounts any
-  // tenant with more users than one page. `null` until that call resolves,
-  // during which the cards fall back to the old (possibly-undercounted but
-  // available) client tally rather than showing nothing.
+  // tenant with more users than one page. All three cards (Total too) read
+  // only this — `null` until the call resolves, during which they show a
+  // placeholder rather than a provisional client tally that then jumps.
   const [userCounts, setUserCounts] = useState<{ active_users: number; inactive_users: number; total_users: number } | null>(null);
+  // Total = active + inactive (every account), so the three cards always add up.
+  // Active is what counts against the plan's seat limit, so the limit sits on that card.
+  const activeUsersCount = userCounts ? userCounts.active_users : users.filter(u => u.is_active).length;
+  const inactiveUsersCount = userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length;
+  const totalUsersCount = activeUsersCount + inactiveUsersCount;
+  // The last /users/count call failed — the cards show '—', not a guess.
+  const [userCountsFailed, setUserCountsFailed] = useState(false);
+  // Bumped per loadUsers, so an older /users/count response can't land last.
+  const userCountsSeqRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  // Drill-in pattern: cards-first overview, switch to list+search when a stat
-  // card is clicked. `statusFilter` carries the card that was clicked so the
-  // list is pre-filtered.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  // The page always opens on the Total Users list (client request 2026-10-17);
+  // clicking a stat card re-filters it. `statusFilter` carries the card that was
+  // clicked so the list is pre-filtered.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
@@ -592,8 +773,23 @@ export default function UserManagement() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
+  // Restore memory belongs to one Edit User session.
+  useEffect(() => { turnOffMemory.current.clear(); }, [editingUser?.id]);
   const [isSaving, setIsSaving] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<RoleListItem[]>([]);
+  // Default permission count per role, shown on the role chips/cards — the same
+  // number the Roles list and role popup show (tickable + 2 always on).
+  const [roleDefaultCounts, setRoleDefaultCounts] = useState<Record<number, number>>({});
+  useEffect(() => {
+    if (availableRoles.length === 0) return;
+    let cancelled = false;
+    fetchRoleShownCounts(availableRoles.map((r) => r.id)).then((counts) => {
+      if (!cancelled) setRoleDefaultCounts(counts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [availableRoles]);
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [editSelectedRoleId, setEditSelectedRoleId] = useState<number | null>(null);
@@ -643,7 +839,13 @@ export default function UserManagement() {
 
   // View role permissions popup (same as RoleManagement view modal)
   const [viewingRolePopup, setViewingRolePopup] = useState<RoleListItem | null>(null);
+  // Same popup, opened from a user row's "+N more" permissions chip.
+  const [viewingUserPermissions, setViewingUserPermissions] = useState<ApiUser | null>(null);
   const [viewingRolePopupPermissions, setViewingRolePopupPermissions] = useState<Permission[]>([]);
+  // Role / user permission popups include the always-on pair every user gets,
+  // so the count matches Edit User (Standard User = 2, not 0).
+  const viewingRolePopupCodes = withAlwaysOnPermissions(viewingRolePopupPermissions.map((p) => p.code));
+  const viewingRolePopupShownCount = countGrantedPermissions(viewingRolePopupCodes);
   const [isViewingRolePopupLoading, setIsViewingRolePopupLoading] = useState(false);
 
   // Reset Password modal — offers BOTH "email a temp password" and "set directly".
@@ -698,11 +900,10 @@ export default function UserManagement() {
   const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
   useListStatePersistence(
     'org-user-management',
-    { statusFilter, searchQuery, itemsPerPage },
+    { searchQuery, itemsPerPage },
     (s) => {
-      if (s.statusFilter === 'all' || s.statusFilter === 'active' || s.statusFilter === 'inactive') {
-        setStatusFilter(s.statusFilter as typeof statusFilter);
-      }
+      // statusFilter is deliberately NOT restored — the page always opens on
+      // Total Users.
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
@@ -850,18 +1051,60 @@ export default function UserManagement() {
     }
   };
 
+  const [isResettingEditPermissions, setIsResettingEditPermissions] = useState(false);
+  // Last role chip applied in the Edit User popup (so re-clicking it is a no-op).
+  const editingRoleSelectionRef = useRef<number | null>(null);
+
+  // Load a role's default permissions into the Edit User checklist (role chip
+  // click and Reset). Kept to the codes the checklist shows — the same filter
+  // used when the popup loads a user's saved permissions — plus the baseline.
+  const applyRoleDefaultsToEditor = async (roleId: number) => {
+    const requestId = ++selectRoleRequestIdRef.current;
+    setIsResettingEditPermissions(true);
+    try {
+      const role = await rbacService.getRoleById(roleId);
+      if (requestId !== selectRoleRequestIdRef.current) return; // a newer click won
+      const shown = new Set(getAllCustomPermissionCodes());
+      const roleCodes = new Set<string>((role.permissions || []).map(p => p.code).filter(c => shown.has(c)));
+      // Also switch on whatever the role's permissions need (a role can have
+      // gaps), so this is exactly what Save will store.
+      const codes = withoutOrphanEntryPoints(withRequiredPermissions(roleCodes));
+      setEditSelectedPermissionCodes(codes);
+      const added = Array.from(codes).filter(c => !roleCodes.has(c) && !MANDATORY_PERMISSION_CODES.has(c));
+      if (added.length > 0) {
+        toast.success(
+          `Permissions set to ${role.name} defaults. Also switched on ${added.map(getPermissionDisplayName).join(', ')} — required by permissions in this role.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(`Permissions set to ${role.name} defaults`);
+      }
+    } catch (error) {
+      if (requestId !== selectRoleRequestIdRef.current) return;
+      console.error('Failed to load role default permissions:', error);
+      toast.error('Failed to load role permissions');
+    } finally {
+      if (requestId === selectRoleRequestIdRef.current) setIsResettingEditPermissions(false);
+    }
+  };
+
   const selectRole = async (roleId: number, isEdit: boolean = false) => {
     if (isEdit) {
-      // Switching an EXISTING user's assigned role must not discard whatever
-      // permission customizations are currently shown in the editor — this
-      // used to fetch the clicked role's raw default template and overwrite
-      // editSelectedPermissionCodes/Ids with it, silently wiping out the
-      // user's real saved permission overrides (or edits made earlier in the
-      // same session) out from under the admin. Role assignment and
-      // permission overrides are edited independently in this modal: the
-      // permissions checklist keeps whatever it already shows, and role only
-      // changes the `role`/`role_id` columns that get saved.
+      // Picking a role in Edit User applies that role's default permissions to
+      // the checklist. Picking the user's ORIGINAL role again restores their
+      // saved permissions (not the role template), so custom overrides are never
+      // silently lost; Reset is the explicit "role defaults" action. Nothing is
+      // persisted until Save Changes — Cancel discards it all.
       setEditSelectedRoleId(roleId);
+      if (roleId === editingRoleSelectionRef.current) return; // same chip clicked again
+      editingRoleSelectionRef.current = roleId;
+      if (roleId === editOriginalRoleId) {
+        ++selectRoleRequestIdRef.current; // drop any in-flight role-defaults load
+        setEditSelectedPermissionCodes(new Set(editOriginalPermissionCodes));
+        toast.info("Restored this user's saved permissions");
+        return;
+      }
+      await applyRoleDefaultsToEditor(roleId);
       return;
     }
 
@@ -905,6 +1148,62 @@ export default function UserManagement() {
       }
     }
   };
+
+  // "+N more" in the Permissions column: the user's real permissions in the shared
+  // read-only popup. Resolved the same way the Edit User popup resolves them:
+  // the user's saved permission_ids, else the list-cached ids, else role defaults.
+  const handleViewUserPermissions = async (user: ApiUser) => {
+    setViewingUserPermissions(user);
+    setIsViewingRolePopupLoading(true);
+    setViewingRolePopupPermissions([]);
+    try {
+      const perms = await loadAllPermissions();
+      const fresh = await userService.getUser(user.id);
+      const ids: number[] =
+        Array.isArray(fresh.permission_ids) && fresh.permission_ids.length > 0
+          ? fresh.permission_ids
+          : user.permission_ids ?? [];
+      let granted = perms.filter((p) => ids.includes(p.id));
+      if (granted.length === 0) {
+        const role = availableRoles.find((r) => r.code.toLowerCase() === (user.role || '').toLowerCase());
+        if (role) {
+          const rolePerms = await userService.getRolePermissions(role.id);
+          granted = perms.filter((p) => rolePerms.permission_codes.includes(p.code));
+        }
+      }
+      setViewingRolePopupPermissions(granted);
+    } catch (error) {
+      console.error('Failed to load user permissions:', error);
+      toast.error('Failed to load permissions');
+    } finally {
+      setIsViewingRolePopupLoading(false);
+    }
+  };
+
+  const closePermissionsPopup = () => {
+    setViewingRolePopup(null);
+    setViewingUserPermissions(null);
+    setViewingRolePopupPermissions([]);
+  };
+
+  // "Allocated Permissions" list shared by the role and user permission popups.
+  const renderAllocatedPermissions = () => (
+    <>
+      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
+        <Shield className="w-3.5 h-3.5 text-brand-blue" />
+        Allocated Permissions ({viewingRolePopupShownCount})
+      </h3>
+
+      {isViewingRolePopupLoading ? (
+        <PermissionSectionsSkeleton sections={2} Skeleton={Skeleton} />
+      ) : (
+        <>
+          <AlwaysOnPermissionsNote />
+          <PermissionSectionsView codes={viewingRolePopupCodes} showAll />
+        </>
+      )}
+    </>
+  );
 
   const handleViewRolePopup = async (role: RoleListItem, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1155,6 +1454,18 @@ export default function UserManagement() {
     }
   };
 
+  // Reset: replace the editor's checklist with the selected role's default
+  // permissions (the role chip alone deliberately keeps the user's
+  // customizations — see selectRole). Baseline permissions stay on. Not saved
+  // until Save Changes.
+  const handleResetEditPermissionsToRole = async () => {
+    if (!editSelectedRoleId) {
+      toast.error('Select a role first');
+      return;
+    }
+    await applyRoleDefaultsToEditor(editSelectedRoleId);
+  };
+
   // Select/Deselect all permissions in a module for create modal
   const handleSelectModulePermissions = (modulePermissions: Permission[]) => {
     const modulePermissionIds = modulePermissions.map(p => p.id);
@@ -1240,8 +1551,15 @@ export default function UserManagement() {
     // mount, so toggling a user's status left the Inactive/Active cards stale
     // until a manual page refresh. Fired in parallel and independent of the
     // list fetch so it still updates even if the list request fails.
-    userService.getUserCounts().then(setUserCounts).catch((error) => {
+    const countsSeq = ++userCountsSeqRef.current;
+    userService.getUserCounts().then((counts) => {
+      if (countsSeq !== userCountsSeqRef.current) return;
+      setUserCounts(counts);
+      setUserCountsFailed(false);
+    }).catch((error) => {
+      if (countsSeq !== userCountsSeqRef.current) return;
       console.warn('Failed to load user counts:', error);
+      setUserCountsFailed(true);
     });
     try {
       const response = await fetch(`${API_URL}/users`, {
@@ -1296,8 +1614,8 @@ export default function UserManagement() {
 
   const filteredUsers = users.filter(user => {
     const matchesSearch =
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase());
+      (user.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (user.email || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'active' && user.is_active) ||
@@ -1308,6 +1626,133 @@ export default function UserManagement() {
   const paginatedUsers = filteredUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
+  );
+
+  // Active/Inactive toggle (or badge when the viewer can't change it). `compact`
+  // hides the word next to the switch on tablet widths so the table fits.
+  const renderUserStatus = (user: (typeof users)[number], compact = false) => (
+    <>
+    {/* Toggle Switch for Active/Inactive — requires users:disable. Without
+        it the switch stays visible but greyed (hover tooltip, no-op click). */}
+    {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => { if (canDisableUser) handleToggleActive(user); }}
+          aria-disabled={!canDisableUser}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
+            user.is_active
+              ? 'bg-success ring-success-line shadow-sm'
+              : 'bg-gray-300 ring-black/5'
+          } ${!canDisableUser ? 'cursor-not-allowed opacity-60 grayscale' : ''}`}
+          title={!canDisableUser ? 'You do not have permission to activate or deactivate users' : user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+              user.is_active ? 'translate-x-6' : 'translate-x-1'
+            }`}
+          />
+        </button>
+        <span className={`${compact ? 'hidden lg:inline' : ''} text-xs font-semibold ${user.is_active ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
+          {user.is_active ? 'Active' : 'Inactive'}
+        </span>
+      </div>
+    ) : (
+      <Badge variant={user.is_active ? 'success' : 'destructive'}>
+        {user.is_active ? 'Active' : 'Inactive'}
+      </Badge>
+    )}
+    </>
+  );
+
+  // Row actions — shared by the table (md+) and the phone card list.
+  const renderUserActions = (user: (typeof users)[number]) => (
+    <div className="flex items-center justify-center gap-1 sm:gap-2">
+      {/* Feature Permissions button - HIDDEN for now as requested */}
+      {/* {(user.role || '').toLowerCase() !== 'tenant_admin' && (
+        <button
+          onClick={() => setFeaturePermissionUser(user)}
+          className="p-2 text-gray-500 dark:text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+          aria-label="Feature Permissions" title="Feature Permissions"
+        >
+          <Settings2 className="w-4 h-4" />
+        </button>
+      )} */}
+  
+      {/* Edit button - requires users:update, disabled when user is inactive.
+          Icon stays visible (never removed from the DOM) when the permission
+          is off, matching the is_active disabled treatment right below it —
+          and reacts live to a permission change because canUpdateUser is
+          derived from currentUser?.permissions on every render. */}
+      {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+        <Tooltip content={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}>
+          <button
+            onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
+            disabled={!canUpdateUser || !user.is_active}
+            aria-label="Edit user"
+            className={`p-2 rounded-lg transition-all ${
+              canUpdateUser && user.is_active
+                ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
+                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+
+      {/* Reset Password — requires users:reset_password. Icon stays visible; see Edit button above. */}
+      {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+        <Tooltip content={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}>
+          <button
+            onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
+            disabled={!canResetPassword || !user.is_active}
+            aria-label="Reset password"
+            className={`p-2 rounded-lg transition-all ${
+              canResetPassword && user.is_active
+                ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
+                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <KeyRound className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+
+      {/* Force Password Change — requires users:force_password_change. Icon stays visible; see Edit button above. */}
+      {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+        <Tooltip content={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}>
+          <button
+            onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
+            disabled={!canForcePwChange || !user.is_active}
+            aria-label="Force password change"
+            className={`p-2 rounded-lg transition-all ${
+              canForcePwChange && user.is_active
+                ? 'text-gray-500 dark:text-slate-500 hover:text-brand-orange hover:bg-brand-orange/10 cursor-pointer'
+                : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            <Lock className="w-4 h-4" />
+          </button>
+        </Tooltip>
+      )}
+    </div>
+  );
+
+  // Created + Last Login as two lines — icon-only in the xl+ table column
+  // (the header names them), labelled under the email / on the phone cards.
+  const renderUserDates = (user: (typeof users)[number], labels = true) => (
+    <div className="space-y-0.5 text-2xs sm:text-xs text-gray-500 dark:text-slate-400">
+      <div className="flex items-center gap-1.5" title="Created">
+        <Calendar className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+        {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Created</span>}
+        <span className="text-gray-700 dark:text-slate-300">{formatIST(user.created_at)}</span>
+      </div>
+      <div className="flex items-center gap-1.5" title="Last login">
+        <Clock className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+        {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Last login</span>}
+        <span className="text-gray-700 dark:text-slate-300">{user.last_login ? formatIST(user.last_login) : 'Never'}</span>
+      </div>
+    </div>
   );
 
   // Reset to first page when search changes
@@ -1489,7 +1934,7 @@ export default function UserManagement() {
     setEditingUser(user);
 
     // Find the role ID based on user's current role
-    const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
+    const matchingRole = availableRoles.find(r => r.code.toLowerCase() === (user.role || '').toLowerCase());
     setEditSelectedRoleId(matchingRole?.id || null);
 
     // Guard the permissions panel with a loading state so it doesn't render
@@ -1661,6 +2106,7 @@ export default function UserManagement() {
       // Store original permissions for comparison later
       setEditOriginalPermissionIds(new Set(currentPermissionIds));
       setEditOriginalRoleId(matchingRole?.id || null);
+      editingRoleSelectionRef.current = matchingRole?.id ?? null;
 
       // Also initialize permission codes based on permission IDs
       // Only include codes that are recognized in CUSTOM_PERMISSION_CATEGORIES to prevent
@@ -1681,16 +2127,20 @@ export default function UserManagement() {
           currentPermissionCodes.add(perm.code);
         }
       });
-      setEditSelectedPermissionCodes(currentPermissionCodes);
-      setEditOriginalPermissionCodes(new Set(currentPermissionCodes));
+      // An entry point can't work without its main — never show one alone.
+      const loadedCodes = withoutOrphanEntryPoints(currentPermissionCodes);
+      setEditSelectedPermissionCodes(loadedCodes);
+      setEditOriginalPermissionCodes(new Set(loadedCodes));
 
       console.log(`[EDIT USER] Pre-selected ${currentPermissionIds.size} permissions for user ${user.email}`);
       console.log(`[EDIT USER] Permission codes:`, Array.from(currentPermissionCodes));
     } catch (error) {
       console.error('Error fetching user permissions for edit:', error);
-      // Fallback to empty permissions if fetch fails
-      setEditSelectedPermissionIds(new Set());
-      setEditOriginalPermissionIds(new Set());
+      // Don't leave the popup open with nothing (or the previous user's ticks)
+      // loaded: Save Changes would REPLACE this user's real permissions with
+      // that. Close it and let the admin retry.
+      resetEditModal();
+      toast.error("Couldn't load this user's permissions (network error). Nothing was changed — please try again.");
     } finally {
       setIsLoadingPermissions(false);
     }
@@ -1705,6 +2155,7 @@ export default function UserManagement() {
     setEditSelectedPermissionCodes(new Set());
     setEditOriginalPermissionCodes(new Set()); // ⚠️ FIX: was missing — stale original codes caused incorrect permissionsChanged detection
     setEditOriginalRoleId(null);
+    editingRoleSelectionRef.current = null;
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -1954,7 +2405,73 @@ export default function UserManagement() {
     setSeatQuotaRefreshTrigger(prev => prev + 1);
   };
 
-  const handleUpdateUser = async () => {
+  // Name / email / phone edits are confirmed with a code mailed to the user's
+  // CURRENT email (backend: app/services/identity_change.py). The first Save
+  // returns 202 + requires_otp and applies NOTHING (not even permissions) —
+  // this popup collects the code and re-submits the same save with it.
+  const [identityOtp, setIdentityOtp] = useState<{ requestId: string; sentTo: string; alreadySent: boolean } | null>(null);
+  const [identityOtpCode, setIdentityOtpCode] = useState('');
+  const [identityOtpError, setIdentityOtpError] = useState('');
+  const [identityOtpBusy, setIdentityOtpBusy] = useState(false);
+
+  // Name / email edits vs the saved user — drives the in-form notice, the
+  // Save button label and the "what will change" list in the code popup.
+  const editingSavedUser = editingUser ? users.find(u => u.id.toString() === editingUser.id.toString()) : undefined;
+  const identityChanges: { field: string; from: string; to: string }[] = [];
+  if (editingUser && editingSavedUser) {
+    if ((editingUser.name || '').trim() !== (editingSavedUser.name || '').trim()) {
+      identityChanges.push({ field: 'Name', from: editingSavedUser.name || '—', to: editingUser.name || '—' });
+    }
+    if ((editingUser.email || '').trim().toLowerCase() !== (editingSavedUser.email || '').trim().toLowerCase()) {
+      identityChanges.push({ field: 'Email', from: editingSavedUser.email || '—', to: editingUser.email || '—' });
+    }
+  }
+
+  const closeIdentityOtp = () => {
+    setIdentityOtp(null);
+    setIdentityOtpCode('');
+    setIdentityOtpError('');
+  };
+
+  // Cancel = abandon the change; drop the pending request so it can't block a later save.
+  const cancelIdentityOtp = async () => {
+    const userId = editingUser?.id;
+    closeIdentityOtp();
+    if (!userId) return;
+    try {
+      await fetch(`${API_URL}/users/${userId}/identity-change`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+    } catch { /* best effort — a stale request is replaced on the next save anyway */ }
+  };
+
+  const resendIdentityOtp = async () => {
+    if (!editingUser || !identityOtp) return;
+    setIdentityOtpBusy(true);
+    setIdentityOtpError('');
+    try {
+      const res = await fetch(`${API_URL}/users/${editingUser.id}/identity-change/resend`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setIdentityOtp({ requestId: data.request_id, sentTo: data.sent_to || identityOtp.sentTo, alreadySent: false });
+        setIdentityOtpCode('');
+        toast.success(`New code sent to ${data.sent_to || identityOtp.sentTo}`);
+      } else if (data.detail?.error === 'NO_PENDING') {
+        // Expired / used up — start a fresh verification with the same changes.
+        await handleUpdateUser();
+      } else {
+        setIdentityOtpError(data.detail?.message || 'Could not resend the code');
+      }
+    } finally {
+      setIdentityOtpBusy(false);
+    }
+  };
+
+  const handleUpdateUser = async (otp?: { code: string; requestId: string }, staleRetried = false): Promise<void> => {
     console.log('[UPDATE USER] Function called');
     console.log('[UPDATE USER] allPermissions state at function start:', {
       count: allPermissions.length,
@@ -2047,6 +2564,10 @@ export default function UserManagement() {
     // This prevents the backend from applying role defaults when role changes
     requestBody.permission_ids = derivedPermissionIds;
     requestBody.permission_codes = Array.from(editSelectedPermissionCodes);
+    if (otp) {
+      requestBody.otp = otp.code;
+      requestBody.request_id = otp.requestId;
+    }
 
     if (permissionsChanged) {
       console.log('[EDIT USER] Permissions changed, sending updated permission_ids:', derivedPermissionIds);
@@ -2083,8 +2604,45 @@ export default function UserManagement() {
         return;
       }
 
+      // Name/email changed: a code was mailed and NOTHING was saved yet.
+      if (response.status === 202) {
+        const pending = await response.json().catch(() => ({}));
+        if (pending.requires_otp) {
+          setIdentityOtp({
+            requestId: pending.request_id,
+            sentTo: pending.sent_to || editingUser.email,
+            alreadySent: !!pending.already_sent,
+          });
+          setIdentityOtpCode('');
+          setIdentityOtpError('');
+          return;
+        }
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
+        // A leftover unfinished verification (older backends never cleared
+        // one, so it blocked every later save): drop it and retry once.
+        if (errorData.detail?.error === 'VERIFICATION_PENDING' && !otp && !staleRetried) {
+          await fetch(`${API_URL}/users/${editingUser.id}/identity-change`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+          }).catch(() => undefined);
+          setIsSaving(false);
+          return await handleUpdateUser(undefined, true);
+        }
+
+        // Wrong / expired code: keep the code popup open and say why.
+        const otpErr = errorData.detail?.error;
+        if (otp && (otpErr === 'OTP_INVALID' || otpErr === 'OTP_EXPIRED' || otpErr === 'NO_PENDING' || otpErr === 'REQUEST_MISMATCH')) {
+          setIdentityOtpError(
+            otpErr === 'OTP_INVALID' && errorData.detail?.attempts_left > 0
+              ? errorData.detail.message
+              : 'This code can no longer be used. Click "Send new code".'
+          );
+          return;
+        }
 
         // DEBUG: Log error details
         console.error('='.repeat(80));
@@ -2117,11 +2675,13 @@ export default function UserManagement() {
                 ...user,
                 ...updatedUserData,
                 id: user.id, // ⚠️ PRESERVE string id — API returns numeric id which would cause type mismatch in userStillExists check
-                role: updatedUserData.role, // Explicitly update role
-                name: updatedUserData.name,
-                email: updatedUserData.email,
-                permissions: updatedUserData.permissions,
-                permission_ids: updatedUserData.permission_ids,
+                // Keep the old value when the response lacks a field — an
+                // undefined role/name/email crashed the list (.toLowerCase()).
+                role: updatedUserData.role ?? user.role,
+                name: updatedUserData.name ?? user.name,
+                email: updatedUserData.email ?? user.email,
+                permissions: updatedUserData.permissions ?? user.permissions,
+                permission_ids: updatedUserData.permission_ids ?? user.permission_ids,
               }
             : user
         );
@@ -2129,6 +2689,7 @@ export default function UserManagement() {
         return updated;
       });
 
+      closeIdentityOtp();
       toast.success('User updated successfully');
 
       // RBAC02 AC3: the backend force-keeps a dependency enabled (e.g. Resume
@@ -2208,10 +2769,10 @@ export default function UserManagement() {
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
+      <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
 
       {/* Shared organization tab bar — Users is the first tab */}
-      <OrganizationTabs />
+      <OrganizationTabs stickyTop={orgCrumbHeight} />
 
       {/* Active tab + its data enclosed together in one bordered panel that
           connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
@@ -2232,26 +2793,29 @@ export default function UserManagement() {
             >
               Dependencies
             </Button>
-            {/* RBAC01: Check user limits before showing Add User button — also requires users:create */}
-            {canCreateUser && (
-              <Button
-                variant="primary"
-                icon={<Plus className="w-4 h-4" />}
-                onClick={() => {
-                  if (isAtLimit) {
-                    if (isTrial) {
-                      toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
-                    } else {
-                      setShowAddSeatsModal(true);
-                    }
-                    return;
+            {/* RBAC01: Check user limits before showing Add User button — also
+                requires users:create (greyed with a hover tooltip, never hidden). */}
+            <Button
+              variant="primary"
+              icon={<Plus className="w-4 h-4" />}
+              aria-disabled={!canCreateUser}
+              title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
+              className={!canCreateUser ? 'opacity-60 cursor-not-allowed' : undefined}
+              onClick={() => {
+                if (!canCreateUser) return;
+                if (isAtLimit) {
+                  if (isTrial) {
+                    toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                  } else {
+                    setShowAddSeatsModal(true);
                   }
-                  setIsCreateModalOpen(true);
-                }}
-              >
-                {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
-              </Button>
-            )}
+                  return;
+                }
+                setIsCreateModalOpen(true);
+              }}
+            >
+              {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
+            </Button>
           </div>
         }
       />
@@ -2273,37 +2837,37 @@ export default function UserManagement() {
       <StatsCardGrid columns={3}>
         <StatsCard
           label="Total Users"
-          value={
-            <span className="flex items-baseline gap-1">
-              {limits?.current_users ?? userCounts?.total_users ?? users.length}
-              <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
-                / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
-              </span>
-            </span>
-          }
+          value={totalUsersCount}
           icon={UsersIcon}
           tone="neutral"
-          sparkVariant={0}
+          sparkline={false}
           onClick={() => openListView('all')}
           active={isOverviewCardActive('all')}
           showClickArrow
         />
         <StatsCard
           label="Active Users"
-          value={userCounts ? userCounts.active_users : users.filter(u => u.is_active).length}
+          value={
+            <span className="flex items-baseline gap-1">
+              {activeUsersCount}
+              <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
+                / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
+              </span>
+            </span>
+          }
           icon={UserCheck}
           tone="neutral"
-          sparkVariant={1}
+          sparkline={false}
           onClick={() => openListView('active')}
           active={isOverviewCardActive('active')}
           showClickArrow
         />
         <StatsCard
           label="Inactive Users"
-          value={userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length}
+          value={inactiveUsersCount}
           icon={UserX}
           tone="neutral"
-          sparkVariant={2}
+          sparkline={false}
           onClick={() => openListView('inactive')}
           active={isOverviewCardActive('inactive')}
           showClickArrow
@@ -2381,26 +2945,24 @@ export default function UserManagement() {
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
-             Role, Permissions, Status, Created At, Last Login, Actions.
+             Role, Permissions, Status, Created / Last Login, Actions.
              Column count per breakpoint mirrors the real <thead> below: User ID
-             hides below sm, Permissions below md, Created At/Last Login below lg —
-             otherwise the skeleton shows 8 cramped columns on a phone while the
-             real table only ever shows 4. */
+             hides below 2xl, Permissions below lg, Created / Last Login below xl
+             (both shown under the user's name instead); phones get cards. */
           <div className="tf-table-shell">
-            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
-              <div className="hidden sm:block"><Skeleton className="h-3 w-16" /></div>
+            <div className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
+              <div className="hidden 2xl:block"><Skeleton className="h-3 w-16" /></div>
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-3 w-12" />
-              <div className="hidden md:block"><Skeleton className="h-3 w-24" /></div>
+              <div className="hidden xl:block"><Skeleton className="h-3 w-24" /></div>
               <Skeleton className="h-3 w-14" />
-              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
-              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
+              <div className="hidden xl:block"><Skeleton className="h-3 w-24" /></div>
               <Skeleton className="h-3 w-16" />
             </div>
             <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Array.from({ length: 8 }).map((_, r) => (
-                <div key={r} className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 items-center gap-4 px-6 py-4">
-                  <div className="hidden sm:block"><Skeleton className="h-5 w-16 rounded" /></div>
+                <div key={r} className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 items-center gap-4 px-6 py-4">
+                  <div className="hidden 2xl:block"><Skeleton className="h-5 w-16 rounded" /></div>
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-8 w-8 rounded-full shrink-0" />
                     <div className="space-y-1.5">
@@ -2409,15 +2971,14 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <Skeleton className="h-5 w-16 rounded-full" />
-                  <div className="hidden md:block">
+                  <div className="hidden lg:block">
                     <div className="flex flex-wrap gap-1">
                       <Skeleton className="h-5 w-14 rounded" />
                       <Skeleton className="h-5 w-10 rounded" />
                     </div>
                   </div>
                   <Skeleton className="h-5 w-14 rounded-full" />
-                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
-                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
+                  <div className="hidden xl:block space-y-1.5"><Skeleton className="h-3 w-28" /><Skeleton className="h-3 w-28" /></div>
                   <div className="flex items-center justify-center gap-1">
                     <Skeleton className="h-8 w-8 rounded-lg" />
                     <Skeleton className="h-8 w-8 rounded-lg" />
@@ -2427,32 +2988,30 @@ export default function UserManagement() {
             </div>
           </div>
         ) : (
-          <div className="tf-table-shell">
+          <>
+          <div className="hidden md:block tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden 2xl:table-cell whitespace-nowrap">
                     User ID
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     User
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Role
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                     Permissions
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
-                    Created At
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden xl:table-cell">
+                    Created / Last Login
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
-                    Last Login
-                  </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -2460,7 +3019,7 @@ export default function UserManagement() {
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {paginatedUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden 2xl:table-cell">
                       {user.user_display_id ? (
                         <span className="px-2 py-0.5 text-2xs sm:text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
                           {user.user_display_id}
@@ -2469,12 +3028,12 @@ export default function UserManagement() {
                         <span className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
-                          user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin'
+                          (user.role || '').toLowerCase() === 'tenant_admin' || (user.role || '').toLowerCase() === 'admin'
                             ? 'bg-brand-blue shadow-brand-blue/25'
-                            : user.role.toLowerCase() === 'recruiter'
+                            : (user.role || '').toLowerCase() === 'recruiter'
                             ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
                             : 'bg-gradient-to-br from-slate-500 to-slate-600'
                         }`}>
@@ -2482,158 +3041,115 @@ export default function UserManagement() {
                             {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                           </span>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{user.name || user.email || 'Unknown'}</div>
-                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate">
+                        <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
+                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</div>
+                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate" title={user.email}>
                             <Mail className="w-3 h-3 flex-shrink-0" />
                             <span className="truncate">{user.email}</span>
                           </div>
+                          {/* User ID / dates columns are hidden on narrower screens — show them here. */}
+                          {user.user_display_id && (
+                            <span className="2xl:hidden mt-1 inline-block px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                              {user.user_display_id}
+                            </span>
+                          )}
+                          <div className="mt-1 xl:hidden">{renderUserDates(user)}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-2xs sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
+                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-2xs sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
                         {getRoleLabel(user.role, availableRoles)}
                       </span>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
-                      <div className="flex flex-wrap gap-1 max-w-xs">
-                        {Object.entries(user.permissions)
-                          .filter(([, value]) => value)
-                          .slice(0, 3)
-                          .map(([key]) => (
-                            <span
-                              key={key}
-                              className="px-2 py-0.5 text-xs font-medium bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15"
-                            >
-                              {permissionLabels[key as keyof UserPermissions]}
-                            </span>
-                          ))}
-                        {Object.values(user.permissions).filter(v => v).length > 3 && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15">
-                            +{Object.values(user.permissions).filter(v => v).length - 3} more
-                          </span>
-                        )}
+                    <td className="tf-wrap px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden lg:table-cell">
+                      <div className="flex flex-wrap gap-1 max-w-[170px] 2xl:max-w-xs">
+                        {(() => {
+                          const pills = getUserPermissionPills(user.permissions);
+                          return (
+                            <>
+                              {pills.slice(0, 3).map((label) => (
+                                <span
+                                  key={label}
+                                  className="px-2 py-0.5 text-xs font-medium bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                              {pills.length > 3 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewUserPermissions(user)}
+                                  title="View all permissions"
+                                  className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15 hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 transition-colors cursor-pointer"
+                                >
+                                  +{pills.length - 3} more
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      {/* Toggle Switch for Active/Inactive — requires users:disable */}
-                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canDisableUser ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleToggleActive(user)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
-                              user.is_active
-                                ? 'bg-success ring-success-line shadow-sm'
-                                : 'bg-gray-300 ring-black/5'
-                            }`}
-                            title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
-                          >
-                            <span
-                              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                user.is_active ? 'translate-x-6' : 'translate-x-1'
-                              }`}
-                            />
-                          </button>
-                          <span className={`text-xs font-semibold ${user.is_active ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
-                            {user.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                      ) : (
-                        <Badge variant={user.is_active ? 'success' : 'destructive'}>
-                          {user.is_active ? 'Active' : 'Inactive'}
-                        </Badge>
-                      )}
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
+                      {renderUserStatus(user, true)}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />
-                        {formatIST(user.created_at)}
-                      </div>
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden xl:table-cell">
+                      {renderUserDates(user, false)}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />
-                        {formatIST(user.last_login)}
-                      </div>
-                    </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
-                      <div className="flex items-center justify-center gap-1 sm:gap-2">
-                        {/* Feature Permissions button - HIDDEN for now as requested */}
-                        {/* {user.role.toLowerCase() !== 'tenant_admin' && (
-                          <button
-                            onClick={() => setFeaturePermissionUser(user)}
-                            className="p-2 text-gray-500 dark:text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            aria-label="Feature Permissions" title="Feature Permissions"
-                          >
-                            <Settings2 className="w-4 h-4" />
-                          </button>
-                        )} */}
-  
-                        {/* Edit button - requires users:update, disabled when user is inactive.
-                            Icon stays visible (never removed from the DOM) when the permission
-                            is off, matching the is_active disabled treatment right below it —
-                            and reacts live to a permission change because canUpdateUser is
-                            derived from currentUser?.permissions on every render. */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <Tooltip content={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}>
-                            <button
-                              onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
-                              disabled={!canUpdateUser || !user.is_active}
-                              aria-label="Edit user"
-                              className={`p-2 rounded-lg transition-all ${
-                                canUpdateUser && user.is_active
-                                  ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
-                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-
-                        {/* Reset Password — requires users:reset_password. Icon stays visible; see Edit button above. */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <Tooltip content={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}>
-                            <button
-                              onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
-                              disabled={!canResetPassword || !user.is_active}
-                              aria-label="Reset password"
-                              className={`p-2 rounded-lg transition-all ${
-                                canResetPassword && user.is_active
-                                  ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
-                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                            >
-                              <KeyRound className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-
-                        {/* Force Password Change — requires users:force_password_change. Icon stays visible; see Edit button above. */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                          <Tooltip content={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}>
-                            <button
-                              onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
-                              disabled={!canForcePwChange || !user.is_active}
-                              aria-label="Force password change"
-                              className={`p-2 rounded-lg transition-all ${
-                                canForcePwChange && user.is_active
-                                  ? 'text-gray-500 dark:text-slate-500 hover:text-brand-orange hover:bg-brand-orange/10 cursor-pointer'
-                                  : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                            >
-                              <Lock className="w-4 h-4" />
-                            </button>
-                          </Tooltip>
-                        )}
-                      </div>
+                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 tf-sticky-col">
+                      {renderUserActions(user)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          {/* Phone: one card per user — no sideways scrolling. */}
+          <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
+            {paginatedUsers.map((user) => (
+              <div key={user.id} className="space-y-3 p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
+                    (user.role || '').toLowerCase() === 'tenant_admin' || (user.role || '').toLowerCase() === 'admin'
+                      ? 'bg-brand-blue shadow-brand-blue/25'
+                      : (user.role || '').toLowerCase() === 'recruiter'
+                      ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
+                      : 'bg-gradient-to-br from-slate-500 to-slate-600'
+                  }`}>
+                    <span className="text-white text-xs font-semibold">
+                      {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
+                      {user.user_display_id && (
+                        <span className="shrink-0 px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                          {user.user_display_id}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
+                      <Mail className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span title={getRoleLabel(user.role, availableRoles)} className={`max-w-[60%] truncate px-2.5 py-1 text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                    {getRoleLabel(user.role, availableRoles)}
+                  </span>
+                  {renderUserStatus(user)}
+                </div>
+                {renderUserDates(user)}
+                <div className="flex items-center justify-end border-t border-gray-100 dark:border-slate-700/60 pt-2">
+                  {renderUserActions(user)}
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )}
 
         {!isLoading && filteredUsers.length === 0 && (
@@ -2662,32 +3178,25 @@ export default function UserManagement() {
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-            {/* Header strip */}
-            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <Plus className="w-5 h-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-bold text-white truncate">Invite New User</h2>
-                  <p className="text-xs text-white/80 mt-0.5 truncate">Create an account and send an invite email</p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                tone="onColor"
-                size="sm"
-                onClick={resetCreateModal}
-                className="px-2 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            <div className="space-y-4 px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto flex-1">
+        <AppModal
+          open
+          size="md"
+          zIndexClass="z-50"
+          onCancel={resetCreateModal}
+          cancelDisabled={isSaving}
+          icon={<Plus />}
+          title="Invite New User"
+          subtitle="Create an account and send an invite email"
+          actions={[
+            {
+              label: 'Create User',
+              onClick: handleCreateUser,
+              disabled: isSaving || !emailCheckResult.available || isCheckingEmail,
+              icon: isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />,
+            },
+          ]}
+        >
+            <div className="space-y-4">
               <div>
                 <Label className="mb-1.5">
                   Full Name <span className="text-destructive">*</span>
@@ -2769,7 +3278,15 @@ export default function UserManagement() {
                             </span>
                             {isSystemRole && (
                               <span className="text-2xs font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
-                                System
+                                Default role
+                              </span>
+                            )}
+                            {roleDefaultCounts[role.id] !== undefined && (
+                              <span
+                                title={`${roleDefaultCounts[role.id]} default permissions in this role`}
+                                className="text-2xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1.5 py-0.5 rounded flex-shrink-0"
+                              >
+                                {roleDefaultCounts[role.id]} permissions
                               </span>
                             )}
                           </div>
@@ -2782,14 +3299,23 @@ export default function UserManagement() {
                         {role.description && (
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 line-clamp-1">{role.description}</p>
                         )}
-                        <button
-                          type="button"
+                        {/* span, not <button>: a button inside the role-card <button> is
+                            invalid HTML and raised a hydration error. */}
+                        <span
+                          role="button"
+                          tabIndex={0}
                           onClick={(e) => handleViewRolePopup(role, e)}
-                          className="mt-2 flex items-center gap-1 text-xs font-medium text-brand-cyan hover:text-brand-blue transition-colors"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleViewRolePopup(role, e as unknown as React.MouseEvent);
+                            }
+                          }}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-cyan hover:text-brand-blue transition-colors cursor-pointer"
                         >
                           <Eye className="w-3 h-3" />
                           View Permissions
-                        </button>
+                        </span>
                       </button>
                     );
                   })}
@@ -2818,119 +3344,59 @@ export default function UserManagement() {
                       <span className="ml-2 text-sm text-gray-500 dark:text-slate-500">Loading...</span>
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-3 bg-gray-50 dark:bg-slate-800/50">
-                      {CUSTOM_PERMISSION_CATEGORIES.map(category => {
-                        // Check if any permission in this category is selected
-                        const hasAnyPermission = () => {
-                          if (category.actions) {
-                            if (category.actions.some(a => selectedPermissionCodes.has(a.code))) return true;
-                          }
-                          if (category.subCategories) {
-                            for (const sub of category.subCategories) {
-                              if (sub.actions.some(a => selectedPermissionCodes.has(a.code))) return true;
-                            }
-                          }
-                          return false;
-                        };
-
-                        // Only show categories that have at least one permission
-                        if (!hasAnyPermission()) return null;
-
-                        // Feature not in the plan: shown greyed with the plan hover, not hidden.
-                        if (!isCategoryVisible(category.id)) return renderPlanLockedCategory(category.id, category.name);
-
-                        // Collect all selected actions for this category
-                        const selectedActions: string[] = [];
-                        if (category.actions) {
-                          category.actions.filter(a => selectedPermissionCodes.has(a.code)).forEach(a => selectedActions.push(a.label));
-                        }
-                        if (category.subCategories) {
-                          category.subCategories.forEach(sub => {
-                            sub.actions.filter(a => selectedPermissionCodes.has(a.code)).forEach(a => {
-                              selectedActions.push(`${sub.name}: ${a.label}`);
-                            });
-                          });
-                        }
-
-                        return (
-                          <div key={category.id} className="flex items-start gap-2">
-                            <div className="flex-shrink-0 w-5 h-5 bg-success-subtle rounded flex items-center justify-center mt-0.5">
-                              <Check className="w-3 h-3 text-success" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                                {category.name}
-                                {category.isMenuToggle && (
-                                  <span className="ml-2 text-xs text-success bg-success-subtle px-1.5 py-0.5 rounded">
-                                    Menu Access
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
-                                {selectedActions.join(' • ')}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Show message if no custom permissions found */}
-                      {selectedPermissionCodes.size === 0 && (
-                        <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm">
-                          No permissions assigned to this role yet.
-                          <br />
-                          <span className="text-xs">Configure permissions in Role Management.</span>
-                        </div>
-                      )}
-                    </div>
+                    selectedPermissionCodes.size === 0 ? (
+                      <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm">
+                        No permissions assigned to this role yet.
+                        <br />
+                        <span className="text-xs">Configure permissions in Role Management.</span>
+                      </div>
+                    ) : (
+                      // Same read-only view as the Role details popup (PermissionSectionsView).
+                      <PermissionSectionsView
+                        codes={selectedPermissionCodes}
+                        renderLockedSection={(id, name) => (isCategoryVisible(id) ? null : renderPlanLockedCategory(id, name))}
+                      />
+                    )
                   )}
                 </div>
               )}
             </div>
-
-            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <Button
-                variant="primary"
-                onClick={handleCreateUser}
-                disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
-                icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              >
-                Create User
-              </Button>
-            </div>
-          </div>
-        </div>
+        </AppModal>
       )}
 
       {/* Edit User Modal - Redesigned */}
       {editingUser && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-            {/* Header */}
-            <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3 shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <Pencil className="w-4 h-4 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-bold text-white truncate">Edit User</h2>
-                  <p className="text-xs text-white/80 mt-0.5 truncate">{editingUser.email}</p>
-                </div>
-              </div>
-              <Button
-                variant="secondary"
-                tone="onColor"
-                size="sm"
-                onClick={resetEditModal}
-                className="px-2 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-
-            {/* Body - Scrollable */}
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
+        <AppModal
+          open
+          size="lg"
+          zIndexClass="z-50"
+          onCancel={resetEditModal}
+          cancelDisabled={isSaving}
+          icon={<Pencil />}
+          title="Edit User"
+          subtitle={editingUser.email}
+          footerStart={
+            <span className="text-2xs sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
+              {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
+               ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
+                <>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-orange" />
+                  Unsaved changes
+                </>
+              ) : ''}
+            </span>
+          }
+          actions={[
+            {
+              label: identityChanges.length > 0 ? 'Send code & Save' : 'Save Changes',
+              onClick: () => handleUpdateUser(),
+              disabled: isSaving,
+              icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
+            },
+          ]}
+        >
+            {/* Body - Scrollable (AppModal) */}
+            <div className="space-y-4 sm:space-y-5">
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
@@ -2951,6 +3417,26 @@ export default function UserManagement() {
                   />
                 </div>
               </div>
+              {identityChanges.length > 0 ? (
+                <div className="flex gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3 sm:p-4">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
+                  <div className="space-y-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <p className="font-semibold text-gray-900 dark:text-slate-50">
+                      Changing the {identityChanges.map(c => c.field.toLowerCase()).join(' and ')}{' '}needs the user&apos;s confirmation
+                    </p>
+                    <p>
+                      When you click <span className="font-semibold">Send code &amp; Save</span>, a 6-digit code is emailed to{' '}
+                      <span className="font-semibold">{editingSavedUser?.email}</span>. Ask the user for that code and enter it
+                      in the next step. Nothing is saved until the code is verified.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="-mt-2 flex items-center gap-1.5 text-2xs sm:text-xs text-gray-500 dark:text-slate-400">
+                  <Info className="h-3.5 w-3.5 shrink-0" />
+                  Changing the name or email needs a verification code sent to the user&apos;s current email.
+                </p>
+              )}
 
               {/* Role Selection - Compact Pills */}
               <div>
@@ -2970,6 +3456,16 @@ export default function UserManagement() {
                         }`}
                       >
                         {role.name}
+                        {roleDefaultCounts[role.id] !== undefined && (
+                          <span
+                            title={`${roleDefaultCounts[role.id]} default permissions in this role`}
+                            className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 py-0.5 text-2xs font-semibold align-middle ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-brand-blue/10 text-brand-blue'
+                            }`}
+                          >
+                            {roleDefaultCounts[role.id]}
+                          </span>
+                        )}
                         {isSelected && <Check className="w-3.5 h-3.5 ml-1.5 inline" />}
                       </button>
                     );
@@ -2986,45 +3482,46 @@ export default function UserManagement() {
                       Permissions
                     </label>
                     <div className="flex items-center gap-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleResetEditPermissionsToRole}
+                        disabled={!editSelectedRoleId || isResettingEditPermissions || isLoadingPermissions}
+                        loading={isResettingEditPermissions}
+                        title="Reset to the selected role's default permissions"
+                        className="min-w-[96px]"
+                      >
+                        Reset
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={handleSelectAllEditPermissions}
-                        className="text-2xs font-medium text-brand-blue hover:underline"
+                        disabled={isLoadingPermissions}
+                        className="min-w-[96px]"
                       >
                         {getAllCustomPermissionCodes().every(code => editSelectedPermissionCodes.has(code))
                           ? 'Deselect all'
                           : 'Select all'}
-                      </button>
+                      </Button>
                       <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
-                        {editSelectedPermissionCodes.size} active
+                        {/* Count only permissions shown as tiles below — a role's defaults can
+                            include legacy codes that have no checkbox. */}
+                        {getAllCustomPermissionCodes().filter(code => editSelectedPermissionCodes.has(code)).length} active
+                      </span>
+                      <span
+                        className="text-2xs font-medium text-gray-500 dark:text-slate-500 whitespace-nowrap"
+                        title="View Analytics and View Support are included for every user and can't be switched off"
+                      >
+                        incl. {MANDATORY_PERMISSION_CODES.size} always on
                       </span>
                     </div>
                   </div>
 
                   {isLoadingPermissions ? (
-                    <div className="space-y-4">
-                      {Array.from({ length: 3 }).map((_, ci) => (
-                        <div key={ci} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                          {/* Module Header */}
-                          <div className="px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <Skeleton className="w-8 h-[18px] rounded-full flex-shrink-0" />
-                              <Skeleton className="h-4 w-32" />
-                            </div>
-                            <Skeleton className="h-3 w-16" />
-                          </div>
-                          {/* Permission Cards Grid */}
-                          <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                            {Array.from({ length: 4 }).map((_, pi) => (
-                              <div key={pi} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border border-gray-100 dark:border-slate-800">
-                                <Skeleton className="w-6 h-6 sm:w-8 sm:h-8 rounded flex-shrink-0" />
-                                <Skeleton className="h-4 flex-1" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <PermissionSectionsSkeleton sections={3} Skeleton={Skeleton} />
                   ) : (
                     <div className="space-y-4">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
@@ -3061,45 +3558,32 @@ export default function UserManagement() {
                               return next;
                             });
                           } else {
-                            // Enabling — collect deps not yet enabled so we can notify
-                            const deps = getPermissionDependencies(code);
-                            const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
-                            setEditSelectedPermissionCodes(prev => {
-                              const next = new Set(prev);
-                              next.add(code);
-                              // Auto-enable viewCode
-                              if (category.viewCode) next.add(category.viewCode);
-                              // Handle dependencies — also enable each dep's category viewCode
-                              deps.forEach(dep => {
-                                next.add(dep);
-                                const depViewCode = getCategoryViewCodeFor(dep);
-                                if (depViewCode) next.add(depViewCode);
-                              });
-                              return next;
-                            });
-                            // Notify admin which dependencies were auto-enabled
-                            if (newlyEnabled.length > 0) {
-                              const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
-                              toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(code)}"`);
-                            }
+                            const next = await turnOnWithPrompt([code], getPermissionDisplayName(code));
+                            if (next) setEditSelectedPermissionCodes(next);
                           }
                         };
 
+                        // Every code the section toggle controls (plan-locked sub-sections excluded).
+                        const allCategoryCodes = [
+                          ...(category.viewCode ? [category.viewCode] : []),
+                          ...(category.actions?.map(a => a.code) || []),
+                          ...(category.subCategories?.filter(s => isCategoryVisible(category.id, s.name)).flatMap(s => [
+                            ...(s.viewCode ? [s.viewCode] : []),
+                            ...s.actions.map(a => a.code),
+                          ]) || []),
+                        ];
+                        // Toggle is ON only when everything in the section is selected;
+                        // a partly selected section reads OFF and a click selects all.
                         const isCategoryActive = category.viewCode
-                          ? editSelectedPermissionCodes.has(category.viewCode) ||
-                            (category.actions?.some(a => editSelectedPermissionCodes.has(a.code)) ?? false) ||
-                            (category.subCategories?.some(s => s.actions.some(a => editSelectedPermissionCodes.has(a.code))) ?? false)
+                          ? isGroupFullyOn(allCategoryCodes, editSelectedPermissionCodes)
                           : true;
 
                         const toggleCategory = async (e?: React.MouseEvent) => {
-                          const allCategoryCodes = [
-                            ...(category.viewCode ? [category.viewCode] : []),
-                            ...(category.actions?.map(a => a.code) || []),
-                            ...(category.subCategories?.flatMap(s => [
-                              ...(s.viewCode ? [s.viewCode] : []),
-                              ...s.actions.map(a => a.code),
-                            ]) || []),
-                          ];
+                          if (!isCategoryActive) {
+                            const next = await turnOnWithPrompt(allCategoryCodes, category.name);
+                            if (next) setEditSelectedPermissionCodes(next);
+                            return;
+                          }
                           let cascadeRemoval: Set<string> | null = null;
                           if (isCategoryActive) {
                             // Confirm cascading to any dependents instead of blocking
@@ -3143,14 +3627,15 @@ export default function UserManagement() {
                           });
                         };
 
-                        // Badge color + letter derived from permission code action segment
+                        // Badge color from the permission code's action segment; letter from the
+                        // label shown beside it ("Score Resume" -> S, a view row -> V), so the badge
+                        // never contradicts the label (e.g. "A" from jd:add_applicants).
                         const getActionBadge = (code: string) => {
                           const action = code.split(':').pop() || '';
-                          if (action === 'read') return { cls: 'bg-brand-blue/10 text-brand-blue', letter: 'R' };
-                          if (action === 'create') return { cls: 'bg-success-subtle text-success', letter: 'C' };
-                          if (action === 'update') return { cls: 'bg-warning-subtle text-warning', letter: 'U' };
-                          if (action === 'delete') return { cls: 'bg-destructive-subtle text-destructive', letter: 'D' };
-                          return { cls: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300', letter: (action[0] || 'A').toUpperCase() };
+                          const letter = action === 'read' || action === 'view'
+                            ? 'V'
+                            : (getPermissionDisplayName(code)[0] || 'A').toUpperCase();
+                          return { cls: permissionBadgeClass(action), letter };
                         };
 
                         const allCodes = [
@@ -3164,27 +3649,27 @@ export default function UserManagement() {
                         const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                         return (
-                          <div key={category.id} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                          <div key={category.id} className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm">
                             {/* Module Header */}
                             <div
-                              className={`px-3 sm:px-4 py-2.5 border-b flex items-center justify-between select-none transition-colors ${
-                                isCategoryActive
-                                  ? 'bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border-brand-blue/15'
-                                  : 'bg-slate-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
-                              }`}
+                              className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5 select-none"
                               onClick={category.viewCode ? toggleCategory : undefined}
                               style={category.viewCode ? { cursor: 'pointer' } : undefined}
                             >
                               <div className="flex items-center gap-3">
                                 {category.viewCode && (
-                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isCategoryActive ? 'bg-brand-blue ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
-                                    <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
-                                  </div>
+                                  <GroupCheckbox
+                                    state={groupCheckState(isCategoryActive, allCategoryCodes.filter(c => editSelectedPermissionCodes.has(c)).length)}
+                                    label={category.name}
+                                  />
                                 )}
-                                <h4 className={`font-semibold capitalize text-xs sm:text-sm ${isCategoryActive ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-500'}`}>
-                                  {category.name} ({allCodes.length})
-                                </h4>
-                                {category.isMenuToggle && isCategoryActive && (
+                                <div>
+                                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                                    {category.name}
+                                  </h4>
+                                  <p className="text-xs text-gray-500 dark:text-slate-500">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
+                                </div>
+                                {category.isMenuToggle && selectedCount > 0 && (
                                   <span className="text-2xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
                                     Menu
                                   </span>
@@ -3194,7 +3679,7 @@ export default function UserManagement() {
                             </div>
 
                             {/* Permission Cards Grid */}
-                            <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                               {/* View card */}
                               {category.viewCode && (() => {
                                 const badge = getActionBadge(category.viewCode);
@@ -3207,13 +3692,13 @@ export default function UserManagement() {
                                       ? () => toast.info(`"View ${category.name}" is a baseline permission every account keeps — it can't be disabled.`)
                                       : () => toggleCode(category.viewCode!)}
                                     title={isMandatory ? 'Baseline permission — always enabled for every account' : undefined}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border transition-all select-none ${isMandatory ? 'cursor-default' : 'cursor-pointer'} ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 ${isMandatory ? 'cursor-default' : 'cursor-pointer'} ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                   >
-                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                      <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                      <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">
                                         View {category.name}
                                         {isMandatory && (
                                           <span className="ml-1.5 text-2xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
@@ -3227,17 +3712,24 @@ export default function UserManagement() {
                               {category.actions?.map(action => {
                                 const badge = getActionBadge(action.code);
                                 const isOn = editSelectedPermissionCodes.has(action.code);
+                                const lockedMain = !isOn && isEntryPointLocked(action.code, editSelectedPermissionCodes)
+                                  ? getMainPermission(action.code)
+                                  : null;
                                 return (
                                   <div
                                     key={action.code}
                                     onClick={() => toggleCode(action.code)}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    title={lockedMain ? `Needs "${labelOf(lockedMain)}" — click to turn both on` : undefined}
+                                    className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 ${lockedMain ? 'cursor-pointer border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 opacity-40' : `cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}`}
                                   >
-                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                      <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                      <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
+                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
+                                        {action.label}
+                                        {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
+                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -3248,15 +3740,22 @@ export default function UserManagement() {
                             {category.subCategories?.map(sub => {
                               if (!isCategoryVisible(category.id, sub.name)) return renderPlanLockedCategory(`${category.id}:${sub.name}`, sub.name);
 
-                              const isSubActive = sub.viewCode
-                                ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
-                                : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
+                              // ON only when the View and every action are selected.
+                              const isSubActive = isGroupFullyOn(
+                                [...(sub.viewCode ? [sub.viewCode] : []), ...sub.actions.map(a => a.code)],
+                                editSelectedPermissionCodes
+                              );
 
                               const toggleSub = async () => {
                                 const subAllCodesForToggle = [
                                   ...(sub.viewCode ? [sub.viewCode] : []),
                                   ...sub.actions.map(a => a.code),
                                 ];
+                                if (!isSubActive) {
+                                  const next = await turnOnWithPrompt(subAllCodesForToggle, sub.name);
+                                  if (next) setEditSelectedPermissionCodes(next);
+                                  return;
+                                }
                                 let cascadeRemoval: Set<string> | null = null;
                                 if (isSubActive) {
                                   // Confirm cascading to any dependents instead of blocking
@@ -3312,24 +3811,22 @@ export default function UserManagement() {
                               const subSelectedCount = subAllCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                               return (
-                                <div key={sub.name} className="border-t border-gray-100 dark:border-slate-700/60">
+                                <div key={sub.name} className="ml-4 mr-3 mb-3 sm:ml-8 sm:mr-4 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 border-l-4 border-l-brand-blue/30">
                                   {/* Sub-category header */}
                                   <div
-                                    className={`px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors ${isSubActive ? 'bg-brand-cyan/5' : 'bg-slate-50 dark:bg-slate-800/50'}`}
+                                    className="px-3 sm:px-4 py-2 flex items-center justify-between cursor-pointer select-none transition-colors bg-slate-50 dark:bg-slate-800/50"
                                     onClick={toggleSub}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <div className={`w-6 h-[14px] rounded-full relative transition-colors flex-shrink-0 ring-1 ring-inset ${isSubActive ? 'bg-gradient-to-r from-brand-cyan to-brand-blue ring-white/20' : 'bg-gray-300 ring-black/5'}`}>
-                                        <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
-                                      </div>
-                                      <span className={`text-xs font-semibold ${isSubActive ? 'text-brand-cyan' : 'text-gray-500 dark:text-slate-500'}`}>
-                                        {sub.name} ({subAllCodes.length})
+                                      <GroupCheckbox size="sm" state={groupCheckState(isSubActive, subSelectedCount)} label={sub.name} />
+                                      <span className="text-xs font-semibold text-gray-800 dark:text-slate-200">
+                                        {sub.name}
                                       </span>
                                     </div>
                                     <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
                                   </div>
                                   {/* Sub-category cards */}
-                                  <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                                  <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                                     {sub.viewCode && (() => {
                                       const badge = getActionBadge(sub.viewCode);
                                       const isOn = editSelectedPermissionCodes.has(sub.viewCode);
@@ -3346,16 +3843,17 @@ export default function UserManagement() {
                                               if (!removal) return;
                                               setEditSelectedPermissionCodes(prev => { const next = new Set(prev); removal.forEach(c => next.delete(c)); return next; });
                                             } else {
-                                              setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.add(sub.viewCode!); if (category.viewCode) next.add(category.viewCode); return next; });
+                                              const next = await turnOnWithPrompt([sub.viewCode!], `View ${sub.name}`);
+                                              if (next) setEditSelectedPermissionCodes(next);
                                             }
                                           }}
-                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
+                                          className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                         >
-                                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                            <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                            <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {sub.name}</div>
+                                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">View {sub.name}</div>
                                           </div>
                                         </div>
                                       );
@@ -3363,6 +3861,9 @@ export default function UserManagement() {
                                     {sub.actions.map(action => {
                                       const badge = getActionBadge(action.code);
                                       const isOn = editSelectedPermissionCodes.has(action.code);
+                                const lockedMain = !isOn && isEntryPointLocked(action.code, editSelectedPermissionCodes)
+                                  ? getMainPermission(action.code)
+                                  : null;
                                       return (
                                         <div
                                           key={action.code}
@@ -3390,34 +3891,17 @@ export default function UserManagement() {
                                                 return next;
                                               });
                                             } else {
-                                              const deps = getPermissionDependencies(action.code);
-                                              const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
-                                              setEditSelectedPermissionCodes(prev => {
-                                                const next = new Set(prev);
-                                                next.add(action.code);
-                                                if (sub.viewCode) next.add(sub.viewCode);
-                                                if (category.viewCode) next.add(category.viewCode);
-                                                // Also enable each dep's category viewCode
-                                                deps.forEach(dep => {
-                                                  next.add(dep);
-                                                  const depViewCode = getCategoryViewCodeFor(dep);
-                                                  if (depViewCode) next.add(depViewCode);
-                                                });
-                                                return next;
-                                              });
-                                              if (newlyEnabled.length > 0) {
-                                                const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
-                                                toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(action.code)}"`);
-                                              }
+                                              const next = await turnOnWithPrompt([action.code], getPermissionDisplayName(action.code));
+                                              if (next) setEditSelectedPermissionCodes(next);
                                             }
                                           }}
-                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
+                                          className={`rounded-2xl border p-4 transition-all select-none flex items-center gap-3 cursor-pointer ${isOn ? 'border-brand-blue/30 bg-gradient-to-br from-white to-brand-blue/5 dark:from-slate-900 dark:to-brand-blue/10 ring-1 ring-brand-blue/20 shadow-sm' : 'border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800/50 opacity-50 hover:opacity-90 hover:border-brand-blue/30'}`}
                                         >
-                                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                            <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
+                                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${badge.cls}`}>
+                                            <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
+                                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
                                           </div>
                                         </div>
                                       );
@@ -3434,31 +3918,7 @@ export default function UserManagement() {
                 </div>
               )}
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <span className="text-2xs sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
-                {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
-                 ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
-                  <>
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand-orange" />
-                    Unsaved changes
-                  </>
-                ) : ''}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="primary"
-                  onClick={handleUpdateUser}
-                  disabled={isSaving}
-                  icon={isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </AppModal>
       )}
 
       {/* RBAC06: Feature Permission Manager Modal */}
@@ -3475,24 +3935,31 @@ export default function UserManagement() {
 
       {/* Reset Password Modal — choose: email a temp password OR set one directly */}
       {resetPwUser && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md ring-1 ring-black/5 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-4 bg-brand-orange text-white">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <KeyRound className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold leading-tight">Reset Password</p>
-                  <p className="text-xs text-white/80 truncate">{resetPwUser.email}</p>
-                </div>
-              </div>
-              <Button variant="secondary" tone="onColor" size="sm" onClick={closeResetPwModal} className="px-2 flex-shrink-0" aria-label="Close">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4">
+        <AppModal
+          open
+          size="sm"
+          onCancel={closeResetPwModal}
+          cancelDisabled={resetPwSubmitting}
+          icon={<KeyRound />}
+          title="Reset Password"
+          subtitle={resetPwUser.email}
+          actions={resetPwMode === 'choose' ? [] : [
+            {
+              label: 'Back',
+              variant: 'secondary',
+              onClick: () => setResetPwMode('choose'),
+              disabled: resetPwSubmitting,
+              icon: <ArrowLeft className="w-4 h-4" />,
+            },
+            {
+              label: 'Set Password',
+              onClick: () => handleSetPasswordDirect(resetPwUser),
+              disabled: resetPwSubmitting,
+              icon: resetPwSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined,
+            },
+          ]}
+        >
+            <div className="space-y-4">
               {resetPwMode === 'choose' ? (
                 <>
                   <button
@@ -3559,32 +4026,10 @@ export default function UserManagement() {
                     />
                     <span className="text-xs text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
                   </label>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setResetPwMode('choose')}
-                      disabled={resetPwSubmitting}
-                      icon={<ArrowLeft className="w-4 h-4" />}
-                    >
-                      Back
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleSetPasswordDirect(resetPwUser)}
-                      disabled={resetPwSubmitting}
-                      className="flex-1"
-                      icon={resetPwSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-                    >
-                      Set Password
-                    </Button>
-                  </div>
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </AppModal>
       )}
 
       {/* RBAC07: Dependency Matrix Modal */}
@@ -3609,34 +4054,56 @@ export default function UserManagement() {
       />
 
       {/* View Role Permissions Popup */}
-      {viewingRolePopup && (
-        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
-            {/* Header */}
-            <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
-                  <Eye className="w-5 h-5 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-xl font-bold text-white truncate">{viewingRolePopup.name}</h2>
-                  <p className="text-white/80 text-xs sm:text-sm truncate">{viewingRolePopup.description}</p>
-                </div>
+      {viewingUserPermissions && !viewingRolePopup && (
+        <AppModal
+          open
+          size="lg"
+          onCancel={closePermissionsPopup}
+          icon={<Eye />}
+          title={viewingUserPermissions.name || viewingUserPermissions.email}
+          subtitle={viewingUserPermissions.email}
+          bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
+        >
+          <div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
+              <div>
+                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role</div>
+                <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{getRoleLabel(viewingUserPermissions.role, availableRoles)}</div>
               </div>
-              <Button
-                variant="secondary"
-                tone="onColor"
-                size="sm"
-                onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="px-2 flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </Button>
+              <div>
+                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Status</div>
+                <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingUserPermissions.is_active ? 'Active' : 'Inactive'}</div>
+              </div>
+              <div>
+                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupShownCount}</div>
+              </div>
             </div>
 
-            {/* Body */}
-            <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-slate-50/30 dark:bg-slate-800/30">
+            {renderAllocatedPermissions()}
+          </div>
+        </AppModal>
+      )}
+
+      {viewingRolePopup && (
+        <AppModal
+          open
+          size="lg"
+          onCancel={closePermissionsPopup}
+          icon={<Eye />}
+          title={viewingRolePopup.name}
+          subtitle={viewingRolePopup.description}
+          bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
+          footerStart={
+            viewingRolePopup.is_system ? (
+              <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
+                <Lock className="w-3 h-3" />
+                Default Role (Read-Only)
+              </span>
+            ) : null
+          }
+        >
+            <div>
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
                   <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
@@ -3648,99 +4115,100 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupPermissions.length}</div>
+                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupShownCount}</div>
                 </div>
               </div>
 
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-brand-blue" />
-                Allocated Permissions ({viewingRolePopupPermissions.length})
-              </h3>
-
-              {isViewingRolePopupLoading ? (
-                <div className="space-y-4 sm:space-y-6">
-                  {Array.from({ length: 2 }).map((_, mi) => (
-                    <div key={mi} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                      <div className="bg-slate-50 dark:bg-slate-800/50 px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700">
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                        {Array.from({ length: 4 }).map((_, pi) => (
-                          <div key={pi} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-                            <Skeleton className="w-6 h-6 sm:w-8 sm:h-8 rounded flex-shrink-0" />
-                            <Skeleton className="h-4 flex-1 mt-1" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : viewingRolePopupPermissions.length === 0 ? (
-                <div className="text-center py-10 sm:py-12">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-3">
-                    <Shield className="w-7 h-7 text-brand-blue" />
-                  </div>
-                  <p className="text-gray-700 dark:text-slate-300 font-semibold text-sm">No permissions allocated</p>
-                </div>
-              ) : (
-                <div className="space-y-4 sm:space-y-6">
-                  {Object.entries(
-                    viewingRolePopupPermissions.reduce((acc, perm) => {
-                      const module = perm.module || 'other';
-                      if (!acc[module]) acc[module] = [];
-                      acc[module].push(perm);
-                      return acc;
-                    }, {} as Record<string, Permission[]>)
-                  ).map(([module, perms]) => (
-                    <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                      <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 px-3 sm:px-4 py-2.5 border-b border-brand-blue/15">
-                        <h4 className="font-semibold text-brand-blue capitalize text-xs sm:text-sm">
-                          {module.replace(/_/g, ' ')} ({perms.length})
-                        </h4>
-                      </div>
-                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-                        {perms.map((perm) => (
-                          <div
-                            key={perm.id}
-                            className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-all"
-                          >
-                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
-                              perm.action === 'read'   ? 'bg-brand-blue/10 text-brand-blue' :
-                              perm.action === 'create' ? 'bg-success-subtle text-success' :
-                              perm.action === 'update' ? 'bg-warning-subtle text-warning' :
-                              perm.action === 'delete' ? 'bg-destructive-subtle text-destructive' :
-                              'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300'
-                            }`}>
-                              <span className="text-2xs sm:text-xs font-bold uppercase">{perm.action[0]}</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {renderAllocatedPermissions()}
             </div>
-
-            {/* Footer */}
-            <div className="bg-slate-50/50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
-              <div className="text-sm text-gray-500 dark:text-slate-500">
-                {viewingRolePopup.is_system && (
-                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
-                    <Lock className="w-3 h-3" />
-                    System Role (Read-Only)
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        </AppModal>
       )}
       </div>
       </div>
+      {permissionChangeDialog}
+      <AppModal
+        open={!!identityOtp}
+        onCancel={cancelIdentityOtp}
+        size="sm"
+        zIndexClass="z-[70]"
+        icon={<Mail />}
+        title="Enter verification code"
+        subtitle="Step 2 of 2 — confirm the change"
+        cancelLabel="Cancel change"
+        cancelDisabled={isSaving || identityOtpBusy}
+        actions={[
+          { label: 'Send new code', variant: 'secondary', onClick: resendIdentityOtp, disabled: isSaving || identityOtpBusy },
+          {
+            label: 'Verify & Save',
+            onClick: () => identityOtp && handleUpdateUser({ code: identityOtpCode.trim(), requestId: identityOtp.requestId }),
+            disabled: isSaving || identityOtpBusy || identityOtpCode.trim().length < 6,
+            icon: isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined,
+          },
+        ]}
+      >
+        <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
+          {identityChanges.length > 0 && (
+            <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+              <p className="mb-2 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
+              <div className="space-y-1.5">
+                {identityChanges.map(c => (
+                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-xs sm:text-sm">
+                    <span className="font-medium text-gray-500 dark:text-slate-400">{c.field}</span>
+                    <span className="min-w-0 break-words">
+                      <span className="text-gray-400 line-through dark:text-slate-500">{c.from}</span>
+                      <span className="mx-1.5 text-gray-400">→</span>
+                      <span className="font-semibold text-gray-900 dark:text-slate-50">{c.to}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <ol className="space-y-2">
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-white"><Check className="h-3 w-3" /></span>
+              <span>
+                {identityOtp?.alreadySent ? 'A code was already sent' : 'A 6-digit code was emailed'} to{' '}
+                <span className="font-semibold text-gray-900 dark:text-slate-50 break-all">{identityOtp?.sentTo}</span>
+              </span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white">2</span>
+              <span>Ask the user to check that inbox and share the code with you</span>
+            </li>
+            <li className="flex gap-2.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white">3</span>
+              <span>Type it below and click <span className="font-semibold">Verify &amp; Save</span></span>
+            </li>
+          </ol>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-slate-400">6-digit code</label>
+            <Input
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              value={identityOtpCode}
+              maxLength={6}
+              onChange={(e) => { setIdentityOtpCode(e.target.value.replace(/\D/g, '')); setIdentityOtpError(''); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && identityOtp && identityOtpCode.trim().length === 6 && !isSaving) {
+                  handleUpdateUser({ code: identityOtpCode.trim(), requestId: identityOtp.requestId });
+                }
+              }}
+              className="text-center tracking-[0.5em] font-mono text-lg"
+            />
+            {identityOtpError && <p className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{identityOtpError}</p>}
+          </div>
+
+          <p className="text-xs text-gray-500 dark:text-slate-400">
+            Nothing is saved until the code is verified. The code works for 10 minutes — if it didn&apos;t arrive, ask the
+            user to check spam, or click <span className="font-semibold">Send new code</span>. <span className="font-semibold">Cancel change</span> keeps the old {identityChanges.length === 1 ? identityChanges[0].field.toLowerCase() : 'name and email'}.
+          </p>
+        </div>
+      </AppModal>
     </main>
   );
 }

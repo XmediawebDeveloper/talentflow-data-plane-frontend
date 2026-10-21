@@ -24,6 +24,7 @@ const ALLOW_PREFIXES = [
   '[TalkingHead]',       // avatar/audio playback
   '[AUDIO-SEND-FAILED]', // upstream PCM send failures
   '[INTERVIEW_OBJECT_DETECTION]', // phone/object detector: init, backend, failures
+  '[FaceVerification]',  // identity check: per-check distance / unverifiable reason (~1 line per 30s)
 ];
 // Connection diagnostics that may not carry a known prefix.
 const CONN_SUBSTR = ['close code', 'WebSocket', 'Connection lost', 'onclose', 'WS closed', 'reconnect'];

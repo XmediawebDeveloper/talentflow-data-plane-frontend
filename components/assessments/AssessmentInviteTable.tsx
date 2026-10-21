@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { timelineEvents } from '@/components/AssessmentInviteActions';
+import { timelineEvents, buildInvitationRowActions, InvitationActionsMenu } from '@/components/AssessmentInviteActions';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -70,7 +70,9 @@ export const isInviteExpired = (inv: any): boolean => {
  *  (used by the Invite Tracking popup / Invitation Status tab), not a copy of
  *  it. */
 export const isBulkResendable = (inv: any): boolean =>
-  ['sent', 'expired'].includes(inv.status)
+  // 'pending' = a Copy Link invite (link minted, no email yet). It shows as
+  // Invited, so it gets a checkbox like any other invite that went out.
+  ['sent', 'pending', 'expired'].includes(inv.status)
   && !inv.started_at
   && !inv.completed_at;
 
@@ -190,6 +192,11 @@ export interface AssessmentInviteTableProps {
   canOpenResult: (inv: any) => boolean;
   onOpenResult: (inv: any) => void;
   onResend: (inv: any) => void;
+  /** Revoke / Edit (revoked → Save & Send). Optional: a host that does not
+   *  wire them simply does not offer those actions. Copy Link needs no prop. */
+  onRevoke?: (inv: any) => void;
+  onEdit?: (inv: any) => void;
+  revokingId?: string | null;
 
   /** The inline email editor. Held by the host, because the request it sends
    *  and the toasts it raises belong with the rest of that flow. */
@@ -215,6 +222,9 @@ export default function AssessmentInviteTable({
   canOpenResult,
   onOpenResult,
   onResend,
+  onRevoke,
+  onEdit,
+  revokingId,
   editingEmailId,
   newEmailValue,
   onNewEmailChange,
@@ -539,73 +549,22 @@ export default function AssessmentInviteTable({
                           </div>
                         </div>
                       ) : (() => {
-                        const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
-                        // The host decides which rows open the details page; a
-                        // terminated one does (no scores, but the recording and
-                        // the Integrity Check are there).
-                        const isTerminatedOpenable = !isCompleted && canOpenResult(invitation);
-                        const isBounced = invitation.status === 'bounced';
-                        // Action rules by status: Invited/Expired → Resend only;
-                        // System Check ('opened') and In Progress → no menu at all;
-                        // Completed → View Results only. Edit Email survives only
-                        // where fixing the address is the point — a failed invite
-                        // (mistyped address) or a bounce.
-                        const canResend = ['sent', 'failed', 'expired'].includes(invitation.status)
-                          && !invitation.started_at
-                          && !invitation.completed_at;
-                        const canEditEmail = invitation.status === 'failed'
-                          && !invitation.started_at
-                          && !invitation.completed_at;
-
-                        // Nothing actionable — render no trigger rather than an
-                        // empty menu the user can open onto nothing.
-                        if (!isCompleted && !isTerminatedOpenable && !isBounced && !canResend) return null;
-
-                        return (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                aria-label="Actions"
-                                title="Actions"
-                                className="p-2 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              {(isCompleted || isTerminatedOpenable) && (
-                                // Completed-but-no-attempt is a rare orphaned
-                                // invitation: disabled, so we never silently drop
-                                // the user on the aggregate results page.
-                                <DropdownMenuItem
-                                  className={assessmentDropdownMenuItemClass}
-                                  disabled={!invitation.attempt_id}
-                                  onSelect={() => onOpenResult(invitation)}
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>
-                                    {isCompleted ? 'View Results' : 'View Details'}
-                                  </span>
-                                </DropdownMenuItem>
-                              )}
-                              {canResend && (
-                                <DropdownMenuItem className={assessmentDropdownMenuItemClass} onSelect={() => onResend(invitation)}>
-                                  <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                </DropdownMenuItem>
-                              )}
-                              {(isBounced || canEditEmail) && (
-                                <DropdownMenuItem
-                                  className={assessmentDropdownMenuItemClass}
-                                  onSelect={() => onStartEditEmail(invitation)}
-                                >
-                                  <Pencil className="w-3.5 h-3.5 text-menu-icon-edit" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>{isBounced ? 'Change Email' : 'Edit Email'}</span>
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        );
+                        /* The same toolkit — and so the same rules — as the
+                           Invite Status Tracking popup: Copy Link, View
+                           Results/Details, Resend, Edit Email, Edit, Revoke. */
+                        const actions = buildInvitationRowActions(invitation, {
+                          onResend,
+                          onEditEmail: onStartEditEmail,
+                          onEdit,
+                          onRevoke,
+                          revokingId,
+                          onViewResult: canOpenResult(invitation) || invitation.status === 'completed' || !!invitation.completed_at
+                            ? onOpenResult
+                            : undefined,
+                        });
+                        // Nothing actionable — no trigger rather than an empty menu.
+                        if (actions.length === 0) return null;
+                        return <InvitationActionsMenu actions={actions} />;
                       })()}
                     </td>
                   </tr>

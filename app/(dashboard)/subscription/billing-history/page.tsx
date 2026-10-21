@@ -1,14 +1,18 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X, Copy, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, FileSpreadsheet } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { DateField } from '@/components/ui/date-field';
+import { exportRowsToCSV } from '@/lib/utils/exportUtils';
 import api from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
+import BillingReports from '@/components/subscription/BillingReports';
+import InvoiceDetailModal from '@/components/subscription/InvoiceDetailModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -107,6 +111,20 @@ function normalizeBillingInvoice(inv: BillingInvoice): BillingInvoice {
     : { ...inv, due_date: normalizedDueDate };
 }
 
+// Invoice list status filter. 'open' covers both OPEN and PENDING, as on the stat card.
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All Status', statuses: [] },
+  { value: 'paid', label: 'Paid', statuses: ['PAID'] },
+  { value: 'open', label: 'Open / Pending', statuses: ['OPEN', 'PENDING'] },
+  { value: 'failed', label: 'Failed', statuses: ['FAILED'] },
+  { value: 'refunded', label: 'Refunded', statuses: ['REFUNDED'] },
+] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number]['value'];
+
+// Issue date as 'YYYY-MM-DD' in IST, comparable with the DateField values.
+const toISTDateKey = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
 export default function BillingHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -128,20 +146,41 @@ export default function BillingHistoryPage() {
   // search + invoice list + addon transactions. Initial render is 'cards'
   // so the user explicitly drills in by clicking a stat card.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'open'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // Issue-date range for the Invoices list, as 'YYYY-MM-DD' ('' = open-ended).
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  // null keeps the order the API returned.
+  const [invoiceSort, setInvoiceSort] = useState<{ key: 'date' | 'amount'; dir: 'asc' | 'desc' } | null>(null);
   // Which table the list view shows — formal invoices or add-on purchase history.
-  const [billingTab, setBillingTab] = useState<'invoices' | 'purchases'>('invoices');
+  const [billingTab, setBillingTab] = useState<'invoices' | 'purchases' | 'reports'>('invoices');
   // Separate search for the Purchase History tab — the two tabs match on
   // different fields, so they keep independent queries.
   const [addonSearch, setAddonSearch] = useState('');
 
-  const openListView = (filter: 'all' | 'paid' | 'open') => {
+  const openListView = (filter: StatusFilter, tab: 'invoices' | 'reports' = 'invoices') => {
     setStatusFilter(filter);
+    setInvoicePage(1);
     setPageView('list');
-    // The stat cards all filter invoice data, so always surface the Invoices
+    // The stat cards all drill into invoice data, so always surface an invoice
     // tab — otherwise a click from the Purchase History tab changes nothing the
     // user can see.
-    setBillingTab('invoices');
+    setBillingTab(tab);
+  };
+
+  // Filter changes reset to page 1 here, in the handlers — not in an effect,
+  // which would also fire when the persisted page is restored and clobber it.
+  const changeSearch = (value: string) => { setSearchQuery(value); setInvoicePage(1); };
+  const changeStatus = (value: StatusFilter) => { setStatusFilter(value); setInvoicePage(1); };
+  const changeDateFrom = (value: string) => { setDateFrom(value); setInvoicePage(1); };
+  const changeDateTo = (value: string) => { setDateTo(value); setInvoicePage(1); };
+  const changeAddonSearch = (value: string) => { setAddonSearch(value); setAddonPage(1); };
+  const clearInvoiceFilters = () => {
+    setSearchQuery(''); setStatusFilter('all'); setDateFrom(''); setDateTo(''); setInvoicePage(1);
+  };
+  const toggleSort = (key: 'date' | 'amount') => {
+    setInvoiceSort(prev => (prev?.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }));
+    setInvoicePage(1);
   };
 
   // Persist/restore list view state + scroll position across navigation.
@@ -149,11 +188,15 @@ export default function BillingHistoryPage() {
   const rootRef = useScrollRestoration<HTMLElement>('sub-billing-history', !loading, [pageView]);
   useListStatePersistence(
     'sub-billing-history',
-    { pageView, statusFilter, searchQuery, invoicePage, invoicePageSize, addonPage, addonPageSize },
+    { pageView, billingTab, statusFilter, searchQuery, dateFrom, dateTo, addonSearch, invoicePage, invoicePageSize, addonPage, addonPageSize },
     (s) => {
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
-      if (s.statusFilter === 'all' || s.statusFilter === 'paid' || s.statusFilter === 'open') setStatusFilter(s.statusFilter);
+      if (s.billingTab === 'invoices' || s.billingTab === 'purchases' || s.billingTab === 'reports') setBillingTab(s.billingTab);
+      if (STATUS_FILTERS.some(f => f.value === s.statusFilter)) setStatusFilter(s.statusFilter as StatusFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
+      if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
+      if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
+      if (typeof s.addonSearch === 'string') setAddonSearch(s.addonSearch);
       if (typeof s.invoicePage === 'number') setInvoicePage(s.invoicePage);
       if (typeof s.invoicePageSize === 'number') setInvoicePageSize(s.invoicePageSize);
       if (typeof s.addonPage === 'number') setAddonPage(s.addonPage);
@@ -166,14 +209,34 @@ export default function BillingHistoryPage() {
     fetchAddonTransactions();
   }, []);
 
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setInvoicePage(1);
-  }, [searchQuery, statusFilter]);
+  // Deep link: ?invoice=<invoice number> opens that invoice's detail once loaded.
+  const [pendingDeepLink, setPendingDeepLink] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invoice') : null,
+  );
+  if (pendingDeepLink && invoices.length > 0) {
+    setPendingDeepLink(null);
+    const match = invoices.find(inv => inv.invoice_number === pendingDeepLink);
+    if (match) setSelectedInvoice(match);
+  }
 
+  // Keep ?invoice= in sync with the open modal so the URL can be shared.
+  // Wait while a deep link is still pending, or the param is dropped before
+  // the invoices arrive.
   useEffect(() => {
-    setAddonPage(1);
-  }, [addonSearch]);
+    if (pendingDeepLink) return;
+    const url = new URL(window.location.href);
+    if (selectedInvoice) url.searchParams.set('invoice', selectedInvoice.invoice_number);
+    else url.searchParams.delete('invoice');
+    if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url.toString());
+  }, [selectedInvoice, pendingDeepLink]);
+
+  // Esc closes the invoice detail modal.
+  useEffect(() => {
+    if (!selectedInvoice) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedInvoice(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedInvoice]);
 
   const fetchBillingData = async () => {
     setLoading(true);
@@ -232,20 +295,61 @@ export default function BillingHistoryPage() {
     return inv.line_items?.[0]?.description || inv.metadata?.reason || inv.reason || '-';
   };
 
+  const activeStatusFilter = STATUS_FILTERS.find(f => f.value === statusFilter) ?? STATUS_FILTERS[0];
+  const hasInvoiceFilters = searchQuery.trim() !== '' || statusFilter !== 'all' || dateFrom !== '' || dateTo !== '';
+
   const filteredInvoices = invoices.filter(inv => {
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (inv.plan_name && inv.plan_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getDescription(inv).toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (inv.invoice_number?.toLowerCase().includes(q) ?? false) ||
+      (inv.plan_name?.toLowerCase().includes(q) ?? false) ||
+      getDescription(inv).toLowerCase().includes(q);
 
-    const statusUpper = inv.status.toUpperCase();
-    const matchesStatus =
-      statusFilter === 'all' ||
-      (statusFilter === 'paid' && statusUpper === 'PAID') ||
-      (statusFilter === 'open' && ['OPEN', 'PENDING'].includes(statusUpper));
+    const statuses: readonly string[] = activeStatusFilter.statuses;
+    const matchesStatus = statusFilter === 'all' || statuses.includes((inv.status || '').toUpperCase());
 
-    return matchesSearch && matchesStatus;
+    const day = inv.issue_date ? toISTDateKey(inv.issue_date) : '';
+    const matchesDate = (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo);
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
+
+  if (invoiceSort) {
+    const dir = invoiceSort.dir === 'asc' ? 1 : -1;
+    filteredInvoices.sort((a, b) =>
+      invoiceSort.key === 'amount'
+        ? ((a.total_amount_inr || 0) - (b.total_amount_inr || 0)) * dir
+        : (new Date(a.issue_date).getTime() - new Date(b.issue_date).getTime()) * dir,
+    );
+  }
+
+  const handleExportInvoices = () => {
+    exportRowsToCSV(
+      ['Invoice', 'Date', 'Description', 'Plan', 'Payment Method', 'Payment Reference', 'Amount (INR)', 'Tax (INR)', 'Status'],
+      filteredInvoices.map(inv => [
+        inv.invoice_number,
+        formatIST(inv.issue_date),
+        getDescription(inv),
+        inv.plan_name?.trim() || '',
+        inv.payment_method || inv.metadata?.payment_method || '',
+        inv.razorpay_payment_id || inv.metadata?.payment_reference || '',
+        (inv.total_amount_inr || 0).toFixed(2),
+        (inv.tax_amount_inr || 0).toFixed(2),
+        inv.status,
+      ]),
+      `invoices-${new Date().toISOString().slice(0, 10)}`,
+    );
+  };
+
+  const copyInvoiceNumber = async (invoiceNumber: string) => {
+    try {
+      await navigator.clipboard.writeText(invoiceNumber);
+      toast.success('Invoice number copied');
+    } catch {
+      toast.error('Could not copy invoice number');
+    }
+  };
 
   const paginatedInvoices = filteredInvoices.slice(
     (invoicePage - 1) * invoicePageSize,
@@ -297,6 +401,13 @@ export default function BillingHistoryPage() {
     return method ? method.charAt(0).toUpperCase() + method.slice(1) : (ref ? `••${ref.slice(-8)}` : '-');
   };
 
+  // Hover text for the payment cell — the full reference the label truncates.
+  const getPaymentTitle = (inv: BillingInvoice) => {
+    const method = inv.payment_method || inv.metadata?.payment_method;
+    const ref = inv.razorpay_payment_id || inv.metadata?.payment_reference;
+    return [method && method.charAt(0).toUpperCase() + method.slice(1), ref].filter(Boolean).join(' • ') || '-';
+  };
+
   const handleDownloadInvoice = async (inv: BillingInvoice) => {
     setDownloadingId(inv.id);
     try {
@@ -341,7 +452,7 @@ export default function BillingHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('all')}
-              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && billingTab === 'invoices' && statusFilter ==='all' ? 'border-brand-blue/40 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -357,7 +468,7 @@ export default function BillingHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('paid')}
-              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'paid' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && billingTab === 'invoices' && statusFilter ==='paid' ? 'border-brand-teal/40 ring-brand-teal/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-teal/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -373,7 +484,7 @@ export default function BillingHistoryPage() {
             <button
               type="button"
               onClick={() => openListView('open')}
-              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'open' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && billingTab === 'invoices' && statusFilter ==='open' ? 'border-brand-orange/40 ring-brand-orange/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-orange/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -386,16 +497,17 @@ export default function BillingHistoryPage() {
                 </span>
               </div>
             </button>
+            {/* Opens the Reports tab, so it doesn't duplicate the Total Amount card. */}
             <button
               type="button"
-              onClick={() => openListView('all')}
-              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-cyan/40 ring-brand-cyan/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-cyan/25'}`}
+              onClick={() => openListView('all', 'reports')}
+              className={`h-full text-left rounded-xl border bg-white dark:bg-slate-900 p-4 sm:p-5 shadow-sm shadow-brand-cyan/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${pageView === 'list' && billingTab === 'reports' ? 'border-brand-cyan/40 ring-brand-cyan/20' : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-cyan/25'}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Invoices</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-blue">{stats.total_invoices}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">All time</p>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">All time · View reports</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
                   <FileText className="h-5 w-5 text-brand-cyan" />
@@ -412,8 +524,9 @@ export default function BillingHistoryPage() {
                 below the subscription folder-tabs this page sits under. */}
             <div role="tablist" aria-label="Billing sections" className="mb-5 flex items-center gap-6 border-b border-gray-200 dark:border-slate-700">
               {([
-                { id: 'invoices', label: 'Invoices', count: invoices.length },
-                { id: 'purchases', label: 'Purchase History', count: addonTransactions.length },
+                { id: 'invoices', label: 'Invoices', count: filteredInvoices.length },
+                { id: 'purchases', label: 'Purchase History', count: filteredAddonTransactions.length },
+                { id: 'reports', label: 'Reports', count: null },
               ] as const).map((t) => {
                 const active = billingTab === t.id;
                 return (
@@ -430,13 +543,15 @@ export default function BillingHistoryPage() {
                     }`}
                   >
                     {t.label}
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
-                      active
-                        ? 'bg-brand-blue/10 text-brand-blue'
-                        : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
-                    }`}>
-                      {t.count}
-                    </span>
+                    {t.count !== null && (
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                        active
+                          ? 'bg-brand-blue/10 text-brand-blue'
+                          : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
+                      }`}>
+                        {t.count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -444,19 +559,68 @@ export default function BillingHistoryPage() {
 
             {billingTab === 'invoices' && (
               <>
-            {/* Search */}
-            <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
-              <div className="relative">
+            {/* Search + filters */}
+            <div className="mb-5 flex flex-col gap-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 xl:flex-row xl:items-center">
+              <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                 <input
                   type="text"
                   placeholder="Search by invoice number, plan name, or description"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => changeSearch(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
               </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="relative">
+                  <select
+                    aria-label="Filter by status"
+                    value={statusFilter}
+                    onChange={(e) => changeStatus(e.target.value as StatusFilter)}
+                    className="appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-3 pr-8 text-sm text-gray-800 dark:text-slate-100 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                  >
+                    {STATUS_FILTERS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                </span>
+                <DateField aria-label="From date" placeholder="From" value={dateFrom} onChange={changeDateFrom} max={dateTo || undefined} className="w-[140px]" />
+                <span className="text-xs text-gray-400 dark:text-slate-500">to</span>
+                <DateField aria-label="To date" placeholder="To" value={dateTo} onChange={changeDateTo} min={dateFrom || undefined} className="w-[140px]" />
+                {hasInvoiceFilters && (
+                  <button type="button" onClick={clearInvoiceFilters} className="px-1 text-sm font-medium text-brand-blue hover:underline">
+                    Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleExportInvoices}
+                  disabled={filteredInvoices.length === 0}
+                  title="Download the filtered invoices as CSV"
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:border-brand-blue/30 hover:bg-brand-blue/5 hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  Export CSV
+                </button>
+              </div>
             </div>
+
+            {/* Active filter chip — so a status picked from a stat card is never hidden */}
+            {statusFilter !== 'all' && (
+              <div className="-mt-2 mb-4 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                Showing:
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 py-1 pl-2.5 pr-1 font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                  {activeStatusFilter.label}
+                  <button
+                    type="button"
+                    onClick={() => changeStatus('all')}
+                    aria-label={`Remove ${activeStatusFilter.label} filter`}
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand-blue/15"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+            )}
 
         {/* Error State */}
         {error && (
@@ -468,8 +632,9 @@ export default function BillingHistoryPage() {
           </div>
         )}
 
-        {/* Loading State — mirrors the invoices table columns (Invoice, Timestamp, Description, Payment, Amount, Status, Actions) */}
-        {loading && (
+        {/* Loading State — mirrors the invoices table columns (Invoice, Date, Description, Payment, Amount, Status, Actions).
+            Only on first load; a Refresh keeps the current rows on screen. */}
+        {loading && invoices.length === 0 && (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <Skeleton className="h-4 w-20" />
@@ -516,40 +681,91 @@ export default function BillingHistoryPage() {
         )}
 
         {/* Empty State */}
-        {!loading && !error && filteredInvoices.length === 0 && (
+        {(!loading || invoices.length > 0) && !error && filteredInvoices.length === 0 && (
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Receipt className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No Billing History</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+              {hasInvoiceFilters ? 'No matching invoices' : 'No Billing History'}
+            </h3>
             <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
-              {searchQuery
-                ? 'No invoices match your search criteria.'
+              {hasInvoiceFilters
+                ? 'No invoices match the current search, status or date filters.'
                 : 'Your billing history will appear here once you make a subscription or addon purchase.'}
             </p>
+            {hasInvoiceFilters && (
+              <button type="button" onClick={clearInvoiceFilters} className="mt-4 text-sm font-medium text-brand-blue hover:underline">
+                Clear filters
+              </button>
+            )}
           </div>
         )}
 
         {/* Invoices Table */}
-        {!loading && !error && filteredInvoices.length > 0 && (
+        {(!loading || invoices.length > 0) && !error && filteredInvoices.length > 0 && (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
-              <div>
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Invoices</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
-                  Showing {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-            <div className="overflow-x-auto tf-table-shell">
+            {/* Phone: one card per invoice instead of a sideways-scrolling table */}
+            <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 sm:hidden">
+              {paginatedInvoices.map((inv) => (
+                <li key={inv.id} className="space-y-2 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{inv.invoice_number}</span>
+                      <button type="button" onClick={() => copyInvoiceNumber(inv.invoice_number)} aria-label="Copy invoice number" className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <Badge variant={getStatusVariant(inv.status)} className="shrink-0 capitalize">
+                      {getStatusIcon(inv.status)}
+                      {inv.status}
+                    </Badge>
+                  </div>
+                  <p className="truncate text-sm text-gray-700 dark:text-slate-300">{getDescription(inv)}</p>
+                  <div className="flex items-end justify-between gap-3">
+                    <div className="min-w-0 text-xs text-gray-500 dark:text-slate-500">
+                      <p>{formatIST(inv.issue_date)}</p>
+                      <p className="truncate" title={getPaymentTitle(inv)}>{getPaymentLabel(inv)}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{formatAmount(inv.total_amount_inr || 0)}</p>
+                      {(inv.tax_amount_inr || 0) > 0 && (
+                        <p className="text-xs text-gray-500 dark:text-slate-500">incl. {formatAmount(inv.tax_amount_inr)} tax</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <RowActions
+                      menuLabel="Invoice actions"
+                      actions={[
+                        { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedInvoice(inv) },
+                        { key: 'download', label: 'Download Invoice', icon: Download, loading: downloadingId === inv.id, onClick: () => handleDownloadInvoice(inv) },
+                      ]}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto tf-table-shell sm:block">
               <table className="w-full min-w-[800px] tf-premium-table">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
                     <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[200px]">Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Timestamp</th>
+                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]" aria-sort={invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('date')} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-brand-blue">
+                        Date
+                        {invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+                      </button>
+                    </th>
                     <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Description</th>
                     <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Payment</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[130px]">Amount</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[130px]" aria-sort={invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('amount')} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-brand-blue">
+                        Amount
+                        {invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
+                      </button>
+                    </th>
                     <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px]">Status</th>
                     <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px] tf-sticky-col">Actions</th>
                   </tr>
@@ -565,6 +781,15 @@ export default function BillingHistoryPage() {
                           <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={inv.invoice_number}>
                             {inv.invoice_number}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => copyInvoiceNumber(inv.invoice_number)}
+                            aria-label="Copy invoice number"
+                            title="Copy invoice number"
+                            className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-brand-blue dark:text-slate-500 dark:hover:bg-slate-800"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-700 dark:text-slate-300">
@@ -587,7 +812,7 @@ export default function BillingHistoryPage() {
                       <td className="px-5 py-5">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
-                          <span className="min-w-0 truncate text-sm text-gray-700 dark:text-slate-300" title={getPaymentLabel(inv)}>
+                          <span className="min-w-0 truncate text-sm text-gray-700 dark:text-slate-300" title={getPaymentTitle(inv)}>
                             {getPaymentLabel(inv)}
                           </span>
                         </div>
@@ -624,7 +849,7 @@ export default function BillingHistoryPage() {
         )}
 
         {/* Invoices Pagination */}
-        {!loading && !error && filteredInvoices.length > 0 && (
+        {(!loading || invoices.length > 0) && !error && filteredInvoices.length > 0 && (
           <ListPagination
             currentPage={invoicePage}
             itemsPerPage={invoicePageSize}
@@ -648,7 +873,7 @@ export default function BillingHistoryPage() {
                   type="text"
                   placeholder="Search by invoice number or add-on name"
                   value={addonSearch}
-                  onChange={(e) => setAddonSearch(e.target.value)}
+                  onChange={(e) => changeAddonSearch(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
               </div>
@@ -656,15 +881,6 @@ export default function BillingHistoryPage() {
 
             {filteredAddonTransactions.length > 0 ? (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
-                <Package className="h-5 w-5 text-brand-orange-deep" />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Purchase History</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500">Addons, seats &amp; one-time purchases</p>
-              </div>
-            </div>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[750px] tf-premium-table">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
@@ -779,202 +995,45 @@ export default function BillingHistoryPage() {
                 </div>
               )
             )}
+
+            {billingTab === 'reports' && (
+              error ? (
+                <div className="flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <p className="text-sm font-medium text-destructive">{error}</p>
+                </div>
+              ) : loading && invoices.length === 0 ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
+                </div>
+              ) : (
+                <BillingReports<BillingInvoice>
+                  invoices={invoices}
+                  downloadingId={downloadingId}
+                  onView={setSelectedInvoice}
+                  onDownload={handleDownloadInvoice}
+                  getDescription={getDescription}
+                  getPaymentLabel={getPaymentLabel}
+                  getStatusVariant={getStatusVariant}
+                  getStatusIcon={getStatusIcon}
+                />
+              )
+            )}
           </>
         )}
 
         {/* Invoice Detail Modal */}
         {selectedInvoice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90dvh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-2xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
-              {/* Modal Header */}
-              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
-                <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
-                <div className="relative flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                      <Receipt className="h-5 w-5 text-white" />
-                    </span>
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-semibold">Invoice Details</h2>
-                      <p className="mt-0.5 break-all font-mono text-sm text-white/75">{selectedInvoice.invoice_number}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setSelectedInvoice(null)}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
-                    aria-label="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
-                {/* Key Info Grid */}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Issue Date</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.issue_date)}</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Due Date</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.due_date)}</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Status</p>
-                    <Badge variant={getStatusVariant(selectedInvoice.status)} className="mt-1 capitalize">
-                      {getStatusIcon(selectedInvoice.status)}
-                      {selectedInvoice.status}
-                    </Badge>
-                  </div>
-                  {selectedInvoice.paid_at && (
-                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Paid At</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.paid_at)}</p>
-                    </div>
-                  )}
-                  {selectedInvoice.billing_interval && (
-                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Billing Interval</p>
-                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedInvoice.billing_interval.toLowerCase()}</p>
-                    </div>
-                  )}
-                  {(selectedInvoice.payment_method || selectedInvoice.metadata?.payment_method) && (
-                    <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Payment</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{getPaymentLabel(selectedInvoice)}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Plan Info */}
-                {(selectedInvoice.plan_name || selectedInvoice.plan_type) && (
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-3">
-                    <div>
-                      <p className="text-2xs uppercase tracking-wider text-brand-blue/70">Plan</p>
-                      <p className="mt-0.5 text-sm font-semibold text-brand-blue">{selectedInvoice.plan_name?.trim()}</p>
-                    </div>
-                    {selectedInvoice.plan_type && (
-                      <span className="rounded-full bg-brand-blue/10 px-2.5 py-1 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
-                        {selectedInvoice.plan_type}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* Subscription Period */}
-                {selectedInvoice.subscription_start_date && (
-                  <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                    <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                      <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Subscription Period</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 p-4">
-                      <div>
-                        <p className="text-2xs text-gray-400 dark:text-slate-500">Start</p>
-                        <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.subscription_start_date)}</p>
-                      </div>
-                      <div>
-                        <p className="text-2xs text-gray-400 dark:text-slate-500">End</p>
-                        <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.subscription_end_date)}</p>
-                      </div>
-                      {selectedInvoice.next_billing_date && (
-                        <div>
-                          <p className="text-2xs text-gray-400 dark:text-slate-500">Next Billing</p>
-                          <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.next_billing_date)}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Line Items */}
-                {selectedInvoice.line_items?.length > 0 && (
-                  <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                    <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                      <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Line Items</p>
-                    </div>
-                    <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                      {selectedInvoice.line_items.map((item, idx) => (
-                        <div key={idx} className="flex items-center justify-between gap-4 px-4 py-3">
-                          <span className="flex-1 text-sm text-gray-700 dark:text-slate-300">{item.description}</span>
-                          <span className="shrink-0 text-sm text-gray-500 dark:text-slate-500">
-                            {item.quantity} × {formatAmount(item.unit_price)}
-                          </span>
-                          <span className="min-w-[80px] shrink-0 text-right text-sm font-semibold text-gray-900 dark:text-slate-50">
-                            {formatAmount(Math.abs(item.amount ?? item.total ?? 0))}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Totals */}
-                <div className="space-y-2 border-t border-gray-100 dark:border-slate-700/60 pt-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500 dark:text-slate-500">Subtotal</span>
-                    <span className="text-gray-900 dark:text-slate-50">{formatAmount(selectedInvoice.amount_inr || 0)}</span>
-                  </div>
-                  {(selectedInvoice.tax_amount_inr || 0) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500 dark:text-slate-500">Tax (GST)</span>
-                      <span className="text-gray-900 dark:text-slate-50">{formatAmount(selectedInvoice.tax_amount_inr)}</span>
-                    </div>
-                  )}
-                  {(selectedInvoice.discount_amount_inr || 0) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500 dark:text-slate-500">Discount</span>
-                      <span className="text-brand-teal">-{formatAmount(selectedInvoice.discount_amount_inr)}</span>
-                    </div>
-                  )}
-                  <div className="relative mt-2 flex items-center justify-between overflow-hidden rounded-xl bg-brand-blue px-4 py-3 text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
-                    <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-3xl" />
-                    <span className="relative text-sm font-semibold">Total</span>
-                    <span className="relative text-base font-bold">{formatAmount(selectedInvoice.total_amount_inr || 0)}</span>
-                  </div>
-                </div>
-
-                {/* Payment Reference */}
-                {(selectedInvoice.razorpay_payment_id || selectedInvoice.razorpay_order_id) && (
-                  <div className="space-y-2 rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
-                    {selectedInvoice.razorpay_payment_id && (
-                      <div>
-                        <p className="text-2xs font-semibold uppercase tracking-wider text-brand-cyan">Payment ID</p>
-                        <p className="mt-0.5 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedInvoice.razorpay_payment_id}</p>
-                      </div>
-                    )}
-                    {selectedInvoice.razorpay_order_id && (
-                      <div>
-                        <p className="text-2xs font-semibold uppercase tracking-wider text-brand-cyan">Order ID</p>
-                        <p className="mt-0.5 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedInvoice.razorpay_order_id}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Reason */}
-                {(selectedInvoice.reason || selectedInvoice.metadata?.reason) && (
-                  <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
-                    <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Reason</p>
-                    <p className="mt-1 text-sm text-gray-800 dark:text-slate-100">{selectedInvoice.reason || selectedInvoice.metadata?.reason}</p>
-                  </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:gap-3">
-                  <button
-                    onClick={() => handleDownloadInvoice(selectedInvoice)}
-                    disabled={downloadingId === selectedInvoice.id}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {downloadingId === selectedInvoice.id
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating PDF...</>
-                      : <><Download className="h-4 w-4" /> Download Invoice</>}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <InvoiceDetailModal<BillingInvoice>
+            invoice={selectedInvoice}
+            downloading={downloadingId === selectedInvoice.id}
+            onClose={() => setSelectedInvoice(null)}
+            onDownload={handleDownloadInvoice}
+            formatAmount={formatAmount}
+            getPaymentLabel={getPaymentLabel}
+            getStatusVariant={getStatusVariant}
+            getStatusIcon={getStatusIcon}
+          />
         )}
       </div>
       </div>

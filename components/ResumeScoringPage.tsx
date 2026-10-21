@@ -1,7 +1,7 @@
 "use client";
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
+import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, FileDown, Video, MinusSquare, ChevronsUpDown, ChevronsDownUp, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList, MinusCircle } from 'lucide-react';
@@ -992,6 +992,11 @@ export default function ResumeScoringPage({
      hide) from that list, so until it lands the job list is shown unfiltered
      with no counts rather than wrongly emptied. */
   const [globalLoaded, setGlobalLoaded] = useState(false);
+  /* The last fetch of that list failed. The job rows' Scored Count shows a
+     placeholder while it loads (not the version's own total, which counts
+     fewer rows than the lineage-wide tally it then switches to); on failure
+     there is no tally coming, so it falls back to the version's total. */
+  const [globalFailed, setGlobalFailed] = useState(false);
   /* First-paint gate. The page is held on its skeleton until the job list,
      the candidate scores (the job cards' Exact / Partial / No Match chips and
      the pill counts) and the units have all arrived — then shown in one step,
@@ -1080,6 +1085,7 @@ export default function ResumeScoringPage({
    */
   const fetchGlobalScoredResumes = async ({ silent = false }: { silent?: boolean } = {}) => {
     setIsLoadingGlobal(true);
+    setGlobalFailed(false);
     try {
       // Probe for the real total, then pull everything in one request — the
       // same pattern every other list on this page uses (see e.g. the JD
@@ -1136,6 +1142,7 @@ export default function ResumeScoringPage({
       setGlobalLoaded(true);
     } catch (error) {
       console.error('Failed to fetch global scored resumes:', error);
+      setGlobalFailed(true);
       if (!silent) toast.error('Failed to load all scored candidates');
     } finally {
       setIsLoadingGlobal(false);
@@ -1362,7 +1369,17 @@ export default function ResumeScoringPage({
   const invalidateGlobalScoredResumes = () => {
     setGlobalScoredResumes([]);
     setGlobalLoaded(false);
+    setGlobalFailed(false);
     globalPrefetchedRef.current = false;
+  };
+
+  /** A job row's Scored Count: its verdict tally (every version) once the
+   *  scored list is in, a placeholder until then — never the version's own
+   *  total first, which would then jump to the tally. See `globalFailed`. */
+  const scoredCountValue = (versionTotal: number, tally: { exact: number; partial: number; none: number }) => {
+    if (globalLoaded) return tally.exact + tally.partial + tally.none;
+    if (globalFailed) return versionTotal;
+    return <span className="inline-block h-4 w-6 rounded bg-gray-100 dark:bg-slate-800 animate-pulse align-middle" aria-label="Loading" />;
   };
 
   /**
@@ -2826,7 +2843,6 @@ export default function ResumeScoringPage({
                   variant="primary"
                   onClick={() => {
                     if (!canRunScoring) {
-                      toast.error('You do not have permission to score resumes');
                       return;
                     }
                     /* Already on this job's own page — skip the job
@@ -2918,7 +2934,6 @@ export default function ResumeScoringPage({
              resumes exist — the header above already has one. */
           onScoreResumesFromEmptyState={() => {
             if (!canRunScoring) {
-              toast.error('You do not have permission to score resumes');
               return;
             }
             const jobForPicker: LineageJob = {
@@ -3301,7 +3316,6 @@ export default function ResumeScoringPage({
                 variant="primary"
                 onClick={() => {
                   if (!canRunScoring) {
-                    toast.error('You do not have permission to score resumes');
                     return;
                   }
                   setViewMode('new');
@@ -3792,11 +3806,12 @@ export default function ResumeScoringPage({
                     {/* Export — every score of the ticked jobs (verdict
                         pill applied), all versions. */}
                     <DropdownMenuItem
-                      className={`${itemCls} ${!canExportScores ? 'text-gray-400 opacity-60' : ''}`}
+                      className={`${itemCls} ${!canExportScores ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                      aria-disabled={!canExportScores || undefined}
+                      title={!canExportScores ? 'You do not have permission to export' : undefined}
                       onSelect={(e) => {
                         if (!canExportScores) {
                           e.preventDefault();
-                          toast.error('You do not have permission to export');
                           return;
                         }
                         if (guard()) setShowJobExportModal(true);
@@ -3806,12 +3821,13 @@ export default function ResumeScoringPage({
                       <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      className={`${itemCls} ${!jobActionPerms.canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
+                      className={`${itemCls} ${!jobActionPerms.canDownloadScorecard ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                       disabled={jobBulkDownloading}
+                      aria-disabled={!jobActionPerms.canDownloadScorecard || undefined}
+                      title={!jobActionPerms.canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
                       onSelect={(e) => {
                         if (!jobActionPerms.canDownloadScorecard) {
                           e.preventDefault();
-                          toast.error('You do not have permission to download the scorecard');
                           return;
                         }
                         if (guard()) setJobBulkAction('download');
@@ -3841,10 +3857,10 @@ export default function ResumeScoringPage({
                             target: assessmentTarget,
                             itemClass: itemCls,
                             allowed: jobActionPerms.canCreateAssessments,
+                            deniedReason: jobActionPerms.assessmentDeniedReason,
                             onInvite: (e) => {
                               if (!jobActionPerms.canCreateAssessments) {
                                 e.preventDefault();
-                                toast.error(jobActionPerms.assessmentDeniedReason);
                                 return;
                               }
                               if (guard()) setJobBulkAction('assessment');
@@ -3856,10 +3872,10 @@ export default function ResumeScoringPage({
                             target: interviewTarget,
                             itemClass: itemCls,
                             allowed: jobActionPerms.mayInviteAIInterview,
+                            deniedReason: jobActionPerms.aiInterviewDeniedReason,
                             onInvite: (e) => {
                               if (!jobActionPerms.mayInviteAIInterview) {
                                 e.preventDefault();
-                                toast.error(jobActionPerms.aiInterviewDeniedReason);
                                 return;
                               }
                               if (guard()) setJobBulkAction('interview');
@@ -4130,6 +4146,9 @@ export default function ResumeScoringPage({
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
+                          {/* Checkbox + Job ID + Job Name: one nowrap line at
+                              every width — see JOB_HEADLINE_ROW. */}
+                          <div className={JOB_HEADLINE_ROW}>
                           {/* Tick the job for Export. Stops the click so it
                               doesn't also open / close the row. */}
                           {!item.isProcessing && (
@@ -4153,7 +4172,7 @@ export default function ResumeScoringPage({
                           {/* The scoring record's own JD code, else the full JD
                               record's — some scores come back without it. */}
                           {jdCodeOf(item) && (
-                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jdCodeOf(item)}</JobIdBadge>
+                            <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
@@ -4169,6 +4188,7 @@ export default function ResumeScoringPage({
                           >
                             {item.jobTitle}
                           </h3>
+                          </div>
                           {/* Version badge */}
                           {displayVersionNumber && displayVersionNumber >= 1 && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
@@ -4235,12 +4255,12 @@ export default function ResumeScoringPage({
                           </span>
                           {/* How many scores this job has — every version, the
                               same rows the Exact / Partial / No Match badges
-                              add up to. Until those load, the version's own
-                              total. */}
+                              add up to. A placeholder until those load (see
+                              `globalFailed`). */}
                           <span className="flex items-center gap-1">
                             <span className="font-medium text-gray-700 dark:text-slate-300">Scored Count:</span>
                             <span className="font-normal text-gray-500 dark:text-slate-400 tabular-nums">
-                              {globalLoaded ? verdictTally.exact + verdictTally.partial + verdictTally.none : item.totalScored}
+                              {scoredCountValue(item.totalScored, verdictTally)}
                             </span>
                           </span>
                           {/* Grid only: the verdict counts inline. The list
@@ -4250,7 +4270,7 @@ export default function ResumeScoringPage({
                           {jobListDisplayMode !== 'grid' ? null : !globalLoaded ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                               <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                              {item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
+                              {scoredCountValue(item.totalScored, verdictTally)} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
                             </span>
                           ) : (
                             <span className="flex flex-wrap items-center gap-1.5">
@@ -4292,14 +4312,14 @@ export default function ResumeScoringPage({
                             Job Descriptions cards' Applicants / Assessed /
                             Interviewed stack, in the verdict colours. Across
                             every version of this job; under a verdict filter,
-                            only that one. Until the scores load, the version's
-                            own total. */}
+                            only that one. Until the scores load, a placeholder
+                            (see `scoredCountValue`). */}
                         {jobListDisplayMode !== 'grid' && (
                           <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
                             {!globalLoaded ? (
                               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                                 <FileText className="w-4 h-4" />
-                                {item.totalScored} Scored
+                                {scoredCountValue(item.totalScored, verdictTally)} Scored
                               </span>
                             ) : ([
                               { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
@@ -4479,14 +4499,14 @@ export default function ResumeScoringPage({
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
                         <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                          {globalLoaded ? verdictTally.exact + verdictTally.partial + verdictTally.none : item.totalScored}
+                          {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
                         {!globalLoaded ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                             <FileText className="w-3.5 h-3.5" />
-                            {item.totalScored}
+                            {scoredCountValue(item.totalScored, verdictTally)}
                           </span>
                         ) : (
                           <div className="flex flex-wrap items-center gap-1.5">
@@ -4656,11 +4676,9 @@ export default function ResumeScoringPage({
               description="Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit."
               action={{
                 label: 'Score Resumes Now',
+                disabledReason: !canRunScoring ? 'You do not have permission to score resumes' : undefined,
                 onClick: () => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to score resumes');
-                    return;
-                  }
+                  if (!canRunScoring) return;
                   setViewMode('new');
                   setSelectedJob('');
                   setResumeSource(null);
@@ -5566,7 +5584,6 @@ export default function ResumeScoringPage({
           onSelectionChange={handleJobPicked}
           onProceed={() => {
             if (!canRunScoring) {
-              toast.error('You do not have permission to score resumes');
               return;
             }
             setShowResumeSelectionModal(true);

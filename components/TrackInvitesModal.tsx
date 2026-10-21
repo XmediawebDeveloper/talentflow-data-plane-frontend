@@ -2,6 +2,7 @@
 
 import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { assessmentInviteSource } from '@/components/AIInterviewInviteTable';
@@ -223,8 +224,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     try {
       await assessmentService.resendInvitation(invitation.assessment_id, invitation.id);
       await loadInvitations(true);
-    } catch (error) {
+      toast.success('New invitation link generated and emailed!');
+    } catch (error: any) {
       console.error('Failed to resend invitation:', error);
+      toast.error(error?.response?.data?.detail?.message || error?.message || 'Failed to resend invitation. Please try again.');
     } finally {
       setResendingId(null);
     }

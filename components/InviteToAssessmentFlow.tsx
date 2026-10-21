@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ArrowLeft, CheckCircle, ClipboardCheck, Loader2, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle, ClipboardList, Loader2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import JobAssessmentVersionPicker from '@/components/assessments/JobAssessmentVersionPicker';
@@ -164,7 +164,7 @@ export default function InviteToAssessmentFlow({
           <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                <ClipboardCheck className="w-4 h-4 text-brand-blue" />
+                <ClipboardList className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Invite to Assessment</h2>

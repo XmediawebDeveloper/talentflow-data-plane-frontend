@@ -8,18 +8,24 @@
  * duplicate, and the two share modals for the per-candidate invite — so the
  * drawer adds a presentation, not new business logic.
  *
- * Product rules (2026-10-12): at most MAX_VERSIONS_PER_TYPE versions per JD row
- * per type, counted independently (an Assessment never uses an AI Interview
- * slot); EVERY version counts, archived included; Create New Version
- * duplicates the latest version as a new Draft and never overwrites one; one
- * version per send.
+ * Product rules (2026-10-12): at most MAX_VERSIONS[kind] versions per JD row
+ * (one job version) per type, counted independently (an Assessment never uses
+ * an AI Interview slot) — 5 of each, the backend's caps; EVERY version counts,
+ * archived included; Create New Version duplicates the latest version as a new
+ * Draft and never overwrites one; one version per send. An AI interview is
+ * still ONE per job version: v1 is its only fresh create, and v2..v5 are clones
+ * of it (the clone keeps the AI-xxx ID and takes the next V-number).
  */
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
 import { getLocallyRevokedAssessmentIds, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
-import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
-import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
+import {
+  interviewDuplicateBlockedReason,
+  interviewVersionOrdinal,
+  MAX_INTERVIEW_VERSIONS,
+} from '@/lib/utils/aiInterviewVersion';
+import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ROUND_LABELS, ROUND_SHORT_LABELS } from '@/components/ai-interview/AIInterviewPicker';
@@ -29,6 +35,19 @@ export type InviteKind = 'assessment' | 'interview';
 /** The cap, per type. Shares the Assessments page's constant so the two can
  *  never disagree. */
 export const MAX_VERSIONS_PER_TYPE = MAX_ASSESSMENT_VERSIONS;
+
+/** The version limit per job version (one JD row), per type: the
+ *  Assessments page's cap, and the AI Interviews page's (the backend's
+ *  MAX_INTERVIEW_VERSIONS — the versions of the job version's one interview). */
+export const MAX_VERSIONS: Record<InviteKind, number> = {
+  assessment: MAX_VERSIONS_PER_TYPE,
+  interview: MAX_INTERVIEW_VERSIONS,
+};
+
+/** Why New version is off at the limit — the popup's note and its tooltip,
+ *  worded the same for both types (the Invite to Assessment popup's). */
+export const versionCapMessage = (kind: InviteKind): string =>
+  `Maximum ${MAX_VERSIONS[kind]} versions reached. Manage existing versions to continue.`;
 
 export const KIND_LABEL: Record<InviteKind, { singular: string; plural: string }> = {
   assessment: { singular: 'Assessment', plural: 'Assessments' },
@@ -78,6 +97,9 @@ export interface InviteVersion {
   jdId: string;
   /** Only Active versions can take an invite. */
   sendable: boolean;
+  /** Assessments: its invites were revoked — sealed against new ones, as the
+   *  Assessments page's Share is (a duplicate starts a fresh round). */
+  revoked?: boolean;
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────── */
@@ -126,10 +148,12 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
     if (items.length < 100 || rows.length >= (response.total ?? rows.length)) break;
   }
   const seen = new Set<string>();
+  const revokedIds = getLocallyRevokedAssessmentIds();
   return rows
     .filter((a) => a.jd_id === jdId && (seen.has(a.id) ? false : (seen.add(a.id), true)))
     .map((a): InviteVersion => {
       const status = assessmentStatus(a);
+      const revoked = isAssessmentRevoked(a, revokedIds);
       return {
         id: a.id,
         kind: 'assessment',
@@ -150,7 +174,8 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
         createdBy: a.created_by_name,
         raw: a,
         jdId: a.jd_id,
-        sendable: status === 'active',
+        sendable: status === 'active' && !revoked,
+        revoked,
       };
     })
     .sort(byVersionDesc);
@@ -207,7 +232,7 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
         config: c,
         mapped: !!live && c.id === live.id,
         jdId: c.jd_id as string,
-        sendable: status === 'active',
+        sendable: status === 'active' && !isJdDisabled(c.jd_status),
       };
     })
     .sort(byVersionDesc);
@@ -246,20 +271,27 @@ export function createBlockedReason(
   source?: InviteVersion,
 ): string | null {
   if (!perms.canCreate) return `You do not have permission to create ${KIND_LABEL[kind].plural.toLowerCase()}`;
-  if (versions.length >= MAX_VERSIONS_PER_TYPE) {
-    return `Maximum ${MAX_VERSIONS_PER_TYPE} versions reached. Manage existing versions to continue.`;
-  }
+  if (versions.length >= MAX_VERSIONS[kind]) return versionCapMessage(kind);
   /* One unpublished version at a time — the Assessments page's Draft gate
      (a draft must be published before it is duplicated), applied to both
      types so a sixth draft cannot be stacked behind five. */
   const draft = versions.find((v) => v.status === 'draft');
   if (draft) return `Publish or finish Draft v${draft.version} before creating another version.`;
-  /* An AI interview version is only duplicated once it has been sent - until
-     then it is still editable (the backend's clone rule). New version copies the
-     latest, so that is the one that must have been sent. */
+  /* The source follows the module's Duplicate rules (the Assessments and AI
+     Interviews pages, and the backend's clone): not archived, and only once
+     sent — until then it is still edited. New version copies the latest. */
   const copied = source ?? versions[0];
-  if (kind === 'interview' && copied && !hasBeenSent(copied)) {
-    return `No candidates invited to v${copied.version} yet — edit it instead.`;
+  if (copied) {
+    if (copied.status === 'archived') return `Unarchive v${copied.version} to create a new version from it.`;
+    if (!hasBeenSent(copied)) return `No candidates invited to v${copied.version} yet — edit it instead.`;
+  }
+  /* An AI interview's own clone rules on top (latest only, ...). */
+  if (kind === 'interview' && copied) {
+    if (copied.config) {
+      const lineage = versions.flatMap((v) => (v.config ? [v.config] : []));
+      const why = interviewDuplicateBlockedReason(copied.config, lineage, perms.canCreate);
+      if (why) return why;
+    }
   }
   return null;
 }
@@ -316,9 +348,9 @@ const archiveItem = (v: InviteVersion, perms: VersionPermissions): VersionAction
   disabledReason: perms.canArchive ? undefined : 'You do not have permission to archive',
   confirm: {
     title: `Archive v${v.version}?`,
-    /* AI interviews have one version per job for now, so no version limit to name. */
+    /* Archiving never frees a slot: every version counts toward the limit. */
     message: v.kind === 'interview'
-      ? 'It can no longer be sent to candidates. You can unarchive it later.'
+      ? `It can no longer be sent to candidates. You can unarchive it later. It still counts toward the ${MAX_VERSIONS.interview}-version limit.`
       : `It is hidden from invite lists. It still counts toward the ${MAX_VERSIONS_PER_TYPE}-version limit.`,
     confirmText: 'Archive',
     destructive: true,
@@ -332,6 +364,7 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
   return {
     action: 'publish',
     label: 'Publish',
+    disabledReason: v.kind === 'interview' && isJdDisabled(v.config?.jd_status) ? JD_DISABLED_ACTION_MESSAGE : undefined,
     confirm: {
       title: `Publish v${v.version}?`,
       message: `${v.name} v${v.version} becomes Active and can be sent to candidates.`,
@@ -359,6 +392,14 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
  * (only once sent), Archive. Any other status: View, Duplicate, Archive.
  */
 export function versionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
+  const items = baseVersionActions(v, versions, perms);
+  /* A disabled job's interviews stay viewable; every other action waits
+     until the job is enabled again. */
+  if (v.kind !== 'interview' || !isJdDisabled(v.config?.jd_status)) return items;
+  return items.map((item) => (item.action === 'view' ? item : { ...item, disabledReason: JD_DISABLED_ACTION_MESSAGE }));
+}
+
+function baseVersionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
   const noUpdate = 'You do not have permission to edit';
 
   if (v.kind === 'assessment') {
@@ -491,7 +532,9 @@ export async function versionHref(v: InviteVersion, action: 'view' | 'edit', jdT
       : `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(v.jdId)}&edit=${encodeURIComponent(v.id)}` +
         `&from=job-details&jd_title=${encodeURIComponent(jdTitle)}&returnUrl=${encodeURIComponent(returnUrl)}`;
   }
-  return action === 'view' ? `/recruitment/ai-interviews/${v.id}` : resolveAIInterviewDraftResumeHref(v.id, v.jdId);
+  if (action === 'view') return `/recruitment/ai-interviews/${v.id}`;
+  // Only a draft resumes at its last step; a published version edits from Configure.
+  return v.status === 'draft' ? resolveAIInterviewDraftResumeHref(v.id, v.jdId) : aiInterviewConfigureHref(v.id, v.jdId);
 }
 
 /* ── Sending ─────────────────────────────────────────────────────────── */

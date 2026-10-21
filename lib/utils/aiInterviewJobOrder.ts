@@ -7,7 +7,7 @@
  * every interview config ("1 / 154") while the list it was opened from counted
  * jobs (125).
  */
-import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 
 /** Candidate-flow statuses read as published (the list's normalizeConfigStatus). */
 const isDraft = (status?: string) => status === 'draft';
@@ -57,3 +57,31 @@ export const isPublishedConfig = (c: Pick<AIInterviewResponse, 'status'>) =>
 /** Newest-created first — the job list's default order. */
 export const newestFirst = <T extends AIInterviewResponse>(list: T[]): T[] =>
   [...list].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+/**
+ * An interview config's own version (V1, V2..) — the Nth config created against
+ * its job version (`jd_id`), oldest first, archived ones included. The same
+ * ordinal the All Interviews table and the results panel show; there is no
+ * list-by-jd_id endpoint, so every config is fetched and bucketed here.
+ */
+export async function resolveAIInterviewVersion(
+  own: Pick<AIInterviewResponse, 'id' | 'jd_id'>,
+): Promise<number> {
+  if (!own.jd_id) return 1;
+  const live: AIInterviewResponse[] = [];
+  for (let apiPage = 1; ; apiPage += 1) {
+    const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
+    const items = batch.items || [];
+    live.push(...items);
+    if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
+  }
+  const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
+  const archived = archivedProbe.total > archivedProbe.items.length
+    ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
+    : archivedProbe.items;
+  const siblings = [...live, ...archived]
+    .filter((c) => c.jd_id === own.jd_id)
+    .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+  const idx = siblings.findIndex((c) => c.id === own.id);
+  return idx >= 0 ? idx + 1 : 1;
+}

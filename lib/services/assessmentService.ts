@@ -268,7 +268,17 @@ export interface QuestionEvaluation {
       execution?: { earned: number; total: number; status?: string; reason?: string };
       output?: { earned: number; total: number; status?: string; reason?: string };
       total_marks?: number;
+      // e.g. "To pass (7/10), at least 2 of the 3 test cases must pass: ..."
+      pass_requirement?: string;
     };
+    // Recruiter-only signals from the coding rubric, e.g. a submission that
+    // printed the same output for every judged input.
+    flags?: Array<{
+      type: string;
+      message?: string;
+      constant_output?: string;
+      reads_stdin?: boolean | null;
+    }>;
     details?: Array<{
       test_number: number;
       passed: boolean;

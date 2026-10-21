@@ -614,7 +614,7 @@ function JDCreationContent() {
     // Entered from Create Assessment: back belongs to that flow, not to the JD
     // list the recruiter never visited.
     //
-    // Otherwise this is the button literally labelled "View All Jobs", so ask the
+    // Otherwise this is the button literally labelled "Go to All Jobs", so ask the
     // list for exactly that (?view=list). Without it the JD list opens on its
     // stat-tile overview — or on the last persisted filter/page — so a recruiter
     // who had just published a JD landed on tiles and could not see it.

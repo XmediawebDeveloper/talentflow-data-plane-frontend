@@ -1,15 +1,21 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, SlidersHorizontal } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+// Workspace & admin pages — rendered inline in the right panel (they keep their own routes too).
+import PermissionsPage from '@/app/(dashboard)/settings/permissions/page';
+import ApiManagementPage from '@/app/(dashboard)/settings/api-management/page';
+import BrandingPage from '@/app/(dashboard)/settings/branding/page';
+import SecurityPage from '@/app/(dashboard)/settings/security/page';
+import LegalCompliancePage from '@/app/(dashboard)/settings/legal/page';
 import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -221,33 +227,39 @@ export default function Settings() {
     hasPermission('canViewScoring') ||
     hasPermission('canViewAiMatch');
 
-  const tabs = [
+  // `visible: false` = the user lacks the permission. The tab is still rendered
+  // (greyed, hover tooltip, click is a no-op) - permission-gated tabs are never
+  // hidden. `visibleTabs` only drives which tab may be ACTIVE.
+  const tabs: { id: string; label: string; icon: typeof User; visible: boolean; deniedMessage?: string }[] = [
     { id: 'profile', label: 'My Profile', icon: User, visible: true },
     { id: 'notifications', label: 'Notifications', icon: Bell, visible: true },
-    { id: 'job-preferences', label: 'Job Preferences', icon: Briefcase, visible: canAccessJobPreferences },
-    { id: 'workflow', label: 'Workflow', icon: Filter, visible: canAccessWorkflow },
+    { id: 'job-preferences', label: 'Job Preferences', icon: Briefcase, visible: canAccessJobPreferences, deniedMessage: 'You do not have permission to access Job Preferences' },
+    { id: 'workflow', label: 'Workflow', icon: Filter, visible: canAccessWorkflow, deniedMessage: 'You do not have permission to access Workflow settings' },
     { id: 'privacy', label: 'Privacy & Security', icon: Shield, visible: true },
     { id: 'appearance', label: 'Appearance', icon: Palette, visible: true },
     { id: 'change-password', label: 'Change Password', icon: KeyRound, visible: true },
   ];
   const visibleTabs = tabs.filter(tab => tab.visible);
 
-  // Quick links to the workspace / admin settings pages. These are separate routes,
-  // so they are shown as plain navigation links (not tabs and not a dropdown).
+  // Workspace / admin settings. Each also has its own route, but here they open
+  // inline in the right panel like the other tabs. `visible` mirrors the
+  // route-access rules for those routes (tenant admin OR the same permission);
+  // links without access are shown greyed with a hover tooltip, never hidden.
   const adminSettingsLinks = [
-    { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', visible: isTenantAdmin || hasPermission('canViewRoles') },
-    { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', visible: isTenantAdmin || hasPermission('canViewApiManagement') },
-    { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', visible: isTenantAdmin || hasPermission('canViewBranding') },
-    { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', visible: isTenantAdmin || hasPermission('canViewSecuritySettings') },
-    { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', visible: isTenantAdmin || hasPermission('canManageSettings') },
+    { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', visible: isTenantAdmin || hasPermission('canViewRoles'), deniedMessage: 'You do not have permission to view roles and permissions' },
+    { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', visible: isTenantAdmin || hasPermission('canViewApiManagement'), deniedMessage: 'You do not have permission to view API management' },
+    { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', visible: isTenantAdmin || hasPermission('canViewBranding'), deniedMessage: 'You do not have permission to view branding settings' },
+    { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', visible: isTenantAdmin || hasPermission('canViewSecuritySettings'), deniedMessage: 'You do not have permission to view security settings' },
+    { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', visible: isTenantAdmin || hasPermission('canManageSettings'), deniedMessage: 'You do not have permission to view legal & compliance settings' },
   ];
   const visibleAdminSettingsLinks = adminSettingsLinks.filter(link => link.visible);
+  const isAdminTab = visibleAdminSettingsLinks.some(link => link.id === activeTab);
 
   useEffect(() => {
-    if (!visibleTabs.some(tab => tab.id === activeTab)) {
+    if (!visibleTabs.some(tab => tab.id === activeTab) && !visibleAdminSettingsLinks.some(link => link.id === activeTab)) {
       setActiveTab(visibleTabs[0]?.id || 'profile');
     }
-  }, [activeTab, visibleTabs]);
+  }, [activeTab, visibleTabs, visibleAdminSettingsLinks]);
 
   // Persist scroll position + the active settings tab so returning to this page
   // lands the user on the same section, scrolled where they left off. Called
@@ -363,14 +375,19 @@ export default function Settings() {
         <div className="w-full lg:w-64 flex-shrink-0">
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-2 lg:sticky lg:top-8">
             <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
-              {visibleTabs.map((tab) => {
+              {tabs.map((tab) => {
                 const Icon = tab.icon;
+                const locked = !tab.visible;
                 return (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => { if (!locked) setActiveTab(tab.id); }}
+                    aria-disabled={locked}
+                    title={locked ? (tab.deniedMessage || PERMISSION_DENIED_MESSAGE) : undefined}
                     className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
-                      activeTab === tab.id
+                      locked
+                        ? 'text-gray-400 cursor-not-allowed opacity-60'
+                        : activeTab === tab.id
                         ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue'
                     }`}
@@ -381,25 +398,35 @@ export default function Settings() {
                 );
               })}
 
-              {/* Workspace & admin settings — plain links to their own pages (not a dropdown) */}
-              {visibleAdminSettingsLinks.length > 0 && (
+              {/* Workspace & admin settings — open inline in the right panel */}
+              {adminSettingsLinks.length > 0 && (
                 <>
                   <div className="hidden lg:block my-1.5 border-t border-gray-100 dark:border-slate-700/60" />
                   <span className="hidden lg:block px-4 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-[0.1em]">
                     Workspace &amp; Admin
                   </span>
-                  {visibleAdminSettingsLinks.map((link) => {
+                  {adminSettingsLinks.map((link) => {
                     const Icon = link.icon;
+                    const locked = !link.visible;
                     return (
-                      <Link
+                      <button
                         key={link.id}
-                        href={link.href}
-                        className="group w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue"
+                        type="button"
+                        onClick={() => { if (!locked) setActiveTab(link.id); }}
+                        aria-disabled={locked}
+                        title={locked ? link.deniedMessage : undefined}
+                        aria-current={activeTab === link.id ? 'page' : undefined}
+                        className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
+                          locked
+                            ? 'text-gray-400 cursor-not-allowed opacity-60'
+                            : activeTab === link.id
+                            ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                            : 'text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue'
+                        }`}
                       >
                         <Icon className="w-5 h-5" />
                         <span>{link.label}</span>
-                        <ChevronRight className="hidden lg:block w-4 h-4 ml-auto text-gray-300 dark:text-slate-500 group-hover:text-brand-blue" />
-                      </Link>
+                      </button>
                     );
                   })}
                 </>
@@ -418,10 +445,39 @@ export default function Settings() {
         {/* Right Content Area */}
         <div className="flex-1">
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
-            {!canEditSettings && activeTab !== 'change-password' && (
+            {!canEditSettings && activeTab !== 'change-password' && !isAdminTab && (
               <div className="mb-6 rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 px-4 py-3 text-sm text-brand-orange-deep">
                 View-only access. You can review these settings, but you do not have permission to edit them.
               </div>
+            )}
+
+            {/* Workspace & admin pages, embedded — strips each page's own breadcrumb,
+                outer padding and card wrapper (main → div.mx-auto → div.bg-white)
+                so it sits flush inside this panel. Modals (div.fixed) are untouched. */}
+            {isAdminTab && (
+              <section
+                className="
+                  [&_[data-slot=breadcrumb]]:hidden
+                  [&>main]:flex-none
+                  [&>main]:overflow-visible
+                  [&>main]:bg-transparent
+                  [&>main>div:not(.fixed)]:max-w-none
+                  [&>main>div:not(.fixed)]:!px-0
+                  [&>main>div:not(.fixed)]:!mx-0
+                  [&>main>div:not(.fixed)>div]:!bg-transparent
+                  [&>main>div:not(.fixed)>div]:!rounded-none
+                  [&>main>div:not(.fixed)>div]:!shadow-none
+                  [&>main>div:not(.fixed)>div]:!ring-0
+                  [&>main>div:not(.fixed)>div]:!border-0
+                  [&>main>div:not(.fixed)>div]:!p-0
+                  [&>main>div:not(.fixed)>div]:!my-0"
+              >
+                {activeTab === 'permissions' && <PermissionsPage />}
+                {activeTab === 'api-management' && <ApiManagementPage />}
+                {activeTab === 'branding' && <BrandingPage />}
+                {activeTab === 'security' && <SecurityPage />}
+                {activeTab === 'legal' && <LegalCompliancePage />}
+              </section>
             )}
 
             {/* Profile Settings */}
@@ -853,7 +909,13 @@ export default function Settings() {
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                       For advanced security settings including password change, 2FA, and session management,
-                      please visit the <a href="/settings/security" className="text-brand-blue hover:text-brand-blue-2 hover:underline font-semibold">Security Settings</a> page.
+                      please visit the{' '}
+                      {visibleAdminSettingsLinks.some(link => link.id === 'security') ? (
+                        <button type="button" onClick={() => setActiveTab('security')} className="text-brand-blue hover:text-brand-blue-2 hover:underline font-semibold">Security Settings</button>
+                      ) : (
+                        <a href="/settings/security" className="text-brand-blue hover:text-brand-blue-2 hover:underline font-semibold">Security Settings</a>
+                      )}{' '}
+                      page.
                     </p>
                   </div>
                   </div>
@@ -1087,8 +1149,9 @@ export default function Settings() {
               </div>
             )}
 
-            {/* Save Button — hidden on change-password tab */}
-            {activeTab !== 'change-password' && canEditSettings && (
+            {/* Save Button — hidden on change-password tab; greyed (never
+                hidden) when the user lacks settings:general. */}
+            {activeTab !== 'change-password' && !isAdminTab && (
             <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 dark:border-slate-700 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-600 dark:text-slate-400">
                 {saveSuccess && (
@@ -1098,15 +1161,21 @@ export default function Settings() {
                   </div>
                 )}
               </div>
-              <Button
-                onClick={handleSave}
-                disabled={isSaving}
-                variant="primary"
-                className="w-full sm:w-auto"
-                icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <span
+                className={`w-full sm:w-auto ${!canEditSettings ? 'cursor-not-allowed' : ''}`}
+                title={!canEditSettings ? 'You do not have permission to edit settings' : undefined}
               >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
+                <Button
+                  onClick={() => { if (canEditSettings) handleSave(); }}
+                  disabled={isSaving || !canEditSettings}
+                  aria-disabled={!canEditSettings}
+                  variant="primary"
+                  className={`w-full sm:w-auto ${!canEditSettings ? 'opacity-60 pointer-events-none' : ''}`}
+                  icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </span>
             </div>
             )}
           </div>

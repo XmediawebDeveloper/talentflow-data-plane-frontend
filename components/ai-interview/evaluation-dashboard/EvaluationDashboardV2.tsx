@@ -489,6 +489,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // question = Opening; un-reached ones go to the Closing end.
   // (Shared with the Evaluation Report, so both list the same order.)
   const allOrder = orderQuestionsAsAsked(delivered);
+  const allNumOf = new Map(allOrder.map((q, i) => [q, i + 1]));
   // The HR rows that lead the order are the Opening ones; the rest close it.
   const _firstNonHr = allOrder.findIndex(q => q.section !== 'hr');
   // (HR only: every HR question that was asked counts as Opening, as before.)
@@ -556,10 +557,10 @@ export function QuestionsView({ data, renderAnswerAction }: {
               </span>
             ) : q.notDelivered ? (
               <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(q.questionScore)}`}
-                title="This planned question was never asked — the candidate ended the interview before reaching it. Its skills are still scored from evidence in other answers (recovered); skills demonstrated nowhere score 0. It counts toward the section denominator."
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(0)}`}
+                title="This planned question was never asked — the interview ended before reaching it, so it scores 0."
               >
-                Not Delivered · {q.questionScore.toFixed(1)}/10
+                Not Delivered · 0.0/10
               </span>
             ) : q.isUnscored && displayOnlyScore !== null ? (
               <span
@@ -583,13 +584,17 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 Score: {q.questionScore.toFixed(1)}/10
               </span>
             )}
-            {/* Sections view: interview-wide ask position, after the score. */}
-            {allNum === undefined && q.askedNum !== undefined && (
+            {/* Sections view: the question's number in the "All" view, after the
+                score. Taken from allOrder (not askedNum, which ranks every asked
+                row before every un-reached one) so a Not Asked opening HR
+                question still counts ahead of MHS: 5 HR configured → MHS
+                starts at Q6 even when only 3 HR questions were asked. */}
+            {allNum === undefined && allNumOf.has(q) && (
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200"
-                title="Position in the whole interview, in the order the questions were asked"
+                title="Position in the whole interview, as numbered in the All view"
               >
-                Q{q.askedNum}
+                Q{allNumOf.get(q)}
               </span>
             )}
             {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
@@ -713,7 +718,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
             per-skill sentence) is carried over from the backend rationale
             string. Previously this rendered the backend `q.scoreRationale`
             string independently, which could drift from the table. */}
-        {!isHr && q.skills.length > 0 && (() => {
+        {!isHr && !q.notDelivered && q.skills.length > 0 && (() => {
           // buildRationaleLines regenerates the per-skill lines from q.skills[]
           // (same source as the "Skills assessed" table) + carries the backend
           // summary sentences. Shared by the PDF/report so all surfaces match.
@@ -747,7 +752,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
             (HR isn't scored). Multi-skill questions list 2-3 skills, so the
             block collapses by default; expanding shows each skill's score AND
             the AI's per-skill rationale (one_line_note). */}
-        {!isHr && !IS_PRODUCTION_ENV && (
+        {!isHr && !q.notDelivered && !IS_PRODUCTION_ENV && (
           <div>
             {q.skills.length === 0 ? (
               <>
@@ -1044,7 +1049,12 @@ export function QuestionsView({ data, renderAnswerAction }: {
           This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
         </div>
       )}
-      <div className="flex items-center gap-2 pt-1 pb-1">
+      {/* Sticky so the All / Sections toggle stays reachable while scrolling a
+          long question list. --crumb-h is the measured height of the page's
+          sticky breadcrumb (set by CandidateResultsView); 3rem matches the left
+          tab rail's offset where it isn't set. -mx-6 px-6 stretches the white
+          backdrop to the card's padding so cards scroll cleanly beneath it. */}
+      <div className="sticky top-[var(--crumb-h,3rem)] z-20 -mx-6 px-6 py-2 bg-white flex items-center gap-2">
         {viewMode === 'all' ? (
           <>
             <div className="text-base font-bold text-gray-900">All Questions</div>

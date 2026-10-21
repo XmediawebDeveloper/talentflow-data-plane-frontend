@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
@@ -70,9 +70,22 @@ interface AIInterviewTrackInvitesModalProps {
    *  (there is nothing to close back to); everything else — stats, filters,
    *  bulk resend, the table, pagination — is unchanged. */
   embedded?: boolean;
+  /** The interview's job is disabled — invites stay viewable, but Invite More,
+   *  Resend, Edit and Revoke are blocked. Omit it and the tracker looks the
+   *  config's job status up itself. */
+  jdDisabled?: boolean;
   /** Footer "Invite More" — the host closes this tracker and opens its own
    *  invite flow. Left out, the button is not shown. */
   onInviteMore?: () => void;
+  /** Called after a resend / revoke / edit changed invitations, once this
+   *  tracker's own rows are reloaded — so the host's counts and lists (the
+   *  Invitation Status tab, interview cards, activity) refresh at once rather
+   *  than on their next poll. */
+  onChanged?: () => void | Promise<void>;
+  /** Bump to make the tracker reload its list at once — for a host whose own
+   *  dialog (e.g. Share) adds invitations while this tracker stays mounted
+   *  underneath, so they appear without waiting for the 15s poll. */
+  refreshSignal?: number;
 }
 
 const PAGE_SIZE = 10;
@@ -98,9 +111,24 @@ export default function AIInterviewTrackInvitesModal({
   hideJobVersionFilter = false,
   onViewResult,
   embedded = false,
+  jdDisabled: jdDisabledProp,
   onInviteMore,
+  onChanged,
+  refreshSignal,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
+
+  const [lookedUpJdDisabled, setLookedUpJdDisabled] = useState(false);
+  useEffect(() => {
+    if (!isOpen || jdDisabledProp !== undefined || !configId) return;
+    let cancelled = false;
+    aiInterviewService
+      .get(configId)
+      .then((cfg) => { if (!cancelled) setLookedUpJdDisabled(isJdDisabled(cfg?.jd_status)); })
+      .catch(() => { /* Unknown — the server still refuses actions on a disabled job. */ });
+    return () => { cancelled = true; };
+  }, [isOpen, jdDisabledProp, configId]);
+  const jdDisabled = jdDisabledProp ?? lookedUpJdDisabled;
 
   /* Job / interview version for the two version columns. Taken from the host
      when it knows them; otherwise derived here from the config list — the
@@ -197,8 +225,9 @@ export default function AIInterviewTrackInvitesModal({
   /* Selection follows the selected card, as on the AI Interviews page: the
      Invited card ticks revocable rows and offers Revoke; the Expired card
      ticks resendable rows and offers Resend. Other cards have no bulk action. */
-  const bulkMode: 'revoke' | 'resend' | null =
-    filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
+  const bulkMode: 'revoke' | 'resend' | null = jdDisabled
+    ? null
+    : filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
   const bulkResendMode = bulkMode === 'resend';
   const rowSelectable = bulkMode === 'revoke' ? isRevocableInvite : isBulkResendable;
   const selectableIds = bulkMode ? invitations.filter(rowSelectable).map((inv: any) => inv.id) : [];
@@ -261,9 +290,16 @@ export default function AIInterviewTrackInvitesModal({
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
     await loadInvitations(true);
+    await onChanged?.();
   };
 
+  /* Bumped by every loadInvitations run (filter/page change, poll, Refresh),
+     so an older response landing late can't overwrite a newer one's rows and
+     cards. */
+  const loadSeqRef = useRef(0);
   const loadInvitations = useCallback(async (silent = false) => {
+    const seq = ++loadSeqRef.current;
+    const isStale = () => seq !== loadSeqRef.current;
     if (!silent) setIsLoading(true);
     try {
       /* Four page_size-1-or-N calls in parallel: the filtered page itself, the
@@ -289,6 +325,7 @@ export default function AIInterviewTrackInvitesModal({
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'revoked' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'expired' }),
       ]);
+      if (isStale()) return;
 
       if (fetchAllForClientFilters) {
         const matching = (result.items || []).filter((inv: any) =>
@@ -321,10 +358,12 @@ export default function AIInterviewTrackInvitesModal({
         setPage(current => Math.min(current - 1, Math.max(1, result.total_pages || 1)));
       }
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to load AI interview invitations:', error);
       if (!silent) toast.error('Could not load invitations. Please try again.');
     } finally {
-      setIsLoading(false);
+      // A stale run leaves the spinner to the run that replaced it.
+      if (!isStale()) setIsLoading(false);
     }
   }, [configId, page, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
 
@@ -352,6 +391,7 @@ export default function AIInterviewTrackInvitesModal({
       if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
       setSelectedIds(new Set());
       await loadInvitations(true);
+      await onChanged?.();
     } finally {
       setIsBulkRevoking(false);
       setShowBulkRevokeConfirm(false);
@@ -368,6 +408,12 @@ export default function AIInterviewTrackInvitesModal({
       if (refreshRef.current) clearInterval(refreshRef.current);
     };
   }, [isOpen, configId, loadInvitations]);
+
+  useEffect(() => {
+    if (!isOpen || !configId || !refreshSignal) return;
+    loadInvitations(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   if (!isOpen) return null;
 
@@ -617,6 +663,7 @@ export default function AIInterviewTrackInvitesModal({
           {/* Same list and action rules as the AI Interviews tracker. */}
           <AIInterviewInviteTable
             invitations={invitations}
+            jdDisabled={jdDisabled}
             isLoading={initialLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
@@ -664,6 +711,7 @@ export default function AIInterviewTrackInvitesModal({
               await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
               toast.success(`New invitation link sent to ${inv.candidate_email}`);
               await loadInvitations(true);
+              await onChanged?.();
             } catch (err: any) {
               const detail = err?.response?.data?.detail;
               const msg =
@@ -702,6 +750,7 @@ export default function AIInterviewTrackInvitesModal({
               await aiInterviewService.revokeInvitation(inv.id);
               toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
               await loadInvitations(true);
+              await onChanged?.();
             } catch (err: any) {
               toast.error(err?.message || 'Failed to revoke invitation');
             } finally {
@@ -789,6 +838,8 @@ export default function AIInterviewTrackInvitesModal({
                 variant="primary"
                 size="sm"
                 onClick={onInviteMore}
+                disabled={jdDisabled}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More
@@ -827,6 +878,7 @@ export default function AIInterviewTrackInvitesModal({
         );
       }
       await loadInvitations(true);
+      await onChanged?.();
       setEditTarget(null);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update invitation');

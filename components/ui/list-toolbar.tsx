@@ -149,11 +149,19 @@ export interface ListToolbarProps {
 
   /**
    * Render the built-in More Filters and Reset buttons at a 36px height
-   * (`h-9`) instead of their natural 38px (`py-2`). Opt-in so existing pages
+   * (`h-9`) instead of their natural 38px (`py-2`) — from sm up; on phones
+   * they take the `compactOnMobile` size (32px, 12px text). Opt-in so existing pages
    * are unchanged; used where a toolbar must match the 36px control band of
    * the Job Details tabs (the AI Talent Match reference).
    */
   compactButtons?: boolean;
+
+  /**
+   * Phones only (below `sm`): render More Filters and Reset as 32px chips
+   * (`h-8`, `text-xs`, tighter padding) so a stacked mobile toolbar stays
+   * compact. From `sm` up the buttons are exactly as without it. Opt-in.
+   */
+  compactOnMobile?: boolean;
 
   className?: string;
 }
@@ -182,6 +190,7 @@ export default function ListToolbar({
   singleLine = false,
   overflowVisible = false,
   compactButtons = false,
+  compactOnMobile = false,
   className,
 }: ListToolbarProps) {
   const container = containerBreakpoint === '4xl'
@@ -230,6 +239,17 @@ export default function ListToolbar({
       onSearchChange('');
     }
   };
+
+  // Size of the built-in More Filters / Reset buttons — see `compactButtons`
+  // and `compactOnMobile`.
+  // compactButtons also takes the compactOnMobile phone size: the Job Details
+  // result tabs (its only users) follow the Job Openings mobile toolbar.
+  const buttonSize = compactButtons
+    ? 'h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm'
+    : compactOnMobile
+    ? 'h-8 px-2.5 text-xs sm:h-auto sm:px-3 sm:py-2 sm:text-sm'
+    : 'px-3 py-2';
+  const buttonIcon = compactOnMobile || compactButtons ? 'w-3.5 h-3.5 sm:w-4 sm:h-4' : 'w-4 h-4';
 
   const hasSearch = draftSearch.trim() !== '';
   const showClear = typeof onClearFilters === 'function' && (filtersApplied || hasSearch);
@@ -286,7 +306,7 @@ export default function ListToolbar({
             onClick={onToggleFilters}
             className={cn(
               'rounded-lg font-medium transition-all flex items-center gap-2 text-sm',
-              compactButtons ? 'h-9 px-3' : 'px-3 py-2',
+              buttonSize,
               filtersApplied
                 ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
                 : filtersOpen
@@ -294,7 +314,7 @@ export default function ListToolbar({
                 : 'bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue',
             )}
           >
-            <SlidersHorizontal className="w-4 h-4" />
+            <SlidersHorizontal className={buttonIcon} />
             <span className="hidden sm:inline">More Filters</span>
             <span className="sm:hidden">Filters</span>
             {activeFilterCount > 0 && (
@@ -320,10 +340,10 @@ export default function ListToolbar({
             title="Clear the search and every filter"
             className={cn(
               'rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300',
-              compactButtons ? 'h-9 px-3' : 'px-3 py-2',
+              buttonSize,
             )}
           >
-            <XCircle className="w-4 h-4" />
+            <XCircle className={buttonIcon} />
             Reset
           </button>
         )}

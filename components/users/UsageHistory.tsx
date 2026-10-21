@@ -1,5 +1,6 @@
 'use client';
 
+import AppModal from '@/components/ui/app-modal';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
 
@@ -9,7 +10,7 @@ import OrganizationTabs from '@/components/organization/OrganizationTabs';
  * Shows feature-wise, user-wise, team-wise usage with analytics, filters, export, and pagination
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ClipboardList,
   ClipboardCheck,
@@ -26,7 +27,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  X,
   FileText,
   FileSpreadsheet,
   CheckCircle2,
@@ -64,6 +64,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageHeader } from '@/components/ui/page-header';
+import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
 
@@ -282,22 +283,21 @@ function ExportModal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-        <div className="flex items-center justify-between p-5 bg-brand-blue rounded-t-2xl shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20 backdrop-blur">
-              <Download className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-base font-semibold text-white">Export Usage History</h3>
-          </div>
-          <Tooltip content="Close">
-            <button onClick={onClose} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ring-1 ring-white/20" aria-label="Close">
-              <X className="w-4 h-4" />
-            </button>
-          </Tooltip>
-        </div>
-        <div className="p-5 space-y-3 flex-1 overflow-y-auto">
+    <AppModal
+      open={open}
+      onCancel={onClose}
+      size="sm"
+      zIndexClass="z-50"
+      icon={<Download />}
+      title="Export Usage History"
+      footerStart={isExporting ? (
+        <span className="flex items-center gap-2 text-sm text-brand-blue">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Preparing export…
+        </span>
+      ) : null}
+    >
+        <div className="space-y-3">
           <p className="text-sm text-gray-500">Choose export format:</p>
           <button
             onClick={() => onExport('csv')}
@@ -326,16 +326,7 @@ function ExportModal({
             </div>
           </button>
         </div>
-        <div className="px-5 py-4 border-t border-gray-100 bg-slate-50/50 rounded-b-2xl flex items-center justify-between gap-3 shrink-0">
-          {isExporting ? (
-            <span className="flex items-center gap-2 text-sm text-brand-blue">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Preparing export…
-            </span>
-          ) : <span />}
-        </div>
-      </div>
-    </div>
+    </AppModal>
   );
 }
 
@@ -1180,6 +1171,8 @@ function RefundsTab({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function UsageHistory() {
+  // Org tab bar pins just below the sticky breadcrumb (measured height).
+  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const today = useMemo(() => new Date(), []);
   const defaultStartDate = useMemo(
@@ -1227,6 +1220,15 @@ export default function UsageHistory() {
   // Export
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  /* Bumped by every loadConsumption / loadPoolData run, so only the latest
+     request applies. The By Feature and By User tabs share the consumption
+     state, and the mount loads run with defaults before the saved filters
+     and dates are restored — an older response landing last used to show
+     the other tab's rows / totals or the default period's numbers. Declared
+     here, above the access guard's early return, with the other hooks. */
+  const consumptionSeqRef = useRef(0);
+  const poolSeqRef = useRef(0);
 
   // ── Computed date range (memoized to prevent infinite effect loops) ────────
   const { dateStart, dateEnd } = useMemo(() => {
@@ -1284,6 +1286,8 @@ export default function UsageHistory() {
 
   // ── Load pool status & summary ────────────────────────────────────────────
   const loadPoolData = useCallback(async () => {
+    const seq = ++poolSeqRef.current;
+    const isStale = () => seq !== poolSeqRef.current;
     setIsLoadingPools(true);
     try {
       const days = Math.max(1, Math.ceil((dateEnd.getTime() - dateStart.getTime()) / (1000 * 60 * 60 * 24)));
@@ -1293,19 +1297,23 @@ export default function UsageHistory() {
         dashboardService.getDashboard().catch(() => null),
         featurePermissionService.getUserLimits().catch(() => null),
       ]);
+      if (isStale()) return;
       setPools(poolsRes);
       setSummary(summaryRes);
       if (dashRes?.subscription_units) setSubscriptionUnits(dashRes.subscription_units);
       if (limitsRes) setUserLimits(limitsRes);
     } catch (err: any) {
+      if (isStale()) return;
       toast.error(err.message || 'Failed to load pool data');
     } finally {
-      setIsLoadingPools(false);
+      if (!isStale()) setIsLoadingPools(false);
     }
   }, [dateStart, dateEnd]);
 
   // ── Load consumption history ───────────────────────────────────────────────
   const loadConsumption = useCallback(async (page: number, mode: 'feature' | 'user' = 'feature') => {
+    const seq = ++consumptionSeqRef.current;
+    const isStale = () => seq !== consumptionSeqRef.current;
     setIsLoadingConsumption(true);
     try {
       const res = await unitPoolService.getConsumptionHistory({
@@ -1316,13 +1324,15 @@ export default function UsageHistory() {
         limit: mode === 'user' ? 10000 : PAGE_SIZE,
         offset: mode === 'user' ? 0 : (page - 1) * PAGE_SIZE,
       });
+      if (isStale()) return;
       setConsumptionItems(res.items);
       setExistingUsers(res.users || []);
       setConsumptionTotal(mode === 'user' ? (res.users?.length ?? res.items.length) : res.total);
     } catch (err: any) {
+      if (isStale()) return;
       toast.error(err.message || 'Failed to load consumption history');
     } finally {
-      setIsLoadingConsumption(false);
+      if (!isStale()) setIsLoadingConsumption(false);
     }
   }, [filterUnitType, filterStatus, dateStart, dateEnd]);
 
@@ -1457,9 +1467,9 @@ export default function UsageHistory() {
     <div ref={rootRef} className="flex-1 bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
+        <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
         <div>
-        <OrganizationTabs />
+        <OrganizationTabs stickyTop={orgCrumbHeight} />
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 space-y-6">
       {/* ── Page Header ── */}
       <PageHeader

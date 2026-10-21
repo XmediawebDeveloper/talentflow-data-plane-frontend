@@ -9,7 +9,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDLineageVersion, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -55,7 +55,9 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
-import { loadAssessmentVersions, nextVersionNumber } from '@/components/talent-match-invite/inviteVersions';
+import { loadAssessmentVersions, loadInterviewVersions, createBlockedReason, nextVersionNumber } from '@/components/talent-match-invite/inviteVersions';
+import { MAX_INTERVIEW_VERSIONS } from '@/lib/utils/aiInterviewVersion';
+import { aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
 import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
@@ -487,6 +489,10 @@ interface ExtendedJob extends Job {
   jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
+  // Full per-location detail (city/state/country/radius_km) - see
+  // ExtractedDataSummary's `locations` prop, which renders every saved location
+  // instead of the single joined `location` string.
+  locations?: JDLocation[];
 }
 
 /**
@@ -561,6 +567,14 @@ interface JobDetailViewProps {
   editDisabled?: boolean;
   /** Why Edit is disabled — shown on hover. Required for it to read as anything. */
   editDisabledReason?: string;
+  /**
+   * RBAC: the viewer lacks the permission for Edit / Disable+Re-enable /
+   * Archive. The control stays VISIBLE, greyed out with a hover tooltip and a
+   * no-op click — permission-gated controls are never hidden.
+   */
+  editLocked?: boolean;
+  disableLocked?: boolean;
+  archiveLocked?: boolean;
   resumes?: any[]; // All resumes for selection
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
   onNavigateToAITalentMatch?: (jobId: string) => void; // Navigate to AI Talent Match page
@@ -634,7 +648,7 @@ const toCandidateDetail = (row: any) => ({
   missingSkills: row.missingSkills || [],
 });
 
-export default function JobDetailView({ job, onBack, onEdit, editDisabled = false, editDisabledReason, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, editDisabled = false, editDisabledReason, editLocked = false, disableLocked = false, archiveLocked = false, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -783,6 +797,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [hasAnyAIInterview, setHasAnyAIInterview] = useState(false);
   /** The AI-interview twin of `assessmentExistenceChecked`. */
   const [aiInterviewExistenceChecked, setAiInterviewExistenceChecked] = useState(false);
+  /* How many AI interview versions this job version holds (archived
+     included), read by Create — the twin of `assessmentVersionCount`. Null
+     until Create has looked; the click re-reads it every time regardless. */
+  const [aiInterviewVersionCount, setAiInterviewVersionCount] = useState<number | null>(null);
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
@@ -915,7 +933,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // finished — Completed or Terminated (the API's 'abandoned'). Invited or
   // in-progress candidates have no result yet.
   const [assessmentFinishedCount, setAssessmentFinishedCount] = useState(0);
+  /* The Assessments Results tab's BADGE: the table's own record count while
+     the tab is open (reported by AssessmentResults — every page, its current
+     filters), else the rows that table lists with no filter: this job's
+     result rows it shows as Completed or Terminated (see
+     `isListedAssessmentResult`). Null until the first fetch settles, so the
+     badge shows a placeholder instead of a provisional 0. */
+  const [assessmentResultTotal, setAssessmentResultTotal] = useState<number | null>(null);
+  const [assessmentTableTotal, setAssessmentTableTotal] = useState<number | null>(null);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+  /* Bumped by every fetchAssessmentResults run, so an older run (e.g. the
+     mount load) cannot overwrite the counts of a newer one (after a send). */
+  const assessmentResultsSeqRef = useRef(0);
   const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
   /* The Assessment objects themselves (not the per-candidate results above) —
      kept for Recent Activity's "Assessment Created (Vn)" entry, which needs
@@ -956,24 +985,37 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     return tenant.features[feature as keyof typeof tenant.features] === true;
   };
 
+  // jd:invite / jd:add_applicants have no typed field on the Permission interface,
+  // so they're read via the raw permission code instead of hasPermission() above.
+  const { hasPermissionCode } = useAuth();
+  const isAdminUser = isTenantAdmin || user?.role === 'tenant_admin';
+
   // ✅ PERMISSIONS: Get permissions for Quick Actions (using camelCase)
   const permissions = {
     canCreateAssessments: hasPermission('canCreateAssessments'),
     canUpdateAssessments: hasPermission('canUpdateAssessments'),
-    canRunAiMatch: hasPermission('canRunAiMatch'),
+    // Run AI Talent Match from a JD needs the main (AI Talent Match → Run) AND
+    // this JD entry point (jd:ai_match). Gates every AI-match trigger on this page.
+    canRunAiMatch: hasPermission('canRunAiMatch') && (isAdminUser || hasPermissionCode('jd:ai_match')),
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
-    canRunScoring: hasPermission('canRunScoring'),
+    // Scoring from a JD needs Resume Scoring → Score Resume AND the JD's own
+    // "Score Resume" (jd:add_applicants). Gates every scoring entry point on this
+    // page: quick action, ?action=score-resumes deep link, Scored Resumes toolbar.
+    canRunScoring: hasPermission('canRunScoring') && (isAdminUser || hasPermissionCode('jd:add_applicants')),
     canCreateAIInterviews: hasPermission('canCreateAIInterviews'),
     canShareAIInterviews: hasPermission('canInviteAIInterviews'),
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
 
-  // jd:invite has no typed field on the Permission interface, so it's read via
-  // the raw permission code instead of the local hasPermission() helper above.
-  const { hasPermissionCode } = useAuth();
-  const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
+  // Job Description → "Invite to Assessment" / "Invite to AI Interview" are
+  // separate permissions; each target also needs its module's own Invite
+  // (the server checks assessments:invite / ai_interview:invite on send).
+  const canInviteJdAssessment =
+    isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && hasPermissionCode('assessments:invite'));
+  const canInviteJdAIInterview =
+    isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && hasPermissionCode('ai_interview:invite'));
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
@@ -1017,9 +1059,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // (it gates Track and the quick actions); an invited or still-in-progress
   // candidate has no result yet.
   const [aiInterviewResultCount, setAiInterviewResultCount] = useState(0);
+  /* The AI Interview Result tab's BADGE, the assessment rule: the table's
+     record count while the tab is open, else what the table lists with no
+     filter — In Progress, Completed and Terminated sessions of the live
+     interview (AIInterviewResults' RESULT_STATUSES), not every invitation.
+     Null until the config load settles, so the badge shows a placeholder. */
+  const [aiInterviewResultTotal, setAiInterviewResultTotal] = useState<number | null>(null);
+  const [aiInterviewTableTotal, setAiInterviewTableTotal] = useState<number | null>(null);
   const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
+  /* Bumped by every loadAIInterviewConfig run, so an older run (e.g. the mount
+     load) cannot overwrite the counts of a newer one (after a send/publish). */
+  const aiInterviewConfigSeqRef = useRef(0);
   /* The interview config's own edit/publish version — for Recent Activity's
      "AI Interview Created (Vn)" entry. `AIInterviewResponse` itself carries no
      version number (only `jd_current_version`, which is the linked JD's
@@ -1050,10 +1102,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const canInviteToAIInterview =
     hasLiveAIInterview && features.ai_interview && job.status !== 'Disabled';
 
-  /* ONE PUBLISHED ASSESSMENT AND ONE PUBLISHED AI INTERVIEW PER JOB. Create is
-     offered until one is PUBLISHED and refused from then on — one answer per
-     side, read by every Create on the page (the section toolbars, the tab
-     empty states and the Quick Action tiles) so no two of them can disagree.
+  /* CREATE GATE, one answer per side, read by every Create on the page (the
+     section toolbars, the tab empty states and the Quick Action tiles) so no
+     two of them can disagree. Once a version is published, Create makes the
+     NEXT version (a duplicate of the latest) until the version cap; the
+     paragraphs below describe the original one-per-job rule's reasoning,
+     which still holds for the draft prompt.
 
      PUBLISHED, NOT MERELY CREATED. A draft leaves Create live on purpose: on
      a draft the button does not mint a second record, it opens the "Draft …
@@ -1076,13 +1130,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      deep-link path (`?action=create-ai-interview`) and for the window between
      a stale tab rendering and the fetch landing — so this gate is the honest
      label on the button, not the only thing enforcing the rule. */
-  const aiInterviewAlreadyPublished = hasLiveAIInterview;
-  /* Create makes the NEXT assessment version once one is live, so a published
-     assessment no longer shuts it - the version cap does. */
+  /* Create makes the NEXT version once one is live — on both sides — so a
+     published assessment / AI interview no longer shuts it; the version cap
+     does. */
   const atAssessmentVersionCap =
     assessmentVersionCount !== null && assessmentVersionCount >= MAX_ASSESSMENT_VERSIONS;
+  const atAIInterviewVersionCap =
+    aiInterviewVersionCount !== null && aiInterviewVersionCount >= MAX_INTERVIEW_VERSIONS;
   const blockAssessmentCreate = !assessmentExistenceChecked || atAssessmentVersionCap;
-  const blockAIInterviewCreate = !aiInterviewExistenceChecked || aiInterviewAlreadyPublished;
+  const blockAIInterviewCreate = !aiInterviewExistenceChecked || atAIInterviewVersionCap;
   /** Why Create is off, for the button titles and tile tooltips. Null when on. */
   const assessmentCreateBlockedReason = !features.assessment
     ? 'Assessments not enabled'
@@ -1097,8 +1153,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ? 'AI Interviews not enabled'
     : job.status === 'Disabled'
       ? 'JD is disabled'
-      : aiInterviewAlreadyPublished
-        ? 'This job already has a published AI interview'
+      : atAIInterviewVersionCap
+        ? `This job version has the maximum ${MAX_INTERVIEW_VERSIONS} AI interview versions — archived ones count too`
         : !aiInterviewExistenceChecked
           ? 'Checking this job’s AI interview…'
           : null;
@@ -1106,10 +1162,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const loadAIInterviewConfig = async () => {
     if (aiInterviewConfigFetchedRef.current) return;
     aiInterviewConfigFetchedRef.current = true;
+    const seq = ++aiInterviewConfigSeqRef.current;
+    const isStale = () => seq !== aiInterviewConfigSeqRef.current;
     setLoadingAIInterviewConfig(true);
     setAiInterviewConfigError(null);
     try {
       const liveConfig = await aiInterviewService.findLiveConfigForJd(job.id);
+      if (isStale()) return;
       setAiInterviewConfig(liveConfig);
 
       // Does this JD have an interview at all? A live one obviously counts; if
@@ -1122,6 +1181,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         const draftResult = await aiInterviewService
           .listConfigs({ status: 'draft', page_size: 50, compact: true })
           .catch(() => null);
+        if (isStale()) return;
         setHasAnyAIInterview(
           (draftResult?.items ?? []).some((c: AIInterviewResponse) => c.jd_id === job.id)
         );
@@ -1134,20 +1194,32 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         const invitations = await aiInterviewService
           .getConfigInvitations(liveConfig.id, { page_size: 1, compact: true })
           .catch(() => null);
+        if (isStale()) return;
         setAiInterviewCount(invitations?.total ?? 0);
         setAiInterviewResultCount((invitations?.completed ?? 0) + (invitations?.terminated ?? 0));
+        // The badge: what the results table lists unfiltered (see its state).
+        setAiInterviewResultTotal(
+          (invitations?.in_progress ?? 0) + (invitations?.completed ?? 0) + (invitations?.terminated ?? 0)
+        );
       } else {
         setAiInterviewCount(0);
         setAiInterviewResultCount(0);
+        setAiInterviewResultTotal(0);
       }
     } catch {
+      if (isStale()) return;
       // Allow a retry — clear the guard so re-opening the tab tries again.
       aiInterviewConfigFetchedRef.current = false;
       setAiInterviewConfigError('Could not load AI interview results. Please try again.');
+      // Settle the badge rather than leave its placeholder pulsing.
+      setAiInterviewResultTotal((prev) => prev ?? 0);
     } finally {
-      setLoadingAIInterviewConfig(false);
-      // Same release-on-failure rule as the assessment side above.
-      setAiInterviewExistenceChecked(true);
+      // A stale run leaves these to the run that replaced it.
+      if (!isStale()) {
+        setLoadingAIInterviewConfig(false);
+        // Same release-on-failure rule as the assessment side above.
+        setAiInterviewExistenceChecked(true);
+      }
     }
   };
 
@@ -1176,6 +1248,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // opened, matching the Scored Resumes / Assessment Results tabs which also
   // fetch eagerly. Side benefit: opening the tab is then instant.
   useEffect(() => {
+    // A count read for another job version must not cap this one's Create.
+    setAiInterviewVersionCount(null);
     if (!job.id) return;
     if (!hasPlanFeature('ai_interview') || !features.ai_interview) return;
     // Also runs for share-only users: the Send Invite gate reads
@@ -1205,32 +1279,38 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     loadAIInterviewConfig();
   };
 
-  // Mirrors handleCreateAssessment's three-way split:
-  //   a live interview exists → /recruitment/ai-interviews/{id}
-  //   only a draft exists     → publish prompt, in place on this page
-  //   nothing exists          → the config flow
-  // AIInterviewConfig keeps its own live-config guard as the enforcement (it
-  // covers deep links too); this decides at the click so the recruiter never
-  // passes through a page that immediately redirects them elsewhere.
+  // Mirrors handleCreateAssessment, against this job version's AI interview
+  // versions (`loadInterviewVersions` — the Create / Send popup's "New
+  // version" list, so both buttons give one answer):
+  //   MAX_INTERVIEW_VERSIONS already → blocked (archived ones count too)
+  //   a draft version exists         → publish prompt, in place on this page
+  //   this JD has an interview       → the NEXT version: a duplicate of the
+  //                                    latest one, opened in the config flow
+  //   nothing exists                 → the config flow
+  // The duplicate follows the AI Interviews page's Duplicate rules
+  // (`createBlockedReason` — latest only, sent, not archived), which the
+  // backend's clone_config enforces again.
   const handleCreateAIInterview = async () => {
     if (resolvingAIInterviewTarget) return;
     setResolvingAIInterviewTarget(true);
     try {
-      const live = await aiInterviewService.findLiveConfigForJd(job.id);
-      if (live?.id) {
-        toast.info('An AI interview already exists for this job.');
-        router.push(`/recruitment/ai-interviews/${live.id}?from=job-details`);
+      // Newest version first; this JD row only, archived included.
+      const versions = await loadInterviewVersions(job.id);
+      setAiInterviewVersionCount(versions.length);
+
+      if (versions.length >= MAX_INTERVIEW_VERSIONS) {
+        await dialog.alert({
+          title: 'Maximum versions reached',
+          message: `This job version already has ${MAX_INTERVIEW_VERSIONS} AI interview versions (the maximum allowed). Archived versions count too, so manage the existing versions to continue.`,
+          variant: 'warning',
+        });
         return;
       }
 
-      // Same draft lookup AIInterviewConfig runs when restoring a draft.
-      const draftResult = await aiInterviewService
-        .listConfigs({ status: 'draft', page_size: 50, compact: true })
-        .catch(() => null);
-      const draft = (draftResult?.items ?? []).find(
-        (c: AIInterviewResponse) => c.jd_id === job.id && c.status === 'draft'
-      );
-      if (draft?.id) {
+      // An unpublished version already exists: it must be published before
+      // another is created.
+      const draft = versions.find((v) => v.status === 'draft');
+      if (draft?.config) {
         // Keep the Send Invite gate in step — this click just proved a draft
         // exists, which may be newer than what loadAIInterviewConfig saw.
         setHasAnyAIInterview(true);
@@ -1239,10 +1319,51 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         // the full record. If that read fails, fall back to the compact row:
         // the prompt then offers editing only, which is always safe.
         const full = await aiInterviewService.get(draft.id).catch(() => null);
-        setDraftAIInterview(full ?? draft);
+        setDraftAIInterview(full ?? draft.config);
         return;
       }
-    } catch {
+
+      // This JD already has an interview: create its next version, the way
+      // Duplicate does — the same clone call, from the latest version — and
+      // open it in the config flow.
+      const source = versions[0];
+      if (source) {
+        const blocked = createBlockedReason(
+          versions,
+          { canCreate: true, canUpdate: true, canPublish: true, canArchive: true, canInvite: true },
+          'interview',
+          source,
+        );
+        if (blocked) {
+          await dialog.alert({
+            title: 'Cannot create a new version',
+            message: blocked,
+            variant: 'warning',
+          });
+          return;
+        }
+        const nextVersion = nextVersionNumber(versions);
+        const confirmed = await dialog.confirm({
+          title: 'Create a new AI interview version',
+          message: `Create version ${nextVersion} of ${MAX_INTERVIEW_VERSIONS} for this job version? It starts as a draft copy of version ${source.version}, ready to edit. Version ${source.version} is not changed.`,
+          confirmText: 'Create Version',
+        });
+        if (!confirmed) return;
+        const response = await aiInterviewService.clone(source.id);
+        toast.success(`New version created as a draft: ${response.cloned_title}`);
+        // Unsaved until Save as Draft: Discard anywhere in the wizard deletes
+        // it — the AI Interviews page's Duplicate rule.
+        markUnsavedVersion(response.cloned_id);
+        router.push(`${aiInterviewConfigureHref(response.cloned_id, job.id)}&from=job-details`);
+        return;
+      }
+    } catch (error: any) {
+      // A failed clone says why; a failed lookup falls through to the config
+      // flow, whose own guard re-checks before anything is created.
+      if (error?.message) {
+        toast.error(error.message);
+        return;
+      }
       // Lookup failed — fall through to the config flow rather than blocking.
       // Its own guard re-checks and redirects if a live interview does exist.
     } finally {
@@ -1726,7 +1847,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const countAssessmentVersionsFor = (rows: { jd_id?: string | null }[], jdId: string) =>
     rows.filter(a => a.jd_id === jdId).length;
 
+  /* The rows AssessmentResults lists with no filter — the same mapping it
+     applies (pending and in-progress attempts, and completed ones still being
+     scored, read as not yet a result; anything else is Completed/Terminated).
+     The tab badge counts with this so it does not change when the tab opens. */
+  const isListedAssessmentResult = (result: { status?: string | null; scoring_status?: string | null }) => {
+    const status = result.status;
+    if (status === 'pending' || status === 'in_progress') return false;
+    if (status === 'completed') return (result.scoring_status || 'pending') === 'completed';
+    return true;
+  };
+
   const fetchAssessmentResults = async () => {
+    const seq = ++assessmentResultsSeqRef.current;
+    const isStale = () => seq !== assessmentResultsSeqRef.current;
     setLoadingAssessmentResults(true);
     /* A different job version: nothing of the previous one's Create state may
        carry over - the gate reads "checking" until THIS version's count lands. */
@@ -1739,6 +1873,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     try {
       // First, get all assessments for this JD
       const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      if (isStale()) return;
       const assessments = assessmentsResponse.items || [];
       setJdAssessments(assessments);
       // Derived here rather than in a separate request — this list is already
@@ -1769,11 +1904,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // For each assessment, get the completed results
       const allResults: any[] = [];
       let resultInviteCount = 0;
+      let listedResultCount = 0;
       for (const assessment of assessments) {
         try {
-          const resultsResponse = await assessmentService.listResults(assessment.id, { page_size: 100 });
-          const results = resultsResponse.items || [];
-          resultInviteCount += Number(resultsResponse.total ?? results.length) || 0;
+          /* Every page, not just the first 100: the badge counts these rows,
+             and the results table itself lists the whole set. */
+          const RESULTS_PAGE_SIZE = 100;
+          const firstPage = await assessmentService.listResults(assessment.id, { page: 1, page_size: RESULTS_PAGE_SIZE });
+          if (isStale()) return;
+          const results = [...(firstPage.items || [])];
+          const reportedTotal = Number(firstPage.total ?? results.length) || 0;
+          for (
+            let page = 2;
+            results.length < reportedTotal && (page - 1) * RESULTS_PAGE_SIZE < reportedTotal;
+            page++
+          ) {
+            // A later page failing keeps the rows already fetched.
+            const nextPage = await assessmentService
+              .listResults(assessment.id, { page, page_size: RESULTS_PAGE_SIZE })
+              .catch(() => null);
+            if (isStale()) return;
+            if (!nextPage) break;
+            const items = nextPage.items || [];
+            results.push(...items);
+            if (items.length < RESULTS_PAGE_SIZE) break;
+          }
+          resultInviteCount += reportedTotal;
+          listedResultCount += results.filter(isListedAssessmentResult).length;
 
           // Add assessment context to each result and map to expected format
           results.forEach((result: any) => {
@@ -1873,24 +2030,30 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       }
 
       setAssessmentInviteCount(Math.max(listedInviteCount, resultInviteCount));
+      setAssessmentResultTotal(listedResultCount);
       setAssessmentFinishedCount(allResults.filter((r: any) => {
         const st = String(r.status || '').toLowerCase();
         return !!r.completed_at || st === 'completed' || st === 'terminated' || st === 'abandoned';
       }).length);
       setAssessmentResults(allResults);
     } catch (error) {
+      if (isStale()) return;
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
+      setAssessmentResultTotal(0);
       setAssessmentFinishedCount(0);
       setAssessmentResults([]);
       setJdAssessments([]);
     } finally {
-      setLoadingAssessmentResults(false);
-      /* Settled either way. A failed lookup deliberately RELEASES the Create
-         gate rather than holding it shut: `handleCreateAssessment` re-queries
-         on the click and refuses there if an assessment turns up, so a flaky
-         request costs a redirect, not the ability to ever create one. */
-      setAssessmentExistenceChecked(true);
+      // A stale run leaves these to the run that replaced it.
+      if (!isStale()) {
+        setLoadingAssessmentResults(false);
+        /* Settled either way. A failed lookup deliberately RELEASES the Create
+           gate rather than holding it shut: `handleCreateAssessment` re-queries
+           on the click and refuses there if an assessment turns up, so a flaky
+           request costs a redirect, not the ability to ever create one. */
+        setAssessmentExistenceChecked(true);
+      }
     }
   };
 
@@ -1938,6 +2101,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
+  /* A results table's reported count holds only while its tab is open; off
+     the tab the badge goes back to the unfiltered total. */
+  useEffect(() => {
+    if (activeTab !== 'assessment-results') setAssessmentTableTotal(null);
+    if (activeTab !== 'ai-interview-results') setAiInterviewTableTotal(null);
+  }, [activeTab]);
   /* The DOM node of the toolbar slot that sits INSIDE the sticky tab-navigation
      card, directly under the tab row. Each result tab's search/filter toolbar
      portals its markup here (keeping all of its own state local), so the
@@ -2559,7 +2728,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const versionInviteDialogEl = inviteDialog ? (
         <VersionInviteDialog
           kind={inviteDialog.kind}
-          onClose={() => setInviteDialog(null)}
+          onClose={() => {
+            const closedKind = inviteDialog.kind;
+            setInviteDialog(null);
+            /* The popup creates, edits, publishes, archives and duplicates
+               versions in place, so this page's own reads of them (Create's
+               cap and gate, Send Invite, the results tabs and their badges)
+               are re-read once it closes — the AI one past its fetched-once
+               guard, as Publish on this page does. */
+            if (closedKind === 'assessment') void fetchAssessmentResults();
+            else {
+              aiInterviewConfigFetchedRef.current = false;
+              void loadAIInterviewConfig();
+            }
+          }}
           jdId={job.id}
           jdCode={job.job_id}
           jdTitle={job.title}
@@ -2609,11 +2791,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         resume={viewingScoredResume}
         jobTitle={job.title}
         jobId={job.id}
-        // Version dropdown: that version's score for this job, in place.
-        onSelectScore={(scoreId) => {
-          const r = scoredResumes.find((row: any) => row.id === scoreId);
-          if (r) setViewingScoredResume(toCandidateDetail(r));
-        }}
+        /* The scored resume's version as a plain badge — this view is that
+           one version's score, so there is no version switcher here. */
+        versionReadOnly
         onBack={() => setViewingScoredResume(null)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -2633,6 +2813,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         /* Invite ▾ → the same Create / Send popup as the Scored Resumes
            tab's row and selection menus, for this candidate. */
         onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+        /* Create / Send Assessment | AI Interview as their own buttons (no
+           Invite ▾), an icon-only View Resume and "Scorecard". */
+        inlineHeaderActions
       />
       {versionInviteDialogEl}
       </>
@@ -2687,8 +2870,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // results to hang a toolbar off).
   // Same gate for the Scored Resumes toolbar button and its empty-state CTA, so
   // the tab never offers scoring in one place and withholds it in the other.
-  const canScoreResumesFromTab =
-    permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled';
+  // The permission part only greys the buttons out (scoreResumesDisabled /
+  // aria-disabled) — permission-gated controls are never hidden.
+  const canOfferScoreResumesFromTab =
+    hasPlanFeature('resume_scoring') && job.status !== 'Disabled';
 
   const hasAssessmentInviteSent = assessmentInviteCount > 0;
   // Result tabs open only once someone has a result to show.
@@ -2697,18 +2882,28 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const hasAIInterviewInviteSent = aiInterviewCount > 0;
 
   // Single buttons for the AI Interview Result tab's empty state.
+  // Permission-gated: stays visible, greyed out with a tooltip, when the user
+  // lacks the permission (aria-disabled so the tooltip still shows on hover).
   const aiInterviewCreateAction =
-    permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') ? (
+    hasPlanFeature('ai_interview') ? (
       <Button
         variant="primary"
-        onClick={handleCreateAIInterview}
+        onClick={() => { if (permissions.canCreateAIInterviews) handleCreateAIInterview(); }}
+        aria-disabled={!permissions.canCreateAIInterviews || undefined}
+        className={!permissions.canCreateAIInterviews ? 'opacity-60 cursor-not-allowed' : undefined}
         disabled={
-          !features.ai_interview
-          || job.status === 'Disabled'
-          || resolvingAIInterviewTarget
-          || blockAIInterviewCreate
+          permissions.canCreateAIInterviews && (
+            !features.ai_interview
+            || job.status === 'Disabled'
+            || resolvingAIInterviewTarget
+            || blockAIInterviewCreate
+          )
         }
-        title={aiInterviewCreateBlockedReason ?? undefined}
+        title={
+          !permissions.canCreateAIInterviews
+            ? 'You do not have permission to create AI interviews'
+            : aiInterviewCreateBlockedReason ?? undefined
+        }
       >
         {resolvingAIInterviewTarget
           ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -2718,15 +2913,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ) : null;
 
   const aiInterviewInviteAction =
-    permissions.canShareAIInterviews && hasPlanFeature('ai_interview') ? (
+    hasPlanFeature('ai_interview') ? (
       <Button
         variant="primary"
         /* Wrapped so the click event isn't passed through as the candidate
            seed — this entry point opens the form empty. */
-        onClick={() => handleInviteAIInterview()}
-        disabled={!canInviteToAIInterview}
+        onClick={() => { if (permissions.canShareAIInterviews) handleInviteAIInterview(); }}
+        aria-disabled={!permissions.canShareAIInterviews || undefined}
+        className={!permissions.canShareAIInterviews ? 'opacity-60 cursor-not-allowed' : undefined}
+        disabled={permissions.canShareAIInterviews && !canInviteToAIInterview}
         title={
-          !features.ai_interview
+          !permissions.canShareAIInterviews
+            ? 'You do not have permission to invite candidates to an AI interview'
+            : !features.ai_interview
             ? 'AI Interviews not enabled'
             : job.status === 'Disabled'
               ? 'JD is disabled'
@@ -3012,7 +3211,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
             </div>
 
-            <div className="flex items-center gap-3 ml-6">
+            {/* Below lg the header stacks (flex-col), so this group is its last
+                row: self-end puts Edit / Disable / Archive in the card's
+                bottom-right corner. The ml-6 gap is only for the lg row layout,
+                where it separates the group from the job info beside it — below
+                lg it indented the icons off the left edge instead. */}
+            <div className="flex items-center gap-3 self-end lg:self-auto lg:ml-6">
             {/* AI Talent Match Button - COMMENTED OUT (gated by aiTalentMatchAvailable) */}
             {false && aiTalentMatchAvailable && (job.status !== 'Disabled' ? (
               <button
@@ -3107,7 +3311,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {job.status === 'Published' && (
               <div className="flex items-center gap-2">
                 {onEdit && (
-                  editDisabled ? (
+                  editLocked ? (
+                    <button
+                      type="button"
+                      aria-disabled="true"
+                      onClick={() => { /* locked: tooltip only */ }}
+                      className={`${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed opacity-60`}
+                      aria-label="Edit this JD"
+                      title="You do not have permission to edit job descriptions"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  ) : editDisabled ? (
                     <Tooltip content={editDisabledReason} position="bottom">
                       <button
                         type="button"
@@ -3135,9 +3350,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     the neutral pair either side of it. */}
                 {onDisable && (
                   <button
-                    onClick={handleDisable}
-                    className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_DISABLE}`}
-                    aria-label="Disable this JD" title="Disable this JD"
+                    onClick={() => { if (!disableLocked) handleDisable(); }}
+                    aria-disabled={disableLocked || undefined}
+                    className={
+                      disableLocked
+                        ? `${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed opacity-60`
+                        : `${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_DISABLE}`
+                    }
+                    aria-label="Disable this JD"
+                    title={disableLocked ? 'You do not have permission to disable job descriptions' : 'Disable this JD'}
                   >
                     <Ban className="w-4 h-4" />
                   </button>
@@ -3145,9 +3366,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
                 {onArchive && (
                   <button
-                    onClick={handleArchive}
-                    className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_ARCHIVE}`}
-                    aria-label="Archive this JD" title="Archive this JD"
+                    onClick={() => { if (!archiveLocked) handleArchive(); }}
+                    aria-disabled={archiveLocked || undefined}
+                    className={
+                      archiveLocked
+                        ? `${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed opacity-60`
+                        : `${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_ARCHIVE}`
+                    }
+                    aria-label="Archive this JD"
+                    title={archiveLocked ? 'You do not have permission to archive job descriptions' : 'Archive this JD'}
                   >
                     <Archive className="w-4 h-4" />
                   </button>
@@ -3161,9 +3388,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {onEnable && (
                   <Button
                     variant="primary"
-                    onClick={() => onEnable(job)}
+                    onClick={() => { if (!disableLocked) onEnable(job); }}
+                    aria-disabled={disableLocked || undefined}
+                    className={disableLocked ? 'opacity-60 cursor-not-allowed' : undefined}
                     icon={<CheckCircle className="w-4 h-4" />}
-                    aria-label="Re-enable this JD" title="Re-enable this JD"
+                    aria-label="Re-enable this JD"
+                    title={disableLocked ? 'You do not have permission to re-enable job descriptions' : 'Re-enable this JD'}
                   >
                     Re-enable JD
                   </Button>
@@ -3262,7 +3492,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <ClipboardList className="w-4 h-4" />
               Scored Resumes
               <span className={detailTabBadge(activeTab === 'scored-resumes')}>
-                {scoringPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : scoredResumesStats.total}
+                {/* Placeholder, not a provisional 0, until the first fetch settles. */}
+                {scoringPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : !scoredResumesLoaded ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  scoredResumesStats.total
+                )}
               </span>
             </button>
           )}
@@ -3291,18 +3528,28 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <BarChart3 className="w-4 h-4" />
               Assessments Results
               <span className={detailTabBadge(activeTab === 'assessment-results')}>
-                {assessmentPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : assessmentFinishedCount}
+                {assessmentPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : (assessmentTableTotal ?? assessmentResultTotal) === null ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  assessmentTableTotal ?? assessmentResultTotal
+                )}
               </span>
             </button>
           )}
-          {(aiInterviewPlanLocked || features.ai_interview) && permissions.canViewAIInterviews && (
-            /* Same rule as the assessment results tab. */
+          {(aiInterviewPlanLocked || features.ai_interview) && (
+            /* Same rule as the assessment results tab. Without the view
+               permission the tab stays visible but greyed out (tooltip only). */
             <button
-              onClick={() => !aiInterviewPlanLocked && hasAIInterviewResults && handleShowAIInterviewResults()}
-              disabled={aiInterviewPlanLocked || !hasAIInterviewResults}
+              onClick={() => !aiInterviewPlanLocked && permissions.canViewAIInterviews && hasAIInterviewResults && handleShowAIInterviewResults()}
+              disabled={aiInterviewPlanLocked || (permissions.canViewAIInterviews && !hasAIInterviewResults)}
+              aria-disabled={aiInterviewPlanLocked || !permissions.canViewAIInterviews || !hasAIInterviewResults || undefined}
               title={
                 aiInterviewPlanLocked
                   ? PLAN_LOCKED_MESSAGE
+                  : !permissions.canViewAIInterviews
+                  ? 'You do not have permission to view AI interview results'
                   : hasAIInterviewResults
                   ? undefined
                   : !hasAnyAIInterview
@@ -3313,12 +3560,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         ? 'Send at least one invite first'
                         : 'Results appear once a candidate completes or is terminated'
               }
-              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !hasAIInterviewResults)}
+              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !permissions.canViewAIInterviews || !hasAIInterviewResults)}
             >
               <MessageSquare className="w-4 h-4" />
               AI Interview Result
               <span className={detailTabBadge(activeTab === 'ai-interview-results')}>
-                {aiInterviewPlanLocked ? <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" /> : aiInterviewResultCount}
+                {aiInterviewPlanLocked ? (
+                  <Lock className="inline-block w-3 h-3 align-middle" aria-label="Not in plan" />
+                ) : (aiInterviewTableTotal ?? aiInterviewResultTotal) === null ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  aiInterviewTableTotal ?? aiInterviewResultTotal
+                )}
               </span>
             </button>
           )}
@@ -3346,8 +3599,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {/* Overview Tab Content */}
       {activeTab === 'overview' && (
       <div ref={overviewSectionRef} className="grid grid-cols-1 lg:grid-cols-12 gap-5 scroll-mt-5">
-        {/* Left Column - Job Details */}
-        <div className="lg:col-span-8 space-y-5">
+        {/* Left Column - Job Details. tf-justify-mobile (globals.css):
+            every Overview section's text is justified on phones. */}
+        <div className="lg:col-span-8 space-y-5 tf-justify-mobile">
           {/* Complete Job Description */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             {/* JD Header - COMMENTED OUT
@@ -3517,6 +3771,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               industry={job.industry_type ? prettifyCode(job.industry_type) : null}
               industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
               location={job.location}
+              locations={job.locations}
               locationNote={job.location ? criterionScoringLabel(job.location, job.locationMandatory) : undefined}
               employmentType={employmentTypeLabel(job.employmentType)}
               workMode={workModeLabel(job.workMode)}
@@ -3559,64 +3814,82 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               open={openActionGroups.actions}
               className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800"
             >
-              {/* 1. View JD History */}
-              {permissions.canReadJD && (
-                <QuickActionRow
-                  icon={<History className="w-4 h-4" />}
-                  label="View JD History"
-                  onClick={() => setShowJDHistory(true)}
-                />
-              )}
+              {/* 1. View JD History — always shown; greyed out (tooltip only)
+                  without permission. Permission-gated actions are never hidden. */}
+              <QuickActionRow
+                icon={<History className="w-4 h-4" />}
+                label="View JD History"
+                onClick={() => { if (permissions.canReadJD) setShowJDHistory(true); }}
+                disabled={!permissions.canReadJD}
+                disabledTooltip="You do not have permission to view JD history"
+              />
 
               {/* 2. AI Talent Match */}
-              {permissions.canRunAiMatch && (
-                <QuickActionRow
-                  icon={<Users className="w-4 h-4" />}
-                  label="AI Talent Match"
-                  onClick={handleAITalentMatch}
-                  planLocked={aiMatchPlanLocked}
-                  disabled={!features.ai_talent_match || job.status === 'Disabled'}
-                  disabledTooltip={
-                    !features.ai_talent_match
+              <QuickActionRow
+                icon={<Users className="w-4 h-4" />}
+                label="AI Talent Match"
+                onClick={() => { if (permissions.canRunAiMatch) handleAITalentMatch(); }}
+                planLocked={aiMatchPlanLocked}
+                disabled={!permissions.canRunAiMatch || !features.ai_talent_match || job.status === 'Disabled'}
+                disabledTooltip={
+                  !permissions.canRunAiMatch
+                    ? 'You do not have permission to run AI Talent Match'
+                    : !features.ai_talent_match
                       ? 'AI Match not enabled'
                       : 'JD is disabled'
-                  }
-                />
-              )}
+                }
+              />
 
               {/* 3. Score Resumes */}
-              {permissions.canRunScoring && (
-                <QuickActionRow
-                  icon={<ClipboardList className="w-4 h-4" />}
-                  label="Score Resumes"
-                  onClick={() => setShowSelectSourceModal(true)}
-                  planLocked={scoringPlanLocked}
-                  disabled={job.status === 'Disabled'}
-                  disabledTooltip="JD is disabled"
-                />
-              )}
+              <QuickActionRow
+                icon={<ClipboardList className="w-4 h-4" />}
+                label="Score Resumes"
+                onClick={() => { if (permissions.canRunScoring) setShowSelectSourceModal(true); }}
+                planLocked={scoringPlanLocked}
+                disabled={!permissions.canRunScoring || job.status === 'Disabled'}
+                disabledTooltip={
+                  !permissions.canRunScoring
+                    ? 'You do not have permission to score resumes'
+                    : 'JD is disabled'
+                }
+              />
             </QuickActionPanel>
 
             {/* Assessment — Create, Invite, Track and Result four-up. The AI
-                Interview group below mirrors it, on its own accent. */}
-            {(permissions.canCreateAssessments || permissions.canViewAssessments) && (
+                Interview group below mirrors it, on its own accent. Always
+                shown; tiles the user lacks permission for are greyed out. */}
+            {(
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
-                  icon={<BarChart3 className="w-4 h-4" />}
+                  icon={<ClipboardList className="w-4 h-4" />}
                   title="Assessment"
                   accent="cyan"
-                  titleAction={
-                    <button
-                      type="button"
-                      onClick={() => setShowAssessmentVersionHistory(true)}
-                      disabled={assessmentPlanLocked}
-                      title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : 'Assessment version history'}
-                      aria-label="Assessment version history"
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-brand-cyan hover:bg-brand-cyan/10 transition-colors shrink-0"
-                    >
-                      <History className="w-4 h-4" />
-                    </button>
-                  }
+                  titleAction={(() => {
+                    const noPerm = !permissions.canCreateAssessments && !permissions.canViewAssessments;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => { if (!noPerm) setShowAssessmentVersionHistory(true); }}
+                        disabled={assessmentPlanLocked}
+                        aria-disabled={assessmentPlanLocked || noPerm || undefined}
+                        title={
+                          assessmentPlanLocked
+                            ? PLAN_LOCKED_MESSAGE
+                            : noPerm
+                              ? 'You do not have permission to view assessment version history'
+                              : 'Assessment version history'
+                        }
+                        aria-label="Assessment version history"
+                        className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 ${
+                          noPerm
+                            ? 'text-gray-400 cursor-not-allowed opacity-60'
+                            : 'text-gray-400 hover:text-brand-cyan hover:bg-brand-cyan/10'
+                        }`}
+                      >
+                        <History className="w-4 h-4" />
+                      </button>
+                    );
+                  })()}
                   open={openActionGroups.assessment}
                   onToggle={() => toggleActionGroup('assessment')}
                   controls="quick-actions-assessment-panel"
@@ -3626,7 +3899,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   open={openActionGroups.assessment}
                   className="grid grid-cols-4 gap-2"
                 >
-                  {permissions.canCreateAssessments && (
+                  {/* Permission-gated tiles stay visible, greyed out with a
+                      tooltip, when the user lacks the permission. */}
+                  {(
                     <>
                       <QuickActionTile
                         icon={<Sparkles className="w-4 h-4" />}
@@ -3636,11 +3911,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         onClick={handleCreateAssessment}
                         loading={resolvingAssessmentTarget}
                         disabled={
-                          !features.assessment
+                          !permissions.canCreateAssessments
+                          || !features.assessment
                           || job.status === 'Disabled'
                           || blockAssessmentCreate
                         }
-                        disabledTooltip={assessmentCreateBlockedReason ?? undefined}
+                        disabledTooltip={
+                          !permissions.canCreateAssessments
+                            ? 'You do not have permission to create assessments'
+                            : assessmentCreateBlockedReason ?? undefined
+                        }
                       />
 
                       <QuickActionTile
@@ -3650,10 +3930,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         planLocked={assessmentPlanLocked}
                         onClick={openCreateSendAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!canInviteJd || !canInviteToAssessment}
+                        disabled={!permissions.canCreateAssessments || !canInviteJdAssessment || !canInviteToAssessment}
                         disabledTooltip={
-                          !canInviteJd
-                            ? 'You do not have permission to invite candidates from a job description'
+                          !permissions.canCreateAssessments || !canInviteJdAssessment
+                            ? 'You do not have permission to invite candidates to an assessment from a job description'
                             : !features.assessment
                               ? 'Assessments not enabled'
                               : job.status === 'Disabled'
@@ -3666,7 +3946,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     </>
                   )}
 
-                  {permissions.canViewAssessments && (
+                  {(
                     <>
                       <QuickActionTile
                         icon={<Users className="w-4 h-4" />}
@@ -3674,9 +3954,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         accent="cyan"
                         planLocked={assessmentPlanLocked}
                         onClick={handleTrackAssessmentInvites}
-                        disabled={!features.assessment || !hasAssessmentInviteSent}
+                        disabled={!permissions.canViewAssessments || !features.assessment || !hasAssessmentInviteSent}
                         disabledTooltip={
-                          !features.assessment
+                          !permissions.canViewAssessments
+                            ? 'You do not have permission to track assessment invites'
+                            : !features.assessment
                             ? 'Assessments not enabled'
                             : !hasAnyAssessment
                               ? 'Create an assessment first'
@@ -3698,9 +3980,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         accent="cyan"
                         planLocked={assessmentPlanLocked}
                         onClick={handleAssessmentStatus}
-                        disabled={!features.assessment || !hasAssessmentResults}
+                        disabled={!permissions.canViewAssessments || !features.assessment || !hasAssessmentResults}
                         disabledTooltip={
-                          !features.assessment
+                          !permissions.canViewAssessments
+                            ? 'You do not have permission to view assessment results'
+                            : !features.assessment
                             ? 'Assessments not enabled'
                             : !hasAnyAssessment
                               ? 'Create an assessment first'
@@ -3717,7 +4001,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
             )}
 
-            {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && (
+            {/* Always shown; tiles the user lacks permission for are greyed out. */}
+            {(
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
                   icon={<Video className="w-4 h-4" />}
@@ -3726,25 +4011,40 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   open={openActionGroups.aiInterview}
                   onToggle={() => toggleActionGroup('aiInterview')}
                   controls="quick-actions-ai-interview-panel"
-                  titleAction={
-                    <button
-                      type="button"
-                      onClick={() => setShowAIVersionHistory(true)}
-                      disabled={aiInterviewPlanLocked}
-                      title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : 'AI Interview version history'}
-                      aria-label="AI Interview version history"
-                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-brand-orange-deep hover:bg-brand-orange/10 transition-colors shrink-0"
-                    >
-                      <History className="w-4 h-4" />
-                    </button>
-                  }
+                  titleAction={(() => {
+                    const noPerm =
+                      !permissions.canCreateAIInterviews && !permissions.canShareAIInterviews && !permissions.canViewAIInterviews;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => { if (!noPerm) setShowAIVersionHistory(true); }}
+                        disabled={aiInterviewPlanLocked}
+                        aria-disabled={aiInterviewPlanLocked || noPerm || undefined}
+                        title={
+                          aiInterviewPlanLocked
+                            ? PLAN_LOCKED_MESSAGE
+                            : noPerm
+                              ? 'You do not have permission to view AI interview version history'
+                              : 'AI Interview version history'
+                        }
+                        aria-label="AI Interview version history"
+                        className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 ${
+                          noPerm
+                            ? 'text-gray-400 cursor-not-allowed opacity-60'
+                            : 'text-gray-400 hover:text-brand-orange-deep hover:bg-brand-orange/10'
+                        }`}
+                      >
+                        <History className="w-4 h-4" />
+                      </button>
+                    );
+                  })()}
                 />
                 <QuickActionPanel
                   id="quick-actions-ai-interview-panel"
                   open={openActionGroups.aiInterview}
                   className="grid grid-cols-4 gap-2"
                 >
-                  {permissions.canCreateAIInterviews && (
+                  {(
                     <QuickActionTile
                       icon={<Sparkles className="w-4 h-4" />}
                       label="Create"
@@ -3753,25 +4053,30 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       onClick={handleCreateAIInterview}
                       loading={resolvingAIInterviewTarget}
                       disabled={
-                        !features.ai_interview
+                        !permissions.canCreateAIInterviews
+                        || !features.ai_interview
                         || job.status === 'Disabled'
                         || blockAIInterviewCreate
                       }
-                      disabledTooltip={aiInterviewCreateBlockedReason ?? undefined}
+                      disabledTooltip={
+                        !permissions.canCreateAIInterviews
+                          ? 'You do not have permission to create AI interviews'
+                          : aiInterviewCreateBlockedReason ?? undefined
+                      }
                     />
                   )}
 
-                  {permissions.canShareAIInterviews && (
+                  {(
                     <QuickActionTile
                       icon={<UserPlus className="w-4 h-4" />}
                       label="Invite"
                       accent="orange"
                       planLocked={aiInterviewPlanLocked}
                       onClick={() => handleInviteAIInterview()}
-                      disabled={!canInviteJd || !canInviteToAIInterview}
+                      disabled={!permissions.canShareAIInterviews || !canInviteJdAIInterview || !canInviteToAIInterview}
                       disabledTooltip={
-                        !canInviteJd
-                          ? 'You do not have permission to invite candidates from a job description'
+                        !permissions.canShareAIInterviews || !canInviteJdAIInterview
+                          ? 'You do not have permission to invite candidates to an AI interview from a job description'
                           : !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : job.status === 'Disabled'
@@ -3783,7 +4088,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     />
                   )}
 
-                  {permissions.canViewAIInterviews && (
+                  {(
                     <>
                       <QuickActionTile
                         icon={<Users className="w-4 h-4" />}
@@ -3792,9 +4097,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       planLocked={aiInterviewPlanLocked}
                         onClick={handleTrackAIInterviewInvites}
                         loading={resolvingTrackInvitesConfig}
-                        disabled={!features.ai_interview || !hasAIInterviewInviteSent}
+                        disabled={!permissions.canViewAIInterviews || !features.ai_interview || !hasAIInterviewInviteSent}
                         disabledTooltip={
-                          !features.ai_interview
+                          !permissions.canViewAIInterviews
+                            ? 'You do not have permission to track AI interview invites'
+                            : !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : !hasAnyAIInterview
                               ? 'Create an AI interview first'
@@ -3812,9 +4119,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         accent="orange"
                       planLocked={aiInterviewPlanLocked}
                         onClick={handleAIInterviewStatus}
-                        disabled={!features.ai_interview || !hasAIInterviewResults}
+                        disabled={!permissions.canViewAIInterviews || !features.ai_interview || !hasAIInterviewResults}
                         disabledTooltip={
-                          !features.ai_interview
+                          !permissions.canViewAIInterviews
+                            ? 'You do not have permission to view AI interview results'
+                            : !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : !hasAnyAIInterview
                               ? 'Create an AI interview first'
@@ -4232,10 +4541,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               imageAlt="Scored resumes illustration"
               title="No Scored Resumes"
               description="Score resumes against this job description to see the candidates here."
-              action={canScoreResumesFromTab ? (
+              action={canOfferScoreResumesFromTab ? (
                 <Button
                   variant="primary"
-                  onClick={() => setShowSelectSourceModal(true)}
+                  onClick={() => { if (permissions.canRunScoring) setShowSelectSourceModal(true); }}
+                  aria-disabled={!permissions.canRunScoring || undefined}
+                  title={!permissions.canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                  className={!permissions.canRunScoring ? 'opacity-60 cursor-not-allowed' : undefined}
                   icon={<ClipboardList className="w-4 h-4" />}
                 >
                   Score Resumes
@@ -4250,6 +4562,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               jobTitle={job.title}
               jobId={job.id}
               jobCode={job.job_id}
+              jobVersion={job.versionNumber}
               availableUnits={15}
               /* JD ID and Job Title are this page's header — not repeated per
                  row (Resume Scoring's View by Job hides the same two). */
@@ -4257,12 +4570,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               /* Actions ▸ AI Assessment / AI Interview Invite: the AI Talent
                  Match tab's version popups, with the ticked candidates. */
               onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'score-resume')}
+              /* Row ⋮: Create / Send Assessment | AI Interview directly, no Invite ▸. */
+              inlineRowInviteItems
               initialMatchStatus={scoredResumesMatchFilter}
               // Same gate and target as the Score Resumes quick action — opens
               // "Select Applicants to Score" in place on this page.
               onScoreResumes={
-                canScoreResumesFromTab ? () => setShowSelectSourceModal(true) : undefined
+                canOfferScoreResumesFromTab
+                  ? () => { if (permissions.canRunScoring) setShowSelectSourceModal(true); }
+                  : undefined
               }
+              /* Without the scoring permission the Score button stays visible
+                 but greyed out with a tooltip. */
+              scoreResumesDisabled={!permissions.canRunScoring}
               /* Row-level "Invite → AI Interview". Same resolve-then-share
                  path as this page's own Invite button, seeded with the row's
                  candidate. Omitted when the viewer can't share, so the option
@@ -4326,6 +4646,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
+                onTotalItemsChange={setAssessmentTableTotal}
               />
             );
           })()}
@@ -4406,6 +4727,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               formatCandidateName={formatCandidateFirstName}
               jdShortId={job.job_id}
               emptyStateAction={aiInterviewEmptyActions}
+              readOnly={job.status === 'Disabled'}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
               jdTitle={aiInterviewConfig.jd_title || ''}
@@ -4414,6 +4736,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                  Talent Match tab's version popups, with the ticked candidates. */
               onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'interview-result')}
+              onTotalItemsChange={setAiInterviewTableTotal}
             />
           ) : (
             /* No interview exists for this JD yet. Create has to stay reachable
@@ -5569,15 +5892,18 @@ function AIMatchTabContent({
         imageAlt="AI talent match illustration"
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
-        action={canRunAiMatch ? (
+        action={(
           <Button
             variant="primary"
-            onClick={onRunMatch}
+            onClick={() => { if (canRunAiMatch) onRunMatch(); }}
+            aria-disabled={!canRunAiMatch || undefined}
+            title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : undefined}
+            className={!canRunAiMatch ? 'opacity-60 cursor-not-allowed' : undefined}
             icon={<Sparkles className="w-4 h-4" />}
           >
             Run AI Match
           </Button>
-        ) : undefined}
+        )}
       />
     );
   }
@@ -5610,6 +5936,10 @@ function AIMatchTabContent({
           onSearchChange={setSearchQuery}
           searchDebounceMs={0}
           searchPlaceholder="Search candidates..."
+          /* Lay out by the tab card's width: search takes its own row until
+             the card is wide enough, instead of shrinking to an icon beside
+             Select All and the controls (tablet widths). */
+          fitToContainer
           /* The built-in More Filters (and Reset) at the 36px band via
              `compactButtons` — the same buttons the sibling result tabs use. */
           onToggleFilters={() => setShowMoreFilters((open) => !open)}
@@ -5618,8 +5948,9 @@ function AIMatchTabContent({
           activeFilterCount={aiMatchActiveFilterCount}
           filtersApplied={aiMatchActiveFilterCount > 0}
           onClearFilters={clearAiMatchFilters}
-          /* h-9 on the List/Grid switch so it matches the 36px toolbar band. */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" />}
+          /* sm:h-9 on the List/Grid switch so it matches the 36px toolbar band
+             from sm; phones keep its own 28px (the Job Openings pill height). */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />}
           beforeSearch={
             <>
               {/* Select All — the shared ToolbarSelectAll (this page / all /
@@ -5646,7 +5977,7 @@ function AIMatchTabContent({
                     <Button
                       variant="secondary"
                       size="sm"
-                      className="rounded-full h-9"
+                      className="rounded-full sm:h-9"
                       aria-label={`Actions for ${selectedIds.size} selected`}
                     >
                       Actions
@@ -5713,14 +6044,50 @@ function AIMatchTabContent({
                         </DropdownMenuItem>
                       );
                     })()}
-                    {/* Export — the ticked candidates, through the AI Talent
-                        Match page's CSV / Excel picker. */}
+                    {/* Create / Send — the version drawer, on that type. The
+                        same icons and permission reads the invite items used. */}
                     <DropdownMenuItem
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canExport ? '' : 'text-gray-400 opacity-60'}`}
+                      aria-disabled={!canCreateAssessments || undefined}
+                      title={!canCreateAssessments ? assessmentDeniedReason : undefined}
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                      onSelect={(e) => {
+                        if (!canCreateAssessments) {
+                          // Locked: tooltip only, no toast.
+                          e.preventDefault();
+                          return;
+                        }
+                        onOpenInviteDrawer('assessment', selectedCandidates);
+                      }}
+                    >
+                      <ClipboardList className="w-4 h-4 text-menu-icon-view" />
+                      <span>Create / Send Assessment</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      aria-disabled={!mayInviteAIInterview || undefined}
+                      title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                      onSelect={(e) => {
+                        if (!mayInviteAIInterview) {
+                          // Locked: tooltip only, no toast.
+                          e.preventDefault();
+                          return;
+                        }
+                        onOpenInviteDrawer('interview', selectedCandidates);
+                      }}
+                    >
+                      <Video className="w-4 h-4 text-menu-icon-ai" />
+                      <span>Create / Send AI Interview</span>
+                    </DropdownMenuItem>
+                    {/* Export, last — the ticked candidates, through the AI
+                        Talent Match page's CSV / Excel picker. */}
+                    <DropdownMenuItem
+                      aria-disabled={!canExport || undefined}
+                      title={!canExport ? 'You do not have permission to export matched candidates' : undefined}
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
                       onSelect={(e) => {
                         if (!canExport) {
+                          // Locked: tooltip only, no toast.
                           e.preventDefault();
-                          toast.error('You do not have permission to export');
                           return;
                         }
                         setShowExportModal(true);
@@ -5728,36 +6095,6 @@ function AIMatchTabContent({
                     >
                       <FileDown className="w-4 h-4 text-menu-icon-download" />
                       <span>Export</span>
-                    </DropdownMenuItem>
-                    {/* Create / Send — the version drawer, on that type. The
-                        same icons and permission reads the invite items used. */}
-                    <DropdownMenuItem
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
-                      onSelect={(e) => {
-                        if (!canCreateAssessments) {
-                          e.preventDefault();
-                          toast.error(assessmentDeniedReason);
-                          return;
-                        }
-                        onOpenInviteDrawer('assessment', selectedCandidates);
-                      }}
-                    >
-                      <FileText className="w-4 h-4 text-menu-icon-view" />
-                      <span>Create / Send Assessment</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
-                      onSelect={(e) => {
-                        if (!mayInviteAIInterview) {
-                          e.preventDefault();
-                          toast.error(aiInterviewDeniedReason);
-                          return;
-                        }
-                        onOpenInviteDrawer('interview', selectedCandidates);
-                      }}
-                    >
-                      <Video className="w-4 h-4 text-menu-icon-share" />
-                      <span>Create / Send AI Interview</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -5799,13 +6136,15 @@ function AIMatchTabContent({
              ticked: a selection swaps it out for the Actions menu, and
              clearing the selection brings it back. Same permission gate and
              handler as the empty state's Run AI Match. */
-          afterFiltersActions={canRunAiMatch && selectedIds.size === 0 ? (
+          afterFiltersActions={selectedIds.size === 0 ? (
             <Button
               variant="primary"
               size="sm"
-              onClick={onRunMatch}
+              onClick={() => { if (canRunAiMatch) onRunMatch(); }}
+              aria-disabled={!canRunAiMatch || undefined}
+              title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : undefined}
               icon={<Sparkles className="w-4 h-4" />}
-              className="h-9 whitespace-nowrap"
+              className={`sm:h-9 whitespace-nowrap${!canRunAiMatch ? ' opacity-60 cursor-not-allowed' : ''}`}
             >
               Run Match
             </Button>
@@ -6163,31 +6502,35 @@ function AIMatchTabContent({
                                 Send items, for one — same handlers, icons and
                                 permission reads. */}
                             <DropdownMenuItem
-                              className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${canCreateAssessments ? '' : 'text-gray-400 opacity-60'}`}
+                              aria-disabled={!canCreateAssessments || undefined}
+                              title={!canCreateAssessments ? assessmentDeniedReason : undefined}
+                              className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
                               onSelect={(e) => {
                                 if (!canCreateAssessments) {
+                                  // Locked: tooltip only, no toast.
                                   e.preventDefault();
-                                  toast.error(assessmentDeniedReason);
                                   return;
                                 }
                                 onOpenInviteDrawer('assessment', [candidate]);
                               }}
                             >
-                              <FileText className="w-4 h-4 text-menu-icon-view" />
+                              <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                               <span>Create / Send Assessment</span>
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              className={`flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer ${mayInviteAIInterview ? '' : 'text-gray-400 opacity-60'}`}
+                              aria-disabled={!mayInviteAIInterview || undefined}
+                              title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
+                              className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
                               onSelect={(e) => {
                                 if (!mayInviteAIInterview) {
+                                  // Locked: tooltip only, no toast.
                                   e.preventDefault();
-                                  toast.error(aiInterviewDeniedReason);
                                   return;
                                 }
                                 onOpenInviteDrawer('interview', [candidate]);
                               }}
                             >
-                              <Video className="w-4 h-4 text-menu-icon-share" />
+                              <Video className="w-4 h-4 text-menu-icon-ai" />
                               <span>Create / Send AI Interview</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>

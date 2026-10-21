@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardList, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -65,6 +65,7 @@ import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
+import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
 
 const formatDateIST = formatISTDate;
 const formatDateTimeIST = formatIST;
@@ -624,9 +625,11 @@ function DroppableFolderCard({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canUpload || !onUploadToFolder}
+                disabled={!onUploadToFolder}
+                aria-disabled={!canUpload}
                 onClick={(e) => runFolderAction(e, () => onUploadToFolder?.(folder.id), !canUpload || !onUploadToFolder)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canUpload ? 'You do not have permission to upload resumes' : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Upload className={`w-4 h-4 ${canUpload && onUploadToFolder ? 'text-menu-icon-download' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
@@ -634,21 +637,27 @@ function DroppableFolderCard({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canCreateSubfolder || !onCreateSubfolder}
+                // canCreateSubfolder = upload permission AND folder depth: no
+                // permission greys it with the permission hover (aria-disabled);
+                // max depth stays the native disabled "(max)" state.
+                disabled={(canUpload && !canCreateSubfolder) || !onCreateSubfolder}
+                aria-disabled={!canUpload}
                 onClick={(e) => runFolderAction(e, () => onCreateSubfolder?.(folder.id), !canCreateSubfolder || !onCreateSubfolder)}
-                title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canUpload ? 'You do not have permission to create folders' : !canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
-                {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
+                {canUpload && !canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
               </button>
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canRename || !onStartRename}
+                disabled={!onStartRename}
+                aria-disabled={!canRename}
                 onClick={(e) => runFolderAction(e, () => onStartRename?.(folder), !canRename || !onStartRename)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canRename ? 'You do not have permission to rename folders' : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Edit2 className={`w-4 h-4 ${canRename && onStartRename ? 'text-menu-icon-edit' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
@@ -657,9 +666,11 @@ function DroppableFolderCard({
               <button
                 type="button"
                 role="menuitem"
-                disabled={!canDelete || !onDeleteFolder}
+                disabled={!onDeleteFolder}
+                aria-disabled={!canDelete}
                 onClick={(e) => runFolderAction(e, () => onDeleteFolder?.(folder.id), !canDelete || !onDeleteFolder)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
+                title={!canDelete ? 'You do not have permission to delete folders' : undefined}
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent aria-disabled:text-gray-400 dark:aria-disabled:text-slate-600 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 aria-disabled:hover:bg-white dark:aria-disabled:hover:bg-transparent transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
@@ -1642,6 +1653,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const MAX_FOLDERS_TO_RECONCILE = 30;
   const reconcilingFoldersRef = useRef(false);
   const lastReconciledRef = useRef('');
+  /* Set by the first fetch. That one waits for the reconcile pass before
+     showing the folder tree, so the badges never paint the raw server count
+     and then drop to the corrected one. Later fetches reuse the cached
+     corrections (see below) and reconcile in the background as before. */
+  const folderCountsPrimedRef = useRef(false);
 
   /* Corrections have to outlive the fetch that produced them. Every fetch
      rebuilds the tree from the API, which reinstalls the raw count — so a
@@ -1948,6 +1964,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // Raw server counts, kept aside — the reconcile pass has to compare
       // against these, not against numbers it corrected itself.
       const rawFolders: FolderType[] = [allResumesFolder, ...apiFolders];
+
+      // First load only (see folderCountsPrimedRef): the page is still on its
+      // skeleton, so correct the badges before the tree first appears. Bounded
+      // like every reconcile — one parallel round of small requests.
+      const primeFolderCounts = !folderCountsPrimedRef.current;
+      folderCountsPrimedRef.current = true;
+      if (primeFolderCounts && isUnfiltered) await reconcileFolderCounts(rawFolders);
 
       setResumes(convertedResumes);
       setTotalItems(resumeResponse.total);
@@ -2391,11 +2414,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       }));
 
       setSelectedResumes([]);
-      /* Re-query the view the same way unarchive does: removing the rows above
-         keeps the page correct, but the server owns the page's totals and what
-         backfills from the next page. */
-      isFetchingRef.current = false;
-      fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      /* No explicit re-query here: removing the rows above keeps the page
+         correct, and the moves above fire RESUMES_CHANGED_EVENT, whose
+         listener re-reads the view (totals, what backfills from the next page)
+         through fetchData's queue. A second, forced fetch here used to bypass
+         that queue and race the listener's. */
       toast.success(`${resumeIds.length} resume(s) archived`);
     } catch (error) {
       toast.error('Failed to archive resumes');
@@ -2483,11 +2506,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       }));
 
       setSelectedResumes([]);
-      // Refetch the current folder view — the displayed list (`filteredResumes`)
-      // is the server-returned page for the selected folder, so the
-      // just-unarchived row won't disappear until we re-query.
-      isFetchingRef.current = false;
-      fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      // The displayed list (`filteredResumes`) is the server-returned page for
+      // the selected folder, so the just-unarchived row won't disappear until
+      // it is re-queried — the moves above fire RESUMES_CHANGED_EVENT, whose
+      // listener does that through fetchData's queue (see archive above).
 
       const restoredToOriginal = restorations.filter(r => r.target !== rootFolder.id).length;
       toast.success(
@@ -3201,7 +3223,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
          rather than trying to guess the delta from the server's summary. */
       refreshAllResumesTotal();
       if (deleteResumes && result.deleted_resumes > 0) {
-        isFetchingRef.current = false;
+        // Through fetchData's queue, not around it — forcing the guard open
+        // let this run alongside an in-flight fetch and land in either order.
         fetchData(appliedSearchQuery, filters, selectedFolder, true);
       }
 
@@ -3410,7 +3433,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
         // Background refresh to get correct uploaded_by_name, version counts, etc.
         setTimeout(async () => {
-          isFetchingRef.current = false; // Reset guard so fetchData can run
+          // Queued behind any in-flight fetch rather than forced past it (see
+          // the folder-delete refresh above).
           // Refresh the view the user is actually on, and update the pinned
           // All Resumes count separately — an unfiltered refresh here made the
           // folder view and its badge jump to the whole library for a moment.
@@ -3785,7 +3809,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               ? 'No resumes are available in this folder yet. Add a resume to get started.'
               : 'No resumes are available in this folder yet.'
         }
-        onAction={isArchivedResumesFolder || !canUploadMyResumes ? undefined : () => openUploadToFolder(folderId)}
+        onAction={isArchivedResumesFolder ? undefined : () => openUploadToFolder(folderId)}
+        actionDisabledReason={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
       />
     );
   };
@@ -3858,7 +3883,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       // Refresh full list from server to get correct data
       setTimeout(async () => {
-        isFetchingRef.current = false;
         fetchData(appliedSearchQuery, filters, selectedFolder, true);
         refreshAllResumesTotal();
         await adoptNewBatchIds(priorBatchIds);
@@ -3955,36 +3979,32 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          {canViewMyResumes && (
-            <button
-              onClick={openUploadHistoryModal}
-              disabled={!hasUploadHistory}
-              title={hasUploadHistory ? 'View upload history' : 'No uploads yet'}
-              className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm flex-1 sm:flex-initial ${
-                hasUploadHistory
-                  ? 'text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer'
-                  : 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed'
-              }`}
-            >
-              <History className="w-4 h-4" />
-              <span className="hidden sm:inline">Upload History</span>
-              <span className="sm:hidden">History</span>
-              {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan/60 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-cyan text-white text-2xs items-center justify-center">
-                    {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
-                  </span>
+          <button
+            onClick={() => { if (!canViewMyResumes) return; openUploadHistoryModal(); }}
+            disabled={canViewMyResumes && !hasUploadHistory}
+            aria-disabled={!canViewMyResumes}
+            title={!canViewMyResumes ? 'You do not have permission to view upload history' : hasUploadHistory ? 'View upload history' : 'No uploads yet'}
+            className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm flex-1 sm:flex-initial ${
+              hasUploadHistory && canViewMyResumes
+                ? 'text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer'
+                : 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span className="hidden sm:inline">Upload History</span>
+            <span className="sm:hidden">History</span>
+            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan/60 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-cyan text-white text-2xs items-center justify-center">
+                  {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
                 </span>
-              )}
-            </button>
-          )}
+              </span>
+            )}
+          </button>
           <button
             onClick={() => {
-              if (!canUploadMyResumes) {
-                toast.error('You do not have permission to upload resumes');
-                return;
-              }
+              if (!canUploadMyResumes) return;
               openUploadToFolder(undefined);
             }}
             aria-disabled={!canUploadMyResumes}
@@ -4026,8 +4046,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onMoveToFolderDisabled={!canMoveMyResumes}
             onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
             onApplyToJob={!isArchivedContext ? handleApplyToJob : undefined}
-            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
@@ -4048,8 +4068,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
             onAIInterview={!isArchivedContext ? handleAIInterview : undefined}
-            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
-            onAIInterviewDisabledReason={!(isTenantAdmin || hasPermission('canInviteAIInterviews')) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
+            onAIInterviewDisabled={isPlanLocked('ai_interview') || !(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview')))}
+            onAIInterviewDisabledReason={!(isTenantAdmin || (hasPermission('canInviteAIInterviews') && hasPermissionCode('my_resumes:invite_ai_interview'))) ? "You do not have permission to invite candidates to an AI interview" : PLAN_LOCKED_MESSAGE}
           />
           );
         })()}
@@ -4079,7 +4099,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectResume={(resume) => {
                     sessionStorage.setItem('resumeNavList', JSON.stringify(resumes.map((r) => r.id)));
                     sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                    router.push(`/recruitment/resume-view/${resume.id}`);
+                    router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                   }}
                 />
               </div>
@@ -4199,11 +4219,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               canRenameFolder={canUpdateMyResumes}
               onDeleteFolder={handleDeleteFolder}
               canDeleteFolder={canDeleteMyResumes}
+              canUploadToFolder={canUploadMyResumes}
               onUploadToFolder={(folderId) => {
-                if (!canUploadMyResumes) {
-                  toast.error('You do not have permission to upload resumes');
-                  return;
-                }
+                if (!canUploadMyResumes) return;
                 setSelectedFolder(folderId);
                 openUploadToFolder(folderId);
               }}
@@ -4258,8 +4276,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
                   onApplyToJob={handleSingleResumeApplyToJob}
-                  onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-                  onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                  onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+                  onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
                   onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4268,7 +4286,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onViewDetails={(resume) => {
                     sessionStorage.setItem('resumeNavList', JSON.stringify(filteredResumes.map((r) => r.id)));
                     sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                    router.push(`/recruitment/resume-view/${resume.id}`);
+                    router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                   }}
                   highlightQuery={appliedSearchQuery}
                   /* Rows can be dragged into an order of your own, kept per
@@ -4542,11 +4560,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         </p>
                       </div>
                         </div>
-                        {canUploadMyResumes && currentFolderCanCreateSubfolder ? (
+                        {currentFolderCanCreateSubfolder ? (
                           <button
                             type="button"
-                            onClick={() => openCardFolderInput(cardViewFolder)}
-                            className="inline-flex items-center justify-center gap-1 rounded-md border border-brand-blue/20 bg-white px-3 py-2 text-sm text-blue-600 shadow-sm shadow-brand-blue/5 transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-blue-700 sm:self-start"
+                            onClick={() => { if (!canUploadMyResumes) return; openCardFolderInput(cardViewFolder); }}
+                            aria-disabled={!canUploadMyResumes}
+                            title={!canUploadMyResumes ? 'You do not have permission to create folders' : undefined}
+                            className={`inline-flex items-center justify-center gap-1 rounded-md border bg-white px-3 py-2 text-sm shadow-sm shadow-brand-blue/5 transition-colors sm:self-start ${
+                              canUploadMyResumes
+                                ? 'border-brand-blue/20 text-blue-600 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-blue-700'
+                                : 'border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
                           >
                             <Plus className="w-4 h-4" />
                             New Subfolder
@@ -4648,10 +4672,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             <button
                               type="button"
                               onClick={() => {
-                                if (!canUploadMyResumes) {
-                                  toast.error('You do not have permission to upload resumes');
-                                  return;
-                                }
+                                if (!canUploadMyResumes) return;
                                 openCardFolderInput(null);
                               }}
                               aria-disabled={!canUploadMyResumes}
@@ -4794,8 +4815,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
                             onApplyToJob={handleSingleResumeApplyToJob}
-                            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
-                            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
+                            onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
+                            onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                             onDelete={(id) => handleDelete(id)}
                             onDeleteDisabled={!canDeleteMyResumes}
                             onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4804,13 +4825,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onViewDetails={(resume) => {
                               sessionStorage.setItem('resumeNavList', JSON.stringify(visibleFolderResumes.map((x) => x.id)));
                               sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                              router.push(`/recruitment/resume-view/${resume.id}`);
+                              router.push(`/recruitment/resume-view/${resume.id}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
                             }}
                             highlightQuery={appliedSearchQuery}
                             enableRowReorder
                             reorderScopeKey={cardViewFolder || 'all'}
-                            onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
-                            onUnarchive={canArchiveMyResumes ? (resumeId) => handleUnarchiveResumes([resumeId]) : undefined}
+                            onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                            onArchiveDisabled={!canArchiveMyResumes}
+                            onArchiveDisabledReason="You do not have permission to archive resumes"
+                            onUnarchive={(resumeId) => handleUnarchiveResumes([resumeId])}
+                            onUnarchiveDisabled={!canArchiveMyResumes}
+                            onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                             canShare={canShareMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
@@ -4903,7 +4928,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           onViewResume={(resumeId) => {
             setIsUploadModalOpen(false);
             sessionStorage.setItem('resumeNavSource', 'my-resumes');
-            router.push(`/recruitment/resume-view/${resumeId}`);
+            router.push(`/recruitment/resume-view/${resumeId}?${RESUME_VIEW_SOURCE_PARAM}=my-resumes`);
           }}
           onDuplicateDetected={(duplicateData) => {
             // Set duplicate files for the DuplicateResumeModal
@@ -5617,14 +5642,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             }
                             /* Straight from history into the upload dialog — the
                                modal has to close first or the two would stack. */
-                            onAction={
-                              canUploadMyResumes
-                                ? () => {
-                                    handleCloseUploadHistory();
-                                    openUploadToFolder(undefined);
-                                  }
-                                : undefined
-                            }
+                            onAction={() => {
+                              handleCloseUploadHistory();
+                              openUploadToFolder(undefined);
+                            }}
+                            actionDisabledReason={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
                           />
 
                           {/* The Upload Resume popup's own Tip — the brand's amber,
@@ -6199,7 +6221,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             setSelectedVersionedItems(new Map());
             // Refresh batch data, without pulling the view out of its folder
             fetchUploadHistory();
-            isFetchingRef.current = false;
             fetchData(appliedSearchQuery, filters, selectedFolder, true);
             refreshAllResumesTotal();
           }}
@@ -6226,7 +6247,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                    <ClipboardCheck className="w-4 h-4 text-brand-blue" />
+                    <ClipboardList className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Invite to Assessment</h2>

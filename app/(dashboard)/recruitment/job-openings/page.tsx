@@ -10,7 +10,7 @@ import SelectSourceModal from '@/components/SelectSourceModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
-import { jdService, JDListResponse } from '@/lib/services/jdService';
+import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -110,17 +110,23 @@ function JobOpeningsSkeleton() {
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  // Total/Published/Draft/Archived, precomputed server-side (page 1 of the same
-  // `/jd` call) so the stat cards can show the right number immediately. `jobs`
-  // itself still fills in two steps below (page 1, then the rest in parallel) —
-  // without this, the cards read page 1's partial tally first and then jump to
-  // the correct one once every page has landed. `jobsFullyLoaded` marks the
-  // point where `jobs` itself is complete and can take over as the live source
-  // (so a publish/archive/delete action keeps updating the cards instantly,
-  // the way it did before this existed) — the handover is silent because by
-  // then the two sources agree.
-  const [statusCounts, setStatusCounts] = useState<JDListResponse['status_counts']>(null);
+  /* Whether `jobs` holds every page yet. The stat cards show a placeholder
+     until it does, then count straight from `jobs` — the same rows, and the
+     same version rules, as the table below them. They used to show the
+     server's page-1 `status_counts` first and then hand over to that tally,
+     but the two count differently (the server by each lineage's latest
+     version, the cards by "any version has the status", so each card equals
+     its tab's row count) — the handover was the jump from one set of numbers
+     to another on every load. */
   const [jobsFullyLoaded, setJobsFullyLoaded] = useState(false);
+  /* Bumped by every fetchJobs run and by unmount / user change, so a response
+     belonging to an older run is dropped instead of overwriting newer data
+     (or appending its pages onto another run's list). */
+  const fetchSeqRef = useRef(0);
+  /* Rows (versions) deleted on this mount. A delete can land while later pages
+     are still loading, and those pages may still carry the deleted row. Only
+     that row - a delete removes ONE version; the job's other versions stay. */
+  const deletedIdsRef = useRef(new Set<string>());
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
@@ -163,10 +169,17 @@ export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // Score Resumes from the JD list needs Resume Scoring → Score Resume and the
+  // JD's own "Score Resume" permission (jd:add_applicants).
+  // Run AI Talent Match from the JD list needs AI Talent Match → Run and the
+  // JD entry point "Run AI Talent Match" (jd:ai_match).
+  const canUpdateJdHere = isTenantAdmin || hasPermission('canUpdateJD');
+  const canAIMatchFromJd = isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('jd:ai_match'));
+  const canScoreFromJd = isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('jd:add_applicants'));
   const canManageMasters = hasPermission('canManageSettings');
 
-  // "?view=list" is a one-shot instruction from the JD flow's "View All Jobs":
+  // "?view=list" is a one-shot instruction from the JD flow's "Go to All Jobs":
   // open the full list with every job showing, rather than the stat-tile overview
   // or whatever narrowed view was last persisted. Captured on the first render so
   // it stays stable for this mount, then stripped from the URL below.
@@ -225,10 +238,11 @@ export default function JobOpeningsPage() {
 
   // Re-fetch jobs and quota when user changes
   useEffect(() => {
-    if (user) {
-      fetchJobs();
-      fetchQuotaInfo();
-    }
+    if (!user) return;
+    fetchJobs();
+    fetchQuotaInfo();
+    // Invalidate this run's in-flight pages on user change / unmount.
+    return () => { fetchSeqRef.current += 1; };
   }, [user?.id]);
 
   const fetchQuotaInfo = async () => {
@@ -248,6 +262,8 @@ export default function JobOpeningsPage() {
   };
 
   const fetchJobs = async () => {
+    const seq = ++fetchSeqRef.current;
+    const isStale = () => seq !== fetchSeqRef.current;
     setLoading(true);
     setJobsFullyLoaded(false);
     // Pull "my JDs" in smaller pages. The previous page_size=total request
@@ -259,6 +275,7 @@ export default function JobOpeningsPage() {
         page_size: JD_BATCH_SIZE,
         source: 'my-jds',
       });
+      if (isStale()) return;
 
       /* One mapping for every surface that lists JDs — this page and the Apply
          to Job dialog both build their rows with it, so neither can end up
@@ -268,9 +285,8 @@ export default function JobOpeningsPage() {
          `?? []` guards a backend response without an `items` array — otherwise
          `.map` would throw and (crucially) leave the page stuck on the skeleton. */
       setJobs((firstPage.items ?? []).map(mapJDToJob));
-      // Precomputed on this same call — see fetchJobs' jobsFullyLoaded comment.
-      setStatusCounts(firstPage.status_counts ?? null);
     } catch (error) {
+      if (isStale()) return;
       // First-page failure (or a bad shape) is a real load failure — surface it.
       // The `finally` below still clears the skeleton so the page never hangs.
       console.error('Failed to fetch jobs:', error);
@@ -279,8 +295,8 @@ export default function JobOpeningsPage() {
     } finally {
       // ALWAYS drop the skeleton after the first page attempt, success or not —
       // this is the guarantee that the page can never be stuck showing only the
-      // skeleton with no data.
-      setLoading(false);
+      // skeleton with no data. A stale run leaves it to the run that replaced it.
+      if (!isStale()) setLoading(false);
     }
 
     // Fetch any remaining pages in PARALLEL (not one after another) so the full
@@ -301,14 +317,30 @@ export default function JobOpeningsPage() {
         jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' })
       )
     );
+    if (isStale()) return;
     const restJobs = results.flatMap((r) =>
       r.status === 'fulfilled' ? (r.value.items ?? []).map(mapJDToJob) : []
     );
     if (restJobs.length) {
-      setJobs((prev) => [...prev, ...restJobs]);
+      setJobs((prev) => {
+        /* A JD created between the page requests shifts rows across page
+           boundaries, so the same row can arrive twice — count it once. The
+           row already on screen wins: it may carry a status the recruiter has
+           changed since page 1 loaded. */
+        const seen = new Set(prev.map((j) => j.id));
+        const fresh = restJobs.filter((j) => {
+          if (seen.has(j.id) || deletedIdsRef.current.has(j.id)) return false;
+          seen.add(j.id);
+          return true;
+        });
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
+    }
+    if (results.some((r) => r.status === 'rejected')) {
+      toast.error('Some job openings could not be loaded — counts may be incomplete. Refresh to try again.');
     }
     // `jobs` now has every page (or every page that didn't fail) — the stat
-    // cards can safely switch from `statusCounts` to their own live tally.
+    // cards can drop their placeholder and count it.
     setJobsFullyLoaded(true);
   };
 
@@ -348,6 +380,8 @@ export default function JobOpeningsPage() {
     // entered data invisible (not lost — just on a step this URL insisted on showing
     // instead of the one the record was on).
     if (job.status === 'Draft') {
+      // Drafts open in the editor — stay on this list without Edit permission.
+      if (!canUpdateJdHere) return;
       router.push(`/recruitment/jd-creation?id=${job.id}`);
     } else {
       router.push(`/recruitment/job-details?id=${job.id}`);
@@ -395,6 +429,7 @@ export default function JobOpeningsPage() {
     // the same note on handleViewJob above; this list's `job.creation_stage`
     // can be stale, and jd-creation's own fresh fetch is the source of truth.
     if (job.status === 'Draft') {
+      if (!canUpdateJdHere) return;
       router.push(`/recruitment/jd-creation?id=${job.id}`);
       return;
     }
@@ -435,6 +470,8 @@ export default function JobOpeningsPage() {
   // editor then opens on the new version; the previous version keeps all its
   // assessments/interviews/scores untouched.
   const handleCreateNewVersion = async () => {
+    // A new version is a new JD — needs Create JD permission, not just Edit.
+    if (!(isTenantAdmin || hasPermission('canCreateJD'))) return;
     const sourceId = editWarningDialog.jobId;
     if (!sourceId) return;
     setEditWarningDialog(prev => ({ ...prev, creating: true }));
@@ -594,25 +631,35 @@ export default function JobOpeningsPage() {
     } catch (error) {
       console.error('Failed to check JD usage status:', error);
     }
+    // A later version is its own row: deleting it removes that version only.
+    const isLaterVersion = (job.versionNumber ?? 1) > 1;
     if (!await dialog.confirm({
-      title: 'Delete Job Opening',
-      message: 'Are you sure you want to delete this job opening?\nThis action cannot be undone.',
+      title: isLaterVersion ? `Delete Version V${job.versionNumber}` : 'Delete Job Opening',
+      message: isLaterVersion
+        ? `Are you sure you want to delete version V${job.versionNumber}?\nThis action cannot be undone.`
+        : 'Are you sure you want to delete this job opening?\nThis action cannot be undone.',
       variant: 'delete',
-      confirmText: 'Delete Job Opening',
+      confirmText: isLaterVersion ? 'Delete Version' : 'Delete Job Opening',
       item: {
         label: 'JOB OPENING',
         name: [job.job_id, job.title].filter(Boolean).join(' – ') || job.title,
         badge: job.versionNumber ? `V${job.versionNumber}` : undefined,
       },
-      warningNote: 'Deleting this job opening will permanently remove it from your job openings and cannot be restored.',
+      warningNote: isLaterVersion
+        ? `Only V${job.versionNumber} is deleted. The earlier versions of ${job.job_id || 'this job'} and everything they were used in are kept.`
+        : 'Deleting this job opening will permanently remove it from your job openings and cannot be restored.',
     })) return;
     try {
       await jdService.delete(job.id);
-      // Remove the whole lineage (every version), not just this row — otherwise an
-      // older version collapses back onto the All Jobs list. See bulk delete above.
-      const deletedLineage = job.job_id || job.id;
-      setJobs(prev => prev.filter(j => (j.job_id || j.id) !== deletedLineage));
-      toast.success(`"${job.title}" has been deleted`);
+      // Remove THIS row only. The backend deletes one version and makes the newest
+      // remaining version the latest again, so it takes this row's place on the
+      // All Jobs list. Dropping the whole lineage here hid v1 of a job whose v2
+      // draft was deleted, which looked as if the entire job had been deleted.
+      deletedIdsRef.current.add(job.id);
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      toast.success(isLaterVersion
+        ? `V${job.versionNumber} of "${job.title}" has been deleted`
+        : `"${job.title}" has been deleted`);
     } catch (error: any) {
       toast.error(error?.message || 'Failed to delete job');
     }
@@ -744,18 +791,12 @@ export default function JobOpeningsPage() {
     }
 
     if (deletedIds.length > 0) {
-      // Drop EVERY version of each deleted job (by its lineage job_id), not just
-      // the single row that was selected. On the All Jobs tab the selected row is
-      // a job's LATEST version; removing only that id left the older versions in
-      // state, and collapseToLatestVersions then promoted one of them back onto
-      // the list — so the job looked like it had never been deleted. Falls back
-      // to id when a record has no job_id.
-      const deletedLineages = new Set(
-        jobsToDelete
-          .filter(job => deletedIds.includes(job.id))
-          .map(job => job.job_id || job.id),
-      );
-      setJobs(prev => prev.filter(job => !deletedLineages.has(job.job_id || job.id)));
+      // Drop only the rows that were deleted. Each delete removes ONE version; the
+      // older versions of that job still exist, and collapseToLatestVersions puts
+      // the newest of them back on the All Jobs list - which is correct, because
+      // the job itself was not deleted.
+      deletedIds.forEach((id) => deletedIdsRef.current.add(id));
+      setJobs(prev => prev.filter(job => !deletedIds.includes(job.id)));
     }
 
     if (deletedIds.length > 0 && skipped.length === 0 && failed === 0) {
@@ -784,18 +825,17 @@ export default function JobOpeningsPage() {
     <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <JobsListing
         jobs={jobs}
-        statusCounts={statusCounts}
         jobsFullyLoaded={jobsFullyLoaded}
         onCreateNew={handleCreateNew}
         onCreateNewDisabled={!(hasPermission('canCreateJD') || isTenantAdmin)}
         onViewJob={handleViewJob}
         onViewApplicants={handleViewApplicants}
         onAIMatch={handleAIMatch}
-        onAIMatchDisabled={isPlanLocked('ai_talent_match') || !(hasPermission('canRunAiMatch') || isTenantAdmin)}
-        onAIMatchDisabledReason={isPlanLocked('ai_talent_match') ? PLAN_LOCKED_MESSAGE : undefined}
+        onAIMatchDisabled={isPlanLocked('ai_talent_match') || !canAIMatchFromJd}
+        onAIMatchDisabledReason={isPlanLocked('ai_talent_match') ? PLAN_LOCKED_MESSAGE : 'You do not have permission to run AI Talent Match from a job description'}
         onScoreResumes={handleScoreResumes}
-        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !(hasPermission('canRunScoring') || isTenantAdmin)}
-        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : undefined}
+        onScoreResumesDisabled={isPlanLocked('resume_scoring') || !canScoreFromJd}
+        onScoreResumesDisabledReason={isPlanLocked('resume_scoring') ? PLAN_LOCKED_MESSAGE : 'You do not have permission to score resumes'}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={handleEditJob}
         onPublishJob={handlePublishJob}
@@ -812,7 +852,8 @@ export default function JobOpeningsPage() {
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
-        configHref={canManageMasters ? '/recruitment/job-openings/config' : undefined}
+        configHref="/recruitment/job-openings/config"
+        configDisabled={!canManageMasters}
       />
 
       {/* Archive confirm — the same component the Job Details page renders, so
@@ -884,6 +925,7 @@ export default function JobOpeningsPage() {
         jdId={editWarningDialog.jobId}
         creating={!!editWarningDialog.creating}
         atMaxVersions={(editWarningDialog.versionNumber ?? 1) >= 5}
+        canCreate={isTenantAdmin || hasPermission('canCreateJD')}
         cancelInFooter
         onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
         onCreateNewVersion={handleCreateNewVersion}

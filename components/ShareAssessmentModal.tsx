@@ -68,6 +68,10 @@ interface ShareAssessmentModalProps {
   prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
   inviteSource?: string; // Source context: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
   onInviteSent?: (count: number) => void;
+  /** Fired the moment an invitation exists server-side (Send or Copy Link),
+   *  without waiting for the success popup — so a tracker behind the modal can
+   *  refresh at once. Distinct from onInviteSent, which is held back 2s. */
+  onInvitesChanged?: () => void;
   additionalAssessments?: Array<{
     id: string;
     title: string;
@@ -158,7 +162,7 @@ type SidebarFolder = { id: string; name: string; parentId?: string | null; count
 const withEntryRow = (list: CandidateEmail[]): CandidateEmail[] =>
   list.some((c) => c.source !== 'database') ? list : [...list, { id: 'manual-entry', name: '', email: '', source: 'manual' }];
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, onInvitesChanged, additionalAssessments, onBack, embedded = false, footerTarget = null }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { quotaData } = useQuota();
@@ -873,6 +877,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           : c
       ));
 
+      onInvitesChanged?.();
       await navigator.clipboard.writeText(result.link);
       toast.success(`Link copied for ${candidate.name}! Expires in ${expiryDays} day${expiryDays !== 1 ? 's' : ''}. Share via WhatsApp, SMS, or send via email.`);
     } catch (err: any) {
@@ -1042,6 +1047,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         setSentCount(sentSoFar);
         setShowSuccess(true);
+        onInvitesChanged?.();
         // As in the AI Interview modal: the host is told AFTER the success popup
         // has had its moment, so a refresh it kicks off cannot disturb the popup.
         setTimeout(() => {
@@ -1125,6 +1131,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
       setSentCount(successCount);
       setShowSuccess(true);
+      onInvitesChanged?.();
       setTimeout(() => {
         setShowSuccess(false);
         onInviteSent?.(successCount);
@@ -1825,12 +1832,20 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <div className="border-2 border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 {/* Tabs */}
                 <div className="flex border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-x-auto">
-                  {hasMyResumesAccess && (
+                  {/* RBAC: both source tabs are always listed; one the user
+                      cannot open is greyed with a tooltip (never hidden). */}
+                  {(() => {
+                    const myResumesLocked = !hasMyResumesAccess;
+                    return (
                     <button
                       type="button"
-                      onClick={() => setDbTab('my-resumes')}
+                      onClick={() => { if (!myResumesLocked) setDbTab('my-resumes'); }}
+                      aria-disabled={myResumesLocked}
+                      title={myResumesLocked ? 'You do not have permission to access My Resumes' : undefined}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                        dbTab === 'my-resumes'
+                        myResumesLocked
+                          ? 'border-transparent text-gray-400 cursor-not-allowed opacity-60'
+                          : dbTab === 'my-resumes'
                           ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
@@ -1842,13 +1857,22 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         <span title="Selected from My Resumes" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.myResumes}</span>
                       )}
                     </button>
-                  )}
-                  {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
+                    );
+                  })()}
+                  {(() => {
+                    // Same rule as before: Shared Database opens with its own
+                    // access, or as the fallback when neither source is granted.
+                    const sharedDbLocked = !(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess));
+                    return (
                     <button
                       type="button"
-                      onClick={() => setDbTab('internal-db')}
+                      onClick={() => { if (!sharedDbLocked) setDbTab('internal-db'); }}
+                      aria-disabled={sharedDbLocked}
+                      title={sharedDbLocked ? 'You do not have permission to access the Shared Database' : undefined}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ${
-                        dbTab === 'internal-db'
+                        sharedDbLocked
+                          ? 'border-transparent text-gray-400 cursor-not-allowed opacity-60'
+                          : dbTab === 'internal-db'
                           ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
@@ -1860,7 +1884,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         <span title="Selected from Shared Database" className="px-1.5 py-0.5 rounded-full text-xs font-semibold bg-brand-blue text-white tabular-nums">✓ {pickedBySource.sharedDb}</span>
                       )}
                     </button>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Content: folder sidebar + resume list */}

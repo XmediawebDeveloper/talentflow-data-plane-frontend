@@ -27,32 +27,23 @@ import MyResumesView from '@/components/resumes/MyResumesView';
 import InternalDatabaseView from '@/components/resumes/InternalDatabaseView';
 import { resumeService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
 import type { Permission } from '@/lib/types/tenant';
+import {
+  INTERNAL_DB_PERMISSIONS,
+  MY_RESUMES_PERMISSIONS,
+  RESUME_TAB_LABEL as TAB_LABEL,
+  type ResumeTab,
+} from '@/lib/constants/resumePools';
 
-export type ResumeTab = 'my-resumes' | 'internal-db';
+export type { ResumeTab };
 
-/** Tab labels for the tab strip. */
-const TAB_LABEL: Record<ResumeTab, string> = {
-  'my-resumes': 'My Resumes',
-  'internal-db': 'Shared Database',
-};
-
-/* The same permission lists the nav entry is gated on (see
-   lib/navigation/menuSections.ts) — holding ANY one of a tab's permissions is
-   enough to see that tab, so the two stay in step: if the menu item shows, at
-   least one tab behind it is reachable. */
-const MY_RESUMES_PERMISSIONS = [
-  'canViewResumes',
-  'canUploadResumes',
-  'canUpdateResumes',
-  'canDeleteResumes',
-] as const;
-
-const INTERNAL_DB_PERMISSIONS = [
-  'canAccessInternalDB',
-  'canViewInternalDB',
-  'canUpdateInternalDB',
-  'canDeleteInternalDB',
-] as const;
+/** The page's breadcrumb, shared by the page and its no-access state.
+ *  The tab strip already shows which pool is open, so the trail stops at the
+ *  page itself rather than repeating the tab name — and stays the same when
+ *  the tab changes. */
+const CRUMBS = [
+  { label: 'Dashboard', href: '/dashboard' },
+  { label: 'Resume Database' },
+];
 
 export default function ResumeDatabasePage() {
   const searchParams = useSearchParams();
@@ -100,9 +91,15 @@ export default function ResumeDatabasePage() {
     window.history.replaceState(null, '', `/recruitment/resume-database?tab=${next}`);
   };
 
-  /* One tab is not a tab strip — a user with only one of the two permissions
-     sees the page without it, rather than a lone chip that looks broken. */
-  const showTabs = canSeeMyResumes && canSeeInternalDb;
+  /* Both pools readable — the tab counts are fetched only then (a pool the
+     user may not read is never queried). */
+  const bothPools = canSeeMyResumes && canSeeInternalDb;
+  /* RBAC: the tab strip is always shown once the page renders. A pool the
+     user lacks permission for stays VISIBLE as a greyed-out tab with a hover
+     tooltip — permission-gated tabs are never hidden. */
+  const showTabs = canSeeMyResumes || canSeeInternalDb;
+  const tabLocked = (tab: ResumeTab): boolean =>
+    !authLoading && (tab === 'my-resumes' ? !canSeeMyResumes : !canSeeInternalDb);
 
   /* Per-pool totals for the tab badges. One page_size=1 request each — the
      same probe the views use for their own totals — so switching tabs never
@@ -111,7 +108,7 @@ export default function ResumeDatabasePage() {
      uploads/deletes made on the other tab. */
   const [tabCounts, setTabCounts] = useState<Partial<Record<ResumeTab, number>>>({});
   useEffect(() => {
-    if (!showTabs) return;
+    if (!bothPools) return;
     let cancelled = false;
     const load = () => {
       (['my-resumes', 'internal-db'] as const).forEach((tab) => {
@@ -133,18 +130,11 @@ export default function ResumeDatabasePage() {
       cancelled = true;
       window.removeEventListener(RESUMES_CHANGED_EVENT, load);
     };
-  }, [showTabs, activeTab]);
-
-  // The tab strip already shows which pool is open, so the breadcrumb stops at
-  // the page itself rather than repeating the tab name.
-  const crumbs = [
-    { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Resume Database' },
-  ];
+  }, [bothPools, activeTab]);
 
   const header = (
     <>
-      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={crumbs} />
+      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={CRUMBS} />
       {showTabs && (
         <Tabs value={activeTab ?? undefined} onValueChange={handleTabChange} className="mb-5 md:mb-6">
           {/* Sized to its labels and visibly grooved, so the selected pool reads
@@ -159,13 +149,22 @@ export default function ResumeDatabasePage() {
               // Own colour per pool — orange like the folder icons in the
               // tree, cyan like the system folders — so the two read apart.
               const iconColor = tab === 'my-resumes' ? 'text-brand-orange' : 'text-brand-cyan';
-              return (
+              const locked = tabLocked(tab);
+              /* Locked: native `disabled` on the trigger (Radix then refuses to
+                 select it), wrapped in a span so the tooltip still shows. */
+              const trigger = (
                 <TabsTrigger
                   key={tab}
                   value={tab}
-                  className="h-9 flex-none gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 sm:gap-2 sm:px-4 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800"
+                  disabled={locked}
+                  aria-disabled={locked || undefined}
+                  className={
+                    locked
+                      ? 'h-9 flex-none gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium text-gray-400 cursor-not-allowed opacity-60 dark:text-slate-500'
+                      : 'h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 sm:gap-2 sm:px-4 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800'
+                  }
                 >
-                  <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
+                  <Icon className={`h-4 w-4 shrink-0 ${locked ? 'text-gray-400' : iconColor}`} />
                   {TAB_LABEL[tab]}
                   {tabCounts[tab] !== undefined && (
                     <span
@@ -180,6 +179,15 @@ export default function ResumeDatabasePage() {
                   )}
                 </TabsTrigger>
               );
+              return locked ? (
+                <span
+                  key={tab}
+                  title={`You do not have permission to view ${TAB_LABEL[tab]}`}
+                  className="inline-flex cursor-not-allowed"
+                >
+                  {trigger}
+                </span>
+              ) : trigger;
             })}
           </TabsList>
         </Tabs>
@@ -195,10 +203,7 @@ export default function ResumeDatabasePage() {
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb
-              className="mb-4 md:mb-6"
-              items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Database' }]}
-            />
+            <PageBreadcrumb className="mb-4 md:mb-6" items={CRUMBS} />
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
                 <Lock className="h-5 w-5" />

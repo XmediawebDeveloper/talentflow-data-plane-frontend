@@ -19,6 +19,7 @@ import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import type { Resume } from '@/lib/types/types';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -290,6 +291,11 @@ interface ScoredResumesTableProps {
    *  All Candidates" host, which instead relies on each row's own `jobCode`
    *  since rows there span different jobs. */
   jobCode?: string;
+  /** This single-job host's JD version — the version every score here was
+   *  fetched for. Only the View Score Table popup reads it, as a fallback for
+   *  a row without its own `jobVersion`; the table's Job Version column stays
+   *  on the rows' own values. */
+  jobVersion?: number | null;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -416,6 +422,12 @@ interface ScoredResumesTableProps {
    */
   onOpenInviteDialog?: (kind: 'assessment' | 'interview', candidates: InviteCandidate[]) => void;
   /**
+   * Job Details → Resume Scoring: a row's ⋮ menu lists the two invite entries
+   * (Create / Send Assessment | AI Interview) directly, instead of under an
+   * "Invite ▸" submenu. Same entries, gates and handlers either way.
+   */
+  inlineRowInviteItems?: boolean;
+  /**
    * Embedded use — the rows of ONE job opened inline under its row in
    * Resume Scoring's "View by Job". Drops the card chrome and the whole
    * search / More Filters / view-toggle toolbar (the host's own controls
@@ -518,6 +530,7 @@ export function renderInviteTargetItems({
   target,
   itemClass,
   allowed,
+  deniedReason,
   extraDisabled,
   extraDisabledReason,
   onInvite,
@@ -529,6 +542,9 @@ export function renderInviteTargetItems({
   itemClass: string;
   /** Permission + plan allow this invite at all. */
   allowed: boolean;
+  /** Hover text when `!allowed` (permission or plan message). The item stays
+   *  visible and greyed; `onInvite` should no-op silently. */
+  deniedReason?: string;
   /** e.g. no assessment units left. */
   extraDisabled?: boolean;
   extraDisabledReason?: string;
@@ -539,14 +555,15 @@ export function renderInviteTargetItems({
   label?: string;
 }) {
   const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-  const Icon = kind === 'assessment' ? FileText : Video;
-  const iconClass = kind === 'assessment' ? 'text-menu-icon-view' : 'text-menu-icon-share';
+  const Icon = kind === 'assessment' ? ClipboardList : Video;
+  const iconClass = kind === 'assessment' ? 'text-menu-icon-view' : 'text-menu-icon-ai';
   if (!allowed || target.state === 'ready') {
     return (
       <DropdownMenuItem
-        className={`${itemClass} ${!allowed || extraDisabled ? 'text-gray-400 opacity-60' : ''}`}
+        className={`${itemClass} ${!allowed || extraDisabled ? '!text-gray-400 opacity-60' : ''} ${!allowed ? 'cursor-not-allowed' : ''}`}
         disabled={allowed && extraDisabled}
-        title={allowed && extraDisabled ? extraDisabledReason : undefined}
+        aria-disabled={!allowed || undefined}
+        title={!allowed ? deniedReason : extraDisabled ? extraDisabledReason : undefined}
         onSelect={onInvite}
       >
         <Icon className={`w-4 h-4 ${iconClass}`} />
@@ -597,7 +614,7 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   // canCreateAssessments (creating a brand-new assessment is a different
   // action).
   const assessmentInvitePermitted =
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
+    (isTenantAdmin || (hasPermissionCode('scoring:invite_assessment') && hasPermissionCode('assessments:invite'))) &&
     isFeatureEnabled('assessment');
   const canCreateAssessments = assessmentInvitePermitted && hasPlanFeature('assessment');
   // A permitted user whose plan lacks Assessments is told so, not that they
@@ -610,8 +627,7 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   // Scoring surface); canInviteAIInterviews is what the endpoints enforce.
   const aiInterviewInvitePermitted =
     canCarryAIInterview &&
-    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
-    hasPermission('canInviteAIInterviews') &&
+    (isTenantAdmin || (hasPermissionCode('scoring:invite_ai_interview') && hasPermission('canInviteAIInterviews'))) &&
     isFeatureEnabled('ai_interview');
   const mayInviteAIInterview = aiInterviewInvitePermitted && hasPlanFeature('ai_interview');
   const aiInterviewDeniedReason = aiInterviewInvitePermitted
@@ -637,6 +653,7 @@ export default function ScoredResumesTable({
   jobTitle: rawJobTitle,
   jobId = 'jd-1',
   jobCode,
+  jobVersion: hostJobVersion,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -664,6 +681,7 @@ export default function ScoredResumesTable({
   hiddenColumnIds,
   formatCandidateName,
   onOpenInviteDialog,
+  inlineRowInviteItems = false,
   verdictCountRows,
   activeVerdict = null,
   displayMode: controlledDisplayMode,
@@ -1816,21 +1834,27 @@ Best regards`);
       return (
         <>
           <DropdownMenuItem
-            className={scoredResumesMenuItemClass}
-            disabled={!rowCanInviteAssessment}
+            className={`${scoredResumesMenuItemClass} ${!rowCanInviteAssessment ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+            aria-disabled={!rowCanInviteAssessment || undefined}
             title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
-            onSelect={() => onOpenInviteDialog('assessment', [invitee])}
+            onSelect={(e) => {
+              if (!rowCanInviteAssessment) { e.preventDefault(); return; }
+              onOpenInviteDialog('assessment', [invitee]);
+            }}
           >
-            <FileText className="w-4 h-4 text-menu-icon-view" />
+            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
             <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
           </DropdownMenuItem>
           <DropdownMenuItem
-            className={scoredResumesMenuItemClass}
-            disabled={!rowCanInviteAIInterview}
+            className={`${scoredResumesMenuItemClass} ${!rowCanInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+            aria-disabled={!rowCanInviteAIInterview || undefined}
             title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
-            onSelect={() => onOpenInviteDialog('interview', [invitee])}
+            onSelect={(e) => {
+              if (!rowCanInviteAIInterview) { e.preventDefault(); return; }
+              onOpenInviteDialog('interview', [invitee]);
+            }}
           >
-            <Video className="w-4 h-4 text-menu-icon-share" />
+            <Video className="w-4 h-4 text-menu-icon-ai" />
             <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
           </DropdownMenuItem>
         </>
@@ -1839,12 +1863,14 @@ Best regards`);
     return (
       <>
           <DropdownMenuItem
-            className={scoredResumesMenuItemClass}
+            className={`${scoredResumesMenuItemClass} ${!canCreateAssessments ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
             /* Off unless this JD has a published assessment —
                and assessment invites spend a unit, so the entry
                also goes quiet when there are none left rather
-               than opening a form that cannot be submitted. */
-            disabled={!canCreateAssessments || !rowCanInviteAssessment || availableUnits === 0}
+               than opening a form that cannot be submitted.
+               No permission: greyed via aria-disabled so the hover shows. */
+            disabled={canCreateAssessments && (!rowCanInviteAssessment || availableUnits === 0)}
+            aria-disabled={!canCreateAssessments || undefined}
             title={
               !canCreateAssessments
                 ? assessmentDeniedReason
@@ -1854,23 +1880,24 @@ Best regards`);
                     ? 'No assessment units available'
                     : undefined
             }
-            onSelect={() => {
+            onSelect={(e) => {
               if (!canCreateAssessments) {
-                toast.error(assessmentDeniedReason);
+                e.preventDefault();
                 return;
               }
               setInviteCandidate(resume);
               setShowInviteModal(true);
             }}
           >
-            <FileText className="w-4 h-4 text-menu-icon-view" />
+            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
             <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
           </DropdownMenuItem>
           <DropdownMenuItem
-            className={scoredResumesMenuItemClass}
+            className={`${scoredResumesMenuItemClass} ${!mayInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
             /* Same rule on the interview side: nothing live on
                this JD means nothing to invite the candidate to. */
-            disabled={!mayInviteAIInterview || !rowCanInviteAIInterview}
+            disabled={mayInviteAIInterview && !rowCanInviteAIInterview}
+            aria-disabled={!mayInviteAIInterview || undefined}
             title={
               !mayInviteAIInterview
                 ? aiInterviewDeniedReason
@@ -1878,9 +1905,9 @@ Best regards`);
                   ? 'No published AI interview for this job yet'
                   : undefined
             }
-            onSelect={() => {
+            onSelect={(e) => {
               if (!mayInviteAIInterview) {
-                toast.error(aiInterviewDeniedReason);
+                e.preventDefault();
                 return;
               }
                 if (onInviteAIInterview) {
@@ -1896,7 +1923,7 @@ Best regards`);
                 }
               }}
             >
-              <Video className="w-4 h-4 text-menu-icon-share" />
+              <Video className="w-4 h-4 text-menu-icon-ai" />
               <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
             </DropdownMenuItem>
       </>
@@ -1906,13 +1933,22 @@ Best regards`);
   /** Invite as the FIRST entry of a row's Actions menu — a submenu with
    *  Assessment / AI Interview. Shared by the table rows and the grid cards;
    *  rows no longer carry a separate Invite button. */
+  /** Row ⋮ menus that hold the invite entries: w-56 once the "Create / Send …"
+   *  labels sit in the menu itself — Job Details' Resumes row ⋮ width. */
+  const rowInviteMenuWidthClass = inlineRowInviteItems ? 'w-56' : 'w-52';
   const renderInviteSubmenu = (resume: ScoredResume) => {
+    // inlineRowInviteItems: the same entries straight in the ⋮ menu, no Invite ▸.
+    if (inlineRowInviteItems) return renderInviteMenuItems(resume);
     const { rowInviteDisabled, rowInviteDisabledTitle } = getRowInviteGate(resume);
     return (
       <DropdownMenuSub>
         <DropdownMenuSubTrigger
-          className={`${scoredResumesMenuItemClass} ${rowInviteDisabled ? 'text-gray-400 opacity-60' : ''}`}
-          disabled={rowInviteDisabled}
+          className={`${scoredResumesMenuItemClass} ${rowInviteDisabled ? '!text-gray-400 opacity-60' : ''}`}
+          /* No permission (or plan): stays hoverable so the tooltip shows —
+             the submenu's two entries are greyed no-ops. Native disabled is
+             kept only for the non-permission "nothing published" case. */
+          disabled={rowInviteDisabled && (canCreateAssessments || mayInviteAIInterview)}
+          aria-disabled={rowInviteDisabled || undefined}
           title={rowInviteDisabled ? rowInviteDisabledTitle : undefined}
         >
           <UserPlus className="w-4 h-4 text-menu-icon-share" />
@@ -1936,27 +1972,35 @@ Best regards`);
    */
   /** `candidateRows` — the grouped candidate row's menu: Download Scorecard
    *  then covers every job in the group, not just its top row. */
-  const renderActionsMenuItems = (resume: ScoredResume, candidateRows?: ScoredResume[]) => (
-    <>
+  /** `withInvites` — a row menu in Job Details (inlineRowInviteItems): the
+   *  invite entries go in the middle, so the order reads View Resume, View
+   *  Results, View Score Table, Create / Send Assessment, Create / Send AI
+   *  Interview, Download Scorecard. Elsewhere the order is unchanged and the
+   *  caller puts its Invite ▸ submenu above these. */
+  const renderActionsMenuItems = (resume: ScoredResume, candidateRows?: ScoredResume[], withInvites = false) => {
+    const viewResults = (
       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
         <Eye className="w-4 h-4 text-menu-icon-view" />
         <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
       </DropdownMenuItem>
+    );
+    const viewScoreTable = (
       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setScoreTableCandidate(resume)}>
         <BarChart3 className="w-4 h-4 text-menu-icon-view" />
         <span className={MENU_ITEM_SCALE_CLASS}>View Score Table</span>
       </DropdownMenuItem>
-      {/* Only scores that still point at a resume have a file behind them to
-          preview. */}
-      {resume.resumeId && (
-        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setViewResumeCandidate(resume)}>
-          <FileText className="w-4 h-4 text-menu-icon-view" />
-          <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
-        </DropdownMenuItem>
-      )}
-      {/* Only scores that still point at a resume can be shared. Hidden
-          for now (RESUME_EMAIL_SHARE_ENABLED). */}
-      {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
+    );
+    /* Only scores that still point at a resume have a file behind them to
+       preview. */
+    const viewResume = resume.resumeId && (
+      <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setViewResumeCandidate(resume)}>
+        <FileText className="w-4 h-4 text-menu-icon-view" />
+        <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
+      </DropdownMenuItem>
+    );
+    /* Only scores that still point at a resume can be shared. Hidden
+       for now (RESUME_EMAIL_SHARE_ENABLED). */
+    const shareViaEmail = RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!canShareResume ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
           aria-disabled={!canShareResume}
@@ -1964,7 +2008,6 @@ Best regards`);
           onSelect={(e) => {
             if (!canShareResume) {
               e.preventDefault();
-              toast.error('You do not have permission to share resumes');
               return;
             }
             openShareModal(resume);
@@ -1973,7 +2016,8 @@ Best regards`);
           <Share2 className="w-4 h-4 text-menu-icon-share" />
           <span className={MENU_ITEM_SCALE_CLASS}>Share via Email</span>
         </DropdownMenuItem>
-      )}
+    );
+    const downloadScorecard = (
       <DropdownMenuItem
         className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
         disabled={downloadingId === resume.id}
@@ -1982,7 +2026,6 @@ Best regards`);
         onSelect={(e) => {
           if (!canDownloadScorecard) {
             e.preventDefault();
-            toast.error('You do not have permission to download the scorecard');
             return;
           }
           if (candidateRows) void handleDownloadCandidateScorecards(candidateRows);
@@ -1998,8 +2041,48 @@ Best regards`);
           {candidateRows && candidateRows.length > 1 ? `Download All Scorecards (${candidateRows.length})` : 'Download Scorecard'}
         </span>
       </DropdownMenuItem>
-    </>
-  );
+    );
+    if (inlineRowInviteItems) {
+      return (
+        <>
+          {viewResume}
+          {viewResults}
+          {viewScoreTable}
+          {shareViaEmail}
+          {withInvites && (
+            <>
+              <DropdownMenuSeparator className="my-1 bg-gray-100" />
+              {renderInviteMenuItems(resume)}
+              <DropdownMenuSeparator className="my-1 bg-gray-100" />
+            </>
+          )}
+          {downloadScorecard}
+        </>
+      );
+    }
+    return (
+      <>
+        {viewResults}
+        {viewScoreTable}
+        {viewResume}
+        {shareViaEmail}
+        {downloadScorecard}
+      </>
+    );
+  };
+
+  /** A row's ⋮ menu: Job Details puts the invite entries inside the actions
+   *  (see renderActionsMenuItems); elsewhere Invite ▸ leads, then a divider. */
+  const renderRowMenuItems = (resume: ScoredResume, candidateRows?: ScoredResume[]) =>
+    inlineRowInviteItems ? (
+      renderActionsMenuItems(resume, candidateRows, true)
+    ) : (
+      <>
+        {renderInviteSubmenu(resume)}
+        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+        {renderActionsMenuItems(resume, candidateRows)}
+      </>
+    );
 
   /* The selection's actions — Download and Invite. Shown once rows are
      picked: after the view pills when the host has them, else inside the
@@ -2020,6 +2103,150 @@ Best regards`);
     } else setInternalSelectedResumes(ids);
   };
 
+  /* The selection Actions menu's entries, as pieces so Job Details can order
+     them its own way (see the menu below). */
+  /** Export — the selection, columns chosen in its dialog. */
+  const renderSelectionExportItem = () => (
+    <>
+      <DropdownMenuItem
+        className={`${scoredResumesMenuItemClass} ${!canExport ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+        aria-disabled={!canExport || undefined}
+        title={!canExport ? 'You do not have permission to export' : undefined}
+        onSelect={(e) => {
+          if (!canExport) {
+            e.preventDefault();
+            return;
+          }
+          handleExportExcel();
+        }}
+      >
+        <FileDown className="w-4 h-4 text-menu-icon-download" />
+        <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+      </DropdownMenuItem>
+    </>
+  );
+  /** Download All Scorecards for the selection. */
+  const renderSelectionDownloadItem = () => (
+    <>
+      <DropdownMenuItem
+        className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+        disabled={bulkDownloading}
+        aria-disabled={!canDownloadScorecard || undefined}
+        title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+        onSelect={(e) => {
+          if (!canDownloadScorecard) {
+            e.preventDefault();
+            return;
+          }
+          setBulkAction('download');
+        }}
+      >
+        <Download className="w-4 h-4 text-menu-icon-download" />
+        <span className={MENU_ITEM_SCALE_CLASS}>
+          {bulkDownloading ? 'Downloading...' : 'Download All Scorecards'}
+        </span>
+      </DropdownMenuItem>
+    </>
+  );
+  /** Create / Send Assessment | AI Interview for the selection. */
+  const renderSelectionInviteItems = () => (
+    <>
+      {(() => {
+        /* Per invite: ready, greyed with the reason, or greyed plus
+           "＋ Create …" when the one job has none yet. */
+        const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
+        const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
+        const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
+        if (onOpenInviteDialog) {
+          /* The AI Talent Match tab's way: always offered (permission
+             aside), opening the host's version popup with the ticked rows. */
+          const invitees: InviteCandidate[] = effectiveSelectedRows.map((r) => ({
+            id: r.resumeId || r.id,
+            name: r.candidateName,
+            email: r.email,
+            phone: r.phone,
+            rating: Math.round(rowRating10(r) * 10) / 10,
+            resumeId: r.resumeId,
+          }));
+          return (
+            <>
+              {renderInviteTargetItems({
+                kind: 'assessment',
+                target: { state: 'ready' },
+                label: 'Create / Send Assessment',
+                itemClass: scoredResumesMenuItemClass,
+                allowed: canCreateAssessments,
+                deniedReason: assessmentDeniedReason,
+                onInvite: (e) => {
+                  if (!canCreateAssessments) {
+                    e.preventDefault();
+                    return;
+                  }
+                  onOpenInviteDialog('assessment', invitees);
+                },
+              })}
+              {renderInviteTargetItems({
+                kind: 'interview',
+                target: { state: 'ready' },
+                label: 'Create / Send AI Interview',
+                itemClass: scoredResumesMenuItemClass,
+                allowed: mayInviteAIInterview,
+                deniedReason: aiInterviewDeniedReason,
+                onInvite: (e) => {
+                  if (!mayInviteAIInterview) {
+                    e.preventDefault();
+                    return;
+                  }
+                  onOpenInviteDialog('interview', invitees);
+                },
+              })}
+            </>
+          );
+        }
+        const create = onCreateInviteTarget
+          ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
+              onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))
+          : undefined;
+        return (
+          <>
+            {renderInviteTargetItems({
+              kind: 'assessment',
+              target: assessmentTarget,
+              itemClass: scoredResumesMenuItemClass,
+              allowed: canCreateAssessments,
+              deniedReason: assessmentDeniedReason,
+              extraDisabled: availableUnits === 0,
+              extraDisabledReason: 'No assessment units available',
+              onInvite: (e) => {
+                if (!canCreateAssessments) {
+                  e.preventDefault();
+                  return;
+                }
+                setBulkAction('assessment');
+              },
+              onCreate: create?.('assessment'),
+            })}
+            {renderInviteTargetItems({
+              kind: 'interview',
+              target: interviewTarget,
+              itemClass: scoredResumesMenuItemClass,
+              allowed: mayInviteAIInterview,
+              deniedReason: aiInterviewDeniedReason,
+              onInvite: (e) => {
+                if (!mayInviteAIInterview) {
+                  e.preventDefault();
+                  return;
+                }
+                setBulkAction('interview');
+              },
+              onCreate: create?.('interview'),
+            })}
+          </>
+        );
+      })()}
+    </>
+  );
+
   const selectionActions = effectiveSelectedRows.length > 0 ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -2029,7 +2256,7 @@ Best regards`);
         <Button
           variant="secondary"
           size="sm"
-          className="rounded-full h-9"
+          className="rounded-full sm:h-9"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
           {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -2042,134 +2269,24 @@ Best regards`);
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
           {(isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length).toLocaleString()} selected
         </div>
-        {/* Export — the selection, columns chosen in its dialog. */}
-        <DropdownMenuItem
-          className={`${scoredResumesMenuItemClass} ${!canExport ? 'text-gray-400 opacity-60' : ''}`}
-          title={!canExport ? 'You do not have permission to export' : undefined}
-          onSelect={(e) => {
-            if (!canExport) {
-              e.preventDefault();
-              toast.error('You do not have permission to export');
-              return;
-            }
-            handleExportExcel();
-          }}
-        >
-          <FileDown className="w-4 h-4 text-menu-icon-download" />
-          <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 opacity-60' : ''}`}
-          disabled={bulkDownloading}
-          title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-          onSelect={(e) => {
-            if (!canDownloadScorecard) {
-              e.preventDefault();
-              toast.error('You do not have permission to download the scorecard');
-              return;
-            }
-            setBulkAction('download');
-          }}
-        >
-          <Download className="w-4 h-4 text-menu-icon-download" />
-          <span className={MENU_ITEM_SCALE_CLASS}>
-            {bulkDownloading ? 'Downloading...' : 'Download All Scorecards'}
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator className="my-1 bg-gray-100" />
-        {(() => {
-          /* Per invite: ready, greyed with the reason, or greyed plus
-             "＋ Create …" when the one job has none yet. */
-          const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
-          const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
-          const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
-          if (onOpenInviteDialog) {
-            /* The AI Talent Match tab's way: always offered (permission
-               aside), opening the host's version popup with the ticked rows. */
-            const invitees: InviteCandidate[] = effectiveSelectedRows.map((r) => ({
-              id: r.resumeId || r.id,
-              name: r.candidateName,
-              email: r.email,
-              phone: r.phone,
-              rating: Math.round(rowRating10(r) * 10) / 10,
-              resumeId: r.resumeId,
-            }));
-            return (
-              <>
-                {renderInviteTargetItems({
-                  kind: 'assessment',
-                  target: { state: 'ready' },
-                  label: 'Create / Send Assessment',
-                  itemClass: scoredResumesMenuItemClass,
-                  allowed: canCreateAssessments,
-                  onInvite: (e) => {
-                    if (!canCreateAssessments) {
-                      e.preventDefault();
-                      toast.error(assessmentDeniedReason);
-                      return;
-                    }
-                    onOpenInviteDialog('assessment', invitees);
-                  },
-                })}
-                {renderInviteTargetItems({
-                  kind: 'interview',
-                  target: { state: 'ready' },
-                  label: 'Create / Send AI Interview',
-                  itemClass: scoredResumesMenuItemClass,
-                  allowed: mayInviteAIInterview,
-                  onInvite: (e) => {
-                    if (!mayInviteAIInterview) {
-                      e.preventDefault();
-                      toast.error(aiInterviewDeniedReason);
-                      return;
-                    }
-                    onOpenInviteDialog('interview', invitees);
-                  },
-                })}
-              </>
-            );
-          }
-          const create = onCreateInviteTarget
-            ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
-                onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))
-            : undefined;
-          return (
-            <>
-              {renderInviteTargetItems({
-                kind: 'assessment',
-                target: assessmentTarget,
-                itemClass: scoredResumesMenuItemClass,
-                allowed: canCreateAssessments,
-                extraDisabled: availableUnits === 0,
-                extraDisabledReason: 'No assessment units available',
-                onInvite: (e) => {
-                  if (!canCreateAssessments) {
-                    e.preventDefault();
-                    toast.error(assessmentDeniedReason);
-                    return;
-                  }
-                  setBulkAction('assessment');
-                },
-                onCreate: create?.('assessment'),
-              })}
-              {renderInviteTargetItems({
-                kind: 'interview',
-                target: interviewTarget,
-                itemClass: scoredResumesMenuItemClass,
-                allowed: mayInviteAIInterview,
-                onInvite: (e) => {
-                  if (!mayInviteAIInterview) {
-                    e.preventDefault();
-                    toast.error(aiInterviewDeniedReason);
-                    return;
-                  }
-                  setBulkAction('interview');
-                },
-                onCreate: create?.('interview'),
-              })}
-            </>
-          );
-        })()}
+        {/* Job Details (embedded): Create / Send Assessment, Create / Send AI
+            Interview, Download All Scorecards, Export. Elsewhere Export and
+            Download lead, then the invites below a divider. */}
+        {embedded ? (
+          <>
+            {renderSelectionInviteItems()}
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+            {renderSelectionDownloadItem()}
+            {renderSelectionExportItem()}
+          </>
+        ) : (
+          <>
+            {renderSelectionExportItem()}
+            {renderSelectionDownloadItem()}
+            <DropdownMenuSeparator className="my-1 bg-gray-100" />
+            {renderSelectionInviteItems()}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   ) : null;
@@ -2236,6 +2353,10 @@ Best regards`);
           // More Filters, Reset, Sort by, List / Grid. In Job Details the
           // controls keep the AI Talent Match row's 12px gap from the search.
           controlsFollowSearch={!toolbarPortal}
+          /* In Job Details the row also carries Select All and Actions, so it
+             lays out by the tab card's width: search takes its own row until
+             the card is wide enough, instead of shrinking to an icon. */
+          fitToContainer={!!toolbarPortal}
           /* Select All — embedded in Job Details, at the very start of the
              toolbar row, matching the AI Talent Match reference. Standalone
              Resume Scoring keeps it leading row 2 instead (see below), the
@@ -2285,20 +2406,21 @@ Best regards`);
           onClearFilters={search.reset}
           leadingActions={
             <>
-              {/* Embedded in Job Details this takes the AI Talent Match
-                  reference's tinted pill chrome (same as the Sort control
-                  beside it); standalone keeps its own bordered box. */}
-              <SearchableSelect
-                className={embedded ? '' : 'w-full sm:w-48'}
-                variant={embedded ? 'pill' : 'bordered'}
-                value={filterRecruiter === 'all' ? '' : filterRecruiter}
-                onChange={(v) => search.setFilter('recruiter', v || 'all')}
-                options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
-                allLabel="All Recruiters"
-                placeholder="All Recruiters"
-                searchPlaceholder="Search recruiter..."
-                ariaLabel="Filter by recruiter"
-              />
+              {/* Standalone only. Embedded in Job Details the same filter is
+                  More Filters' "Scored By" field instead. */}
+              {!embedded && (
+                <SearchableSelect
+                  className="w-full sm:w-48"
+                  variant="bordered"
+                  value={filterRecruiter === 'all' ? '' : filterRecruiter}
+                  onChange={(v) => search.setFilter('recruiter', v || 'all')}
+                  options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
+                  allLabel="All Recruiters"
+                  placeholder="All Recruiters"
+                  searchPlaceholder="Search recruiter..."
+                  ariaLabel="Filter by recruiter"
+                />
+              )}
               {/* Sort by — embedded: ahead of More Filters, matching the AI
                   Talent Match reference's control order. Standalone: after
                   More Filters (the toolbar's children), as View by Job. */}
@@ -2314,7 +2436,7 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9" /> : undefined}
+          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Score — right beside More Filters in Job Details, where the header's
@@ -2327,11 +2449,11 @@ Best regards`);
             <Button
               variant="primary"
               size="sm"
-              onClick={onScoreResumes}
-              disabled={scoreResumesDisabled}
+              onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
+              aria-disabled={!!scoreResumesDisabled}
               title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
-              className="h-9 whitespace-nowrap"
+              className={`sm:h-9 whitespace-nowrap ${scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}`}
             >
               Score
             </Button>
@@ -2380,6 +2502,28 @@ Best regards`);
                 so a row is always filled edge to edge. `max-w` keeps a short
                 final row from stretching two fields across the whole panel. */}
             <div className={embedded ? JOB_TAB_FILTER_GRID_CLASS : 'flex flex-wrap gap-4'}>
+              {/* 0. Scored By (Job Details) — who scored the row, from each
+                  row's scoredBy (the API's scored_by / scored_by_name); the
+                  same `recruiter` filter the standalone toolbar's select sets. */}
+              {embedded && (
+                <div className={JOB_TAB_FILTER_FIELD_CLASS}>
+                  <label className={JOB_TAB_FILTER_LABEL_CLASS}>Scored By</label>
+                  <SearchableSelect
+                    value={filterRecruiter === 'all' ? '' : filterRecruiter}
+                    onChange={(v) => search.setFilter('recruiter', v || 'all')}
+                    options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
+                    allLabel="All Scorers"
+                    placeholder="All Scorers"
+                    searchPlaceholder="Search scored by..."
+                    ariaLabel="Filter by scored by"
+                    /* The neighbouring Match Status / Job Version selects' text
+                       (JOB_TAB_FILTER_CONTROL_CLASS), not this control's
+                       muted gray-500 "nothing picked" text. */
+                    triggerClassName="text-black dark:text-slate-50"
+                  />
+                </div>
+              )}
+
               {/* 1. Match Status — dropped when the list is already one
                   verdict; see `hideMatchStatusFilter`. The only conditional
                   field in this panel, and it turns on a host's explicit
@@ -2439,33 +2583,40 @@ Best regards`);
                   say) — a filter that comes and goes with the data is one users
                   cannot learn, and it left a hole in the row beside a Job Title
                   that did render. `Scored By` has always shown even with a
-                  single recruiter; these now match it. */}
-              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
-                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Job ID</label>
-                <SearchableSelect
-                  value={filterJdId === 'all' ? '' : filterJdId}
-                  onChange={(v) => search.setFilter('jdId', v || 'all')}
-                  options={uniqueJdIds.map((code) => ({ value: code, label: code }))}
-                  allLabel="All Job IDs"
-                  placeholder="All Job IDs"
-                  searchPlaceholder="Search Job ID..."
-                  ariaLabel="Filter by Job ID"
-                />
-              </div>
+                  single recruiter; these now match it.
+                  Job ID is standalone only: Job Details lists one job. */}
+              {!embedded && (
+                <div className={FILTER_FIELD_CLASS}>
+                  <label className={FILTER_LABEL_CLASS}>Job ID</label>
+                  <SearchableSelect
+                    value={filterJdId === 'all' ? '' : filterJdId}
+                    onChange={(v) => search.setFilter('jdId', v || 'all')}
+                    options={uniqueJdIds.map((code) => ({ value: code, label: code }))}
+                    allLabel="All Job IDs"
+                    placeholder="All Job IDs"
+                    searchPlaceholder="Search Job ID..."
+                    ariaLabel="Filter by Job ID"
+                  />
+                </div>
+              )}
 
-              <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
-                <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Job Version</label>
-                <select
-                  value={filterJobVersion}
-                  onChange={(e) => search.setFilter('jobVersion', e.target.value)}
-                  className={embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS}
-                >
-                  <option value="all">All Versions</option>
-                  {uniqueJobVersions.map(version => (
-                    <option key={version} value={version}>v{version}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Job Version is standalone only too: Job Details is one job
+                  version's page. */}
+              {!embedded && (
+                <div className={FILTER_FIELD_CLASS}>
+                  <label className={FILTER_LABEL_CLASS}>Job Version</label>
+                  <select
+                    value={filterJobVersion}
+                    onChange={(e) => search.setFilter('jobVersion', e.target.value)}
+                    className={FILTER_CONTROL_CLASS}
+                  >
+                    <option value="all">All Versions</option>
+                    {uniqueJobVersions.map(version => (
+                      <option key={version} value={version}>v{version}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
             </div>
           </div>
@@ -2566,10 +2717,11 @@ Best regards`);
                 <Button
                   variant="primary"
                   size="md"
-                  onClick={onScoreResumesFromEmptyState}
-                  disabled={scoreResumesDisabled}
+                  onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
+                  aria-disabled={!!scoreResumesDisabled}
                   title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
                   icon={<ClipboardList className="w-4 h-4" />}
+                  className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
                 >
                   Score Resumes
                 </Button>
@@ -2725,11 +2877,9 @@ Best regards`);
                       </DropdownMenuTrigger>
                       <DropdownMenuContent
                         align="end"
-                        className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
+                        className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}
                       >
-                        {renderInviteSubmenu(resume)}
-                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                        {renderActionsMenuItems(resume, groupRows)}
+                        {renderRowMenuItems(resume, groupRows)}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -2792,10 +2942,8 @@ Best regards`);
                                   <MoreVertical className="w-4 h-4 text-gray-600" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                {renderInviteSubmenu(row)}
-                                <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                {renderActionsMenuItems(row)}
+                              <DropdownMenuContent align="end" className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
+                                {renderRowMenuItems(row)}
                               </DropdownMenuContent>
                             </DropdownMenu>
                             </div>
@@ -3003,10 +3151,8 @@ Best regards`);
                                               <MoreVertical className="w-4 h-4 text-gray-600" />
                                             </button>
                                           </DropdownMenuTrigger>
-                                          <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                            {renderInviteSubmenu(row)}
-                                            <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                            {renderActionsMenuItems(row)}
+                                          <DropdownMenuContent align="end" className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
+                                            {renderRowMenuItems(row)}
                                           </DropdownMenuContent>
                                         </DropdownMenu>
                                       </td>
@@ -3285,11 +3431,9 @@ Best regards`);
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="end"
-                      className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
+                      className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}
                     >
-                      {renderInviteSubmenu(resume)}
-                      <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                      {renderActionsMenuItems(resume)}
+                      {renderRowMenuItems(resume)}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -3314,10 +3458,11 @@ Best regards`);
               <Button
                 variant="primary"
                 size="md"
-                onClick={onScoreResumesFromEmptyState}
-                disabled={scoreResumesDisabled}
+                onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
+                aria-disabled={!!scoreResumesDisabled}
                 title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
                 icon={<ClipboardList className="w-4 h-4" />}
+                className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
               >
                 Score Resumes
               </Button>
@@ -3401,24 +3546,23 @@ Best regards`);
                   published assessment on this JD, or no units left. */}
               {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
                 <div className="relative group">
-                  <Button
-                    variant="primary"
-                    size="md"
+                  {/* Create / Send Assessment's shared look (createSendActions). */}
+                  <button
+                    type="button"
                     disabled={!canCreateAssessments || !canInviteAssessment || availableUnits === 0}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canCreateAssessments) {
-                        toast.error(assessmentDeniedReason);
                         return;
                       }
                       setInviteCandidate(resume);
                       setShowInviteModal(true);
                     }}
-                    icon={<UserPlus className="w-4 h-4" />}
-                    className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
+                    className={`${CREATE_SEND_BUTTON_CLASS.assessment} w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug justify-center`}
                   >
+                    <ClipboardList className="w-4 h-4 flex-shrink-0" />
                     Invite for Assessment
-                  </Button>
+                  </button>
                   {(!canCreateAssessments || !canInviteAssessment || availableUnits === 0) && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
                       <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
@@ -3447,7 +3591,6 @@ Best regards`);
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!canDownloadScorecard) {
-                    toast.error('You do not have permission to download the scorecard');
                     return;
                   }
                   handleDownloadScorecard(resume.id);
@@ -3483,7 +3626,6 @@ Best regards`);
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!canShareResume) {
-                      toast.error('You do not have permission to share resumes');
                       return;
                     }
                     openShareModal(resume);
@@ -3515,10 +3657,11 @@ Best regards`);
               <Button
                 variant="primary"
                 size="md"
-                onClick={onScoreResumesFromEmptyState}
-                disabled={scoreResumesDisabled}
+                onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
+                aria-disabled={!!scoreResumesDisabled}
                 title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
                 icon={<ClipboardList className="w-4 h-4" />}
+                className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
               >
                 Score Resumes
               </Button>
@@ -3832,6 +3975,7 @@ Best regards`);
             resume={scoreTableCandidate}
             jobId={jobId}
             jobCode={jobCode}
+            jobVersion={hostJobVersion}
             jobTitle={scoreTableCandidate.jobTitle || jobTitle}
             onClose={() => setScoreTableCandidate(null)}
             jobPager={jobRows && jobIdx >= 0 ? {
@@ -3867,7 +4011,6 @@ Best regards`);
                   size="sm"
                   onClick={() => {
                     if (!canDownloadScorecard) {
-                      toast.error('You do not have permission to download the scorecard');
                       return;
                     }
                     handleDownloadScorecard(shareCandidate.id);
@@ -3961,7 +4104,7 @@ const BULK_ACTION_INFO: Record<BulkActionKind, {
   },
   assessment: {
     title: 'AI Assessment Invite',
-    icon: FileText,
+    icon: ClipboardList,
     what: "Invites the included candidates to this job's published assessment. You pick the assessment and the link expiry next. Each invitation uses one assessment unit.",
     continueLabel: 'Continue',
   },

@@ -48,7 +48,7 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         value={stats.total_teams}
         icon={Users}
         tone="neutral"
-        sparkVariant={0}
+        sparkline={false}
         onClick={onCardClick ? () => onCardClick('total') : undefined}
         active={activeCard === 'total'}
         showClickArrow={!!onCardClick}
@@ -58,7 +58,7 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         value={stats.total_members}
         icon={UserCheck}
         tone="neutral"
-        sparkVariant={1}
+        sparkline={false}
         onClick={onCardClick ? () => onCardClick('members') : undefined}
         active={activeCard === 'members'}
         showClickArrow={!!onCardClick}
@@ -68,7 +68,7 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         value={stats.avg_members_per_team.toFixed(1)}
         icon={Layers3}
         tone="neutral"
-        sparkVariant={2}
+        sparkline={false}
         onClick={onCardClick ? () => onCardClick('avg') : undefined}
         active={activeCard === 'avg'}
         showClickArrow={!!onCardClick}
