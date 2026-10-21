@@ -3415,7 +3415,7 @@ Best regards`);
                       setShowInviteModal(true);
                     }}
                     icon={<UserPlus className="w-4 h-4" />}
-                    className="w-full"
+                    className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
                   >
                     Invite for Assessment
                   </Button>
@@ -3455,7 +3455,7 @@ Best regards`);
                 disabled={downloadingId === resume.id}
                 aria-disabled={!canDownloadScorecard}
                 title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                className={`w-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
                 {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
@@ -3470,7 +3470,7 @@ Best regards`);
                     setViewResumeCandidate(resume);
                   }}
                   icon={<FileText className="w-4 h-4" />}
-                  className="w-full"
+                  className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
                 >
                   View Resume
                 </Button>
@@ -3491,7 +3491,7 @@ Best regards`);
                   aria-disabled={!canShareResume}
                   title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className={`w-full ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>

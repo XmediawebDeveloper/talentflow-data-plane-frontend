@@ -770,15 +770,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 variant="secondary"
                 aria-disabled="true"
                 title={PLAN_LOCKED_MESSAGE}
-                className="gap-1.5 cursor-not-allowed"
+                className="gap-1.5 cursor-not-allowed max-w-full items-start justify-start whitespace-normal text-left leading-snug"
               >
-                <Lock className="h-3 w-3" />
+                <Lock className="h-3 w-3 shrink-0 mt-0.5" />
                 Priority Support is not included in your current plan.
               </Badge>
             }
           >
-            <Badge variant="success" className="gap-1.5">
-              <Sparkles className="h-3 w-3" />
+            <Badge variant="success" className="gap-1.5 max-w-full items-start justify-start whitespace-normal text-left leading-snug">
+              <Sparkles className="h-3 w-3 shrink-0 mt-0.5" />
               Priority Support enabled — tickets handled with higher priority and faster response times.
             </Badge>
           </FeatureGate>

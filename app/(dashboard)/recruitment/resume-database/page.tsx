@@ -152,7 +152,7 @@ export default function ResumeDatabasePage() {
               the row (flex-1), which left two near-identical full-width slabs. */}
           <TabsList
             aria-label="Resume pool"
-            className="h-auto w-auto gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm dark:bg-slate-900 dark:ring-slate-700"
+            className="h-auto w-auto max-w-full gap-1 overflow-x-auto rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm dark:bg-slate-900 dark:ring-slate-700"
           >
             {(['my-resumes', 'internal-db'] as const).map((tab) => {
               const Icon = tab === 'my-resumes' ? FolderOpen : Database;
@@ -163,9 +163,9 @@ export default function ResumeDatabasePage() {
                 <TabsTrigger
                   key={tab}
                   value={tab}
-                  className="h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800"
+                  className="h-9 flex-none gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 sm:gap-2 sm:px-4 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800"
                 >
-                  <Icon className={`h-4 w-4 ${iconColor}`} />
+                  <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
                   {TAB_LABEL[tab]}
                   {tabCounts[tab] !== undefined && (
                     <span

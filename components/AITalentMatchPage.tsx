@@ -80,6 +80,8 @@ import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay
 import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -4097,66 +4099,46 @@ export default function AITalentMatchPage({
         {/* The candidate roll-up is an in-page view on this same route, so the
             trail stays at the module level — no extra step is added. */}
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />
-        {/* Header */}
-        <div className="mb-5">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="p-2 hover:bg-white/80 rounded-lg transition-colors flex items-center justify-center shadow-sm border border-gray-200 dark:border-slate-700 self-start"
-                aria-label="Back to Dashboard" title="Back to Dashboard"
+        {/* Header — shared PageHeader (User Management uniform) */}
+        <PageHeader
+          icon={<History className="h-5 w-5" />}
+          title="AI Talent Match - Matched Jobs"
+          description="Review jobs with AI-matched candidates and their results"
+          actions={
+            <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+              {onBack && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onBack}
+                  className="px-2"
+                  aria-label="Back to Dashboard" title="Back to Dashboard"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI Talent Match');
+                    return;
+                  }
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setSelectedCandidates([]);
+                  router.push('/recruitment/ai-talent-match', { scroll: false });
+                }}
+                aria-disabled={!canRunAiMatch}
+                title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
+                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
+                icon={<Sparkles className="w-4 h-4" />}
               >
-                <ArrowLeft className="w-4 h-4 text-gray-700 dark:text-slate-300" />
-              </button>
-            )}
-            <div className="h-9 w-9 bg-brand-blue rounded-lg flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-              <History className="w-4 h-4 text-white" />
+                Run AI Match
+              </Button>
             </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 truncate">AI Talent Match - Matched Jobs</h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">Review jobs with AI-matched candidates and their results</p>
-            </div>
-            
-            {/* Units Display - Commented out (static data)
-            {availableUnits !== null && (
-              <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold text-white">{availableUnits.toLocaleString()}</span>
-                      <span className="text-xs text-gray-100">units</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            */}
-            
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (!canRunAiMatch) {
-                  toast.error('You do not have permission to run AI Talent Match');
-                  return;
-                }
-                setViewMode('new');
-                setSelectedJob('');
-                setSelectedCandidates([]);
-                router.push('/recruitment/ai-talent-match', { scroll: false });
-              }}
-              aria-disabled={!canRunAiMatch}
-              title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
-              className={`w-full sm:w-auto ${!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Run AI Match
-            </Button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats Cards */}
         {/* Default 4-column grid (same as /recruitment/job-openings) keeps the
@@ -6056,12 +6038,11 @@ export default function AITalentMatchPage({
         </div>
 
         {/* History List */}
-        {bandHistory.length > 0 ? (
-          <>
-            {/* List: one job per row. Grid: cards two / three across; an
-                opened card spans the full row so its candidates have room. */}
-            <div className={jobListDisplayMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch' : 'space-y-3'}>
-            {pageHistory.map((item) => {
+        {bandHistory.length > 0 ? (() => {
+          /* One page of jobs computed once, then rendered as cards (below xl,
+             and in Grid mode) or the User-Management-uniform table (List at xl+).
+             Each item returns both its card and its table row. */
+          const rowNodes = pageHistory.map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
               // Version history is cached/keyed by the human JD-xxx code, not
               // this row's id — every republished version of the same job
@@ -6264,11 +6245,12 @@ export default function AITalentMatchPage({
                     </p>
                   ) : (
                     <>
-                      {jobListDisplayMode === 'grid' ? (
-                        /* Grid: the page's List / Grid toggle reaches the opened
-                           job too — one card per candidate, the table row's
-                           content. A scored card opens / closes its score below
-                           it (spanning the row), as the table row does. */
+                      {(() => {
+                        /* Candidate cards — one per candidate (the table row's
+                           content). Shown in Grid mode, and ALWAYS below xl: the
+                           list table needs horizontal scrolling that cramps on
+                           phones/tablets, so the table only renders at xl+. */
+                        const candCards = (
                         <div className="space-y-2">
                           <button
                             type="button"
@@ -6365,7 +6347,8 @@ export default function AITalentMatchPage({
                             })}
                           </div>
                         </div>
-                      ) : (
+                        );
+                        const candTable = (
                       <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                         {/* The rows scroll inside this box; the header row stays put. */}
                         <div className="max-h-[360px] overflow-auto">
@@ -6483,7 +6466,14 @@ export default function AITalentMatchPage({
                           </table>
                         </div>
                       </div>
-                      )}
+                        );
+                        return (
+                          <>
+                            <div className="xl:hidden">{candCards}</div>
+                            <div className="hidden xl:block">{jobListDisplayMode === 'grid' ? candCards : candTable}</div>
+                          </>
+                        );
+                      })()}
                       <ListPagination
                         compact
                         currentPage={candidateJobsPageOf(pagingKey).page}
@@ -6498,7 +6488,7 @@ export default function AITalentMatchPage({
                 </div>
               ) : null;
 
-              return (
+              return { key: item.id, card: (
                 <div
                   key={item.id}
                   /* No lift on hover: the card grows when opened inline, and
@@ -6636,7 +6626,10 @@ export default function AITalentMatchPage({
                       </div>
                     </div>
 
-                    <div className="flex items-start justify-end gap-6 flex-shrink-0 w-full sm:w-auto">
+                    {/* Below sm: rating stack + actions stack vertically (full
+                        width) so the justify-end row can't overflow the card's
+                        left edge on a phone; sm+ keeps the side-by-side layout. */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto">
                       {/* Rating 10 / 9 – 7 / Below 7, one below another — the
                           Job Descriptions cards' Applicants / Assessed /
                           Interviewed stack, in the rating colours. Under a
@@ -6785,8 +6778,140 @@ export default function AITalentMatchPage({
                     </div>
                   )}
                 </div>
-              );
-            })}
+              ), row: (
+                /* List mode (xl+) — User-Management-uniform table row + an
+                   expandable full-width row holding this job's candidates. */
+                <Fragment key={item.id}>
+                  <tr
+                    className={`transition-colors ${hasMatches ? 'cursor-pointer' : ''} ${isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : isJobExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : 'hover:bg-brand-blue/5'}`}
+                    onClick={() => { if (hasMatches) toggleRow(); }}
+                    aria-expanded={hasMatches ? isJobExpanded : undefined}
+                  >
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      {hasMatches ? (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleSelectJob(jobKey); }} aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false} aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded">
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
+                        </button>
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-300 dark:text-slate-600" />
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      {jobData?.jobId ? <JobIdBadge className="inline-flex h-7 items-center">{jobData.jobId}</JobIdBadge> : <span className="text-xs text-gray-400 dark:text-slate-500">—</span>}
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); openResults(); }} className="text-sm font-semibold text-gray-900 dark:text-slate-50 hover:text-brand-blue transition-colors truncate max-w-[14rem] text-left" title={item.jobTitle}>
+                          {item.jobTitle}
+                        </button>
+                        {jobData?.currentVersion && (
+                          <span className="inline-flex h-6 items-center px-2 rounded-full text-2xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />v{jobData.currentVersion}
+                          </span>
+                        )}
+                        {jobData && (() => {
+                          const raw = jobData.status || 'published';
+                          const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), jobData.publishCount);
+                          if (label === 'Published' || label === 'Republished') return null;
+                          const tone = getStatusConfig(label);
+                          return (
+                            <span className={`inline-flex h-6 items-center px-2 rounded-full text-2xs ${tone.bg} ${tone.text} border ${tone.border} gap-1.5 flex-shrink-0`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />{label}
+                            </span>
+                          );
+                        })()}
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }} className="h-6 w-6 p-0 flex-shrink-0" aria-label="Match History" title="Match History">
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <span className="text-sm text-gray-600 dark:text-slate-400">{item.matchedByName || 'System'}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{item.totalMatches}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      {!hasMatches ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" />No match</span>
+                      ) : !loaded ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap"><FileText className="w-3.5 h-3.5" />{item.totalMatches}</span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {([
+                            { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                            { id: 'partial' as const, label: 'Rating 9–7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                            { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                          ]).map(({ id, label, count, Icon, cls }) => {
+                            const muted = !!candidateRatingBand && id !== candidateRatingBand;
+                            return (
+                              <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={label}>
+                                <Icon className="w-3.5 h-3.5" /><span className="tabular-nums">{count}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openResults(); }} aria-label="View Details" title="View Details" className="h-8 w-8 p-0">
+                          <FileText className="w-4 h-4" />
+                        </Button>
+                        {hasMatches && (
+                          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8 p-0">
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {hasMatches && isJobExpanded && (
+                    <tr className="bg-gray-50/60 dark:bg-slate-800/20">
+                      <td colSpan={8} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">{inlineCandidatesPanel}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              ) };
+            });
+          return (
+            <>
+            {/* Below xl: rich cards (the 8-column table would need horizontal
+                scrolling). xl and up: honor the List / Grid toggle. */}
+            <div className="xl:hidden space-y-3">
+              {rowNodes.map(n => n.card)}
+            </div>
+            <div className="hidden xl:block">
+              {jobListDisplayMode === 'grid' ? (
+                <div className="grid grid-cols-2 2xl:grid-cols-3 gap-3 items-stretch">
+                  {rowNodes.map(n => n.card)}
+                </div>
+              ) : (
+                <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                      <tr>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Job</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matched By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matched</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matches</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Rating</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                      {rowNodes.map(n => n.row)}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             <ListPagination
               currentPage={historyCurrentPage}
@@ -6796,20 +6921,17 @@ export default function AITalentMatchPage({
               onItemsPerPageChange={setHistoryItemsPerPage}
               itemLabel="jobs"
             />
-          </>
-        ) : matchHistory.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                <History className="w-5 h-5 text-brand-blue" />
-              </div>
-              <h3 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 mb-2">No Matching History Yet</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-                Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit.
-              </p>
-              <Button
-                variant="primary"
-                onClick={() => {
+            </>
+          );
+        })() : matchHistory.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <EmptyState
+              icon={History}
+              title="No Matching History Yet"
+              description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
+              action={{
+                label: 'Run AI Match Now',
+                onClick: () => {
                   if (!canRunAiMatch) {
                     toast.error('You do not have permission to run AI Talent Match');
                     return;
@@ -6817,30 +6939,18 @@ export default function AITalentMatchPage({
                   setViewMode('new');
                   setSelectedJob('');
                   router.push('/recruitment/ai-talent-match', { scroll: false });
-                }}
-                aria-disabled={!canRunAiMatch}
-                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
-                title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
-              >
-                <Sparkles className="w-4 h-4" />
-                Run AI Match Now
-              </Button>
-            </div>
+                },
+              }}
+            />
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                <Search className="w-5 h-5 text-brand-blue" />
-              </div>
-              <h3 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 mb-2">No Results Found</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-                No matched jobs match your current filters. Try adjusting your search criteria.
-              </p>
-              <Button variant="secondary" size="md" onClick={clearHistoryFilters} icon={<X className="w-4 h-4" />}>
-                Clear All Filters
-              </Button>
-            </div>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <EmptyState
+              icon={Search}
+              title="No Results Found"
+              description="No matched jobs match your current filters. Try adjusting your search criteria."
+              action={{ label: 'Clear All Filters', onClick: clearHistoryFilters }}
+            />
           </div>
         )}
         </div>
@@ -7106,7 +7216,7 @@ export default function AITalentMatchPage({
                           boundary out past them; the matching negative margin
                           cancels the padding's effect on layout, so the row's
                           rendered position is unchanged. */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:overflow-x-auto py-1 -my-1">
+                      <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-2 lg:overflow-x-auto py-1 -my-1">
                         <div className="flex-1 min-w-[11rem]">
                           <label className={filterLabelClass}>Search</label>
                           <div className="relative">

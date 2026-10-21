@@ -405,13 +405,13 @@ export default function CandidateActivityCard({
 
   return (
     <div ref={cardRef} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+      <div className="flex items-center gap-2 gap-y-1 mb-4 flex-wrap">
+        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
           <Activity className="w-4 h-4 text-brand-blue" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Candidate Activity</h3>
+        <h3 className="text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Candidate Activity</h3>
         {!loading && data && (
-          <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
+          <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
             {total} record{total !== 1 ? 's' : ''}
           </span>
         )}
