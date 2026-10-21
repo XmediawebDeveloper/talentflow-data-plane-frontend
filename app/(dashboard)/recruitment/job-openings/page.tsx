@@ -123,10 +123,10 @@ export default function JobOpeningsPage() {
      belonging to an older run is dropped instead of overwriting newer data
      (or appending its pages onto another run's list). */
   const fetchSeqRef = useRef(0);
-  /* Lineages deleted on this mount. A delete can land while later pages are
-     still loading; those pages may carry the lineage's older versions, which
-     would otherwise bring the deleted job back. */
-  const deletedLineagesRef = useRef(new Set<string>());
+  /* Rows (versions) deleted on this mount. A delete can land while later pages
+     are still loading, and those pages may still carry the deleted row. Only
+     that row - a delete removes ONE version; the job's other versions stay. */
+  const deletedIdsRef = useRef(new Set<string>());
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
@@ -329,7 +329,7 @@ export default function JobOpeningsPage() {
            changed since page 1 loaded. */
         const seen = new Set(prev.map((j) => j.id));
         const fresh = restJobs.filter((j) => {
-          if (seen.has(j.id) || deletedLineagesRef.current.has(j.job_id || j.id)) return false;
+          if (seen.has(j.id) || deletedIdsRef.current.has(j.id)) return false;
           seen.add(j.id);
           return true;
         });
@@ -631,26 +631,35 @@ export default function JobOpeningsPage() {
     } catch (error) {
       console.error('Failed to check JD usage status:', error);
     }
+    // A later version is its own row: deleting it removes that version only.
+    const isLaterVersion = (job.versionNumber ?? 1) > 1;
     if (!await dialog.confirm({
-      title: 'Delete Job Opening',
-      message: 'Are you sure you want to delete this job opening?\nThis action cannot be undone.',
+      title: isLaterVersion ? `Delete Version V${job.versionNumber}` : 'Delete Job Opening',
+      message: isLaterVersion
+        ? `Are you sure you want to delete version V${job.versionNumber}?\nThis action cannot be undone.`
+        : 'Are you sure you want to delete this job opening?\nThis action cannot be undone.',
       variant: 'delete',
-      confirmText: 'Delete Job Opening',
+      confirmText: isLaterVersion ? 'Delete Version' : 'Delete Job Opening',
       item: {
         label: 'JOB OPENING',
         name: [job.job_id, job.title].filter(Boolean).join(' – ') || job.title,
         badge: job.versionNumber ? `V${job.versionNumber}` : undefined,
       },
-      warningNote: 'Deleting this job opening will permanently remove it from your job openings and cannot be restored.',
+      warningNote: isLaterVersion
+        ? `Only V${job.versionNumber} is deleted. The earlier versions of ${job.job_id || 'this job'} and everything they were used in are kept.`
+        : 'Deleting this job opening will permanently remove it from your job openings and cannot be restored.',
     })) return;
     try {
       await jdService.delete(job.id);
-      // Remove the whole lineage (every version), not just this row — otherwise an
-      // older version collapses back onto the All Jobs list. See bulk delete above.
-      const deletedLineage = job.job_id || job.id;
-      deletedLineagesRef.current.add(deletedLineage);
-      setJobs(prev => prev.filter(j => (j.job_id || j.id) !== deletedLineage));
-      toast.success(`"${job.title}" has been deleted`);
+      // Remove THIS row only. The backend deletes one version and makes the newest
+      // remaining version the latest again, so it takes this row's place on the
+      // All Jobs list. Dropping the whole lineage here hid v1 of a job whose v2
+      // draft was deleted, which looked as if the entire job had been deleted.
+      deletedIdsRef.current.add(job.id);
+      setJobs(prev => prev.filter(j => j.id !== job.id));
+      toast.success(isLaterVersion
+        ? `V${job.versionNumber} of "${job.title}" has been deleted`
+        : `"${job.title}" has been deleted`);
     } catch (error: any) {
       toast.error(error?.message || 'Failed to delete job');
     }
@@ -782,19 +791,12 @@ export default function JobOpeningsPage() {
     }
 
     if (deletedIds.length > 0) {
-      // Drop EVERY version of each deleted job (by its lineage job_id), not just
-      // the single row that was selected. On the All Jobs tab the selected row is
-      // a job's LATEST version; removing only that id left the older versions in
-      // state, and collapseToLatestVersions then promoted one of them back onto
-      // the list — so the job looked like it had never been deleted. Falls back
-      // to id when a record has no job_id.
-      const deletedLineages = new Set(
-        jobsToDelete
-          .filter(job => deletedIds.includes(job.id))
-          .map(job => job.job_id || job.id),
-      );
-      deletedLineages.forEach((lineage) => deletedLineagesRef.current.add(lineage));
-      setJobs(prev => prev.filter(job => !deletedLineages.has(job.job_id || job.id)));
+      // Drop only the rows that were deleted. Each delete removes ONE version; the
+      // older versions of that job still exist, and collapseToLatestVersions puts
+      // the newest of them back on the All Jobs list - which is correct, because
+      // the job itself was not deleted.
+      deletedIds.forEach((id) => deletedIdsRef.current.add(id));
+      setJobs(prev => prev.filter(job => !deletedIds.includes(job.id)));
     }
 
     if (deletedIds.length > 0 && skipped.length === 0 && failed === 0) {

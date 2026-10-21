@@ -3233,7 +3233,9 @@ export default function AIInterview() {
                           ? `Track invitations for this job (${totals.invitations} invitation${totals.invitations === 1 ? '' : 's'} sent)`
                           : 'Track invitations for this job'
                         : 'No invitations have been sent for this job yet';
-                    const hasBeenShared = (config.invitations_count ?? 0) > 0;
+                    /* Result, like Track, covers every interview of the job, so
+                       it opens once any of them has been shared. */
+                    const hasBeenShared = jobInvitations > 0 || (config.invitations_count ?? 0) > 0;
                     const resultReason = hasBeenShared
                       ? 'View results'
                       : normalizedStatus === 'draft'
@@ -3363,7 +3365,8 @@ export default function AIInterview() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!hasBeenShared) return;
-                                router.push(`/recruitment/ai-interviews/${config.id}/results`);
+                                // Every interview version of this job, as Track lists them.
+                                router.push(`/recruitment/ai-interviews/${config.id}/results?scope=job`);
                               }}
                               className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                                 hasBeenShared
@@ -4854,7 +4857,11 @@ export default function AIInterview() {
                     variant="primary"
                     size="sm"
                     disabled={trackerJdLocked}
-                    title={trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined}
+                    title={
+                      !canInviteAIInterviews
+                        ? 'You do not have permission to invite candidates'
+                        : trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined
+                    }
                     onClick={() => {
                       if (!canInviteAIInterviews) return;
                       if (blockIfJdDisabled(viewInvitationsConfig)) return;
@@ -4864,7 +4871,6 @@ export default function AIInterview() {
                       setShareConfig(viewInvitationsConfig);
                     }}
                     aria-disabled={!canInviteAIInterviews}
-                    title={!canInviteAIInterviews ? 'You do not have permission to invite candidates' : undefined}
                     className={!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
                     icon={<Send className="w-3.5 h-3.5" />}
                   >

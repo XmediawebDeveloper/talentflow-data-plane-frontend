@@ -55,7 +55,9 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
-import { loadAssessmentVersions, nextVersionNumber } from '@/components/talent-match-invite/inviteVersions';
+import { loadAssessmentVersions, loadInterviewVersions, createBlockedReason, nextVersionNumber } from '@/components/talent-match-invite/inviteVersions';
+import { MAX_INTERVIEW_VERSIONS } from '@/lib/utils/aiInterviewVersion';
+import { aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
 import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
@@ -795,6 +797,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [hasAnyAIInterview, setHasAnyAIInterview] = useState(false);
   /** The AI-interview twin of `assessmentExistenceChecked`. */
   const [aiInterviewExistenceChecked, setAiInterviewExistenceChecked] = useState(false);
+  /* How many AI interview versions this job version holds (archived
+     included), read by Create — the twin of `assessmentVersionCount`. Null
+     until Create has looked; the click re-reads it every time regardless. */
+  const [aiInterviewVersionCount, setAiInterviewVersionCount] = useState<number | null>(null);
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
@@ -1096,10 +1102,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const canInviteToAIInterview =
     hasLiveAIInterview && features.ai_interview && job.status !== 'Disabled';
 
-  /* ONE PUBLISHED ASSESSMENT AND ONE PUBLISHED AI INTERVIEW PER JOB. Create is
-     offered until one is PUBLISHED and refused from then on — one answer per
-     side, read by every Create on the page (the section toolbars, the tab
-     empty states and the Quick Action tiles) so no two of them can disagree.
+  /* CREATE GATE, one answer per side, read by every Create on the page (the
+     section toolbars, the tab empty states and the Quick Action tiles) so no
+     two of them can disagree. Once a version is published, Create makes the
+     NEXT version (a duplicate of the latest) until the version cap; the
+     paragraphs below describe the original one-per-job rule's reasoning,
+     which still holds for the draft prompt.
 
      PUBLISHED, NOT MERELY CREATED. A draft leaves Create live on purpose: on
      a draft the button does not mint a second record, it opens the "Draft …
@@ -1122,13 +1130,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      deep-link path (`?action=create-ai-interview`) and for the window between
      a stale tab rendering and the fetch landing — so this gate is the honest
      label on the button, not the only thing enforcing the rule. */
-  const aiInterviewAlreadyPublished = hasLiveAIInterview;
-  /* Create makes the NEXT assessment version once one is live, so a published
-     assessment no longer shuts it - the version cap does. */
+  /* Create makes the NEXT version once one is live — on both sides — so a
+     published assessment / AI interview no longer shuts it; the version cap
+     does. */
   const atAssessmentVersionCap =
     assessmentVersionCount !== null && assessmentVersionCount >= MAX_ASSESSMENT_VERSIONS;
+  const atAIInterviewVersionCap =
+    aiInterviewVersionCount !== null && aiInterviewVersionCount >= MAX_INTERVIEW_VERSIONS;
   const blockAssessmentCreate = !assessmentExistenceChecked || atAssessmentVersionCap;
-  const blockAIInterviewCreate = !aiInterviewExistenceChecked || aiInterviewAlreadyPublished;
+  const blockAIInterviewCreate = !aiInterviewExistenceChecked || atAIInterviewVersionCap;
   /** Why Create is off, for the button titles and tile tooltips. Null when on. */
   const assessmentCreateBlockedReason = !features.assessment
     ? 'Assessments not enabled'
@@ -1143,8 +1153,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ? 'AI Interviews not enabled'
     : job.status === 'Disabled'
       ? 'JD is disabled'
-      : aiInterviewAlreadyPublished
-        ? 'This job already has a published AI interview'
+      : atAIInterviewVersionCap
+        ? `This job version has the maximum ${MAX_INTERVIEW_VERSIONS} AI interview versions — archived ones count too`
         : !aiInterviewExistenceChecked
           ? 'Checking this job’s AI interview…'
           : null;
@@ -1238,6 +1248,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // opened, matching the Scored Resumes / Assessment Results tabs which also
   // fetch eagerly. Side benefit: opening the tab is then instant.
   useEffect(() => {
+    // A count read for another job version must not cap this one's Create.
+    setAiInterviewVersionCount(null);
     if (!job.id) return;
     if (!hasPlanFeature('ai_interview') || !features.ai_interview) return;
     // Also runs for share-only users: the Send Invite gate reads
@@ -1267,32 +1279,38 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     loadAIInterviewConfig();
   };
 
-  // Mirrors handleCreateAssessment's three-way split:
-  //   a live interview exists → /recruitment/ai-interviews/{id}
-  //   only a draft exists     → publish prompt, in place on this page
-  //   nothing exists          → the config flow
-  // AIInterviewConfig keeps its own live-config guard as the enforcement (it
-  // covers deep links too); this decides at the click so the recruiter never
-  // passes through a page that immediately redirects them elsewhere.
+  // Mirrors handleCreateAssessment, against this job version's AI interview
+  // versions (`loadInterviewVersions` — the Create / Send popup's "New
+  // version" list, so both buttons give one answer):
+  //   MAX_INTERVIEW_VERSIONS already → blocked (archived ones count too)
+  //   a draft version exists         → publish prompt, in place on this page
+  //   this JD has an interview       → the NEXT version: a duplicate of the
+  //                                    latest one, opened in the config flow
+  //   nothing exists                 → the config flow
+  // The duplicate follows the AI Interviews page's Duplicate rules
+  // (`createBlockedReason` — latest only, sent, not archived), which the
+  // backend's clone_config enforces again.
   const handleCreateAIInterview = async () => {
     if (resolvingAIInterviewTarget) return;
     setResolvingAIInterviewTarget(true);
     try {
-      const live = await aiInterviewService.findLiveConfigForJd(job.id);
-      if (live?.id) {
-        toast.info('An AI interview already exists for this job.');
-        router.push(`/recruitment/ai-interviews/${live.id}?from=job-details`);
+      // Newest version first; this JD row only, archived included.
+      const versions = await loadInterviewVersions(job.id);
+      setAiInterviewVersionCount(versions.length);
+
+      if (versions.length >= MAX_INTERVIEW_VERSIONS) {
+        await dialog.alert({
+          title: 'Maximum versions reached',
+          message: `This job version already has ${MAX_INTERVIEW_VERSIONS} AI interview versions (the maximum allowed). Archived versions count too, so manage the existing versions to continue.`,
+          variant: 'warning',
+        });
         return;
       }
 
-      // Same draft lookup AIInterviewConfig runs when restoring a draft.
-      const draftResult = await aiInterviewService
-        .listConfigs({ status: 'draft', page_size: 50, compact: true })
-        .catch(() => null);
-      const draft = (draftResult?.items ?? []).find(
-        (c: AIInterviewResponse) => c.jd_id === job.id && c.status === 'draft'
-      );
-      if (draft?.id) {
+      // An unpublished version already exists: it must be published before
+      // another is created.
+      const draft = versions.find((v) => v.status === 'draft');
+      if (draft?.config) {
         // Keep the Send Invite gate in step — this click just proved a draft
         // exists, which may be newer than what loadAIInterviewConfig saw.
         setHasAnyAIInterview(true);
@@ -1301,10 +1319,51 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         // the full record. If that read fails, fall back to the compact row:
         // the prompt then offers editing only, which is always safe.
         const full = await aiInterviewService.get(draft.id).catch(() => null);
-        setDraftAIInterview(full ?? draft);
+        setDraftAIInterview(full ?? draft.config);
         return;
       }
-    } catch {
+
+      // This JD already has an interview: create its next version, the way
+      // Duplicate does — the same clone call, from the latest version — and
+      // open it in the config flow.
+      const source = versions[0];
+      if (source) {
+        const blocked = createBlockedReason(
+          versions,
+          { canCreate: true, canUpdate: true, canPublish: true, canArchive: true, canInvite: true },
+          'interview',
+          source,
+        );
+        if (blocked) {
+          await dialog.alert({
+            title: 'Cannot create a new version',
+            message: blocked,
+            variant: 'warning',
+          });
+          return;
+        }
+        const nextVersion = nextVersionNumber(versions);
+        const confirmed = await dialog.confirm({
+          title: 'Create a new AI interview version',
+          message: `Create version ${nextVersion} of ${MAX_INTERVIEW_VERSIONS} for this job version? It starts as a draft copy of version ${source.version}, ready to edit. Version ${source.version} is not changed.`,
+          confirmText: 'Create Version',
+        });
+        if (!confirmed) return;
+        const response = await aiInterviewService.clone(source.id);
+        toast.success(`New version created as a draft: ${response.cloned_title}`);
+        // Unsaved until Save as Draft: Discard anywhere in the wizard deletes
+        // it — the AI Interviews page's Duplicate rule.
+        markUnsavedVersion(response.cloned_id);
+        router.push(`${aiInterviewConfigureHref(response.cloned_id, job.id)}&from=job-details`);
+        return;
+      }
+    } catch (error: any) {
+      // A failed clone says why; a failed lookup falls through to the config
+      // flow, whose own guard re-checks before anything is created.
+      if (error?.message) {
+        toast.error(error.message);
+        return;
+      }
       // Lookup failed — fall through to the config flow rather than blocking.
       // Its own guard re-checks and redirects if a live interview does exist.
     } finally {
