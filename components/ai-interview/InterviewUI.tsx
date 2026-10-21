@@ -3485,6 +3485,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Prevents TalkingHead from receiving streamStart with an empty buffer (causes early
   // onAudioEnd on Q1 when AudioContext is cold or TalkingHead is still initialising).
   const pendingStreamStartRef = useRef<(() => void) | null>(null);
+  // This turn's end-of-playback callback, kept after streamStart consumes
+  // pendingStreamStartRef so a worklet re-armed after a mid-sentence TTS stall
+  // still runs it (countdown → mic). Cleared once it has run.
+  const playbackEndedCbRef = useRef<(() => void) | null>(null);
   // Set true when TalkingHead's worklet fires onAudioEnd BEFORE backend audio_end —
   // i.e. its internal buffer drained during a streaming hiccup. New PCM chunks
   // arriving after this point would go to a stopped worklet and be silently lost
@@ -5239,6 +5243,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Turn-scoped playback state — re-armed by the next turn's own
     // speaking_started, so clearing it here cannot leak into the next turn.
     pendingStreamStartRef.current = null;
+    playbackEndedCbRef.current = null;
     pendingBuffersRef.current = 0;
     audioEndReceivedRef.current = false;
     if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
@@ -6222,6 +6227,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             talkingHeadEndedEarlyRef.current = true;
             return;
           }
+          // Runs once per turn (a later re-armed worklet must not finalize again).
+          playbackEndedCbRef.current = null;
           // Clear safety-net fallback — normal path fired, no fallback needed
           if (audioEndFallbackRef.current) {
             clearTimeout(audioEndFallbackRef.current);
@@ -6317,6 +6324,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           const _finalizeSafetyMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
           whenTrackedPlaybackEnds(finalizePlayback, _finalizeSafetyMs);
         };
+        playbackEndedCbRef.current = pendingStreamStartRef.current;
         break;
       case "silent_discard":
         // If the candidate clicked End mid-answer but the answer was discarded
@@ -6522,11 +6530,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // Point 4: clarification ends when Bina stops speaking
             setIsClarification(false);
             isClarificationRef.current = false;
-            setStatus("Your turn - speak now...");
+            // A real question turn still gets its 3-2-1 (armed by
+            // question_timer_started), same as the primary path.
+            playbackEndedCbRef.current = null;
+            const _runGetReady = getReadyArmedRef.current;
+            getReadyArmedRef.current = false;
+            setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
               startRecordingTimerRef.current = null;
-              startRecordingInternalRef.current();
+              const _openMic = () => {
+                setStatus("Your turn - speak now...");
+                if (wsRef.current?.readyState === WebSocket.OPEN
+                    && !isAiSpeakingRef.current
+                    && !isRecordingRef.current) {
+                  startRecordingInternalRef.current();
+                }
+              };
+              if (_runGetReady) runPreTurnCountdownRef.current(_openMic);
+              else startRecordingInternalRef.current();
             }, 800);
           }
         }, _fallbackDelayMs);
@@ -9307,6 +9329,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           talkingHeadEndedEarlyRef.current = false;
           talkingHeadRef.current?.streamStart(24000, () => {
             console.log("[TalkingHead] re-armed playback-ended callback fired");
+            // Same end-of-turn work as the first streamStart (audio_end gate,
+            // countdown, mic). Without it a mid-sentence TTS stall left the turn
+            // to the safety net, which opened the mic with no 3-2-1.
+            playbackEndedCbRef.current?.();
           });
         }
         // TalkingHead handles audio playback (gain:1) AND lip sync natively.
