@@ -696,6 +696,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // guard). Shows a terminal overlay and stops auto-reconnect.
   const [concurrentBlocked, setConcurrentBlocked] = useState(false);
   const concurrentBlockedRef = useRef(false);
+  // A 4409 on an AUTO-RECONNECT (this page already had a live interview) is
+  // usually the server still seeing our own dropped socket — retry a few times
+  // (2s, 3s, 5s) before showing the overlay. A first open never retries.
+  const interviewStartedRef = useRef(false);
+  const concurrentRetryRef = useRef(0);
   // Next-Q debounce: set true the moment the candidate clicks Next Q (so the
   // button disables immediately and rapid double-clicks can't send multiple
   // skip_question messages). Cleared when the backend sends the next question's
@@ -1111,6 +1116,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // instead of giving up (which forced the candidate to manually refresh).
   const preStartRetryRef = useRef(0);
   const PRE_START_MAX_RETRIES = 15;
+  const CONCURRENT_RECONNECT_DELAYS = [2000, 3000, 5000]; // ~10s, then the overlay
   const isUnmountedRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
 
@@ -5313,6 +5319,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // Stop everything and show a terminal message — do NOT reconnect (the
         // server will just block again). The close (code 4409) follows this.
         console.warn(`[WS ${timestamp}] Concurrent session blocked by server`);
+        if (interviewStartedRef.current && concurrentRetryRef.current < CONCURRENT_RECONNECT_DELAYS.length) {
+          // Our own reconnect — the 4409 close branch retries; no overlay yet.
+          setStatus("Connection lost — reconnecting...");
+          break;
+        }
         // NOTE: do NOT set isClosingRef here — the onclose handler treats
         // isClosing as a NORMAL completion ("Interview completed"). The 4409
         // close branch + concurrentBlockedRef already suppress auto-reconnect.
@@ -5326,6 +5337,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         console.log(`[WS ${timestamp}] Viseme timeline received (deprecated)`);
         break;
       case "connected":
+        interviewStartedRef.current = true;
+        concurrentRetryRef.current = 0;
         console.log(`[WS ${timestamp}] Connected: session_id=${data.session_id}, total_questions=${data.total_questions}, duration_minutes=${data.duration_minutes}, remaining_seconds=${data.remaining_seconds}`);
           setBackendLiveTranscriptEnabled(Boolean(data.live_transcript_enabled));
         {
@@ -9199,6 +9212,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // it, or grace-period reaper fired). Retrying hits the same wall.
         setStatus("Interview has ended. " + (event.reason || ""));
         uploadRecording().catch(() => {});
+      } else if (
+        event.code === 4409 && !concurrentBlockedRef.current && interviewStartedRef.current
+        && concurrentRetryRef.current < CONCURRENT_RECONNECT_DELAYS.length
+        && !isUnmountedRef.current && !isClosingRef.current
+      ) {
+        // Blocked on an auto-reconnect: the server may still see our own dropped
+        // socket as live. The backend now lets the same browser take over, so
+        // this is only a safety net — a few quick retries, then the overlay.
+        const delay = CONCURRENT_RECONNECT_DELAYS[concurrentRetryRef.current];
+        concurrentRetryRef.current++;
+        console.warn(`[INTERVIEW-DEBUG] 4409 on reconnect — retry ${concurrentRetryRef.current}/${CONCURRENT_RECONNECT_DELAYS.length} in ${delay}ms`);
+        setStatus(`Connection lost — reconnecting in ${Math.round(delay / 1000)}s...`);
+        setTimeout(() => {
+          if (!isUnmountedRef.current && !isClosingRef.current) connectRef.current();
+        }, delay);
       } else if (event.code === 4409 || concurrentBlockedRef.current) {
         // Single-active-session guard: this link is already open/active in
         // another window/device. TERMINAL — never auto-reconnect (it would just
