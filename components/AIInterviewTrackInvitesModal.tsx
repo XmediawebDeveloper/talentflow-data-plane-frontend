@@ -19,7 +19,7 @@ import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
-import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { emailValidationError } from '@/lib/utils/email';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import AIInterviewInviteTable, {
@@ -853,14 +853,15 @@ export default function AIInterviewTrackInvitesModal({
 
   const editEmailTrimmed = editForm.candidate_email.trim();
   const editEmailError =
-    editEmailTrimmed.length > 0 && !isValidEmailFormat(editEmailTrimmed) ? EMAIL_FORMAT_ERROR : null;
+    editEmailTrimmed.length > 0 ? emailValidationError(editEmailTrimmed) : null;
   const handleSaveEdit = async () => {
     const inv = editTarget;
     if (!inv) return;
     const name = editForm.candidate_name.trim();
     const email = editForm.candidate_email.trim();
     if (!name || !email) { toast.error('Candidate name and email are required'); return; }
-    if (!isValidEmailFormat(email)) { toast.error(EMAIL_FORMAT_ERROR); return; }
+    const emailError = emailValidationError(email);
+    if (emailError) { toast.error(emailError); return; }
     setSavingEdit(true);
     try {
       await aiInterviewService.updateInvitation(inv.id, { candidate_name: name, candidate_email: email });
