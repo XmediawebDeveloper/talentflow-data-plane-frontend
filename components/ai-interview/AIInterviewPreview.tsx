@@ -10,7 +10,7 @@ import {
   Share2, ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
@@ -296,6 +296,14 @@ export default function AIInterviewPreview() {
     setLoading(true);
     try {
       const data = await aiInterviewService.get(id);
+      // A disabled JD's interview is view-only — no publishing or editing it
+      // until the job is enabled again; show its read-only details instead.
+      if (isJdDisabled(data.jd_status)) {
+        toast.error(JD_DISABLED_ACTION_MESSAGE);
+        if (wizardNav) wizardNav.exit();
+        else router.replace(`/recruitment/ai-interviews/${data.id}`);
+        return;
+      }
       setInterview(data);
 
       // Parse rounds_config
@@ -324,7 +332,7 @@ export default function AIInterviewPreview() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, router, wizardNav]);
 
   useEffect(() => {
     loadInterview();

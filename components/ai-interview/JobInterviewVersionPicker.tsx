@@ -7,6 +7,7 @@ import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import { isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { ROUND_LABELS, ROUND_SHORT_LABELS, type AIInterviewPickerSelection } from './AIInterviewPicker';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
@@ -48,7 +49,8 @@ function listedJobInterviewConfigs(configs: AIInterviewResponse[], jobId: string
 /** The version the cards tag "Latest": the newest listed Active interview —
  *  what a host pre-selects (and, with a single version, the only choice). */
 export function latestActiveInterviewConfig(configs: AIInterviewResponse[], jobId: string): AIInterviewResponse | undefined {
-  return listedJobInterviewConfigs(configs, jobId)[0];
+  // A disabled job's interview is listed but never pre-selected.
+  return listedJobInterviewConfigs(configs, jobId).find((c) => !isJdDisabled(c.jd_status));
 }
 
 /**
@@ -139,7 +141,8 @@ export default function JobInterviewVersionPicker({
           {versions.map((c) => {
             const status = normalizeStatus(c.status);
             const pill = STATUS_PILL[status] ?? { label: status, className: STATUS_PILL.cancelled.className };
-            const selectable = status === 'published';
+            const jdDisabled = isJdDisabled(c.jd_status);
+            const selectable = status === 'published' && !jdDisabled;
             const isSelected = multiple ? (selectedIds ?? []).includes(c.id) : selection?.interviewId === c.id;
             const ivNum = interviewVersionOrdinal(c, configs);
             const rounds = (c.rounds_config || []).filter((r) => r.enabled !== false);
@@ -159,6 +162,7 @@ export default function JobInterviewVersionPicker({
                 role={multiple ? 'checkbox' : 'radio'}
                 aria-checked={isSelected}
                 aria-disabled={!selectable}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
                 tabIndex={selectable ? 0 : -1}
                 onClick={pick}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } }}

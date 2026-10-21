@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import {
   KIND_LABEL,
   MAX_VERSIONS,
@@ -176,6 +177,8 @@ export default function VersionList({
               ? undefined
               : v.revoked
                 ? 'Invites for this version have been revoked. Create a new version to start fresh.'
+                : v.kind === 'interview' && isJdDisabled(v.config?.jd_status)
+                  ? JD_DISABLED_ACTION_MESSAGE
                 : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
             const pick = () => { if (v.sendable) onSelect(selected ? null : v.id); };
             const actions = versionActions(v, every, perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));

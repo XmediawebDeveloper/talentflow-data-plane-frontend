@@ -14,7 +14,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { loadAllInterviewConfigs } from '@/components/talent-match-invite/inviteVersions';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { Button } from '@/components/ui/button';
@@ -1655,6 +1655,28 @@ export default function AIInterviewConfig() {
           setRedirecting(true);
           toast.error('Job description not found');
           router.replace('/recruitment/ai-interviews/jd-selection');
+          return;
+        }
+
+        // A disabled JD is view-only: no creating or editing its interview
+        // until the job is enabled again. Editing an existing config lands on
+        // its (read-only) details page instead.
+        if (isJdDisabled(jd.status) || isJdDisabled(specificConfig?.jd_status)) {
+          setRedirecting(true);
+          toast.error(JD_DISABLED_ACTION_MESSAGE);
+          if (wizardNav) {
+            wizardNav.exit();
+            return;
+          }
+          if (fromInviteOrigin) {
+            router.replace(inviteOriginReturn);
+            return;
+          }
+          router.replace(
+            specificConfig
+              ? `/recruitment/ai-interviews/${specificConfig.id}${fromJobDetails ? '?from=job-details' : ''}`
+              : '/recruitment/ai-interviews/jd-selection'
+          );
           return;
         }
 

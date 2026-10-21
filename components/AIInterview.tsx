@@ -18,7 +18,7 @@ import { DateField } from '@/components/ui/date-field';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useQuota } from '@/contexts/QuotaContext';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -66,7 +66,7 @@ import AssessmentVersionHistoryPanel, {
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import AllInterviewsTable, { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
+import AllInterviewsTable, { VersionPill, JobDisabledBadge } from '@/components/ai-interview/AllInterviewsTable';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
@@ -1296,7 +1296,33 @@ export default function AIInterview() {
     };
   }, [openMenuId]);
 
+  /* A disabled JD's configs stay listed and viewable but take no actions until
+     the JD is enabled again — every action handler bails here first (the
+     backend refuses them too, with the same message). */
+  const blockIfJdDisabled = (config: AIInterviewResponse | null | undefined) => {
+    if (!isJdDisabled(config?.jd_status)) return false;
+    toast.error(JD_DISABLED_ACTION_MESSAGE);
+    setOpenMenuId(null);
+    return true;
+  };
+
+  /* Same gate for an invitation row: its config is found by config id (rows
+     carry `_config_id` when merged across configs, `config_id` otherwise). */
+  const isInviteJdDisabled = (inv: { jd_status?: string; _config_id?: string; config_id?: string } | null | undefined) => {
+    if (!inv) return false;
+    if (isJdDisabled(inv.jd_status)) return true;
+    const configId = inv._config_id || inv.config_id;
+    const config = configId ? [...configs, ...archivedConfigs].find((c) => c.id === configId) : null;
+    return isJdDisabled(config?.jd_status);
+  };
+  const blockIfInviteJdDisabled = (inv: { jd_status?: string; _config_id?: string; config_id?: string } | null | undefined) => {
+    if (!isInviteJdDisabled(inv)) return false;
+    toast.error(JD_DISABLED_ACTION_MESSAGE);
+    return true;
+  };
+
   const handleDeleteConfig = (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
     // Prevent deletion if candidates have started
     if (config.invitations_count && config.invitations_count > 0) {
       toast.error('Cannot delete — candidates have already started this interview');
@@ -1329,6 +1355,7 @@ export default function AIInterview() {
   };
 
   const handlePublishConfig = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
     try {
       await aiInterviewService.publishConfig(config.id);
       await loadData();
@@ -1427,6 +1454,7 @@ export default function AIInterview() {
   };
 
   const handleArchiveConfig = (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
     // Close the 3-dot menu the instant the confirm opens — otherwise both sit
     // on screen at once until the archive call resolves.
     setOpenMenuId(null);
@@ -1450,6 +1478,7 @@ export default function AIInterview() {
   };
 
   const handleUnarchiveConfig = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
     try {
       const restored = await aiInterviewService.unarchive(config.id);
       await Promise.all([loadData(), loadArchivedConfigs()]);
@@ -1469,6 +1498,7 @@ export default function AIInterview() {
      as Duplicate does on an assessment. The gate is the shared one the menu
      item shows; the backend enforces the same three rules. */
   const handleCloneConfig = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
     setOpenMenuId(null);
     const blocked = interviewDuplicateBlockedReason(
       config,
@@ -1496,6 +1526,7 @@ export default function AIInterview() {
   };
 
   const handleCopyLink = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
     if (config.interview_link) {
       const fullLink = `${window.location.origin}${config.interview_link}`;
       await navigator.clipboard.writeText(fullLink);
@@ -1601,6 +1632,13 @@ export default function AIInterview() {
     );
     const draftConfig = jdConfigs.find((config) => config.status === 'draft');
     const fallbackConfig = publishedConfig || draftConfig || jdConfigs.find((config) => config.status !== 'archived') || jdConfigs[0] || null;
+
+    // Status tracking is a view; creating and inviting are actions a disabled job refuses.
+    if (action !== 'ai-interview-status' && jdConfigs.some((config) => isJdDisabled(config.jd_status))) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      clearQuickActionUrl();
+      return;
+    }
 
     if (action === 'create-ai-interview') {
       if (!canCreateAIInterviews) {
@@ -1875,10 +1913,10 @@ export default function AIInterview() {
   /* Opening a version from the list: a DRAFT the recruiter may edit goes
      straight back into its editor, at the step it was left on (see
      aiInterviewDraftResume); anything else — or a draft without edit
-     permission — opens its details page as before. */
+     permission, or of a disabled job — opens its details page as before. */
   const openInterviewFromList = (id: string) => {
     const config = configs.find((c) => c.id === id);
-    if (config?.status === 'draft' && config.jd_id && canUpdateAIInterviews) {
+    if (config?.status === 'draft' && config.jd_id && canUpdateAIInterviews && !isJdDisabled(config.jd_status)) {
       void resolveAIInterviewDraftResumeHref(config.id, config.jd_id).then((href) => router.push(href));
       return;
     }
@@ -2152,6 +2190,8 @@ export default function AIInterview() {
     const invitations = config.invitations_count ?? 0;
     const hasBeenShared = invitations > 0;
     const menuKey = `version:${config.id}`;
+    // Disabled job: the view items stay, every action is listed but inert.
+    const jdLocked = isJdDisabled(config.jd_status);
 
     // Every action lives in the 3-dot menu — the row carries no quick-action
     // buttons of its own.
@@ -2198,6 +2238,7 @@ export default function AIInterview() {
                 <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
               </button>
+              {!jdLocked && (<>
               {/* Continue Editing — moved here from the job row, which now
                   reports the job as a whole, as the Assessments Job List does. */}
               {config.status === 'draft' && config.jd_id && (
@@ -2256,6 +2297,7 @@ export default function AIInterview() {
                   <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
                 </button>
               )}
+              </>)}
               {/* Track / View Results — always listed, but disabled (reason in
                   the tooltip) until at least one invite exists: before that
                   there is nothing to track and no session to score. */}
@@ -2283,6 +2325,30 @@ export default function AIInterview() {
                 <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
+              {jdLocked ? (
+                <>
+                  <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
+                  {([
+                    ['Edit', Pencil],
+                    ['Invite', Send],
+                    ['Duplicate', Copy],
+                    [normalizedStatus === 'archived' ? 'Unarchive' : 'Archive', normalizedStatus === 'archived' ? ArchiveRestore : Archive],
+                    ['Delete', Trash2],
+                  ] as const).map(([label, Icon]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled
+                      aria-disabled
+                      title={JD_DISABLED_ACTION_MESSAGE}
+                      className={VERSION_MENU_ITEM_DISABLED_CLASS}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                    </button>
+                  ))}
+                </>
+              ) : (<>
               {/* Duplicate — creates the next version. Disabled (reason in the
                   tooltip) for a draft, for a version nobody was invited to
                   (edit it instead), while another draft is open in the lineage,
@@ -2361,6 +2427,7 @@ export default function AIInterview() {
                 <Trash2 className="w-4 h-4 flex-shrink-0" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
               </button>
+              </>)}
             </div>,
             document.body,
           )}
@@ -2393,7 +2460,7 @@ export default function AIInterview() {
      filters change, so every ticked row is one on screen. */
   const statusRevocableSelectedCount = selectedStatusInviteIds.size === 0
     ? 0
-    : inviteStatusRows.filter((inv) => selectedStatusInviteIds.has(inv.id) && isRevocableInvite(inv)).length;
+    : inviteStatusRows.filter((inv) => selectedStatusInviteIds.has(inv.id) && isRevocableInvite(inv) && !isInviteJdDisabled(inv)).length;
 
   /* Ticked rows a fresh link can be sent to — the Track Invites popup's bulk
      resend rule: Expired, and never once the candidate started or finished.
@@ -2402,7 +2469,7 @@ export default function AIInterview() {
   const statusResendableSelectedRows = inviteStatusFilters.status !== 'expired' || selectedStatusInviteIds.size === 0
     ? []
     : inviteStatusRows.filter((inv) =>
-        selectedStatusInviteIds.has(inv.id) && isExpiredForActions(inv) && !inv.started_at && !inv.completed_at);
+        selectedStatusInviteIds.has(inv.id) && isExpiredForActions(inv) && !inv.started_at && !inv.completed_at && !isInviteJdDisabled(inv));
 
   /* A fresh link to each invitation, one at a time — each send emails a
      candidate, and a failure on one must not stop the rest. Shared by the
@@ -3168,7 +3235,9 @@ export default function AIInterview() {
                           ? `Track invitations for this job (${totals.invitations} invitation${totals.invitations === 1 ? '' : 's'} sent)`
                           : 'Track invitations for this job'
                         : 'No invitations have been sent for this job yet';
-                    const hasBeenShared = (config.invitations_count ?? 0) > 0;
+                    /* Result, like Track, covers every interview of the job, so
+                       it opens once any of them has been shared. */
+                    const hasBeenShared = jobInvitations > 0 || (config.invitations_count ?? 0) > 0;
                     const resultReason = hasBeenShared
                       ? 'View results'
                       : normalizedStatus === 'draft'
@@ -3204,6 +3273,7 @@ export default function AIInterview() {
                             >
                               {config.jd_title || config.position || 'Untitled'}
                             </h3>
+                            {isJdDisabled(config.jd_status) && <JobDisabledBadge />}
                           </div>
 
                           {/* Status of the job's representative interview —
@@ -3297,7 +3367,8 @@ export default function AIInterview() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (!hasBeenShared) return;
-                                router.push(`/recruitment/ai-interviews/${config.id}/results`);
+                                // Every interview version of this job, as Track lists them.
+                                router.push(`/recruitment/ai-interviews/${config.id}/results?scope=job`);
                               }}
                               className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                                 hasBeenShared
@@ -3878,18 +3949,19 @@ export default function AIInterview() {
                         showJobColumn
                         selectedIds={selectedStatusInviteIds}
                         onToggleSelect={toggleSelectOneInvite}
-                        isSelectable={() => true}
+                        isSelectable={(inv) => !isInviteJdDisabled(inv)}
                         allSelected={allPageSelected}
                         onToggleSelectAll={toggleSelectAllOnPage}
-                        onResend={(inv) => setResendInviteTarget(inv)}
+                        onResend={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
                         onEdit={(inv) => {
+                          if (blockIfInviteJdDisabled(inv)) return;
                           setEditInviteForm({
                             candidate_name: inv.candidate_name || '',
                             candidate_email: inv.candidate_email || '',
                           });
                           setEditInviteTarget(inv);
                         }}
-                        onRevoke={(inv) => setRevokeInviteTarget(inv)}
+                        onRevoke={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setRevokeInviteTarget(inv); }}
                         onViewDetails={(inv) => openCandidateResultRoute(inv, filtered, 'invitation-status')}
                         resendingId={resendingEmailFor}
                         revokingId={revokingInviteFor}
@@ -4260,6 +4332,8 @@ export default function AIInterview() {
           ? null
           : !chosen
             ? 'Select an interview version'
+            : isJdDisabled(chosen.jd_status)
+              ? JD_DISABLED_ACTION_MESSAGE
             : chosenStatus === 'draft'
               ? 'Publish this interview version before inviting'
               : chosenStatus === 'archived'
@@ -4404,9 +4478,12 @@ export default function AIInterview() {
            offers Resend. Every other card has no bulk action, so no checkbox
            column either. "Select All" only ever targets the CURRENT page — the
            list is server-paginated. The row rules are the table's own, so a
-           checkbox can never disagree with the action it feeds. */
+           checkbox can never disagree with the action it feeds. A disabled
+           job's tracker is view-only, so it has no bulk mode at all. */
+        const trackerJdLocked = isJdDisabled(viewInvitationsConfig.jd_status);
         const trackerBulkMode: 'revoke' | 'resend' | null =
-          inviteFilters.status === 'invited' ? 'revoke'
+          trackerJdLocked ? null
+          : inviteFilters.status === 'invited' ? 'revoke'
             : inviteFilters.status === 'expired' ? 'resend'
               : null;
         const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
@@ -4702,15 +4779,17 @@ export default function AIInterview() {
                   selectedIds={trackerBulkMode ? selectedInviteIds : undefined}
                   onToggleSelect={trackerBulkMode ? toggleSelectOne : undefined}
                   isSelectable={trackerRowSelectable}
-                  onResend={(inv) => setResendInviteTarget(inv)}
-                  onEdit={(inv) => {
+                  /* A disabled job's tracker is view-only: no row actions. */
+                  onResend={trackerJdLocked ? undefined : (inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
+                  onEdit={trackerJdLocked ? undefined : (inv) => {
+                    if (blockIfInviteJdDisabled(inv)) return;
                     setEditInviteForm({
                       candidate_name: inv.candidate_name || '',
                       candidate_email: inv.candidate_email || '',
                     });
                     setEditInviteTarget(inv);
                   }}
-                  onRevoke={(inv) => setRevokeInviteTarget(inv)}
+                  onRevoke={trackerJdLocked ? undefined : (inv) => { if (blockIfInviteJdDisabled(inv)) return; setRevokeInviteTarget(inv); }}
                   onViewDetails={(inv) => openCandidateResultRoute(inv, invitations)}
                   resendingId={resendingEmailFor}
                   revokingId={revokingInviteFor}
@@ -4779,15 +4858,21 @@ export default function AIInterview() {
                   <Button
                     variant="primary"
                     size="sm"
+                    disabled={trackerJdLocked}
+                    title={
+                      !canInviteAIInterviews
+                        ? 'You do not have permission to invite candidates'
+                        : trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined
+                    }
                     onClick={() => {
                       if (!canInviteAIInterviews) return;
+                      if (blockIfJdDisabled(viewInvitationsConfig)) return;
                       // Remember where we came from so closing Share returns here.
                       setShareReturnToInvites(viewInvitationsConfig);
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
                     aria-disabled={!canInviteAIInterviews}
-                    title={!canInviteAIInterviews ? 'You do not have permission to invite candidates' : undefined}
                     className={!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
                     icon={<Send className="w-3.5 h-3.5" />}
                   >
@@ -4810,6 +4895,7 @@ export default function AIInterview() {
         totalQuestions={archiveTarget?.total_questions}
         durationMinutes={archiveTarget?.duration_minutes}
         isLoading={archiveLoading}
+        jdDisabled={isJdDisabled(archiveTarget?.jd_status)}
         onConfirm={confirmArchiveConfig}
         onCancel={() => setArchiveTarget(null)}
       />
@@ -4824,6 +4910,7 @@ export default function AIInterview() {
         totalQuestions={deleteTarget?.total_questions}
         durationMinutes={deleteTarget?.duration_minutes}
         isLoading={deleteLoading}
+        jdDisabled={isJdDisabled(deleteTarget?.jd_status)}
         onConfirm={confirmDeleteConfig}
         onCancel={() => setDeleteTarget(null)}
       />

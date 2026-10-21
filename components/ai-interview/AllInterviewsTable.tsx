@@ -21,7 +21,7 @@ import ListCountBadge from '@/components/ui/list-count-badge';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -172,6 +172,19 @@ export function VersionPill({ kind, version }: { kind: 'job' | 'interview'; vers
       }`}
     >
       V{version}
+    </span>
+  );
+}
+
+/* Marks a job whose JD is disabled: its interviews stay listed and viewable,
+   but every action on them is off until the JD is enabled again. */
+export function JobDisabledBadge() {
+  return (
+    <span
+      title={JD_DISABLED_ACTION_MESSAGE}
+      className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 text-gray-600 bg-gray-100 ring-gray-200 dark:text-slate-300 dark:bg-slate-800 dark:ring-slate-700"
+    >
+      Job Disabled
     </span>
   );
 }
@@ -530,7 +543,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   /* Row click: an editable DRAFT reopens its editor at the step it was left
      on; everything else opens its details page as before. */
   const openRow = (row: InterviewRow) => {
-    if (row.rawStatus === 'draft' && row.jdId && canUpdateAIInterviews) {
+    if (row.rawStatus === 'draft' && row.jdId && canUpdateAIInterviews && !isJdDisabled(row.config.jd_status)) {
       void resolveAIInterviewDraftResumeHref(row.id, row.jdId).then((href) => router.push(href));
       return;
     }
@@ -706,7 +719,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      button checks. It routes to the JD-selection config builder — AI
      interviews have no `create?edit=` route the way Assessments does. */
   const rowActions = (row: InterviewRow) => {
-    const actions: { key: string; label: string; icon: typeof Eye; run: () => void; disabled?: boolean }[] = [
+    const actions: { key: string; label: string; icon: typeof Eye; run: () => void; disabled?: boolean; reason?: string }[] = [
       {
         key: 'view', label: 'View', icon: Eye,
         run: () => router.push(detailsHref(row.id)),
@@ -715,10 +728,15 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     // Draft-only and jdId are business conditions (stay a real hide); the
     // permission itself must not remove the item — visible but disabled.
     if (row.rawStatus === 'draft' && row.jdId) {
+      const jdLocked = isJdDisabled(row.config.jd_status);
       actions.push({
         key: 'edit', label: 'Edit', icon: Pencil,
-        run: () => { void resolveAIInterviewDraftResumeHref(row.id, row.jdId!).then((href) => router.push(href)); },
-        disabled: !canUpdateAIInterviews,
+        run: () => {
+          if (jdLocked) return;
+          void resolveAIInterviewDraftResumeHref(row.id, row.jdId!).then((href) => router.push(href));
+        },
+        disabled: !canUpdateAIInterviews || jdLocked,
+        reason: jdLocked ? JD_DISABLED_ACTION_MESSAGE : 'You do not have permission to edit AI interviews',
       });
     }
     return actions;
@@ -1066,12 +1084,15 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                     </td>
 
                     <td className="px-3 py-2.5 align-middle max-w-[16rem]">
-                      <span
-                        className="block truncate font-medium text-gray-900 dark:text-slate-50"
-                        title={row.jobName}
-                      >
-                        {row.jobName}
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="block truncate font-medium text-gray-900 dark:text-slate-50"
+                          title={row.jobName}
+                        >
+                          {row.jobName}
+                        </span>
+                        {isJdDisabled(row.config.jd_status) && <JobDisabledBadge />}
+                      </div>
                     </td>
 
                     <td className="px-3 py-2.5 align-middle whitespace-nowrap">
@@ -1147,7 +1168,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
-                          {rowActions(row).map(({ key, label, icon: Icon, run, disabled }) => (
+                          {rowActions(row).map(({ key, label, icon: Icon, run, disabled, reason }) => (
                             /* aria-disabled, not Radix `disabled`: its pointer-events:none
                                swallowed the permission tooltip. Locked = no-op click. */
                             <DropdownMenuItem
@@ -1155,7 +1176,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                               onClick={disabled ? undefined : run}
                               onSelect={disabled ? (e) => e.preventDefault() : undefined}
                               aria-disabled={disabled || undefined}
-                              title={disabled ? 'You do not have permission to edit AI interviews' : undefined}
+                              title={disabled ? reason : undefined}
                               className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS} ${disabled ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
                             >
                               <Icon className="w-4 h-4" />

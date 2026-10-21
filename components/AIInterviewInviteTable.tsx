@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
@@ -643,6 +643,10 @@ export interface AIInterviewInviteTableProps {
   /** Ids currently mid-request, so the row can show a spinner. */
   resendingId?: string | null;
   revokingId?: string | null;
+  /** The interview's job is disabled: rows stay viewable, but Copy Link,
+   *  Resend, Edit and Revoke are shown disabled. A row's own `_jd_status` /
+   *  `jd_status` is honoured too, for lists that span several interviews. */
+  jdDisabled?: boolean;
 }
 
 export default function AIInterviewInviteTable({
@@ -665,8 +669,10 @@ export default function AIInterviewInviteTable({
   onViewDetails,
   resendingId,
   revokingId,
+  jdDisabled = false,
 }: AIInterviewInviteTableProps) {
   const selectable = !!onToggleSelect;
+  const rowLocked = (inv: any): boolean => jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
 
   /* Full action-log modal — fetched on demand per row, never eagerly for the
      whole page, so opening the tracker doesn't fire one audit-trail request
@@ -695,9 +701,11 @@ export default function AIInterviewInviteTable({
      buttons on the mobile card — so the two can't drift apart. */
   const rowActions = (inv: any): RowAction[] => {
     const actions: RowAction[] = [];
+    const locked = rowLocked(inv);
+    const lockedProps = locked ? { disabled: true, title: JD_DISABLED_ACTION_MESSAGE } : {};
 
     if (isInterviewLinkLive(inv)) {
-      actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download' });
+      actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
     }
     /* View Details on Completed and Terminated rows — a terminated interview
        still has its (partial) evaluation to open; the result page shows it as
@@ -715,6 +723,7 @@ export default function AIInterviewInviteTable({
         busy: resendingId === inv.id,
         disabled: resendingId === inv.id,
         iconClassName: 'text-menu-icon-share',
+        ...lockedProps,
       });
     }
     if (onEdit && canEdit(inv)) {
@@ -725,6 +734,7 @@ export default function AIInterviewInviteTable({
         run: () => onEdit(inv),
         title: 'Edit candidate details and send',
         iconClassName: 'text-menu-icon-edit',
+        ...lockedProps,
       });
     }
     if (onRevoke && isRevocableInvite(inv)) {
@@ -737,6 +747,7 @@ export default function AIInterviewInviteTable({
         title: "Revoke this invitation — the candidate's link will stop working",
         destructive: true,
         busy: revokingId === inv.id,
+        ...lockedProps,
       });
     }
     return actions;
@@ -762,7 +773,7 @@ export default function AIInterviewInviteTable({
     if (!selectable) return null;
     // A fixed-width slot even when this row can't be selected, so every avatar
     // below it stays on the same left edge.
-    if (!(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-6 flex-shrink-0" />;
+    if (rowLocked(inv) || !(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-6 flex-shrink-0" />;
     const checked = !!selectedIds?.has(inv.id);
     // The CheckSquare / Square checkbox every AI Interviews tab uses, so the
     // select column looks the same wherever it appears.

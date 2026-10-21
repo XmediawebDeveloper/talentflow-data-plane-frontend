@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
@@ -1069,7 +1069,8 @@ function CategorySection({
 export default function AIInterviewClusters() {
   const router = useWizardRouter();
   /* Run inside the Create / Send AI Interview popup (AIInterviewWizardDialog). */
-  const embedded = !!useEmbeddedWizard();
+  const wizardNav = useEmbeddedWizard();
+  const embedded = !!wizardNav;
   /* Step indicator pins below the sticky breadcrumb rather than under it. */
   const [breadcrumbBarRef, breadcrumbHeight] = useBreadcrumbOffset();
   const searchParams = useWizardSearchParams();
@@ -1235,6 +1236,14 @@ export default function AIInterviewClusters() {
     const load = async () => {
       try {
         const draft = await aiInterviewService.get(id);
+        // A disabled JD's interview is view-only — no editing its clusters
+        // until the job is enabled again; show its read-only details instead.
+        if (isJdDisabled(draft.jd_status)) {
+          toast.error(JD_DISABLED_ACTION_MESSAGE);
+          if (wizardNav) wizardNav.exit();
+          else router.replace(`/recruitment/ai-interviews/${draft.id}`);
+          return;
+        }
         setConfig(draft);
 
         // Parse rounds_config for skills

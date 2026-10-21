@@ -1980,7 +1980,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const leaveCheckpointRef = useRef<{ jd: JDResponse; label: string } | null>(null);
   // The part of the checkpoint the leave prompt renders (refs cannot be read
   // during render under this eslint config).
-  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string } | null>(null);
+  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string; versionNumber: number } | null>(null);
   // Step-1 text as of that checkpoint; compared with the live text to tell
   // whether an existing JD has actually been edited.
   const checkpointContentKeyRef = useRef<string | null>(null);
@@ -3039,7 +3039,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const setLeaveCheckpoint = (jd: JDResponse, label: string) => {
     leaveCheckpointRef.current = { jd, label };
-    setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status });
+    setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1 });
     checkpointContentKeyRef.current = currentContentKeyRef.current;
     editedSinceCheckpointRef.current = false;
   };
@@ -3929,7 +3929,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         if (!cancelled && !leaveCheckpointRef.current) {
           const label = 'the version you opened';
           leaveCheckpointRef.current = { jd, label };
-          setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status });
+          setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1 });
         }
       })
       .catch(error => console.error('[Leave] Could not load the JD checkpoint:', error));
@@ -11755,6 +11755,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       <LeaveJDDialog
         open={showUnsavedDialog}
         jobCode={leaveJobCode}
+        versionNumber={leaveCheckpointMeta?.versionNumber ?? effectiveEditingJD?.version_number ?? 1}
         jobTitle={jobTitle.trim() || undefined}
         discardTarget={leaveCheckpointMeta?.label ?? null}
         nothingSavedYet={!editingId}
