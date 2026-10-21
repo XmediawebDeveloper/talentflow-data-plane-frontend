@@ -7,6 +7,7 @@ import api from '@/lib/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
 import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks, type PickSource } from '@/lib/utils/resumeSelection';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 
 interface InviteToAssessmentModalProps {
   onClose: () => void;
@@ -27,6 +28,11 @@ interface CandidateEmail {
   origin?: PickSource;
   resumeId?: string;
 }
+
+/* A typed name with anything but letters and spaces. Database rows are
+   exempt: their name comes read-only from the resume. */
+const hasInvalidName = (c: CandidateEmail) =>
+  c.source !== 'database' && !!c.name.trim() && !isValidCandidateName(c.name);
 
 interface Assessment {
   id: string;
@@ -342,6 +348,11 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       toast.error({ title: 'No Valid Candidates', description: 'Please add at least one candidate with valid name and email' });
       return;
     }
+    const invalidNames = sendCandidates.filter(hasInvalidName);
+    if (invalidNames.length > 0) {
+      toast.error({ title: 'Invalid Name', description: `${invalidNames.map(c => c.name.trim()).join(', ')}: ${NAME_FORMAT_ERROR}` });
+      return;
+    }
 
     // Quota check
     if (quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length) {
@@ -431,6 +442,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
   const isValid =
     sendCandidates.some(c => c.name.trim() && c.email.trim() && c.email.includes('@')) &&
+    !sendCandidates.some(hasInvalidName) &&
     selectedAssessment !== '';
 
   const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
@@ -785,8 +797,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                             onChange={(e) => updateCandidate(cand.id, 'name', e.target.value)}
                             placeholder="John Doe"
                             readOnly={cand.source === 'database'}
-                            className={`w-full min-w-0 h-[38px] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent ${cand.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''}`}
+                            aria-invalid={hasInvalidName(cand) ? 'true' : undefined}
+                            className={`w-full min-w-0 h-[38px] px-3 py-2 border ${hasInvalidName(cand) ? 'border-destructive-line' : 'border-gray-300 dark:border-slate-700'} rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent ${cand.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''}`}
                           />
+                          {hasInvalidName(cand) && (
+                            <p className="text-xs text-destructive mt-1">{NAME_FORMAT_ERROR}</p>
+                          )}
                         </div>
                         <div>
                           <label className="text-xs text-gray-500 dark:text-slate-500 mb-1 block">Email Address</label>

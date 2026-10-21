@@ -88,21 +88,11 @@ export function suggestEmailDomain(domain: string): string | null {
   return null;
 }
 
-/**
- * Why `raw` is not an acceptable email, or null when it is. Malformed →
- * EMAIL_FORMAT_ERROR; a misspelt provider domain → that error plus the
- * corrected address ("Did you mean name@gmail.com?").
- */
-export function emailValidationError(raw: string | null | undefined): string | null {
-  if (!isWellFormedEmail(raw)) return EMAIL_FORMAT_ERROR;
-  const at = raw!.lastIndexOf('@');
-  const suggestion = suggestEmailDomain(raw!.slice(at + 1));
-  return suggestion ? `${EMAIL_FORMAT_ERROR} Did you mean ${raw!.slice(0, at)}@${suggestion}?` : null;
-}
-
-/** Well-formed AND not a misspelt provider domain — every caller's gate. */
+/** Well-formed AND not a misspelt provider domain — every caller's gate.
+ *  A rejection shows the same plain message either way; no correction is
+ *  suggested. */
 export function isValidEmailFormat(raw: string | null | undefined): boolean {
-  return emailValidationError(raw) === null;
+  return isWellFormedEmail(raw) && suggestEmailDomain(raw!.slice(raw!.lastIndexOf('@') + 1)) === null;
 }
 
 function isWellFormedEmail(raw: string | null | undefined): boolean {
