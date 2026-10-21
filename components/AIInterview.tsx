@@ -4856,7 +4856,11 @@ export default function AIInterview() {
                     variant="primary"
                     size="sm"
                     disabled={trackerJdLocked}
-                    title={trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined}
+                    title={
+                      !canInviteAIInterviews
+                        ? 'You do not have permission to invite candidates'
+                        : trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined
+                    }
                     onClick={() => {
                       if (!canInviteAIInterviews) return;
                       if (blockIfJdDisabled(viewInvitationsConfig)) return;
@@ -4866,7 +4870,6 @@ export default function AIInterview() {
                       setShareConfig(viewInvitationsConfig);
                     }}
                     aria-disabled={!canInviteAIInterviews}
-                    title={!canInviteAIInterviews ? 'You do not have permission to invite candidates' : undefined}
                     className={!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
                     icon={<Send className="w-3.5 h-3.5" />}
                   >

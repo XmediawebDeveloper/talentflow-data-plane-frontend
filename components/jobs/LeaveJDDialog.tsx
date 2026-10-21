@@ -9,6 +9,9 @@ export interface LeaveJDDialogProps {
   /** Human-readable code (JD-076) once the job has a record; null before. */
   jobCode?: string | null;
   jobTitle?: string;
+  /** Lineage version (1, 2, ...). A v2+ draft is its own row: Delete removes that
+   *  version only, and the job's earlier versions stay. */
+  versionNumber?: number;
   /**
    * What "Discard current changes" goes back to, phrased to finish the
    * sentence "Goes back to …" — e.g. "the version you opened" or "the version
@@ -42,6 +45,7 @@ export default function LeaveJDDialog({
   open,
   jobCode,
   jobTitle,
+  versionNumber = 1,
   discardTarget,
   nothingSavedYet,
   deleteBlockedReason,
@@ -50,6 +54,8 @@ export default function LeaveJDDialog({
   onDiscard,
   onDelete,
 }: LeaveJDDialogProps) {
+  const isLaterVersion = versionNumber > 1;
+  const deleteLabel = isLaterVersion ? `Delete this version (V${versionNumber})` : 'Delete this entire JD';
   const discardDisabled = busy !== null || (!nothingSavedYet && discardTarget === null);
   const deleteDisabled = busy !== null || deleteBlockedReason !== null;
 
@@ -78,7 +84,7 @@ export default function LeaveJDDialog({
           loading: busy === 'discard',
         },
         {
-          label: 'Delete this entire JD',
+          label: deleteLabel,
           variant: 'destructive',
           onClick: onDelete,
           disabled: deleteDisabled,
@@ -112,13 +118,18 @@ export default function LeaveJDDialog({
         <li className={`flex gap-3 ${deleteBlockedReason ? 'opacity-60' : ''}`}>
           <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <p className="text-gray-700 dark:text-slate-300">
-            <span className="font-semibold text-gray-900 dark:text-slate-100">Delete this entire JD</span> —{' '}
-            {deleteBlockedReason ?? (
+            <span className="font-semibold text-gray-900 dark:text-slate-100">{deleteLabel}</span> —{' '}
+            {deleteBlockedReason ?? (isLaterVersion ? (
+              <>
+                permanently remove only V{versionNumber}. The earlier versions of {jobCode ?? 'this job'} and everything
+                they were used in are kept. This cannot be undone.
+              </>
+            ) : (
               <>
                 permanently remove this JD{jobCode ? ` (${jobCode})` : ''} and all its steps. It will not appear under
                 Draft in Job Descriptions. This cannot be undone.
               </>
-            )}
+            ))}
           </p>
         </li>
       </ul>
