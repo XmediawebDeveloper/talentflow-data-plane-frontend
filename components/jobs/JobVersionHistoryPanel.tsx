@@ -394,8 +394,8 @@ export default function JobVersionHistoryPanel({
                 const postedOn = version.published_at || detail?.published_at || version.created_at || detail?.created_at;
                 const lastUpdated = detail?.updated_at || version.published_at || version.created_at;
                 const locationText =
-                  detail?.location
-                  || (detail?.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ');
+                  (detail?.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ')
+                  || detail?.location;
                 const isSelected = !!onSelectVersion && selectedVersionId === version.id;
                 /* Only a published version can receive candidates — the same
                    rule the dialog's job list is built on, applied per version
@@ -584,8 +584,8 @@ export default function JobVersionHistoryPanel({
                         {detail?.industry_type ? formatIndustryType(detail.industry_type) : '—'}
                       </div>
                     </td>
-                    {/* Location — this version's own record; single field
-                        first, else the cities from the locations list. */}
+                    {/* Location — this version's own record; the cities
+                        from the locations list first, else the single field. */}
                     <td
                       className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle"
                       title={locationText || ''}

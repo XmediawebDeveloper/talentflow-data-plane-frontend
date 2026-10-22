@@ -29,6 +29,7 @@ import {
   Activity,
   XCircle
 } from 'lucide-react';
+import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import type { IconComponent } from '@/lib/types/icon';
 import { useState, useEffect, useCallback } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
@@ -682,10 +683,10 @@ export default function Dashboard({
                               {jd.department}
                             </div>
                           )}
-                          {jd.location && (
-                            <div className="flex items-center gap-2">
+                          {formatJdLocationText(jd) && (
+                            <div className="flex items-center gap-2" title={formatJdLocationText(jd)}>
                               <MapPin className="w-4 h-4 text-gray-400" />
-                              {jd.location}
+                              {formatJdLocationText(jd, 1)}
                             </div>
                           )}
                           {jd.published_at && (
@@ -811,10 +812,10 @@ export default function Dashboard({
                               {jd.department}
                             </div>
                           )}
-                          {jd.location && (
-                            <div className="flex items-center gap-2">
+                          {formatJdLocationText(jd) && (
+                            <div className="flex items-center gap-2" title={formatJdLocationText(jd)}>
                               <MapPin className="w-4 h-4 text-gray-400" />
-                              {jd.location}
+                              {formatJdLocationText(jd, 1)}
                             </div>
                           )}
                           {jd.created_at && (
