@@ -5,6 +5,7 @@ import { Plus, Users } from 'lucide-react';
 import AppModal, { AppModalAction } from '@/components/ui/app-modal';
 import { ApiUser } from '@/lib/services/userService';
 import MemberSelector from './MemberSelector';
+import { TEAM_MODAL_WIDTH } from './TeamDetailsModal';
 
 interface TeamFormModalProps {
   isOpen: boolean;
@@ -23,6 +24,8 @@ interface TeamFormModalProps {
   /** false = user lacks teams:delete — Delete stays visible but greyed with a tooltip. */
   canDelete?: boolean;
   isDeleting?: boolean;
+  /** Footer Cancel label — "Back" when the form was opened from Team Details. */
+  cancelLabel?: string;
 }
 
 export interface TeamFormData {
@@ -46,6 +49,7 @@ export default function TeamFormModal({
   onDelete,
   canDelete = true,
   isDeleting = false,
+  cancelLabel,
 }: TeamFormModalProps) {
   const [teamName, setTeamName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
@@ -99,15 +103,20 @@ export default function TeamFormModal({
       open={isOpen}
       onCancel={onClose}
       cancelDisabled={isSubmitting}
-      size="md"
+      cancelLabel={cancelLabel}
+      // Same width as Team Details, so switching modes doesn't resize the popup.
+      widthClassName={TEAM_MODAL_WIDTH}
       zIndexClass="z-50"
       icon={<Users />}
       title={mode === 'create' ? 'Create New Team' : 'Edit Team'}
       subtitle="Define the team profile, assign members, and optionally choose a lead."
       actions={actions}
     >
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {/* Two columns on the wider popup: profile left, members right — keeps
+            the form short instead of stacking everything. The member count and
+            lead status live in MemberSelector, so no separate summary box. */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-5">
             <div>
               <label htmlFor="team-name" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
                 Team Name <span className="text-brand-blue">*</span>
@@ -121,32 +130,24 @@ export default function TeamFormModal({
                 maxLength={255}
                 className={fieldClassName}
               />
-              <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{teamName.length}/255 characters</p>
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-slate-500">{teamName.length}/255 characters</p>
             </div>
 
-            <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-              <div className="text-xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Selected Members</div>
-              <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{selectedMemberIds.length}</div>
-              <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">
-                {teamLeadId ? 'Team lead assigned' : 'No lead assigned yet'}
-              </p>
+            <div>
+              <label htmlFor="team-description" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                Description
+              </label>
+              <textarea
+                id="team-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Briefly describe this team's purpose..."
+                maxLength={1000}
+                rows={5}
+                className={`${fieldClassName} resize-y`}
+              />
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-slate-500">{description.length}/1000 characters</p>
             </div>
-          </div>
-
-          <div>
-            <label htmlFor="team-description" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
-              Description
-            </label>
-            <textarea
-              id="team-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Briefly describe this team's purpose..."
-              maxLength={1000}
-              rows={4}
-              className={`${fieldClassName} resize-y`}
-            />
-            <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{description.length}/1000 characters</p>
           </div>
 
           <MemberSelector
