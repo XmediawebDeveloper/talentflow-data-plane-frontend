@@ -1168,7 +1168,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
         {/* Pagination */}
         {calculatedTotalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+          <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <div className="text-sm text-gray-600 dark:text-slate-400">
               Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
@@ -1432,11 +1432,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               </div>
 
               {/* Content */}
-              <div className="p-6 flex items-center gap-4 border-b border-gray-200">
-                <div className="w-16 h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <div className="p-4 sm:p-6 flex items-center gap-4 border-b border-gray-200">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
                   <Users className="w-7 h-7 text-brand-blue" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
                     <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>

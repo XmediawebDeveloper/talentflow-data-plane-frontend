@@ -10,6 +10,11 @@ import { createPortal } from 'react-dom';
 const FOLDER_MENU_WIDTH = 224; // w-56
 const FOLDER_MENU_GAP = 6;
 const FOLDER_MENU_EDGE = 8;
+// On a narrow phone the full 224px panel can't fit; shrink it to the available
+// viewport width (matching the `max-w-[calc(100vw-16px)]` cap on the panels) so
+// the position math never overlaps a flyout onto its parent or runs off-screen.
+const effectiveMenuWidth = (viewportW: number) =>
+  Math.min(FOLDER_MENU_WIDTH, viewportW - FOLDER_MENU_EDGE * 2);
 
 interface BulkActionsBarProps {
   /** Kept on the interface so callers don't have to change: the bar no longer
@@ -124,9 +129,10 @@ export default function BulkActionsBar({
     const top = flipUp
       ? Math.max(FOLDER_MENU_EDGE, folderMenuAnchor.top - FOLDER_MENU_GAP - clampedHeight)
       : Math.min(folderMenuAnchor.bottom + FOLDER_MENU_GAP, viewportH - FOLDER_MENU_EDGE - clampedHeight);
+    const menuWidth = effectiveMenuWidth(viewportW);
     const left = Math.min(
       Math.max(FOLDER_MENU_EDGE, folderMenuAnchor.left),
-      viewportW - FOLDER_MENU_EDGE - FOLDER_MENU_WIDTH,
+      viewportW - FOLDER_MENU_EDGE - menuWidth,
     );
 
     setFolderMenuPosition(prev =>
@@ -215,12 +221,13 @@ export default function BulkActionsBar({
     const viewportW = window.innerWidth;
     const viewportH = window.innerHeight;
     const estimatedHeight = Math.min(260, viewportH - FOLDER_MENU_EDGE * 2);
+    const menuWidth = effectiveMenuWidth(viewportW);
     const openLeft =
-      viewportW - anchor.right - FOLDER_MENU_EDGE < FOLDER_MENU_WIDTH &&
-      anchor.left - FOLDER_MENU_EDGE >= FOLDER_MENU_WIDTH;
+      viewportW - anchor.right - FOLDER_MENU_EDGE < menuWidth &&
+      anchor.left - FOLDER_MENU_EDGE >= menuWidth;
     const left = openLeft
-      ? Math.max(FOLDER_MENU_EDGE, anchor.left - FOLDER_MENU_WIDTH)
-      : Math.min(anchor.right, viewportW - FOLDER_MENU_EDGE - FOLDER_MENU_WIDTH);
+      ? Math.max(FOLDER_MENU_EDGE, anchor.left - menuWidth)
+      : Math.min(anchor.right, viewportW - FOLDER_MENU_EDGE - menuWidth);
     const top = Math.min(
       Math.max(FOLDER_MENU_EDGE, anchor.top),
       viewportH - FOLDER_MENU_EDGE - estimatedHeight,
@@ -251,7 +258,7 @@ export default function BulkActionsBar({
         }}
         onMouseLeave={() => scheduleOpenPath(ancestors)}
         className={`w-full text-left py-2 text-sm text-foreground hover:bg-accent/50 rounded-md transition-colors flex items-center gap-2 ${isOpen ? 'bg-accent/50' : ''}`}
-        style={{ width: 'calc(100% - 8px)', paddingLeft: 12 + depth * 16, paddingRight: 8, marginLeft: 4, marginRight: 4 }}
+        style={{ width: 'calc(100% - 8px)', paddingLeft: 12 + Math.min(depth, 3) * 16, paddingRight: 8, marginLeft: 4, marginRight: 4 }}
       >
         <FolderInput className="w-4 h-4 text-brand-orange flex-shrink-0" />
         <span className="truncate flex-1">{folder.name}</span>
@@ -301,8 +308,8 @@ export default function BulkActionsBar({
                 aria-label="Move to Folder" title={onMoveToFolderDisabled ? (onMoveToFolderDisabledReason || 'You do not have permission to move resumes to a folder') : 'Move to Folder'}
               >
                 <FolderInput className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">Move to Folder</span>
-                <span className="xl:hidden">Move</span>
+                <span className="hidden lg:inline">Move to Folder</span>
+                <span className="lg:hidden">Move</span>
               </button>
 
               {showFolderMenu && folderMenuAnchor && typeof document !== 'undefined' && createPortal(
@@ -330,7 +337,7 @@ export default function BulkActionsBar({
                        laid out past this panel's own clipped edge, so they
                        were there but the mouse could never reach them to
                        scroll to them. */
-                    className="fixed w-56 bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 flex flex-col overflow-hidden z-50"
+                    className="fixed w-56 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 flex flex-col overflow-hidden z-50"
                     style={{
                       top: folderMenuPosition?.top ?? folderMenuAnchor.bottom + FOLDER_MENU_GAP,
                       left: folderMenuPosition?.left ?? folderMenuAnchor.left,
@@ -413,7 +420,7 @@ export default function BulkActionsBar({
                   <div
                     key={entry.folder.id}
                     data-move-folder-menu
-                    className="fixed w-56 bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 overflow-y-auto overscroll-contain z-50"
+                    className="fixed w-56 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 overflow-y-auto overscroll-contain z-50"
                     style={{ top: pos.top, left: pos.left, maxHeight: pos.maxHeight }}
                     onMouseEnter={cancelScheduledClose}
                     onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
@@ -437,8 +444,8 @@ export default function BulkActionsBar({
               aria-label="Score Resume" title={onApplyToJobDisabled ? (onApplyToJobDisabledReason || 'You do not have permission to score resumes') : 'Score Resume'}
             >
               <ClipboardList className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Score Resume</span>
-              <span className="xl:hidden">Score</span>
+              <span className="hidden lg:inline">Score Resume</span>
+              <span className="lg:hidden">Score</span>
             </button>
           )}
 
@@ -449,8 +456,8 @@ export default function BulkActionsBar({
               aria-label="Resume Scoring" title="Resume Scoring"
             >
               <ClipboardList className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Resume Scoring</span>
-              <span className="xl:hidden">Score</span>
+              <span className="hidden lg:inline">Resume Scoring</span>
+              <span className="lg:hidden">Score</span>
             </button>
           )}
 
@@ -465,8 +472,8 @@ export default function BulkActionsBar({
               aria-label="Invite Assessment" title={onAssessmentDisabled ? (onAssessmentDisabledReason || 'You do not have permission to invite candidates to an assessment') : 'Invite Assessment'}
             >
               <ClipboardList className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Invite Assessment</span>
-              <span className="xl:hidden">Invite</span>
+              <span className="hidden lg:inline">Invite Assessment</span>
+              <span className="lg:hidden">Invite</span>
             </button>
           )}
 
@@ -481,9 +488,9 @@ export default function BulkActionsBar({
               aria-label="Invite AI Interview" title={onAIInterviewDisabled ? (onAIInterviewDisabledReason || 'You do not have permission to invite candidates to an AI interview') : 'Invite AI Interview'}
             >
               <Video className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Invite AI Interview</span>
+              <span className="hidden lg:inline">Invite AI Interview</span>
               {/* Short form for narrow widths, same shape as Invite Assessment's. */}
-              <span className="xl:hidden">Invite AI</span>
+              <span className="lg:hidden">Invite AI</span>
             </button>
           )}
 
@@ -498,8 +505,8 @@ export default function BulkActionsBar({
               aria-label="AI Talent Match" title={onAITalentMatchDisabled ? (onAITalentMatchDisabledReason || 'You do not have permission to run AI talent match') : 'AI Talent Match'}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">AI Talent Match</span>
-              <span className="xl:hidden">AI Match</span>
+              <span className="hidden lg:inline">AI Talent Match</span>
+              <span className="lg:hidden">AI Match</span>
             </button>
           )}
 
@@ -510,7 +517,7 @@ export default function BulkActionsBar({
               aria-label="Download" title="Download"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Download</span>
+              <span className="hidden lg:inline">Download</span>
             </button>
           )}
 
@@ -525,7 +532,7 @@ export default function BulkActionsBar({
               aria-label="Unarchive" title={onUnarchiveDisabled ? (onUnarchiveDisabledReason || 'You do not have permission to unarchive resumes') : 'Unarchive'}
             >
               <ArchiveRestore className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Unarchive</span>
+              <span className="hidden lg:inline">Unarchive</span>
             </button>
           ) : onArchive && (
             <button
@@ -538,7 +545,7 @@ export default function BulkActionsBar({
               aria-label="Archive" title={onArchiveDisabled ? (onArchiveDisabledReason || 'You do not have permission to archive resumes') : 'Archive'}
             >
               <Archive className="w-3.5 h-3.5" />
-              <span className="hidden xl:inline">Archive</span>
+              <span className="hidden lg:inline">Archive</span>
             </button>
           )}
 
@@ -557,7 +564,7 @@ export default function BulkActionsBar({
                 aria-label="Delete" title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : 'Delete'}
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden xl:inline">Delete</span>
+                <span className="hidden lg:inline">Delete</span>
               </button>
             </>
           )}
