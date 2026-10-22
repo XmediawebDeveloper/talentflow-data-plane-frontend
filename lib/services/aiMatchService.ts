@@ -361,6 +361,23 @@ export const aiMatchService = {
   },
 
   /**
+   * `getSession` for many sessions in one request (POST /ai-match/sessions/batch).
+   * Ids the server doesn't return (deleted / other tenant) are absent from the map.
+   */
+  async getSessionsBatch(sessionIds: string[]): Promise<Map<string, { session: AIMatchSessionResponse; candidates: MatchedCandidate[] }>> {
+    try {
+      const response = await api.post<{ items: AIMatchSessionResponse[] }>('/ai-match/sessions/batch', { session_ids: sessionIds });
+      const out = new Map<string, { session: AIMatchSessionResponse; candidates: MatchedCandidate[] }>();
+      for (const session of response.data?.items || []) {
+        out.set(session.id, { session, candidates: await resultsToCandidates(session.results) });
+      }
+      return out;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Every candidate matched to a JD, de-duplicated, best rating first.
    *
    * Replaces a fan-out that made the Job Details tab slow and its badge wrong: list the

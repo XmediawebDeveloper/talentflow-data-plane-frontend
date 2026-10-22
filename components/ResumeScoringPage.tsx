@@ -65,6 +65,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 /** Search/Scored By/Version/Status for the Scoring History modal's filter
  *  row — same shape as AITalentMatchPage's MatchHistoryModalFilters, so the
@@ -1093,10 +1094,7 @@ export default function ResumeScoringPage({
       // to silently cap this list at 100 rows with no pagination to reach
       // the rest, so "Total Resumes Scored"/"View by Candidates" undercounted
       // against the real total the moment more than 100 resumes existed.
-      const probe = await scoringService.getAllScoredResumes({ page: 1, page_size: 1 });
-      const response = probe.total > (probe.items || []).length
-        ? await scoringService.getAllScoredResumes({ page: 1, page_size: probe.total })
-        : probe;
+      const response = await fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page, page_size }));
 
       // Convert to ScoredResumesTable format
       const converted = response.items.map((item: any) => ({
@@ -3960,10 +3958,7 @@ export default function ResumeScoringPage({
                 setLoadingProgressJobId(item.jobId);
                 try {
                   const perVersion = await Promise.all(versions.map(async (version) => {
-                    const probe = await scoringService.getJDScoredResumes(version.id, { page_size: 1 });
-                    const response = probe.total > (probe.items || []).length
-                      ? await scoringService.getJDScoredResumes(version.id, { page_size: probe.total })
-                      : probe;
+                    const response = await fetchAllRows((page_size, page) => scoringService.getJDScoredResumes(version.id, { page_size, page }));
                     return (response.items || []).map((resume: any) => ({
                       /* Keyed by version AND resume: the same candidate can be
                          scored against several versions of one job, and those

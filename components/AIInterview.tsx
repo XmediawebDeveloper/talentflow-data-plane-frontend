@@ -70,6 +70,7 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import AllInterviewsTable, { VersionPill, JobDisabledBadge, JobArchivedBadge, jobLockBadgeFor } from '@/components/ai-interview/AllInterviewsTable';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -633,10 +634,7 @@ export default function AIInterview() {
   const loadArchivedConfigs = useCallback(async () => {
     const seq = ++archivedSeqRef.current;
     try {
-      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-      const result = probe.total > probe.items.length
-        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total, compact: true })
-        : probe;
+      const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ status: 'archived', page, page_size, compact: true }));
       if (seq !== archivedSeqRef.current) return;
       setArchivedConfigs(result.items);
     } catch (error) {
@@ -748,10 +746,7 @@ export default function AIInterview() {
   const loadProcessingSessions = useCallback(async () => {
     setProcessingLoading(true);
     try {
-      const probe = await aiInterviewService.list({ status: 'in_progress', page_size: 1 });
-      const result = probe.total > probe.items.length
-        ? await aiInterviewService.list({ status: 'in_progress', page_size: probe.total })
-        : probe;
+      const result = await fetchAllRows((page_size, page) => aiInterviewService.list({ status: 'in_progress', page_size, page }));
       setProcessingSessions(result.items);
     } catch (error) {
       console.error('Failed to load processing sessions:', error);
@@ -976,7 +971,7 @@ export default function AIInterview() {
             if (known === 0) return [];
             const probe = known !== undefined
               ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: known })
-              : await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
+              : await fetchAllRows((page_size, page) => aiInterviewService.getConfigInvitations(config.id, { page, page_size }));
             if (!probe.total) return [];
             const full = probe.total > probe.items.length
               ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })

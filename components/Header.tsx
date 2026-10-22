@@ -756,7 +756,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       )}
 
       {/* Brand logo — shown in the header so the dashboard route (where the sidebar is hidden) still has a brand mark. */}
-      <Link href="/dashboard" prefetch={false} aria-label="TalentFlow home" className="flex items-center mr-2 sm:mr-4 lg:mr-6 shrink-0">
+      <Link href="/dashboard" aria-label="TalentFlow home" className="flex items-center mr-2 sm:mr-4 lg:mr-6 shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={brandLogo.src}

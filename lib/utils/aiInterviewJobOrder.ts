@@ -68,17 +68,7 @@ export async function resolveAIInterviewVersion(
   own: Pick<AIInterviewResponse, 'id' | 'jd_id'>,
 ): Promise<number> {
   if (!own.jd_id) return 1;
-  const live: AIInterviewResponse[] = [];
-  for (let apiPage = 1; ; apiPage += 1) {
-    const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-    const items = batch.items || [];
-    live.push(...items);
-    if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
-  }
-  const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-  const archived = archivedProbe.total > archivedProbe.items.length
-    ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-    : archivedProbe.items;
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
   const siblings = [...live, ...archived]
     .filter((c) => c.jd_id === own.jd_id)
     .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());

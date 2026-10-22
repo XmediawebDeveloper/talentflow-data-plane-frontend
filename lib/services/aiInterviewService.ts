@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 export type AIInterviewHRQuestionStage = 'opening' | 'closing';
 
@@ -755,6 +756,23 @@ export const aiInterviewService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Every interview config, split into the default (non-archived) list and the
+   * archived one — both in full, fetched in parallel, one request each.
+   *
+   * Seven screens each paged the live list 100 at a time and only then probed
+   * the archived list for its total before fetching it: three-plus serial round
+   * trips, repeated per screen. Identical concurrent calls are shared by the
+   * API client, so screens that load together pay for it once.
+   */
+  async listAllConfigsSplit(): Promise<{ live: AIInterviewResponse[]; archived: AIInterviewResponse[] }> {
+    const [live, archived] = await Promise.all([
+      fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ page, page_size, compact: true })),
+      fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ status: 'archived', page, page_size, compact: true })),
+    ]);
+    return { live: live.items || [], archived: archived.items || [] };
   },
 
   /**

@@ -3032,7 +3032,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // URL to push and must instead unwind the history trap set up below.
   const [isPendingBackNavigation, setIsPendingBackNavigation] = useState(false);
   // Which leave-prompt action is in flight (its button shows the spinner).
-  const [leaveBusy, setLeaveBusy] = useState<'discard' | 'delete' | null>(null);
+  const [leaveBusy, setLeaveBusy] = useState<'save' | 'discard' | 'delete' | null>(null);
   // Set by the hydration effect when the loaded JD is one the recruiter opened,
   // so the change-tracking effect adopts the loaded text as the checkpoint text.
   const adoptLoadedKeyAsCheckpointRef = useRef(false);
@@ -7348,6 +7348,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     resolvePendingNavigation(pendingNavigation);
     setPendingNavigation(null);
     setIsPendingBackNavigation(false);
+  };
+
+  // Leave prompt → "Save as Draft". The same save as the page's own Save as Draft
+  // button (current step included, so the draft reopens where the recruiter left
+  // off), then leave. Stays on the page if the save fails or is refused (e.g. an
+  // empty job title), so nothing is lost by leaving.
+  const handleLeaveSave = async () => {
+    setLeaveBusy('save');
+    try {
+      const saved = await handleSaveDraft(false);
+      if (saved) finishLeave();
+    } finally {
+      setLeaveBusy(null);
+    }
   };
 
   // Leave prompt → "Discard current changes". Puts the record back to the
@@ -11760,8 +11774,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         discardTarget={leaveCheckpointMeta?.label ?? null}
         nothingSavedYet={!editingId}
         deleteBlockedReason={leaveDeleteBlockedReason}
+        isPublishedJD={leaveIsPublishedJD}
+        currentStepLabel={step === 'create' ? 'Step 1 (Create)' : step === 'extract' ? 'Step 2 (Extract)' : 'Step 3 (Review)'}
         busy={leaveBusy}
         onCancel={handleCancelDialog}
+        onSave={handleLeaveSave}
         onDiscard={handleLeaveDiscard}
         onDelete={handleLeaveDelete}
       />
