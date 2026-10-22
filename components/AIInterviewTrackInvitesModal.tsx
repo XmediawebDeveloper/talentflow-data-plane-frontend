@@ -8,6 +8,7 @@ import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
@@ -550,21 +551,6 @@ export default function AIInterviewTrackInvitesModal({
           ]}
         />
 
-        {/* Results note + completion rate — same banner as the AI Interviews
-            tracker, so the recruiter knows why only some rows open a result. */}
-        <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-          <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
-            <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-            <p className="flex-1 min-w-0 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-              <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
-            </p>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
-              <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
-              {completionRate}% Completion
-            </span>
-          </div>
-        </div>
-
         <InviteFilterBar
           filters={filters}
           onChange={(nextFilters) => {
@@ -740,9 +726,12 @@ export default function AIInterviewTrackInvitesModal({
         </ConfirmationDialog>
 
         {/* Revoke — the old link stops working immediately. */}
-        <ConfirmationDialog
+        <RevokeLinkModal
           isOpen={!!revokeTarget}
-          onClose={() => { if (!revokingId) setRevokeTarget(null); }}
+          kind="interview"
+          email={revokeTarget?.candidate_email}
+          isLoading={!!revokingId && revokingId === revokeTarget?.id}
+          onCancel={() => { if (!revokingId) setRevokeTarget(null); }}
           onConfirm={async () => {
             const inv = revokeTarget;
             if (!inv) return;
@@ -759,15 +748,6 @@ export default function AIInterviewTrackInvitesModal({
               setRevokeTarget(null);
             }
           }}
-          title="Revoke Interview Link?"
-          description={
-            revokeTarget
-              ? `This will immediately expire the interview link sent to ${revokeTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
-              : ''
-          }
-          confirmText={revokingId && revokingId === revokeTarget?.id ? 'Revoking…' : 'Confirm'}
-          cancelText="Cancel"
-          variant="danger"
         />
 
         {/* Bulk revoke — selected Invited candidates only. */}

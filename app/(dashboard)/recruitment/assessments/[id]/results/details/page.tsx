@@ -32,6 +32,15 @@ function DetailsContent() {
   // assessment. The breadcrumb then drops the job-role crumb, and Prev/Next
   // carry the flag so paging keeps that.
   const fromCandidateResults = searchParams.get('from') === 'candidate-results';
+  // Same for the Invitation Status tab's View Result.
+  const fromInvitationStatus = searchParams.get('from') === 'invitation-status';
+  /** The Assessments list tab this result was opened from, if any — its
+   *  "AI Assessments" crumb and Back return there. */
+  const originTabHref = fromCandidateResults
+    ? '/recruitment/assessments?tab=completed-candidates'
+    : fromInvitationStatus
+      ? '/recruitment/assessments?tab=invitation-status'
+      : '';
   /* The page this result was opened from — an assessment's Results / Invite
      Status / Recent Activity tab, or the standalone results page — named by
      the opener (see resultReturnContext). The assessment crumb and Back return
@@ -45,11 +54,25 @@ function DetailsContent() {
      resume's (Resume Database › My Resumes › <candidate>) and Back returns to
      it. Prev/Next are hidden — the stored list belongs to some other screen. */
   const resumeTrail = useResumeActivityTrail(searchParams);
-  const backHref = resumeTrail.backHref || returnTo || `/recruitment/assessments/${assessmentId}/results`;
+  const backHref = resumeTrail.backHref || returnTo || originTabHref || `/recruitment/assessments/${assessmentId}/results`;
+  /* The assessment page this result came back from was itself opened from a
+     JD's Job Details page (its `return_to` carries `from=job-details`): the
+     trail stays anchored to that job — Job Descriptions › <job> › <assessment>
+     › <candidate> — as the assessment page's own trail is. */
+  const returnAnchoredToJob = (() => {
+    if (!returnTo) return false;
+    try {
+      return new URL(returnTo, 'http://local').searchParams.get('from') === 'job-details';
+    } catch {
+      return false;
+    }
+  })();
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [jdId, setJdId] = useState<string>('');
   const [jdTitle, setJdTitle] = useState<string>('');
+  /** The JD row id, for the Job Details crumb of a job-anchored trail. */
+  const [jdRowId, setJdRowId] = useState<string>('');
   /** The JOB's version, for the chip beside its title. */
   const [jdVersion, setJdVersion] = useState<number | null>(null);
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
@@ -83,7 +106,7 @@ function DetailsContent() {
   // candidate would silently re-add the assessment crumb mid-session.
   const buildNavUrl = (entry: { id: string; cid: string; aid?: string }) =>
     `/recruitment/assessments/${entry.aid || assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}` +
-    (fromCandidateResults ? '&from=candidate-results' : '') +
+    (fromCandidateResults ? '&from=candidate-results' : fromInvitationStatus ? '&from=invitation-status' : '') +
     // Prev / Next keep the way back, so paging never loses it.
     resultReturnQuery(returnTo, returnLabel);
 
@@ -101,6 +124,7 @@ function DetailsContent() {
           // Use jd_short_id (e.g. "JD-014") if available, else fall back to raw jd_id
           setJdId(response.jd_short_id || (response.jd_id ? `JD-${response.jd_id}` : ''));
           setJdTitle(response.jd_title || '');
+          setJdRowId(response.jd_id || '');
           setAssessmentVersion(response.version ?? null);
           /* The JOB version, resolved from the JD ROW this assessment points
              at rather than from `response.jd_version`. That field is a
@@ -168,10 +192,19 @@ function DetailsContent() {
             ? { label: assessmentTitle || 'Assessment Result', onClick: () => resumeView.close?.() }
             : { label: assessmentTitle || 'Assessment Result' },
           ...(resumeView.viewing ? [{ label: 'Resume' }] : []),
+        ] : returnAnchoredToJob && jdRowId ? [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: jdTitle || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(jdRowId)}` },
+          { label: returnLabel || assessmentTitle || 'Assessment', href: backHref },
+          resumeView.viewing
+            ? { label: candidateName || candidateDisplayId || 'Candidate Details', onClick: () => resumeView.close?.() }
+            : { label: candidateName || candidateDisplayId || 'Candidate Details' },
+          ...(resumeView.viewing ? [{ label: 'Resume' }] : []),
         ] : [
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Assessments', href: '/recruitment/assessments' },
-          ...(fromCandidateResults
+          { label: 'AI Assessments', href: originTabHref || '/recruitment/assessments' },
+          ...(originTabHref
             ? []
             : [{
                 label: returnLabel || assessmentTitle || 'Assessment',

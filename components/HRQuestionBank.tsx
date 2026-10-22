@@ -419,7 +419,7 @@ export default function HRQuestionBank() {
               { label: 'Dashboard', href: '/dashboard' },
               openedFrom === 'ai-interviews'
                 ? { label: 'AI Interviews', href: '/recruitment/ai-interviews' }
-                : { label: 'Assessments', href: '/recruitment/assessments' },
+                : { label: 'AI Assessments', href: '/recruitment/assessments' },
               { label: 'HR Question Bank' },
             ]}
           />

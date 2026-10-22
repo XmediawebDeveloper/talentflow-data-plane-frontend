@@ -1201,17 +1201,17 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <span
                 aria-disabled="true"
                 title={PLAN_LOCKED_MESSAGE}
-                className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400"
+                className="inline-flex cursor-not-allowed max-w-full items-start justify-start whitespace-normal text-left leading-snug items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400"
               >
-                <Lock className="h-3.5 w-3.5 shrink-0" />
+                <Lock className="h-3.5 w-3.5 shrink-0 shrink-0 mt-0.5" />
                 <span className="sm:hidden">Priority Support not in plan</span>
                 <span className="hidden sm:inline">Priority Support is not included in your current plan.</span>
               </span>
             }
           >
-            <span title="Priority Support enabled — tickets handled with higher priority and faster response times." className="inline-flex items-center gap-2 rounded-lg bg-success-subtle px-3 py-2 text-xs font-medium text-success-strong">
+            <span title="Priority Support enabled — tickets handled with higher priority and faster response times." className="inline-flex items-center gap-2 rounded-lg bg-success-subtle px-3 py-2 text-xs font-medium text-success-strong max-w-full items-start justify-start whitespace-normal text-left leading-snug">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success text-white">
-                <Check className="h-3 w-3" strokeWidth={3} />
+                <Check className="h-3 w-3 shrink-0 mt-0.5" strokeWidth={3} />
               </span>
               <span className="sm:hidden">Priority Support enabled</span>
               <span className="hidden sm:inline">Priority Support enabled — tickets handled with higher priority and faster response times.</span>

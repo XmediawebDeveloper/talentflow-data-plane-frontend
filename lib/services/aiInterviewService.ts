@@ -185,6 +185,17 @@ export function isJdDisabled(jdStatus?: string | null): boolean {
   return (jdStatus || '').toLowerCase() === 'disabled';
 }
 
+export const JD_ARCHIVED_ACTION_MESSAGE = 'This job is archived. Archived jobs cannot be changed or run interviews.';
+
+/** Why an AI interview's actions are locked by its JD, or null when they are
+ *  not: an Archived JD takes the Disabled JD's lock — views stay, every action
+ *  that changes the interview is greyed. */
+export function jdActionLockReason(jdStatus?: string | null): string | null {
+  if (isJdDisabled(jdStatus)) return JD_DISABLED_ACTION_MESSAGE;
+  if ((jdStatus || '').toLowerCase() === 'archived') return JD_ARCHIVED_ACTION_MESSAGE;
+  return null;
+}
+
 /** One thing worth saying about one skill the recruiter is trying to add.
  *
  *  `action` is the field to branch on. `duplicate` is the older boolean and is

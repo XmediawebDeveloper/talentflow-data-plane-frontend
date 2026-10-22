@@ -3182,7 +3182,8 @@ export default function AIInterviewConfig() {
                     { label: 'Dashboard', href: '/dashboard' },
                     { label: 'Job Descriptions', href: '/recruitment/job-openings' },
                     { label: selectedJd?.title || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
-                    { label: 'AI Interview Config' },
+                    { label: 'Create AI Interview' },
+                    { label: 'Configure' },
                   ]
                 : [
                     { label: 'Dashboard', href: '/dashboard' },

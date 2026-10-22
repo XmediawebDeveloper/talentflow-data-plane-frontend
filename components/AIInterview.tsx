@@ -18,7 +18,7 @@ import { DateField } from '@/components/ui/date-field';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useQuota } from '@/contexts/QuotaContext';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -27,6 +27,7 @@ import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
@@ -66,8 +67,8 @@ import AssessmentVersionHistoryPanel, {
   jobVersionDisplayStatus,
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
-import AllInterviewsTable, { VersionPill, JobDisabledBadge } from '@/components/ai-interview/AllInterviewsTable';
+import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
+import AllInterviewsTable, { VersionPill, JobDisabledBadge, JobArchivedBadge, jobLockBadgeFor } from '@/components/ai-interview/AllInterviewsTable';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
@@ -153,7 +154,7 @@ const CONFIG_FETCH_PAGE_SIZE = 100;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
-  JSON.stringify([v.activeTab, v.invitedOnly, v.modeFilter, v.searchQuery, v.sortBy, v.creatorFilter, v.dateFilter, v.customDateFrom, v.customDateTo]);
+  JSON.stringify([v.activeTab, v.invitedOnly, v.modeFilter, v.statusFilter, v.searchQuery, v.sortBy, v.creatorFilter, v.dateFilter, v.customDateFrom, v.customDateTo]);
 
 export default function AIInterview() {
   const router = useRouter();
@@ -215,6 +216,9 @@ export default function AIInterview() {
   };
   const isOverviewCardActive = (cardKey: OverviewCardKey) =>
     pageView === 'list' && (TAB_OVERVIEW_CARD[activeTab] ?? activeOverviewCard) === cardKey;
+  // More Filters' Status — the interview statuses this module lists
+  // (Active = published and the candidate-flow statuses, Draft, Archived).
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'archived'>('all');
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
@@ -229,17 +233,19 @@ export default function AIInterview() {
   // either. Mirrors job-openings' clearAllFilters()/filtersActive pair.
   const aiFiltersActive =
     searchQuery !== '' || modeFilter !== 'all' || creatorFilter !== 'all' ||
-    dateFilter !== 'all' || invitedOnly;
+    dateFilter !== 'all' || statusFilter !== 'all' || invitedOnly;
 
   const [showAIFilters, setShowAIFilters] = useState(false);
   const aiFilterCount =
-    (modeFilter !== 'all' ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0) + (dateFilter !== 'all' ? 1 : 0);
+    (modeFilter !== 'all' ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0) + (dateFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0);
 
   const clearAIInterviewFilters = () => {
     setSearchQuery('');
     setModeFilter('all');
     setCreatorFilter('all');
     setDateFilter('all');
+    setStatusFilter('all');
     setInvitedOnly(false);
     setCustomDateFrom('');
     setCustomDateTo('');
@@ -1115,7 +1121,7 @@ export default function AIInterview() {
   const rootRef = useScrollRestoration('ai-interviews', !loading, [pageView]);
   useListStatePersistence(
     'ai-interviews',
-    { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
+    { activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
       openVersionsFor, expandedJobVersionsByJob,
@@ -1136,6 +1142,7 @@ export default function AIInterview() {
         activeTab: typeof s.activeTab === 'string' && s.activeTab !== 'consent' ? s.activeTab : activeTab,
         invitedOnly: typeof s.invitedOnly === 'boolean' ? s.invitedOnly : invitedOnly,
         modeFilter: typeof s.modeFilter === 'string' ? s.modeFilter : modeFilter,
+        statusFilter: typeof s.statusFilter === 'string' ? s.statusFilter : statusFilter,
         searchQuery: typeof s.searchQuery === 'string' ? s.searchQuery : searchQuery,
         sortBy: typeof s.sortBy === 'string' ? s.sortBy : sortBy,
         creatorFilter: typeof s.creatorFilter === 'string' ? s.creatorFilter : creatorFilter,
@@ -1145,7 +1152,7 @@ export default function AIInterview() {
       });
       // Only when the restore changes one of them — otherwise no render
       // follows to consume the skip, and it would swallow a real change.
-      const currentKey = listFilterKey({ activeTab, invitedOnly, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo });
+      const currentKey = listFilterKey({ activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo });
       restoredListKeyRef.current = restoredKey !== currentKey ? restoredKey : null;
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       // 'consent' tab was removed — never restore onto it.
@@ -1160,6 +1167,7 @@ export default function AIInterview() {
         setExpandedJobVersionsByJob(restored);
       }
       if (typeof s.modeFilter === 'string') setModeFilter(s.modeFilter as typeof modeFilter);
+      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as typeof sortBy);
       if (typeof s.creatorFilter === 'string') setCreatorFilter(s.creatorFilter);
@@ -1301,8 +1309,10 @@ export default function AIInterview() {
      the JD is enabled again — every action handler bails here first (the
      backend refuses them too, with the same message). */
   const blockIfJdDisabled = (config: AIInterviewResponse | null | undefined) => {
-    if (!isJdDisabled(config?.jd_status)) return false;
-    toast.error(JD_DISABLED_ACTION_MESSAGE);
+    // Archived JDs take the same lock (jdActionLockReason).
+    const lockReason = jdActionLockReason(config?.jd_status);
+    if (!lockReason) return false;
+    toast.error(lockReason);
     setOpenMenuId(null);
     return true;
   };
@@ -1784,7 +1794,7 @@ export default function AIInterview() {
     return { from, to };
   })();
 
-  // Filter configs by tab + mode + creator + date + search
+  // Filter configs by tab + mode + creator + date + status + search
   const filteredConfigs = (() => {
     const base = activeTab === 'archived'
       ? archivedConfigs
@@ -1820,9 +1830,12 @@ export default function AIInterview() {
           return t >= dateWindow.from.getTime() && t < dateWindow.to.getTime();
         })
       : byCreator;
+    const byStatus = statusFilter === 'all'
+      ? byDate
+      : byDate.filter((config) => normalizeConfigStatus(config.status) === statusFilter);
     const q = searchQuery.trim().toLowerCase();
     const bySearch = q
-      ? byDate.filter((c) => {
+      ? byStatus.filter((c) => {
           const haystack = [
             c.jd_title,
             c.position,
@@ -1836,7 +1849,7 @@ export default function AIInterview() {
             .toLowerCase();
           return haystack.includes(q);
         })
-      : byDate;
+      : byStatus;
     const sorted = [...bySearch].sort((a, b) => {
       if (sortBy === 'active') {
         const aw = normalizeConfigStatus(a.status) === 'published' ? 0 : 1;
@@ -2027,6 +2040,15 @@ export default function AIInterview() {
        version NUMBER is not a count, which is what the old fallback got wrong. */
     return 1;
   };
+  /** The main card's Job Disabled / Job Archived badge — the All Interviews
+   *  table's rule (jobLockBadgeFor), judged on every version of the job. */
+  const jobLockBadgeForCard = (config: AIInterviewResponse) =>
+    jobLockBadgeFor(
+      config.jd_status,
+      config.jd_id
+        ? jdLineage.lineages[config.jd_id] ?? jdLineage.filterLineages[config.jd_id]
+        : undefined,
+    );
   /** The job's most-invited interview — what the row's Track opens. */
   const getJobTrackTarget = (config: AIInterviewResponse) => {
     const key = configLineageKeyOf(config);
@@ -2037,11 +2059,6 @@ export default function AIInterview() {
     }
     return best;
   };
-
-  /** Every job this tenant has an interview for, before tab and filters. */
-  const allJobsCount = new Set(
-    [...configs, ...archivedConfigs].map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
-  ).size;
 
   const configTotalPages = Math.max(1, Math.ceil(collapsedConfigs.length / configListItemsPerPage));
   const paginatedConfigs = collapsedConfigs.slice(
@@ -2062,6 +2079,13 @@ export default function AIInterview() {
        panel has ever been opened. See getJobVersionCount. */
     jdLineage.ensureVersionCounts(
       paginatedConfigs.map((c) => c.jd_id).filter((id): id is string => !!id),
+    );
+    /* Every version's status, for the cards whose job reads Disabled or
+       Archived — that badge is judged on the whole job (jobLockBadgeForCard). */
+    jdLineage.ensureFilterLineages(
+      paginatedConfigs
+        .filter((c) => c.jd_id && (isJdDisabled(c.jd_status) || String(c.jd_status || '').toLowerCase() === 'archived'))
+        .map((c) => ({ key: c.jd_id!, jobId: c.jd_id! })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleLineageKeys, configs, archivedConfigs, inviteCountsTick]);
@@ -2191,8 +2215,9 @@ export default function AIInterview() {
     const invitations = config.invitations_count ?? 0;
     const hasBeenShared = invitations > 0;
     const menuKey = `version:${config.id}`;
-    // Disabled job: the view items stay, every action is listed but inert.
-    const jdLocked = isJdDisabled(config.jd_status);
+    // Disabled or Archived job: the view items stay, every action is listed but inert.
+    const jdLockReason = jdActionLockReason(config.jd_status) ?? '';
+    const jdLocked = !!jdLockReason;
 
     // Every action lives in the 3-dot menu — the row carries no quick-action
     // buttons of its own.
@@ -2239,33 +2264,44 @@ export default function AIInterview() {
                 <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
               </button>
-              {!jdLocked && (<>
               {/* Continue Editing — moved here from the job row, which now
-                  reports the job as a whole, as the Assessments Job List does. */}
-              {config.status === 'draft' && config.jd_id && (
-                <button
-                  onClick={() => {
-                    if (!canUpdateAIInterviews) return;
-                    setOpenMenuId(null);
-                    // Resumes at the step the draft was left on.
-                    void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
-                  }}
-                  aria-disabled={!canUpdateAIInterviews}
-                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
-                  className={canUpdateAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <Pencil className="w-4 h-4 flex-shrink-0 text-menu-icon-edit" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
-                </button>
-              )}
+                  reports the job as a whole, as the Assessments Job List does.
+                  A disabled job lists the same items as a live one, greyed with
+                  the reason, so the menu keeps its shape whatever the job status. */}
+              {config.status === 'draft' && config.jd_id && (() => {
+                const continueBlocked = jdLocked
+                  ? jdLockReason
+                  : !canUpdateAIInterviews
+                    ? 'You do not have permission to edit AI interviews'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (continueBlocked) return;
+                      setOpenMenuId(null);
+                      // Resumes at the step the draft was left on.
+                      void resolveAIInterviewDraftResumeHref(config.id, config.jd_id!).then((href) => router.push(href));
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!continueBlocked}
+                    title={continueBlocked}
+                    className={continueBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Pencil className={`w-4 h-4 flex-shrink-0 ${continueBlocked ? '' : 'text-menu-icon-edit'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
+                  </button>
+                );
+              })()}
               {/* Edit — a published version nobody has been invited to can still
                   be edited. Once any invite exists the version is locked (every
                   candidate sits the same interview) and the tooltip says to
                   duplicate it instead — the Assessments Edit rule. */}
               {isPublished && config.jd_id && (() => {
-                const editBlocked = !canUpdateAIInterviews
-                  ? 'You do not have permission to edit AI interviews'
-                  : interviewEditBlockedReason(config);
+                const editBlocked = jdLocked
+                  ? jdLockReason
+                  : !canUpdateAIInterviews
+                    ? 'You do not have permission to edit AI interviews'
+                    : interviewEditBlockedReason(config);
                 return (
                   <button
                     onClick={() => {
@@ -2274,7 +2310,7 @@ export default function AIInterview() {
                       // A published version always edits from Configure, not Clusters.
                       router.push(aiInterviewConfigureHref(config.id, config.jd_id!));
                     }}
-                    disabled={!!editBlocked && canUpdateAIInterviews}
+                    disabled={!!editBlocked && (jdLocked || canUpdateAIInterviews)}
                     aria-disabled={!!editBlocked}
                     title={editBlocked || 'Edit this version'}
                     className={editBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
@@ -2284,21 +2320,28 @@ export default function AIInterview() {
                   </button>
                 );
               })()}
-              {isPublished && (
-                <button
-                  onClick={() => {
-                    if (!canInviteAIInterviews) return;
-                    setShareConfig(config); setOpenMenuId(null);
-                  }}
-                  aria-disabled={!canInviteAIInterviews}
-                  title={!canInviteAIInterviews ? 'You do not have permission to invite candidates' : ''}
-                  className={canInviteAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <Send className="w-4 h-4 flex-shrink-0 text-menu-icon-share" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
-                </button>
-              )}
-              </>)}
+              {isPublished && (() => {
+                const inviteBlocked = jdLocked
+                  ? jdLockReason
+                  : !canInviteAIInterviews
+                    ? 'You do not have permission to invite candidates'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (inviteBlocked) return;
+                      setShareConfig(config); setOpenMenuId(null);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!inviteBlocked}
+                    title={inviteBlocked}
+                    className={inviteBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <Send className={`w-4 h-4 flex-shrink-0 ${inviteBlocked ? '' : 'text-menu-icon-share'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Invite</span>
+                  </button>
+                );
+              })()}
               {/* Track / View Results — always listed, but disabled (reason in
                   the tooltip) until at least one invite exists: before that
                   there is nothing to track and no session to score. */}
@@ -2326,47 +2369,25 @@ export default function AIInterview() {
                 <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
-              {jdLocked ? (
-                <>
-                  <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-                  {([
-                    ['Edit', Pencil],
-                    ['Invite', Send],
-                    ['Duplicate', Copy],
-                    [normalizedStatus === 'archived' ? 'Unarchive' : 'Archive', normalizedStatus === 'archived' ? ArchiveRestore : Archive],
-                    ['Delete', Trash2],
-                  ] as const).map(([label, Icon]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      disabled
-                      aria-disabled
-                      title={JD_DISABLED_ACTION_MESSAGE}
-                      className={VERSION_MENU_ITEM_DISABLED_CLASS}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
-                    </button>
-                  ))}
-                </>
-              ) : (<>
               {/* Duplicate — creates the next version. Disabled (reason in the
                   tooltip) for a draft, for a version nobody was invited to
                   (edit it instead), while another draft is open in the lineage,
                   and at the version cap: the Assessments Duplicate gate. */}
               {(() => {
-                const dupBlocked = interviewDuplicateBlockedReason(
-                  config,
-                  [...configs, ...archivedConfigs],
-                  canCreateAIInterviews,
-                );
+                const dupBlocked = jdLocked
+                  ? jdLockReason
+                  : interviewDuplicateBlockedReason(
+                    config,
+                    [...configs, ...archivedConfigs],
+                    canCreateAIInterviews,
+                  );
                 return (
                   <button
                     onClick={() => {
                       if (dupBlocked) return;
                       void handleCloneConfig(config);
                     }}
-                    disabled={!!dupBlocked && canCreateAIInterviews}
+                    disabled={!!dupBlocked && (jdLocked || canCreateAIInterviews)}
                     aria-disabled={!!dupBlocked}
                     title={dupBlocked || 'Duplicate as a new version'}
                     className={dupBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
@@ -2377,58 +2398,59 @@ export default function AIInterview() {
                 );
               })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-              {normalizedStatus !== 'archived' && (
-                <button
-                  onClick={() => {
-                    if (!canArchiveAIInterviews) return;
-                    handleArchiveConfig(config);
-                  }}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to archive AI interviews' : ''}
-                  className={canArchiveAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <Archive className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
-                </button>
-              )}
-              {normalizedStatus === 'archived' && (
-                <button
-                  onClick={() => {
-                    if (!canArchiveAIInterviews) return;
-                    handleUnarchiveConfig(config);
-                  }}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
-                  className={canArchiveAIInterviews ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
-                >
-                  <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  if (!canDeleteAIInterviews) return;
-                  handleDeleteConfig(config);
-                }}
-                disabled={hasBeenShared}
-                aria-disabled={!canDeleteAIInterviews || hasBeenShared}
-                title={
-                  !canDeleteAIInterviews
+              {(() => {
+                const isArchived = normalizedStatus === 'archived';
+                const archiveBlocked = jdLocked
+                  ? jdLockReason
+                  : !canArchiveAIInterviews
+                    ? `You do not have permission to ${isArchived ? 'unarchive' : 'archive'} AI interviews`
+                    : '';
+                const ArchiveIcon = isArchived ? ArchiveRestore : Archive;
+                return (
+                  <button
+                    onClick={() => {
+                      if (archiveBlocked) return;
+                      if (isArchived) handleUnarchiveConfig(config);
+                      else handleArchiveConfig(config);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!archiveBlocked}
+                    title={archiveBlocked}
+                    className={archiveBlocked ? VERSION_MENU_ITEM_DISABLED_CLASS : VERSION_MENU_ITEM_CLASS}
+                  >
+                    <ArchiveIcon className={`w-4 h-4 flex-shrink-0 ${archiveBlocked ? '' : 'text-menu-icon-archive'}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>{isArchived ? 'Unarchive' : 'Archive'}</span>
+                  </button>
+                );
+              })()}
+              {(() => {
+                const deleteBlocked = jdLocked
+                  ? jdLockReason
+                  : !canDeleteAIInterviews
                     ? 'You do not have permission to delete AI interviews'
                     : hasBeenShared
                       ? 'Cannot delete — candidates have already started this interview'
-                      : ''
-                }
-                className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
-                  !canDeleteAIInterviews || hasBeenShared
-                    ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                    : 'text-destructive hover:bg-gray-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                <Trash2 className="w-4 h-4 flex-shrink-0" />
-                <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
-              </button>
-              </>)}
+                      : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (deleteBlocked) return;
+                      handleDeleteConfig(config);
+                    }}
+                    disabled={jdLocked || hasBeenShared}
+                    aria-disabled={!!deleteBlocked}
+                    title={deleteBlocked}
+                    className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
+                      deleteBlocked
+                        ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                        : 'text-destructive hover:bg-gray-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Trash2 className="w-4 h-4 flex-shrink-0" />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
+                  </button>
+                );
+              })()}
             </div>,
             document.body,
           )}
@@ -2530,7 +2552,7 @@ export default function AIInterview() {
     // keep the restored page, and stop skipping.
     if (restoredListKeyRef.current !== null) { restoredListKeyRef.current = null; return; }
     setConfigListPage(1);
-  }, [activeTab, invitedOnly, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
+  }, [activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
 
   /* The Processing list: keep the (restored) page as the rows load, and only
      pull it back if the list got shorter than it — it used to snap to 1 on
@@ -2871,22 +2893,13 @@ export default function AIInterview() {
               activeFilterCount={aiFilterCount}
               filtersApplied={aiFiltersActive}
               onClearFilters={clearAIInterviewFilters}
-              countBadge={
-                <ListCountBadge
-                  filtered={collapsedConfigs.length}
-                  total={allJobsCount}
-                  noun="job"
-                />
-              }
             />
             {showAIFilters && (
-                <ListFilterPanel
-                  footer={
-                    <Button variant="secondary" size="sm" onClick={() => setShowAIFilters(false)}>
-                      Done
-                    </Button>
-                  }
-                >
+                /* No footer: every control commits as it changes, so the
+                   panel needs no Done. Four controls = the panel's one
+                   4-column row from lg; the custom date range, when picked,
+                   takes the row below. */
+                <ListFilterPanel>
                     <div>
                       <label htmlFor="ai-interview-mode" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Mode
@@ -2937,19 +2950,19 @@ export default function AIInterview() {
                       </select>
                     </div>
                     <div>
-                      <label htmlFor="ai-interview-sort" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-                        Sort by
+                      <label htmlFor="ai-interview-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                        Status
                       </label>
                       <select
-                        id="ai-interview-sort"
-                        value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                        id="ai-interview-status"
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
                         className={AI_FILTER_FIELD_CLASS}
                       >
-                        <option value="newest">Newest</option>
-                        <option value="oldest">Oldest</option>
-                        <option value="active">Active first</option>
-                        <option value="draft">Draft first</option>
+                        <option value="all">All statuses</option>
+                        <option value="published">Active</option>
+                        <option value="draft">Draft</option>
+                        <option value="archived">Archived</option>
                       </select>
                     </div>
                     {dateFilter === 'custom' && (
@@ -3080,6 +3093,35 @@ export default function AIInterview() {
             >
               {isBulkRevoking ? 'Revoking…' : `Revoke (${statusRevocableSelectedCount})`}
             </Button>
+          )}
+
+          {/* Sort by — moved out of More Filters to sit before Refresh, in the
+              Job Openings page's sort control (JobsListing.tsx): the tab pills'
+              resting tint, a 28px select on phones, label hidden below sm so the
+              row still fits a 320px screen. The options carry their own
+              direction (Newest / Oldest), so there is no order toggle. Only on
+              the grouped job list, the one list it sorts. */}
+          {isConfigListTab && !showUngroupedList && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="ai-interview-sort" className="hidden sm:inline text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
+              <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-0.5 sm:p-1 transition-all">
+                <div className="relative">
+                  <select
+                    id="ai-interview-sort"
+                    aria-label="Sort by"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                    className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="active">Active first</option>
+                    <option value="draft">Draft first</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Refresh — right corner of the pill row. Refetches whichever tab
@@ -3260,21 +3302,30 @@ export default function AIInterview() {
                         }`}
                       >
                         <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
-                          {/* Identity — icon, Job ID, title */}
-                          <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
-                            <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <Briefcase className="h-4 w-4 text-brand-blue" />
+                          {/* Identity — icon, Job ID, title. As on the Job Openings
+                              card (JobOpeningSummary): ID + name keep one line and
+                              truncate, and the job badge wraps under them on a phone
+                              rather than squeezing the name; one line again from @4xl. */}
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0 @4xl/ai-row:flex-nowrap @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                            <div className={`${JOB_HEADLINE_ROW} gap-2.5`}>
+                              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Briefcase className="h-4 w-4 text-brand-blue" />
+                              </div>
+                              {config.jd_short_id && (
+                                <JobIdBadge className={JOB_ID_BADGE_FIT}>{config.jd_short_id}</JobIdBadge>
+                              )}
+                              <h3
+                                className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+                                title={config.jd_title || config.position || 'Untitled'}
+                              >
+                                {config.jd_title || config.position || 'Untitled'}
+                              </h3>
                             </div>
-                            {config.jd_short_id && (
-                              <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
-                            )}
-                            <h3
-                              className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
-                              title={config.jd_title || config.position || 'Untitled'}
-                            >
-                              {config.jd_title || config.position || 'Untitled'}
-                            </h3>
-                            {isJdDisabled(config.jd_status) && <JobDisabledBadge />}
+                            {(() => {
+                              const lockBadge = jobLockBadgeForCard(config);
+                              return lockBadge === 'disabled' ? <JobDisabledBadge />
+                                : lockBadge === 'archived' ? <JobArchivedBadge /> : null;
+                            })()}
                           </div>
 
                           {/* Status of the job's representative interview —
@@ -4631,26 +4682,6 @@ export default function AIInterview() {
                 ]}
               />
 
-              {/* Row clicks and View Details open the candidate result only for
-                  Completed / Auto Completed invites — same note and banner
-                  treatment as the assessment tracker, so the recruiter knows
-                  why other rows don't navigate anywhere. */}
-              <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-                <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
-                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  <p className="flex-1 min-w-0 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                    <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
-                  </p>
-                  {/* Completion rate — moved here from the selection bar, where
-                      it sat apart from the note that explains which results
-                      exist. Solid and bold so it reads at a glance. */}
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
-                    <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
-                    {invitationOverview ? `${completionRate}%` : '—'} Completion
-                  </span>
-                </div>
-              </div>
-
               <InviteFilterBar
                 filters={inviteFilters}
                 onChange={(nextFilters) => {
@@ -4905,11 +4936,12 @@ export default function AIInterview() {
           per-version rows, so the warning cannot drift between the two. */}
       <DeleteAIInterviewModal
         isOpen={!!deleteTarget}
-        title={deleteTarget ? `${deleteTarget.jd_title || deleteTarget.position || 'Untitled'} - AI Interview` : ''}
+        jobShortId={deleteTarget?.jd_short_id}
+        jobTitle={deleteTarget ? deleteTarget.jd_title || deleteTarget.position || 'Untitled' : ''}
+        jobVersion={deleteTarget?.jd_version}
         version={deleteTarget?.jd_id ? interviewVersionRows(deleteTarget.jd_id).find((r) => r.id === deleteTarget.id)?.version : undefined}
         createdAt={deleteTarget?.created_at}
-        totalQuestions={deleteTarget?.total_questions}
-        durationMinutes={deleteTarget?.duration_minutes}
+        createdBy={deleteTarget?.created_by_name}
         isLoading={deleteLoading}
         jdDisabled={isJdDisabled(deleteTarget?.jd_status)}
         onConfirm={confirmDeleteConfig}
@@ -4998,9 +5030,12 @@ export default function AIInterview() {
       </ConfirmationDialog>
 
       {/* Revoke confirmation — flips status to REVOKED; old link stops working immediately */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={!!revokeInviteTarget}
-        onClose={() => { if (!revokingInviteFor) setRevokeInviteTarget(null); }}
+        kind="interview"
+        email={revokeInviteTarget?.candidate_email}
+        isLoading={!!revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id}
+        onCancel={() => { if (!revokingInviteFor) setRevokeInviteTarget(null); }}
         onConfirm={async () => {
           const inv = revokeInviteTarget;
           if (!inv) return;
@@ -5016,15 +5051,6 @@ export default function AIInterview() {
             setRevokeInviteTarget(null);
           }
         }}
-        title="Revoke Interview Link?"
-        description={
-          revokeInviteTarget
-            ? `This will immediately expire the interview link sent to ${revokeInviteTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
-            : ''
-        }
-        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Confirm'}
-        cancelText="Cancel"
-        variant="danger"
       />
 
       {/* Bulk revoke confirmation — revokes every checked invitation. Each one is
