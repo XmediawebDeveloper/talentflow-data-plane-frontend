@@ -5,6 +5,7 @@ import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, Chevron
 import type { IconComponent } from '@/lib/types/icon';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST } from '@/lib/utils/dateUtils';
+import NameAvatar from '@/components/ui/name-avatar';
 
 const PAGE_SIZE = 10;
 
@@ -18,16 +19,6 @@ const EVENT_CONFIG: Record<string, { label: string; icon: IconComponent; color: 
 
 function formatDate(iso: string) {
   return formatIST(iso);
-}
-
-function getInitials(name?: string) {
-  if (!name) return '?';
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 export default function TeamHistory() {
@@ -86,7 +77,7 @@ export default function TeamHistory() {
             <History className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Teams History</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Teams History</h2>
             <p className="text-sm text-gray-600 dark:text-slate-400">
               {loading ? 'Loading activities...' : `${total} ${total === 1 ? 'activity' : 'activities'} recorded`}
             </p>
@@ -141,7 +132,7 @@ export default function TeamHistory() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-2xs font-medium ${config.bg} ${config.color}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${config.bg} ${config.color}`}>
                         {config.label}
                       </span>
                       <span className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{entry.team_name}</span>
@@ -190,9 +181,7 @@ export default function TeamHistory() {
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     {entry.actor_name && (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue text-xs font-semibold text-white">
-                        {getInitials(entry.actor_name)}
-                      </div>
+                      <NameAvatar name={entry.actor_name} size="sm" />
                     )}
                     <span className="whitespace-nowrap text-xs text-gray-400 dark:text-slate-500">{formatDate(entry.event_at)}</span>
                   </div>
@@ -209,7 +198,7 @@ export default function TeamHistory() {
               </p>
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}

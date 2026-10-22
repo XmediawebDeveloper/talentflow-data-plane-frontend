@@ -13,6 +13,7 @@ import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { DateField } from '@/components/ui/date-field';
+import NameAvatar from '@/components/ui/name-avatar';
 
 /* ── Status palette for the results donut ─────────────────────────────
    Invited · Completed · In Progress · Revoked · Expired. Validated (dataviz
@@ -72,8 +73,6 @@ const roundsOf = (a: AssessmentResponse) =>
 /** The Assessments module's pass mark when an assessment sets none. */
 const DEFAULT_PASS_MARK = 70;
 const pillFor = (status: string) => STATUS_PILL[normalizeStatus(status)] ?? { label: status, className: STATUS_PILL.archived.className };
-const initialsOf = (name?: string) =>
-  (name || '?').split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
 
 /** One assessment's invite funnel (from its invitations) and Pass / Fail
@@ -438,7 +437,7 @@ export default function AssessmentVersionHistoryModal({
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                <span className="w-7 h-7 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold flex items-center justify-center shrink-0">{initialsOf(c.created_by_name)}</span>
+                                <NameAvatar name={c.created_by_name} size="sm" />
                                 <span className="text-gray-700 dark:text-slate-300 truncate max-w-[8rem]">{c.created_by_name || '—'}</span>
                               </div>
                             </td>

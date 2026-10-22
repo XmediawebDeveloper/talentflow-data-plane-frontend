@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import NameAvatar from '@/components/ui/name-avatar';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -65,10 +66,6 @@ function getMUnits(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
 
 function teamTotal(t: TeamUsageSummary) {
   return getCount(t, 'RS') + getCount(t, 'AS') + getCount(t, 'AIU') + getCount(t, 'RU');
-}
-
-function initials(name: string) {
-  return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
 // Human-readable labels for all unit types (including system ones)
@@ -197,9 +194,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
             <div className="text-gray-300 dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
-            <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue flex items-center justify-center text-xs font-semibold shrink-0">
-              {initials(member.user_name || member.user_email)}
-            </div>
+            <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
               <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
@@ -628,7 +623,7 @@ export default function TeamUsageAnalytics() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
                 {isTenantAdmin ? 'All Teams' : 'Your Teams'}
               </span>

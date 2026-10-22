@@ -32,6 +32,7 @@ import { assessmentService } from '@/lib/services/assessmentService';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
+import NameAvatar from '@/components/ui/name-avatar';
 
 interface ConsentLogsProps {
   compact?: boolean;
@@ -401,12 +402,6 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {logs.map((log) => {
                 const meta = log.feature_context_id ? assessmentMeta[log.feature_context_id] : undefined;
-                const initials = log.candidate_name
-                  ?.split(' ')
-                  .map((n) => n[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2) || '??';
                 return (
                 <tr key={log.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-800">
                   {showAssessmentColumns && (
@@ -450,9 +445,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                   )}
                   <td className="px-3 sm:px-4 py-4 align-middle">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
-                        {initials}
-                      </div>
+                      <NameAvatar name={log.candidate_name} fallback={log.candidate_email} size="md" />
                       <div className="min-w-0 max-w-[240px]">
                         <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={log.candidate_name || 'Unknown'}>
                           {log.candidate_name || 'Unknown'}

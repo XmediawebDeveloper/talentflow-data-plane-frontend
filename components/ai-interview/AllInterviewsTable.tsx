@@ -17,6 +17,7 @@ import {
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
@@ -226,21 +227,9 @@ export function JobArchivedBadge() {
 }
 
 function CreatedBy({ name }: { name: string }) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?';
-
   return (
     <span className="inline-flex items-center gap-2 min-w-0">
-      <span
-        aria-hidden="true"
-        className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-2xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
-      >
-        {initials}
-      </span>
+      <NameAvatar name={name} size="xs" title="" />
       <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
         {name}
       </span>

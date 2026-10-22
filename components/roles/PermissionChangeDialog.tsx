@@ -191,7 +191,7 @@ export function usePermissionChangeDialog() {
                 });
                 return (
                   <div key={g.heading} className="space-y-2.5">
-                    <p className="text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
                       {g.heading} <span className="text-gray-400 dark:text-slate-600">· {g.codes.length}</span>
                     </p>
                     {Array.from(bySection.entries()).map(([section, codes]) => (

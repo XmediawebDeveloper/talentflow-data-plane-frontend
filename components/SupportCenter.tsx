@@ -28,6 +28,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
+import NameAvatar from '@/components/ui/name-avatar';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Main API - Local backend handles everything including support tickets
@@ -2224,7 +2225,6 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             ? [{ id: `${selectedTicket.id}-description`, from: 'user', message: selectedTicket.description, timestamp: selectedTicket.createdAt }, ...responses]
             : responses;
           const myName = authUser?.name || 'You';
-          const myInitial = (authUser?.name || 'U').trim().charAt(0).toUpperCase();
           const authorName = (r: NonNullable<SupportTicket['responses']>[number]) =>
             r.from === 'user' ? myName : (r.agentName || 'Support Team');
           const statusLabel = selectedTicket.status.charAt(0).toUpperCase() + selectedTicket.status.slice(1).replace('-', ' ');
@@ -2478,9 +2478,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           }`}
                         >
                           <div className={`flex items-start gap-3 ${response.from === 'user' ? 'flex-row-reverse' : ''}`}>
-                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${response.from === 'user' ? 'bg-brand-blue' : 'bg-gray-700 dark:bg-slate-600'}`}>
-                              {response.from === 'user' ? myInitial : 'S'}
-                            </div>
+                            <NameAvatar name={authorName(response)} size="sm" />
                             <div className="min-w-0 flex-1">
                               <div className="mb-1 flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
@@ -2695,9 +2693,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(Clock, 'Last Updated', formatIST(selectedTicket.updatedAt))}
                     {selectedTicket.assignedAgent && infoRow(UserCheck, 'Agent', (
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs text-white">
-                          {selectedTicket.assignedAgent.split(' ').map(n => n[0]).join('')}
-                        </span>
+                        <NameAvatar name={selectedTicket.assignedAgent} size="xs" />
                         <span className="truncate">{selectedTicket.assignedAgent}</span>
                       </span>
                     ))}
@@ -3284,9 +3280,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">
-                                    {ticket.created_by?.name?.charAt(0) || 'U'}
-                                  </span>
+                                  <NameAvatar name={ticket.created_by?.name} fallback={ticket.created_by?.email} size="xs" />
                                   <span className="truncate text-gray-700 dark:text-slate-300">{ticket.created_by?.name}</span>
                                 </div>
                               </td>
@@ -3301,9 +3295,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <td className="px-4 py-3">
                                 {ticket.assigned_to ? (
                                   <div className="flex min-w-0 items-center gap-2">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-700 text-xs font-semibold text-white dark:bg-slate-600">
-                                      {ticket.assigned_to.name.charAt(0)}
-                                    </span>
+                                    <NameAvatar name={ticket.assigned_to.name} size="xs" />
                                     <span className="truncate text-gray-700 dark:text-slate-300">{ticket.assigned_to.name}</span>
                                   </div>
                                 ) : (
@@ -3622,9 +3614,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             }`}
                           >
                             <div className={`flex items-start gap-3 ${mine ? 'flex-row-reverse' : ''}`}>
-                              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${fromAdmin ? 'bg-gray-700 dark:bg-slate-600' : 'bg-brand-blue'}`}>
-                                {(response.user_name || (fromAdmin ? 'A' : 'U')).charAt(0).toUpperCase()}
-                              </div>
+                              <NameAvatar name={nameOf(response)} size="sm" />
                               <div className="min-w-0 flex-1">
                                 <div className="mb-1 flex items-center justify-between gap-2">
                                   <div className="flex min-w-0 items-center gap-2">
@@ -3793,7 +3783,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(User, 'Requester', t.created_by?.name || '-')}
                     {infoRow(UserCheck, 'Assigned To', t.assigned_to ? (
                       <span className="flex min-w-0 items-center gap-2">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs text-white">{t.assigned_to.name.charAt(0)}</span>
+                        <NameAvatar name={t.assigned_to.name} size="xs" />
                         <span className="truncate">{t.assigned_to.name}</span>
                       </span>
                     ) : (

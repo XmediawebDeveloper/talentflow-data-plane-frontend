@@ -4,6 +4,7 @@ import { Users, Briefcase, FileText, UserPlus, Crown, ChevronRight } from 'lucid
 import { Team, TeamMember } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/components/ui/utils';
+import NameAvatar from '@/components/ui/name-avatar';
 
 export const teamInitials = (name: string) => {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -53,16 +54,13 @@ export function MemberStack({
   return (
     <div className="flex items-center -space-x-1.5">
       {shown.map((member) => (
-        <span
+        <NameAvatar
           key={member.id}
-          title={member.name}
-          className={cn(
-            'flex items-center justify-center rounded-full bg-brand-blue font-semibold text-white ring-2 ring-white dark:ring-slate-900',
-            dim,
-          )}
-        >
-          {member.initials}
-        </span>
+          name={member.name}
+          fallback={member.email}
+          size="sm"
+          className={cn('ring-2 ring-white dark:ring-slate-900', size === 'sm' && 'h-7 w-7 text-2xs')}
+        />
       ))}
       {extra > 0 && (
         <span

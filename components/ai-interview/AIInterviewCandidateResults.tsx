@@ -8,6 +8,7 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TimelineStamps from '@/components/ui/timeline-stamps';
+import NameAvatar from '@/components/ui/name-avatar';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
@@ -746,9 +747,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       selectionActive={selectedKeys.size > 0}
                     />
                     <div className="flex items-start gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
-                        {(row.candidate_name || 'U')[0].toUpperCase()}
-                      </div>
+                      <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
                           {row.candidate_name || 'Unknown'}
@@ -936,9 +935,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         {col('candidate') && (
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
-                                {(row.candidate_name || 'U')[0].toUpperCase()}
-                              </div>
+                              <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
