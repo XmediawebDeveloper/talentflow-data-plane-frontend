@@ -9,6 +9,7 @@ import { aiInterviewLineageKey, isPublishedConfig, newestFirst, orderAIInterview
 import { isAIInterviewJobPagerList, parseAIInterviewPagerList, readAIInterviewPagerOrder } from '@/lib/utils/aiInterviewPagerList';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 // Neutral-gray skeleton mirroring the AI Interview details view: breadcrumb,
 // header bar (icon + title + subtitle + action buttons), a tab bar, then the
@@ -120,10 +121,8 @@ function AIInterviewDetailsContent() {
 
   useEffect(() => {
     const fetchAll = async (status?: string) => {
-      const probe = await aiInterviewService.listConfigs({ page_size: 1, page: 1, compact: true, ...(status ? { status } : {}) });
-      return probe.total > probe.items.length
-        ? (await aiInterviewService.listConfigs({ page_size: probe.total, page: 1, compact: true, ...(status ? { status } : {}) })).items
-        : probe.items;
+      return (await fetchAllRows((page_size, page) =>
+        aiInterviewService.listConfigs({ page_size, page, compact: true, ...(status ? { status } : {}) }))).items;
     };
     /* What a list holds, unfiltered: Total Jobs / All Interviews span every
        status (archived too, as the AI Interviews page loads them); the others

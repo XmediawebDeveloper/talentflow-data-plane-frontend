@@ -1,7 +1,7 @@
 'use client';
 
-import { Users, UserCheck, Layers3 } from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Users, UserCheck, Briefcase } from 'lucide-react';
+import { StatsGridSkeleton } from '@/components/ui/skeleton';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 
 interface TeamStats {
@@ -10,10 +10,12 @@ interface TeamStats {
   avg_members_per_team: number;
 }
 
-export type TeamStatsCardKey = 'total' | 'members' | 'avg';
+export type TeamStatsCardKey = 'total' | 'members' | 'jobs';
 
 interface TeamStatsCardsProps {
   stats: TeamStats;
+  /** Sum of active jobs across all teams — the stats endpoint doesn't return it. */
+  activeJobs?: number;
   isLoading?: boolean;
   // When provided, each card becomes a button that calls back with its key —
   // lets the team-management page drill into a list view (mirrors the
@@ -22,23 +24,10 @@ interface TeamStatsCardsProps {
   activeCard?: TeamStatsCardKey | null;
 }
 
-export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCard }: TeamStatsCardsProps) {
+export default function TeamStatsCards({ stats, activeJobs = 0, isLoading, onCardClick, activeCard }: TeamStatsCardsProps) {
   if (isLoading) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3 mb-5">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <div className="flex items-start gap-2.5">
-              <Skeleton className="w-9 h-9 rounded-xl" />
-              <div className="min-w-0 space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-7 w-16" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    // Shared stats skeleton, laid out like StatsCardGrid columns={3}.
+    return <StatsGridSkeleton count={3} className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" />;
   }
 
   return (
@@ -64,13 +53,13 @@ export default function TeamStatsCards({ stats, isLoading, onCardClick, activeCa
         showClickArrow={!!onCardClick}
       />
       <StatsCard
-        label="Avg Members/Team"
-        value={stats.avg_members_per_team.toFixed(1)}
-        icon={Layers3}
+        label="Active Jobs"
+        value={activeJobs.toLocaleString()}
+        icon={Briefcase}
         tone="neutral"
         sparkline={false}
-        onClick={onCardClick ? () => onCardClick('avg') : undefined}
-        active={activeCard === 'avg'}
+        onClick={onCardClick ? () => onCardClick('jobs') : undefined}
+        active={activeCard === 'jobs'}
         showClickArrow={!!onCardClick}
       />
     </StatsCardGrid>

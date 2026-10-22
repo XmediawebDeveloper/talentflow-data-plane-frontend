@@ -409,47 +409,57 @@ export default function RoleManagement() {
           title="Role Management"
           description="Manage role structure, permission coverage, and access activity with the same operational guardrails used across the dashboard."
           actions={
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (!canManageRoles) return;
-                setCreateOpen(true);
-              }}
-              aria-disabled={!canManageRoles}
-              title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
-              icon={<Plus className="h-4 w-4" />}
-            >
-              Create Role
-            </Button>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* Roles / Activity Log — the sliding white-tile toggle from
+                  Resume Scoring's "View by" (same track, tile, size). */}
+              <div
+                role="radiogroup"
+                aria-label="Role management view"
+                className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+              >
+                <span
+                  aria-hidden
+                  className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
+                    activeTab === 'audit' ? 'translate-x-full' : 'translate-x-0'
+                  }`}
+                />
+                {([
+                  { id: 'roles', label: 'Roles', icon: Shield },
+                  { id: 'audit', label: 'Activity Log', icon: History },
+                ] as const).map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isActive}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+                        isActive ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                      }`}
+                    >
+                      <tab.icon className="w-4 h-4" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canManageRoles) return;
+                  setCreateOpen(true);
+                }}
+                aria-disabled={!canManageRoles}
+                title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
+                icon={<Plus className="h-4 w-4" />}
+              >
+                Create Role
+              </Button>
+            </div>
           }
         />
-
-        <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-2 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              onClick={() => setActiveTab('roles')}
-              className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
-                activeTab === 'roles'
-                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                  : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
-              }`}
-            >
-              <Shield className="h-4 w-4" />
-              Roles
-            </button>
-            <button
-              onClick={() => setActiveTab('audit')}
-              className={`flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-all ${
-                activeTab === 'audit'
-                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
-                  : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
-              }`}
-            >
-              <History className="h-4 w-4" />
-              Activity Log
-            </button>
-          </div>
-        </div>
 
         {activeTab === 'roles' && (
           <>
@@ -560,7 +570,7 @@ export default function RoleManagement() {
             <section className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Roles Directory</h2>
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Roles Directory</h2>
                   <p className="text-sm text-gray-500 dark:text-slate-500">Review access levels and role usage across the organization.</p>
                 </div>
               </div>
@@ -583,11 +593,11 @@ export default function RoleManagement() {
                     <table className="w-full min-w-[980px]">
                       <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                         <tr className="text-left">
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
-                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Users</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Role</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Type</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Users</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 text-right tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -607,7 +617,7 @@ export default function RoleManagement() {
                                       </span>
                                     )}
                                   </div>
-                                  <p className="mt-2 line-clamp-2 break-words text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
+                                  <p className="mt-2 line-clamp-2 break-words text-xs text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                                 </div>
                               </div>
                             </td>
@@ -717,7 +727,7 @@ export default function RoleManagement() {
                                   {role.is_system ? 'Default role' : 'Custom role'}
                                 </span>
                               </div>
-                              <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
+                              <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{role.description || 'No description provided.'}</p>
                             </div>
                           </div>
                           {role.is_default && (
@@ -809,7 +819,7 @@ export default function RoleManagement() {
               <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-teal/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                 <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">User Assignments</h2>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">User Assignments</h2>
                     <p className="text-sm text-gray-500 dark:text-slate-500">How many users hold each role across the organization.</p>
                   </div>
                 </div>
@@ -830,10 +840,10 @@ export default function RoleManagement() {
                     <table className="w-full min-w-[640px]">
                       <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                         <tr className="text-left">
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Type</th>
-                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Users</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Role</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Type</th>
+                          <th className="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Permissions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 text-right">Users</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -856,7 +866,7 @@ export default function RoleManagement() {
                             </td>
                             <td className="px-6 py-4 text-center text-sm text-gray-700 dark:text-slate-300">{shownCountFor(role)}</td>
                             <td className="px-6 py-4 text-right">
-                              <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1 text-sm font-semibold text-brand-teal ring-1 ring-brand-teal/20">
+                              <span className="inline-flex items-center rounded-full bg-brand-teal/10 px-3 py-1 text-xs font-semibold text-brand-teal ring-1 ring-brand-teal/20">
                                 {role.user_count}
                               </span>
                             </td>
@@ -874,7 +884,7 @@ export default function RoleManagement() {
               <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-orange/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                 <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Permissions Catalog</h2>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Permissions Catalog</h2>
                     <p className="text-sm text-gray-500 dark:text-slate-500">All permissions available to assign, grouped by section.</p>
                   </div>
                 </div>
@@ -895,7 +905,7 @@ export default function RoleManagement() {
                     {permissionsBySection.map((section) => (
                         <div key={section.id} className="px-4 py-4 sm:px-6">
                           <div className="mb-3 flex items-center justify-between">
-                            <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-gray-700 dark:text-slate-300">{section.name}</h3>
+                            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-slate-300">{section.name}</h3>
                             <span className="text-xs text-gray-500 dark:text-slate-500">{section.items.length} {section.items.length === 1 ? 'permission' : 'permissions'}</span>
                           </div>
                           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -920,7 +930,7 @@ export default function RoleManagement() {
           <section className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Access Activity Log</h2>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Access Activity Log</h2>
                 <p className="text-sm text-gray-500 dark:text-slate-500">Track role lifecycle changes and permission updates for audit readiness.</p>
               </div>
               <span className="hidden rounded-full bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 text-xs text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700 sm:inline-flex">
@@ -942,11 +952,11 @@ export default function RoleManagement() {
                   <table className="w-full min-w-[980px]">
                     <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                       <tr className="text-left">
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Action</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Entity</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Performed By</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Date</th>
-                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Changes</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Action</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Entity</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Performed By</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Date</th>
+                        <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Changes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1015,7 +1025,7 @@ export default function RoleManagement() {
         subtitle={viewingRole?.description || 'No description provided.'}
         headerExtra={
           viewingRole && (
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
               {viewingRole.is_system ? 'Default role' : 'Custom role'}
             </span>
           )
@@ -1025,15 +1035,15 @@ export default function RoleManagement() {
           <>
               <div className="mb-6 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Role Code</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Role Code</div>
                   <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.code}</div>
                 </div>
                 <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Assigned Users</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Assigned Users</div>
                   <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRole.user_count}</div>
                 </div>
                 <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                  <div className="text-xs uppercase tracking-[0.18em] text-gray-400 dark:text-slate-500">Permissions</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Permissions</div>
                   <div className="mt-2 text-sm font-semibold text-gray-900 dark:text-slate-50">{viewingRoleShownCount}</div>
                 </div>
               </div>

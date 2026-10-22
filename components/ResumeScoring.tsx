@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
 
 interface ResumeScoringProps {
   resumes: Resume[] | any[];
@@ -323,9 +324,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                     <tr key={resultKey} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs font-medium">
-                            {(resume.name || resume.candidateName || 'U')?.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                          </div>
+                          <NameAvatar name={resume.name || resume.candidateName} fallback={resume.email} size="md" />
                           <div>
                             <div className="text-sm font-medium text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
                             <div className="text-xs text-gray-500">{resume.title || resume.experience || ''}</div>

@@ -2,7 +2,6 @@
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
-import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { SurfaceCard, SectionHeading } from '@/components/ui/section-container';
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -77,7 +76,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { GroupCheckbox, groupCheckState } from '@/components/ui/group-checkbox';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { Tooltip } from '@/components/ui/tooltip';
+import NameAvatar from '@/components/ui/name-avatar';
 import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 // Types
@@ -749,25 +750,14 @@ export default function UserManagement() {
   // Bumped per loadUsers, so an older /users/count response can't land last.
   const userCountsSeqRef = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
+  // Users whose Active toggle request is in flight — their switch is locked.
+  const [togglingUserIds, setTogglingUserIds] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   // The page always opens on the Total Users list (client request 2026-10-17);
   // clicking a stat card re-filters it. `statusFilter` carries the card that was
   // clicked so the list is pre-filtered.
   const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const listSectionRef = useRef<HTMLDivElement | null>(null);
-  const [listScrollRequest, setListScrollRequest] = useState(0);
-  const openListView = (filter: 'all' | 'active' | 'inactive') => {
-    try {
-      window.sessionStorage.removeItem('listScroll:org-user-management');
-    } catch {
-      /* Ignore unavailable sessionStorage. */
-    }
-    setStatusFilter(filter);
-    setPageView('list');
-    setCurrentPage(1);
-    setListScrollRequest((request) => request + 1);
-  };
   const isOverviewCardActive = (filter: typeof statusFilter) => pageView === 'list' && statusFilter === filter;
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -908,22 +898,6 @@ export default function UserManagement() {
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
   );
-
-  useEffect(() => {
-    if (listScrollRequest === 0 || pageView !== 'list') return;
-
-    let nestedFrame = 0;
-    const frame = window.requestAnimationFrame(() => {
-      nestedFrame = window.requestAnimationFrame(() => {
-        listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      if (nestedFrame) window.cancelAnimationFrame(nestedFrame);
-    };
-  }, [listScrollRequest, pageView, statusFilter]);
 
   // Permission guard - check if user has access to User Management
   useEffect(() => {
@@ -1189,7 +1163,7 @@ export default function UserManagement() {
   // "Allocated Permissions" list shared by the role and user permission popups.
   const renderAllocatedPermissions = () => (
     <>
-      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
+      <h3 className="text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
         <Shield className="w-3.5 h-3.5 text-brand-blue" />
         Allocated Permissions ({viewingRolePopupShownCount})
       </h3>
@@ -1543,8 +1517,10 @@ export default function UserManagement() {
     }, 500);
   };
 
-  const loadUsers = async () => {
-    setIsLoading(true);
+  // `silent`: refetch in the background without swapping the table for the
+  // skeleton — for quick in-place edits like the Active toggle.
+  const loadUsers = async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setIsLoading(true);
     // Keep the Active / Inactive / Total count cards in sync on every reload —
     // mount, manual refresh, and after mutations (activate/deactivate/delete/
     // create) that call loadUsers(). Previously userCounts loaded only once on
@@ -1606,7 +1582,8 @@ export default function UserManagement() {
     } catch (error: any) {
       console.error('Error loading users:', error);
       toast.error(error.message || 'Failed to load users');
-      setUsers([]); // Show empty state instead of mock data
+      // A failed background refresh keeps the list on screen.
+      if (!silent) setUsers([]); // Show empty state instead of mock data
     } finally {
       setIsLoading(false);
     }
@@ -1639,9 +1616,11 @@ export default function UserManagement() {
         <button
           onClick={() => { if (canDisableUser) handleToggleActive(user); }}
           aria-disabled={!canDisableUser}
+          aria-busy={togglingUserIds.has(user.id)}
+          disabled={togglingUserIds.has(user.id)}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
             user.is_active
-              ? 'bg-success ring-success-line shadow-sm'
+              ? 'bg-brand-blue ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
               : 'bg-gray-300 ring-black/5'
           } ${!canDisableUser ? 'cursor-not-allowed opacity-60 grayscale' : ''}`}
           title={!canDisableUser ? 'You do not have permission to activate or deactivate users' : user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
@@ -1652,7 +1631,7 @@ export default function UserManagement() {
             }`}
           />
         </button>
-        <span className={`${compact ? 'hidden lg:inline' : ''} text-xs font-semibold ${user.is_active ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
+        <span className={`${compact ? 'hidden lg:inline' : ''} text-xs font-semibold ${user.is_active ? 'text-brand-blue dark:text-blue-300' : 'text-gray-500 dark:text-slate-500'}`}>
           {user.is_active ? 'Active' : 'Inactive'}
         </span>
       </div>
@@ -1741,7 +1720,7 @@ export default function UserManagement() {
   // Created + Last Login as two lines — icon-only in the xl+ table column
   // (the header names them), labelled under the email / on the phone cards.
   const renderUserDates = (user: (typeof users)[number], labels = true) => (
-    <div className="space-y-0.5 text-2xs sm:text-xs text-gray-500 dark:text-slate-400">
+    <div className="space-y-0.5 text-xs text-gray-500 dark:text-slate-400">
       <div className="flex items-center gap-1.5" title="Created">
         <Calendar className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
         {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Created</span>}
@@ -2205,11 +2184,25 @@ export default function UserManagement() {
   };
 
   const handleToggleActive = async (user: ApiUser) => {
+    // One request per user at a time — rapid clicks used to fire several.
+    if (togglingUserIds.has(user.id)) return;
+
+    // Every toast from this toggle names the user it was about: email · ID underneath.
+    const userName = user.name || user.email || 'User';
+    const who = { description: [user.email, user.user_display_id || user.id].filter(Boolean).join(' · ') };
+
     // Pre-check: if activating and already at limit, show clear message
     if (!user.is_active && isAtLimit) {
-      toast.error('User limit exceeded. Please upgrade your plan to activate more users.');
+      toast.error(`Can't activate ${userName}: user limit exceeded. Please upgrade your plan to activate more users.`, who);
       return;
     }
+
+    // Optimistic: flip the switch now, revert if the server says no.
+    const setActive = (isActive: boolean) =>
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, is_active: isActive } : u)));
+    const revert = () => setActive(user.is_active);
+    setActive(!user.is_active);
+    setTogglingUserIds((prev) => new Set(prev).add(user.id));
 
     try {
       const endpoint = user.is_active ? 'deactivate' : 'activate';
@@ -2222,31 +2215,41 @@ export default function UserManagement() {
 
       // Handle 401 - logout and redirect
       if (response.status === 401) {
+        revert();
         handleUnauthorized();
         return;
       }
 
       if (!response.ok) {
+        revert();
         const errorData = await response.json().catch(() => ({}));
         // Handle specific errors
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
-          toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.');
+          toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.', who);
         } else if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
-          toast.error(errorData.detail.message || 'Cannot deactivate the last admin user');
+          toast.error(errorData.detail.message || 'Cannot deactivate the last admin user', who);
         } else {
-          toast.error(errorData.detail?.message || errorData.detail || 'Failed to update user status');
+          toast.error(errorData.detail?.message || errorData.detail || `Failed to update ${userName}'s status`, who);
         }
         return;
       }
 
-      toast.success(user.is_active ? 'User deactivated' : 'User activated');
+      toast.success(`${userName} ${user.is_active ? 'deactivated' : 'activated'}`, who);
       refreshLimits(); // Refresh user limits count
       setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
-      loadUsers();
+      // Background sync (counts + list) — no skeleton, the switch already moved.
+      loadUsers({ silent: true });
     } catch (error: any) {
+      revert();
       console.error('Error toggling user status:', error);
       const isNetworkError = error.message === 'Failed to fetch' || error.name === 'TypeError';
-      toast.error(isNetworkError ? 'Unable to update user status. Please check your connection and try again.' : (error.message || 'Failed to update user status'));
+      toast.error(isNetworkError ? `Unable to update ${userName}'s status. Please check your connection and try again.` : (error.message || `Failed to update ${userName}'s status`), who);
+    } finally {
+      setTogglingUserIds((prev) => {
+        const next = new Set(prev);
+        next.delete(user.id);
+        return next;
+      });
     }
   };
 
@@ -2743,7 +2746,7 @@ export default function UserManagement() {
     >
       <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
       <span className="text-sm font-medium text-gray-500 dark:text-slate-400 flex-1 min-w-0 truncate">{name}</span>
-      <span className="text-2xs font-medium text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded whitespace-nowrap">Not in plan</span>
+      <span className="text-xs font-medium text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded whitespace-nowrap">Not in plan</span>
     </div>
   );
 
@@ -2832,115 +2835,111 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* Stats Cards — clickable; clicking drills into the users list filtered by status.
-          Uniform neutral tone + identical structure so all three are the same height. */}
-      <StatsCardGrid columns={3}>
-        <StatsCard
-          label="Total Users"
-          value={totalUsersCount}
-          icon={UsersIcon}
-          tone="neutral"
-          sparkline={false}
-          onClick={() => openListView('all')}
-          active={isOverviewCardActive('all')}
-          showClickArrow
-        />
-        <StatsCard
-          label="Active Users"
-          value={
-            <span className="flex items-baseline gap-1">
-              {activeUsersCount}
-              <span className="text-sm font-normal text-gray-400 dark:text-slate-500">
-                / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
-              </span>
-            </span>
-          }
-          icon={UserCheck}
-          tone="neutral"
-          sparkline={false}
-          onClick={() => openListView('active')}
-          active={isOverviewCardActive('active')}
-          showClickArrow
-        />
-        <StatsCard
-          label="Inactive Users"
-          value={inactiveUsersCount}
-          icon={UserX}
-          tone="neutral"
-          sparkline={false}
-          onClick={() => openListView('inactive')}
-          active={isOverviewCardActive('inactive')}
-          showClickArrow
-        />
-      </StatsCardGrid>
+      {/* One section for the list's controls. Top row: status pills (these were
+          the Total / Active / Inactive stat cards — same counts, same filter on
+          click) and seat usage. Bottom row: search and the result count. */}
+      <div className="mb-4 sm:mb-5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div role="group" aria-label="Filter users by status" className="flex flex-wrap items-center gap-2">
+            {([
+              { key: 'all', label: 'All users', Icon: UsersIcon, count: totalUsersCount, of: null },
+              { key: 'active', label: 'Active', Icon: UserCheck, count: activeUsersCount, of: limits?.max_users === -1 ? '∞' : (limits?.max_users ?? null) },
+              { key: 'inactive', label: 'Inactive', Icon: UserX, count: inactiveUsersCount, of: null },
+            ] as const).map(({ key, label, Icon, count, of }) => {
+              const active = isOverviewCardActive(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setStatusFilter(key);
+                    setPageView('list');
+                    setCurrentPage(1);
+                  }}
+                  className={`inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
+                    active
+                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                      : 'bg-brand-blue/5 text-gray-700 ring-1 ring-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue dark:bg-brand-blue/10 dark:text-slate-300'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                      active ? 'bg-white/20 text-white' : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
+                    }`}
+                  >
+                    {userCountsFailed ? '—' : count}
+                    {of !== null && <span className={active ? 'text-white/70' : 'text-gray-400 dark:text-slate-500'}> / {of}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-      {/* Seat quota detail — relocated out of the Total card so the three stat
-          cards stay uniform height; no data dropped. */}
-      {limits && limits.max_users > 0 && (
-        <div className="mb-5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Seat usage</span>
-            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{Math.min(limits.usage_percentage, 100)}%</span>
-          </div>
-          <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                isAtLimit
-                  ? 'bg-destructive'
-                  : limits.approaching_limit
-                    ? 'bg-brand-orange'
-                    : 'bg-gradient-to-r from-brand-blue to-brand-cyan'
-              }`}
-              style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
-            />
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-blue flex-shrink-0" />
-              <span className="text-gray-500 dark:text-slate-500">Plan Limit</span>
-              <span className="font-semibold text-gray-700 dark:text-slate-300">
-                {(() => {
-                  const sl = quotaData?.quotas?.max_seats?.subscription?.limit;
-                  return sl === 'unlimited' || sl === -1 ? '∞' : (sl ?? limits.max_users);
-                })()}
+          {limits && limits.max_users > 0 && (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span className="text-xs font-medium text-gray-600 dark:text-slate-400 whitespace-nowrap">Seat usage</span>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-28 sm:w-36 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isAtLimit
+                        ? 'bg-destructive'
+                        : limits.approaching_limit
+                          ? 'bg-brand-orange'
+                          : 'bg-brand-blue'
+                    }`}
+                    style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
+                  />
+                </div>
+                <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                  {Math.min(limits.usage_percentage, 100)}%
+                </span>
+              </div>
+              <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
+                Plan{' '}
+                <span className="font-semibold text-gray-700 dark:text-slate-300">
+                  {(() => {
+                    const sl = quotaData?.quotas?.max_seats?.subscription?.limit;
+                    return sl === 'unlimited' || sl === -1 ? '∞' : (sl ?? limits.max_users);
+                  })()}
+                </span>
+                {' · '}Add-ons{' '}
+                {(quotaData?.quotas?.max_seats?.addon?.total_purchased ?? 0) > 0 ? (
+                  <span className="font-semibold text-gray-700 dark:text-slate-300">
+                    {quotaData?.quotas?.max_seats?.addon?.total_purchased}
+                  </span>
+                ) : (
+                  <span className="italic text-gray-400 dark:text-slate-500">none</span>
+                )}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-cyan flex-shrink-0" />
-              <span className="text-gray-500 dark:text-slate-500">Add-ons</span>
-              {(quotaData?.quotas?.max_seats?.addon?.total_purchased ?? 0) > 0 ? (
-                <span className="font-semibold text-gray-700 dark:text-slate-300">
-                  {quotaData?.quotas?.max_seats?.addon?.total_purchased}
-                </span>
-              ) : (
-                <span className="text-gray-400 dark:text-slate-500 italic">None purchased</span>
-              )}
-            </div>
-          </div>
+          )}
         </div>
-      )}
+
+        {pageView === 'list' && (
+          <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+              <Input
+                type="text"
+                placeholder="Search users by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 rounded-[6.6px]"
+              />
+            </div>
+            <span className="shrink-0 self-start rounded-lg bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 dark:bg-brand-blue/15 dark:text-blue-200 sm:self-auto">
+              {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+            </span>
+          </div>
+        )}
+      </div>
 
       {pageView === 'list' && (
       <>
-      <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
-
-      {/* Toolbar — search left, result count right */}
-      <div className="mb-4 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
-          <Input
-            type="text"
-            placeholder="Search users by name or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <span className="shrink-0 text-xs font-medium text-gray-500 dark:text-slate-400">
-          {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
-        </span>
-      </div>
-
       {/* Users Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
         {isLoading ? (
@@ -2993,25 +2992,25 @@ export default function UserManagement() {
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden 2xl:table-cell whitespace-nowrap">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden 2xl:table-cell whitespace-nowrap">
                     User ID
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     User
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Role
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                     Permissions
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden xl:table-cell">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden xl:table-cell">
                     Created / Last Login
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -3021,29 +3020,19 @@ export default function UserManagement() {
                   <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
                     <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden 2xl:table-cell">
                       {user.user_display_id ? (
-                        <span className="px-2 py-0.5 text-2xs sm:text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                        <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
                           {user.user_display_id}
                         </span>
                       ) : (
-                        <span className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500">—</span>
+                        <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </td>
                     <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
                       <div className="flex items-center gap-2 sm:gap-3">
-                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
-                          (user.role || '').toLowerCase() === 'tenant_admin' || (user.role || '').toLowerCase() === 'admin'
-                            ? 'bg-brand-blue shadow-brand-blue/25'
-                            : (user.role || '').toLowerCase() === 'recruiter'
-                            ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
-                            : 'bg-gradient-to-br from-slate-500 to-slate-600'
-                        }`}>
-                          <span className="text-white text-xs sm:text-sm font-semibold">
-                            {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                          </span>
-                        </div>
+                        <NameAvatar name={user.name} fallback={user.email} size="md" />
                         <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
-                          <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</div>
-                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate" title={user.email}>
+                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate" title={user.email}>
                             <Mail className="w-3 h-3 flex-shrink-0" />
                             <span className="truncate">{user.email}</span>
                           </div>
@@ -3058,7 +3047,7 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
-                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-2xs sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
                         {getRoleLabel(user.role, availableRoles)}
                       </span>
                     </td>
@@ -3102,6 +3091,22 @@ export default function UserManagement() {
                     </td>
                   </tr>
                 ))}
+                {/* Empty result: the message fills the shell's reserved height
+                    (TABLE_EMPTY_PANEL_CLASS) instead of sitting below a blank
+                    400px box. colSpan covers the widest (2xl) column set. */}
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-0">
+                      <div className={TABLE_EMPTY_PANEL_CLASS}>
+                        <EmptyState
+                          icon={UserCog}
+                          title="No users found"
+                          description="Try adjusting your search, or invite a new teammate to get started."
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -3110,17 +3115,7 @@ export default function UserManagement() {
             {paginatedUsers.map((user) => (
               <div key={user.id} className="space-y-3 p-4">
                 <div className="flex items-start gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ring-1 ring-white/10 shadow-sm ${
-                    (user.role || '').toLowerCase() === 'tenant_admin' || (user.role || '').toLowerCase() === 'admin'
-                      ? 'bg-brand-blue shadow-brand-blue/25'
-                      : (user.role || '').toLowerCase() === 'recruiter'
-                      ? 'bg-gradient-to-br from-brand-cyan to-brand-blue shadow-brand-cyan/20'
-                      : 'bg-gradient-to-br from-slate-500 to-slate-600'
-                  }`}>
-                    <span className="text-white text-xs font-semibold">
-                      {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                    </span>
-                  </div>
+                  <NameAvatar name={user.name} fallback={user.email} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
@@ -3152,26 +3147,30 @@ export default function UserManagement() {
           </>
         )}
 
+        {/* Phones only — on md+ the message renders inside the table body. */}
         {!isLoading && filteredUsers.length === 0 && (
-          <EmptyState
-            icon={UserCog}
-            title="No users found"
-            description="Try adjusting your search, or invite a new teammate to get started."
+          <div className="md:hidden">
+            <EmptyState
+              icon={UserCog}
+              title="No users found"
+              description="Try adjusting your search, or invite a new teammate to get started."
+            />
+          </div>
+        )}
+
+        {/* Pagination — the table card's footer, not a separate card. */}
+        {!isLoading && filteredUsers.length > 0 && (
+          <ListPagination
+            attached
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={filteredUsers.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="users"
           />
         )}
       </div>
-
-      {/* Pagination */}
-      {!isLoading && filteredUsers.length > 0 && (
-        <ListPagination
-          currentPage={currentPage}
-          itemsPerPage={itemsPerPage}
-          totalItems={filteredUsers.length}
-          onPageChange={setCurrentPage}
-          onItemsPerPageChange={setItemsPerPage}
-          itemLabel="users"
-        />
-      )}
       </>
       )}
       </div>
@@ -3248,7 +3247,7 @@ export default function UserManagement() {
               {/* Password is auto-generated — user receives invite email */}
               <div className="flex items-start gap-2.5 p-3 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/20 rounded-lg text-sm text-brand-blue ring-1 ring-brand-blue/10">
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-blue" />
-                <span className="text-xs sm:text-sm">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
+                <span className="text-sm">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
               </div>
               <div>
                 <Label className="mb-2">
@@ -3277,14 +3276,14 @@ export default function UserManagement() {
                               {role.name}
                             </span>
                             {isSystemRole && (
-                              <span className="text-2xs font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
+                              <span className="text-xs font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
                                 Default role
                               </span>
                             )}
                             {roleDefaultCounts[role.id] !== undefined && (
                               <span
                                 title={`${roleDefaultCounts[role.id]} default permissions in this role`}
-                                className="text-2xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1.5 py-0.5 rounded flex-shrink-0"
+                                className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1.5 py-0.5 rounded flex-shrink-0"
                               >
                                 {roleDefaultCounts[role.id]} permissions
                               </span>
@@ -3376,7 +3375,7 @@ export default function UserManagement() {
           title="Edit User"
           subtitle={editingUser.email}
           footerStart={
-            <span className="text-2xs sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
+            <span className="text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
               {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
                ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
                 <>
@@ -3400,7 +3399,7 @@ export default function UserManagement() {
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Name</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name</label>
                   <Input
                     type="text"
                     value={editingUser.name}
@@ -3408,7 +3407,7 @@ export default function UserManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Email</label>
                   <Input
                     type="email"
                     value={editingUser.email}
@@ -3420,7 +3419,7 @@ export default function UserManagement() {
               {identityChanges.length > 0 ? (
                 <div className="flex gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3 sm:p-4">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
-                  <div className="space-y-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  <div className="space-y-1 text-sm text-gray-700 dark:text-slate-300">
                     <p className="font-semibold text-gray-900 dark:text-slate-50">
                       Changing the {identityChanges.map(c => c.field.toLowerCase()).join(' and ')}{' '}needs the user&apos;s confirmation
                     </p>
@@ -3432,7 +3431,7 @@ export default function UserManagement() {
                   </div>
                 </div>
               ) : (
-                <p className="-mt-2 flex items-center gap-1.5 text-2xs sm:text-xs text-gray-500 dark:text-slate-400">
+                <p className="-mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
                   <Info className="h-3.5 w-3.5 shrink-0" />
                   Changing the name or email needs a verification code sent to the user&apos;s current email.
                 </p>
@@ -3440,7 +3439,7 @@ export default function UserManagement() {
 
               {/* Role Selection - Compact Pills */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-2">Role</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Role</label>
                 <div className="flex flex-wrap gap-2">
                   {availableRoles.map(role => {
                     const isSelected = editSelectedRoleId === role.id;
@@ -3459,7 +3458,7 @@ export default function UserManagement() {
                         {roleDefaultCounts[role.id] !== undefined && (
                           <span
                             title={`${roleDefaultCounts[role.id]} default permissions in this role`}
-                            className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 py-0.5 text-2xs font-semibold align-middle ${
+                            className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold align-middle ${
                               isSelected ? 'bg-white/20 text-white' : 'bg-brand-blue/10 text-brand-blue'
                             }`}
                           >
@@ -3512,7 +3511,7 @@ export default function UserManagement() {
                         {getAllCustomPermissionCodes().filter(code => editSelectedPermissionCodes.has(code)).length} active
                       </span>
                       <span
-                        className="text-2xs font-medium text-gray-500 dark:text-slate-500 whitespace-nowrap"
+                        className="text-xs font-medium text-gray-500 dark:text-slate-500 whitespace-nowrap"
                         title="View Analytics and View Support are included for every user and can't be switched off"
                       >
                         incl. {MANDATORY_PERMISSION_CODES.size} always on
@@ -3664,18 +3663,18 @@ export default function UserManagement() {
                                   />
                                 )}
                                 <div>
-                                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                                  <h4 className="text-base font-semibold text-gray-900 dark:text-slate-50">
                                     {category.name}
                                   </h4>
                                   <p className="text-xs text-gray-500 dark:text-slate-500">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
                                 </div>
                                 {category.isMenuToggle && selectedCount > 0 && (
-                                  <span className="text-2xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
+                                  <span className="text-xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
                                     Menu
                                   </span>
                                 )}
                               </div>
-                              <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+                              <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
                             </div>
 
                             {/* Permission Cards Grid */}
@@ -3701,7 +3700,7 @@ export default function UserManagement() {
                                       <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">
                                         View {category.name}
                                         {isMandatory && (
-                                          <span className="ml-1.5 text-2xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
+                                          <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
                                         )}
                                       </div>
                                     </div>
@@ -3823,7 +3822,7 @@ export default function UserManagement() {
                                         {sub.name}
                                       </span>
                                     </div>
-                                    <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
+                                    <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
                                   </div>
                                   {/* Sub-category cards */}
                                   <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -3993,7 +3992,7 @@ export default function UserManagement() {
               ) : (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
                     <div className="relative">
                       <Input
                         type={directPwShow ? 'text' : 'password'}
@@ -4009,7 +4008,7 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
                     <Input
                       type={directPwShow ? 'text' : 'password'}
                       value={directPwConfirm}
@@ -4024,7 +4023,7 @@ export default function UserManagement() {
                       onCheckedChange={(v) => setDirectPwForceChange(!!v)}
                       className="mt-0.5"
                     />
-                    <span className="text-xs text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
+                    <span className="text-sm text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
                   </label>
                 </>
               )}
@@ -4067,16 +4066,16 @@ export default function UserManagement() {
           <div>
             <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
               <div>
-                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role</div>
+                <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role</div>
                 <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{getRoleLabel(viewingUserPermissions.role, availableRoles)}</div>
               </div>
               <div>
-                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Status</div>
-                <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingUserPermissions.is_active ? 'Active' : 'Inactive'}</div>
+                <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Status</div>
+                <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingUserPermissions.is_active ? 'Active' : 'Inactive'}</div>
               </div>
               <div>
-                <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupShownCount}</div>
+                <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingRolePopupShownCount}</div>
               </div>
             </div>
 
@@ -4096,7 +4095,7 @@ export default function UserManagement() {
           bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
           footerStart={
             viewingRolePopup.is_system ? (
-              <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
+              <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-semibold">
                 <Lock className="w-3 h-3" />
                 Default Role (Read-Only)
               </span>
@@ -4106,16 +4105,16 @@ export default function UserManagement() {
             <div>
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
-                  <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
                   <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
-                  <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
-                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopup.user_count}</div>
+                  <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingRolePopup.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                  <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupShownCount}</div>
+                  <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingRolePopupShownCount}</div>
                 </div>
               </div>
 
@@ -4149,10 +4148,10 @@ export default function UserManagement() {
         <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
           {identityChanges.length > 0 && (
             <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
-              <p className="mb-2 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
               <div className="space-y-1.5">
                 {identityChanges.map(c => (
-                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-xs sm:text-sm">
+                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-sm">
                     <span className="font-medium text-gray-500 dark:text-slate-400">{c.field}</span>
                     <span className="min-w-0 break-words">
                       <span className="text-gray-400 line-through dark:text-slate-500">{c.from}</span>
@@ -4174,17 +4173,17 @@ export default function UserManagement() {
               </span>
             </li>
             <li className="flex gap-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white">2</span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-xs font-semibold text-white">2</span>
               <span>Ask the user to check that inbox and share the code with you</span>
             </li>
             <li className="flex gap-2.5">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white">3</span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue text-xs font-semibold text-white">3</span>
               <span>Type it below and click <span className="font-semibold">Verify &amp; Save</span></span>
             </li>
           </ol>
 
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-slate-400">6-digit code</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-slate-300">6-digit code</label>
             <Input
               autoFocus
               inputMode="numeric"

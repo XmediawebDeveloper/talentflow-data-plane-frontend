@@ -91,6 +91,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { toOneDecimalScore } from '@/lib/utils/score';
+import NameAvatar from '@/components/ui/name-avatar';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -6240,9 +6241,7 @@ function AIMatchTabContent({
                         selectionActive={selectedIds.size > 0}
                       />
                       <div className="flex items-start gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
-                          {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                        </div>
+                        <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
                           {candidate.title && (
@@ -6651,9 +6650,7 @@ function AIMatchTabContent({
                       onClick={(e) => e.stopPropagation()}
                       className="mt-1 rounded border-gray-300 flex-shrink-0"
                     />
-                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm font-medium text-gray-700 dark:text-slate-300 flex-shrink-0">
-                      {(candidate.name || 'U').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
-                    </div>
+                    <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
                       {candidate.title && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{candidate.title}</p>}

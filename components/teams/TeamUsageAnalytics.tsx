@@ -23,6 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import NameAvatar from '@/components/ui/name-avatar';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -65,10 +66,6 @@ function getMUnits(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
 
 function teamTotal(t: TeamUsageSummary) {
   return getCount(t, 'RS') + getCount(t, 'AS') + getCount(t, 'AIU') + getCount(t, 'RU');
-}
-
-function initials(name: string) {
-  return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
 
 // Human-readable labels for all unit types (including system ones)
@@ -197,9 +194,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
             <div className="text-gray-300 dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
-            <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue flex items-center justify-center text-xs font-semibold shrink-0">
-              {initials(member.user_name || member.user_email)}
-            </div>
+            <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
               <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
@@ -322,7 +317,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
   );
 }
 
-// ─── Team row (outer table — 7 cols) + nested member table (10 cols) ──────────
+// ─── Team row (outer table — 6 cols) + nested member table (10 cols) ──────────
 
 function TeamRow({
   team,
@@ -360,14 +355,15 @@ function TeamRow({
 
   return (
     <>
-      {/* Team summary row — outer table 7 cols */}
+      {/* Team summary row — outer table 6 cols */}
       <tr
         onClick={onToggle}
         className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-200 dark:border-slate-700 select-none"
       >
         <td className="px-4 py-4 whitespace-nowrap">
           <div className="flex items-center gap-3">
-            <div className="text-gray-400 dark:text-slate-500">
+            {/* The only expand affordance — the whole row toggles. */}
+            <div className={expanded ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'} aria-label={expanded ? 'Hide members' : 'Show members'}>
               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
             </div>
             <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
@@ -404,25 +400,12 @@ function TeamRow({
             {total > 0 ? total : '—'}
           </span>
         </td>
-        <td className="px-4 py-4 whitespace-nowrap">
-          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full transition-colors
-            ${expanded
-              ? 'bg-gray-800 text-white'
-              : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700'
-            }`}>
-            {expanded ? (
-              <><ChevronDown className="w-3 h-3" /> Collapse</>
-            ) : (
-              <><ChevronRight className="w-3 h-3" /> Members</>
-            )}
-          </span>
-        </td>
       </tr>
 
       {/* Member expansion — full-width nested table with 10 columns */}
       {expanded && (
         <tr>
-          <td colSpan={7} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
+          <td colSpan={6} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
             <div className="bg-gray-50 dark:bg-slate-800/50">
               {loadingMembers ? (
                 <div className="px-4 py-3 space-y-3">
@@ -516,17 +499,11 @@ function TeamRow({
 
 // ─── Summary stat card ────────────────────────────────────────────────────────
 
-function StatCard({ label, value, dot, loading, onClick, active }: {
+function StatCard({ label, value, dot, loading }: {
   label: string; value: number; dot: string; loading: boolean;
-  // When supplied, the card renders as a button — drives the cards → list drill-in.
-  onClick?: () => void;
-  active?: boolean;
 }) {
-  const className = `bg-white dark:bg-slate-900 rounded-xl border shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-5 py-4 flex items-center gap-4 text-left w-full ${
-    onClick ? 'transition-all hover:-translate-y-0.5 hover:shadow-md cursor-pointer' : ''
-  } ${active ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`;
-  const content = (
-    <>
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-5 py-4 flex items-center gap-4 text-left w-full">
       <span className={`w-3 h-3 rounded-full shrink-0 ${dot}`} />
       <div className="min-w-0">
         <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{label}</p>
@@ -534,12 +511,8 @@ function StatCard({ label, value, dot, loading, onClick, active }: {
           ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
           : <p className="text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
       </div>
-    </>
+    </div>
   );
-  if (onClick) {
-    return <button type="button" onClick={onClick} className={className}>{content}</button>;
-  }
-  return <div className={className}>{content}</div>;
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -603,14 +576,6 @@ export default function TeamUsageAnalytics() {
   // Which export the format picker is open for — null while it's closed.
   const [exportScope, setExportScope] = useState<'team' | 'user' | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
-  // Drill-in: 'cards' shows only the 5 summary tiles; clicking a card opens the
-  // team usage table below. activeCard highlights which tile was clicked.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  const [activeCard, setActiveCard] = useState<'rs' | 'as' | 'aiu' | 'ru' | 'all' | null>(null);
-  const openList = (card: 'rs' | 'as' | 'aiu' | 'ru' | 'all') => {
-    setActiveCard(card);
-    setPageView('list');
-  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -658,7 +623,7 @@ export default function TeamUsageAnalytics() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
                 {isTenantAdmin ? 'All Teams' : 'Your Teams'}
               </span>
@@ -738,17 +703,15 @@ export default function TeamUsageAnalytics() {
         </div>
       </div>
 
-      {/* Summary stats */}
+      {/* Summary stats — display only; the table below is always shown. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} onClick={() => openList('rs')}  active={pageView === 'list' && activeCard === 'rs'} />
-        <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} onClick={() => openList('as')}  active={pageView === 'list' && activeCard === 'as'} />
-        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />
-        <StatCard label="Resume Storage"  value={totals.ru}  dot="bg-orange-500" loading={loading} onClick={() => openList('ru')}  active={pageView === 'list' && activeCard === 'ru'} />
-        <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} onClick={() => openList('all')} active={pageView === 'list' && activeCard === 'all'} />
+        <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} />
+        <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} />
+        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"    loading={loading} />
+        <StatCard label="Resume Storage"  value={totals.ru}  dot="bg-orange-500" loading={loading} />
+        <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} />
       </div>
 
-      {pageView === 'list' && (
-      <>
       {/* justify-end, not justify-between: the Back to overview button that
           used to hold the left slot is gone, and the tally belongs on the
           right. */}
@@ -758,7 +721,7 @@ export default function TeamUsageAnalytics() {
         </span>
       </div>
 
-      {/* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, expand) */}
+      {/* Outer team table — 6 cols (Team, RS, AS, AIU, RU, Total) */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
@@ -772,12 +735,11 @@ export default function TeamUsageAnalytics() {
                 </th>
               ))}
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Total</th>
-              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              /* Skeleton rows mirror the 7-col team row: Team, RS, AS, AIU, RU, Total, expand */
+              /* Skeleton rows mirror the 6-col team row: Team, RS, AS, AIU, RU, Total */
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-t border-gray-200 dark:border-slate-700">
                   <td className="px-4 py-4 whitespace-nowrap">
@@ -795,14 +757,11 @@ export default function TeamUsageAnalytics() {
                   <td className="px-4 py-4 whitespace-nowrap">
                     <Skeleton className="h-5 w-8" />
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <Skeleton className="h-6 w-24 rounded-full" />
-                  </td>
                 </tr>
               ))
             ) : teams.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-0">
+                <td colSpan={6} className="p-0">
                   {/* The shared empty-state panel — centred on both axes with
                       the same height and padding every other table's uses. */}
                   <div className={TABLE_EMPTY_PANEL_CLASS}>
@@ -832,8 +791,6 @@ export default function TeamUsageAnalytics() {
       <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
         Click a team to see its members · Click a member to see their full consumption history
       </p>
-      </>
-      )}
     </div>
   );
 }

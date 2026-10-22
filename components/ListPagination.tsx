@@ -39,6 +39,12 @@ interface ListPaginationProps {
    * existing list keeps hiding it on short lists.
    */
   alwaysShow?: boolean;
+  /**
+   * Render as the table card's footer strip (top divider, no card of its own)
+   * instead of a separate card below the table. Place it INSIDE the table's
+   * bordered wrapper, after the table. Off by default.
+   */
+  attached?: boolean;
 }
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
@@ -83,6 +89,7 @@ export default function ListPagination({
   compact = false,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   alwaysShow = false,
+  attached = false,
 }: ListPaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -107,7 +114,11 @@ export default function ListPagination({
 
   /* One place per dimension, so the two builds can't drift: shell padding,
      label type scale, the select, and the go-to/step controls. */
-  const shellClass = compact ? 'p-2' : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
+  const shellClass = compact
+    ? 'p-2'
+    : attached
+      ? 'rounded-b-xl border-t border-gray-200 bg-gray-50/60 px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-800/40'
+      : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
   const labelClass = compact ? 'text-xs' : 'text-sm';
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
   const selectClass = compact
