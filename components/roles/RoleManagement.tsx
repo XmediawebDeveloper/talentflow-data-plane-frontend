@@ -1,7 +1,5 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import CreateRoleForm from './CreateRoleForm';
 import EditRoleForm from './EditRoleForm';
 import { Button } from '@/components/ui/button';
@@ -45,7 +43,6 @@ import {
 } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 type TabType = 'roles' | 'audit';
 
@@ -72,8 +69,6 @@ const getRoleBadgeClass = (isSystem: boolean) =>
     : 'bg-brand-cyan/15 text-brand-blue ring-1 ring-brand-cyan/20';
 
 export default function RoleManagement() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { hasPermission } = useAuth();
@@ -111,7 +106,7 @@ export default function RoleManagement() {
   // Persist scroll + view state so returning to Roles & Permissions lands the
   // user where they left off. Re-detect the scroll container when the tab or
   // two-step view flips (height changes between overview and list).
-  const rootRef = useScrollRestoration<HTMLElement>('org-role-management', !isLoading, [pageView, activeTab]);
+  const rootRef = useScrollRestoration<HTMLDivElement>('org-role-management', !isLoading, [pageView, activeTab]);
   useListStatePersistence(
     'org-role-management',
     { activeTab, pageView, listView, searchQuery },
@@ -398,12 +393,9 @@ export default function RoleManagement() {
   const viewingRoleShownCount = countGrantedPermissions(viewingRoleCodes);
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Roles & Permissions' }]} />
-        <OrganizationTabs stickyTop={orgCrumbHeight} />
-        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+    // Card, breadcrumb, organization tabs and the tab panel come from
+    // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
+    <div ref={rootRef}>
         <PageHeader
           icon={<Shield className="h-5 w-5" />}
           title="Role Management"
@@ -1013,8 +1005,6 @@ export default function RoleManagement() {
             )}
           </section>
         )}
-      </div>
-      </div>
 
       <AppModal
         open={!!viewingRole}
@@ -1053,7 +1043,6 @@ export default function RoleManagement() {
           </>
         )}
       </AppModal>
-      </div>
 
       {/* Create / Edit Role — popups laid out like Edit User (AppModal inside the form) */}
       {createOpen && (
@@ -1071,6 +1060,6 @@ export default function RoleManagement() {
           onSuccess={() => { setEditingRole(null); loadData(); }}
         />
       )}
-    </main>
+    </div>
   );
 }

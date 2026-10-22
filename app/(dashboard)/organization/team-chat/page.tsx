@@ -1,7 +1,6 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
+import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
 import { useState, useRef, useEffect, Fragment } from 'react';
 import {
   Search,
@@ -38,7 +37,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useSearchParams } from 'next/navigation';
 import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
-import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -694,7 +693,7 @@ export default function TeamChatPage() {
   }, [messageInput, selectedChannel?.id]);
 
   if (isLoading) {
-    return <PageSkeleton variant="cards" showStats={false} />;
+    return <TeamChatSkeleton />;
   }
 
   const todayLabel = formatISTDate(new Date().toISOString());
@@ -810,14 +809,9 @@ export default function TeamChatPage() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-50 overflow-x-clip">
-      <div className="mx-auto w-full max-w-[1400px] flex flex-col flex-1 min-h-0">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl flex flex-col flex-1 min-h-0">
-      <div className="shrink-0">
-        <PageBreadcrumb className="mb-4" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
-        <OrganizationTabs />
-      </div>
-      <div className="flex flex-1 min-h-0 flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+    // Card, breadcrumb, organization tabs and the tab panel come from
+    // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
+    <div className="flex flex-1 min-h-0 flex-col">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
         <div className="flex flex-1 min-h-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700 dark:bg-slate-900">
@@ -1681,9 +1675,6 @@ export default function TeamChatPage() {
                   )}
                 </div>
         </AppModal>
-      </div>
-      </div>
-      </div>
     </div>
   );
 }

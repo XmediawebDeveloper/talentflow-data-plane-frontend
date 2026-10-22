@@ -1,7 +1,5 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
 import {
   Users,
@@ -44,7 +42,6 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import FadeIn from '@/components/ui/fade-in';
 import ListPagination from '@/components/ListPagination';
 import NameAvatar from '@/components/ui/name-avatar';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
@@ -68,8 +65,6 @@ const getErrorDetail = (error: unknown): string | undefined => {
 };
 
 export default function TeamManagementPage() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -117,7 +112,7 @@ export default function TeamManagementPage() {
   // Persist scroll + view state so returning to this page lands where the user
   // left off. Re-detect the scroll container when the tab or two-step view flips
   // (height changes drastically between the cards overview and the list).
-  const rootRef = useScrollRestoration<HTMLElement>('org-team-management', !isLoading, [pageView, activeTab]);
+  const rootRef = useScrollRestoration<HTMLDivElement>('org-team-management', !isLoading, [pageView, activeTab]);
   // currentPage is intentionally not persisted: the existing
   // `setCurrentPage(1)` effect on [searchQuery, filterTeamLead] resets it on
   // mount, so a restored page would be immediately clobbered.
@@ -499,12 +494,9 @@ export default function TeamManagementPage() {
 
   return (
     <FeatureGate feature="teams">
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
-          <OrganizationTabs stickyTop={orgCrumbHeight} />
-          <div className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+      {/* Card, breadcrumb, organization tabs and the tab panel come from
+          app/(dashboard)/organization/layout.tsx — this renders the panel's content. */}
+      <div ref={rootRef}>
             <PageHeader
               icon={<Users className="h-5 w-5" />}
               title="Team Management"
@@ -764,9 +756,6 @@ export default function TeamManagementPage() {
             )}
               </div>
             </div>
-          </div>
-        </div>
-        </div>
 
         <TeamFormModal
           key={`create-${showCreateModal ? 'open' : 'closed'}`}
@@ -825,7 +814,7 @@ export default function TeamManagementPage() {
           onConfirm={handleDeleteTeam}
           isDeleting={isDeleting}
         />
-      </main>
+      </div>
     </FeatureGate>
   );
 }

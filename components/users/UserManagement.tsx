@@ -1,6 +1,5 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
 import { SurfaceCard, SectionHeading } from '@/components/ui/section-container';
 import React, { useState, useEffect, useRef } from 'react';
@@ -53,7 +52,6 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -79,7 +77,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { Tooltip } from '@/components/ui/tooltip';
 import NameAvatar from '@/components/ui/name-avatar';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 // Types
 interface UserPermissions {
@@ -609,8 +606,6 @@ const mockUsers: ApiUser[] = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function UserManagement() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
@@ -887,7 +882,7 @@ export default function UserManagement() {
   // flips (cards overview vs. list). currentPage is intentionally not persisted:
   // the existing `setCurrentPage(1)` effect on [searchQuery] resets it on mount,
   // so a restored page would be immediately clobbered.
-  const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
+  const rootRef = useScrollRestoration<HTMLDivElement>('org-user-management', !isLoading, [pageView]);
   useListStatePersistence(
     'org-user-management',
     { searchQuery, itemsPerPage },
@@ -2769,17 +2764,9 @@ export default function UserManagement() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
-
-      {/* Shared organization tab bar — Users is the first tab */}
-      <OrganizationTabs stickyTop={orgCrumbHeight} />
-
-      {/* Active tab + its data enclosed together in one bordered panel that
-          connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+    // Card, breadcrumb, organization tabs and the tab panel come from
+    // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
+    <div ref={rootRef}>
       {/* Header */}
       <PageHeader
         icon={<UserCog className="h-5 w-5" />}
@@ -3173,7 +3160,6 @@ export default function UserManagement() {
       </div>
       </>
       )}
-      </div>
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
@@ -4122,8 +4108,6 @@ export default function UserManagement() {
             </div>
         </AppModal>
       )}
-      </div>
-      </div>
       {permissionChangeDialog}
       <AppModal
         open={!!identityOtp}
@@ -4208,6 +4192,6 @@ export default function UserManagement() {
           </p>
         </div>
       </AppModal>
-    </main>
+    </div>
   );
 }
