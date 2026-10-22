@@ -44,21 +44,23 @@ export default function OrganizationLayout({ children }: { children: React.React
   return (
     <main className={`flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col' : ''}`}>
       <div className={`mx-auto w-full max-w-[1400px] ${fill}`}>
-        <div className={`my-4 w-full rounded-2xl bg-white p-4 shadow-2xl md:my-5 md:p-8 dark:bg-slate-900 ${fill}`}>
+        {/* Phones get 12px instead of 16px around the content (all five tabs).
+            OrganizationTabs' sticky band mirrors this padding. */}
+        <div className={`my-4 w-full rounded-2xl bg-white shadow-2xl md:my-5 md:p-8 dark:bg-slate-900 p-3 sm:p-4 ${fill}`}>
           <PageBreadcrumb
             barRef={crumbRef}
             className="mb-4 shrink-0 md:mb-6"
             items={
               pathname === '/organization/user-management'
-                ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]
-                : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label }]
+                ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'User Management' }]
+                : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'User Management', href: '/organization/user-management' }, { label }]
             }
           />
           <OrganizationTabs stickyTop={isChat ? undefined : crumbHeight} />
 
           {/* The active tab's panel — joins the tab bar's baseline on desktop
               (-mt-5 cancels the tab bar's mb-5). */}
-          <div className={`rounded-xl border border-gray-200 bg-slate-100 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50 ${fill}`}>
+          <div className={`rounded-xl border border-gray-200 bg-slate-100 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50 p-3 ${fill}`}>
             {/* Keyed by route so the fade replays on every tab switch. Opacity
                 only — a transform here would re-anchor the pages' fixed-position
                 popups to this box while it animates. */}
