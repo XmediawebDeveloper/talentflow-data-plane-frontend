@@ -115,6 +115,12 @@ export interface JobOpeningPickerListProps {
    * pay for the tally.
    */
   showCandidateCounts?: boolean;
+  /** Colour the applicants / assessed / interviewed chips like the Job
+   *  Openings badges (Resume Scoring). Off by default. */
+  coloredCountBadges?: boolean;
+  /** The applicant count's label on the cards and the version table
+   *  ("Scored" on Resume Scoring). Omitted = "applicants" / "Applicants". */
+  applicantsLabel?: string;
 }
 
 /**
@@ -139,6 +145,8 @@ export default function JobOpeningPickerList({
   excludeDraftsOnly = false,
   listAnchorRef,
   showCandidateCounts = false,
+  coloredCountBadges = false,
+  applicantsLabel,
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const candidateCounts = useJobCandidateCounts(showCandidateCounts);
@@ -571,6 +579,8 @@ export default function JobOpeningPickerList({
                           // Openings cards). Icons and the count chips stay at
                           // their defaults so the picker keeps its own identity.
                           hideEmptyFields
+                          coloredCountBadges={coloredCountBadges}
+                          applicantsLabel={applicantsLabel?.toLowerCase()}
                           trailingBadges={
                             /* No ml-auto: that was reaching across the row to line
                                up with the eye icon back when it sat beside this
@@ -683,6 +693,7 @@ export default function JobOpeningPickerList({
                       loading={versionLineage.isLoading(versionKey)}
                       versionDetails={versionLineage.versionDetails}
                       versionApplicants={versionLineage.versionApplicants}
+                      applicantsLabel={applicantsLabel}
                       openInNewTab
                       /* The rows are things you TICK here, so the title's
                          hover scale comes off — on a selectable row that

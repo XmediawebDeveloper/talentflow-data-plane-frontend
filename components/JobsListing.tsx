@@ -75,7 +75,7 @@ const JOBS_EXPORT_HEADERS = [
   // other silently shifts every following column.
   'Salary', 'Location', 'Job Level',
   'Posted Date', 'Created Date', 'Last Updated', 'Created By',
-  'Applicants'
+  'Scored'
 ];
 
 interface JobsListingProps {
@@ -1493,7 +1493,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
-                      <option value="applicants">Applicants</option>
+                      <option value="applicants">Scored</option>
                       <option value="assessed">Assessed</option>
                       <option value="interviewed">Interviewed</option>
                       <option value="title">Job Title</option>
@@ -1635,7 +1635,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         {applicantsCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-info-subtle text-info-strong">
                             <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
-                            {applicantsCount} {applicantsCount === 1 ? 'Applicant' : 'Applicants'}
+                            {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
@@ -1747,7 +1747,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
                                 >
                                   <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
                                 </button>
                               )}
                               {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
@@ -1998,7 +1998,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                 {versionJob.status.toLowerCase() !== 'draft' && (
                                   <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)} className={viewVersionsMenuItemClass}>
                                     <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
+                                    <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Quick Actions — same gates as the latest-version menu */}
