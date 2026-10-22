@@ -105,6 +105,7 @@ import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessme
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
+import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -842,6 +843,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      replacing the newer list, and only the latest run clears `isLoading`. */
   const assessmentsFetchSeqRef = useRef(0);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
+  /* Each linked job version's live status, by its JD id: Duplicate is off on
+     an Archived / Disabled one (the AI Interview rule, for Create / Duplicate
+     only). Read in one batch for the jobs the loaded assessments point at. */
+  const [jobVersionStatusById, setJobVersionStatusById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const missing = Array.from(new Set(
+      apiAssessments.map((a: any) => a?.jd_id).filter((id: any) => id && !(id in jobVersionStatusById)),
+    )) as string[];
+    if (missing.length === 0) return;
+    let cancelled = false;
+    loadJobVersionStatuses(missing)
+      .then((statuses) => { if (!cancelled) setJobVersionStatusById((prev) => ({ ...prev, ...statuses })); })
+      .catch(() => { /* the click-time check still blocks */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiAssessments]);
+  /** Why Duplicate / Share / Revoke / Archive is off for this assessment's
+   *  job version, or null. */
+  const jobLockReason = (assessment: { jd_id?: string } | null | undefined): string | null =>
+    assessment?.jd_id && isJobVersionLocked(jobVersionStatusById[assessment.jd_id])
+      ? ASSESSMENT_JOB_LOCK_MESSAGE
+      : null;
+  /* Share/Invite opens from many places (menus, details page, Send Invite,
+     Track's Invite More). Whichever one did, the job version is read fresh
+     here and a locked one closes the popup with the message. */
+  useEffect(() => {
+    if (!showShareModal || !selectedAssessmentForShare?.jd_id) return;
+    let cancelled = false;
+    void checkAssessmentJobLock(selectedAssessmentForShare.jd_id).then((lock) => {
+      if (cancelled || !lock) return;
+      setShowShareModal(false);
+      toast.error(lock);
+    });
+    return () => { cancelled = true; };
+  }, [showShareModal, selectedAssessmentForShare]);
   /* What the page-level Send Invite offers. Loaded on click, with no status
      filter, because `apiAssessments` is narrowed to the active tab: on Draft or
      Archived it holds no sendable row, which used to disable the button. */
@@ -3827,6 +3863,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // If the lineage is already at MAX_ASSESSMENT_VERSIONS, show a max-reached
   // popup instead of opening the duplicate confirmation.
   const handleOpenCloneModal = async (assessment: any) => {
+    /* First: the linked job version, read fresh — an Archived / Disabled one
+       takes no new version, whatever the menu could see when it opened. */
+    const jobLock = await checkAssessmentJobLock(assessment.jd_id);
+    if (jobLock) {
+      await dialog.alert({ title: 'Cannot duplicate this assessment', message: jobLock, variant: 'warning' });
+      return;
+    }
     /* Re-read the lineage before deciding, rather than trusting whatever the
        menu's own gate could see.
 
@@ -3925,6 +3968,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Open the revoke confirmation modal. Fetch eligible count so the
   // recruiter sees exactly how many links will be invalidated.
   const handleOpenRevokeModal = async (assessment: any) => {
+    const jobLock = await checkAssessmentJobLock(assessment?.jd_id);
+    if (jobLock) {
+      await dialog.alert({ title: 'Cannot revoke invites', message: jobLock, variant: 'warning' });
+      return;
+    }
     setRevokeTargetAssessment(assessment);
     setRevokeCount(null);
     try {
@@ -4010,6 +4058,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Archive assessment
   const handleArchiveAssessment = async (assessmentId: string) => {
     const target = apiAssessments.find((a) => a.id === assessmentId);
+    const jobLock = await checkAssessmentJobLock(target?.jd_id);
+    if (jobLock) {
+      await dialog.alert({ title: 'Cannot archive this assessment', message: jobLock, variant: 'warning' });
+      return;
+    }
     if (!await confirmArchive({
       title: `${target?.jd_title || target?.title || 'Untitled'} - Assessment`,
       version: target?.version,
@@ -5838,9 +5891,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // so it is edited, not duplicated.
               const notInvited = (assessment.invitations_count || 0) === 0;
               const versionBlocked = latestVersionBlockedReason(assessment);
-              const buttonDisabled = !canCreateAssessment || isDraft || notInvited || capReached || !!versionBlocked;
+              const jobLocked = jobLockReason(assessment);
+              const buttonDisabled = !canCreateAssessment || !!jobLocked || isDraft || notInvited || capReached || !!versionBlocked;
               const disabledReason = !canCreateAssessment
                 ? 'You do not have permission to create assessments'
+                : jobLocked
+                ? jobLocked
                 : isDraft
                 ? 'Publish the assessment before duplicating.'
                 : notInvited
@@ -5879,9 +5935,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // a fresh invite round, not re-run revoke.
               const hasInvites = (assessment.invitations_count || 0) > 0;
               const alreadyRevoked = !!assessment.has_revoked_invites;
-              const revokeDisabled = !canUpdateAssessment || !hasInvites || alreadyRevoked;
+              const revokeJobLocked = jobLockReason(assessment);
+              const revokeDisabled = !canUpdateAssessment || !!revokeJobLocked || !hasInvites || alreadyRevoked;
               const revokeReason = !canUpdateAssessment
                 ? 'You do not have permission to edit assessments'
+                : revokeJobLocked
+                ? revokeJobLocked
                 : !hasInvites
                 ? 'No invites have been sent yet.'
                 : alreadyRevoked
@@ -5947,16 +6006,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
               </button>
             )}
-            {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
+            {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (() => {
+            const archiveJobLocked = jobLockReason(assessment);
+            const archiveOff = !canDeleteAssessment || !!archiveJobLocked;
+            return (
             <button
               onClick={() => {
-                if (!canDeleteAssessment) return;
+                if (archiveOff) return;
                 handleArchiveAssessment(assessment.id);
               }}
-              aria-disabled={!canDeleteAssessment}
-              title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
+              aria-disabled={archiveOff}
+              title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : (archiveJobLocked ?? '')}
               className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
-                !canDeleteAssessment
+                archiveOff
                   ? 'text-gray-400 cursor-not-allowed opacity-60'
                   : 'text-gray-700'
               }`}
@@ -5964,7 +6026,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <Archive className="w-4 h-4 text-menu-icon-archive flex-shrink-0" />
               <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
             </button>
-            )}
+            );
+            })()}
             {assessment.status !== 'Archived' && (
               <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             )}
@@ -6034,14 +6097,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
     const shareReason = !canShare
       ? 'You do not have permission to share assessments'
+      : jobLockReason(assessment)
+        ? jobLockReason(assessment)!
       : assessment.has_revoked_invites
         ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
         : '';
     // Duplicate — blocked at the version cap.
     const capReached = isVersionCapReached(assessment);
     const versionBlockedReason = latestVersionBlockedReason(assessment);
+    const jobLockedReason = jobLockReason(assessment);
     const duplicateReason = !canCreateAssessment
       ? 'You do not have permission to create assessments'
+      : jobLockedReason
+        ? jobLockedReason
       : versionBlockedReason
         ? versionBlockedReason
       : capReached
@@ -6050,6 +6118,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // Revoke — once there are invites, and only once.
     const revokeReason = !canUpdateAssessment
       ? 'You do not have permission to edit assessments'
+      : jobLockedReason
+        ? jobLockedReason
       : !hasBeenShared
         ? 'No invites have been sent yet.'
         : assessment.has_revoked_invites
@@ -6112,6 +6182,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
     const shareBlockedReason =
+      jobLockReason(assessment) ? jobLockReason(assessment)! :
       assessment.status === 'Draft' ? 'Publish assessment first to share' :
       assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
       assessment.has_revoked_invites ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.' :
@@ -10318,6 +10389,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   const status = String(target?.status ?? '').toLowerCase();
                   const blockedReason = !target ? 'No assessment selected'
                     : !canShare ? 'You do not have permission to invite candidates'
+                    : jobLockReason(target) ? jobLockReason(target)!
                     : status === 'draft' ? 'Publish assessment first to share'
                     : status === 'archived' ? 'Archived assessments cannot be shared'
                     : isAssessmentRevoked(target) ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'

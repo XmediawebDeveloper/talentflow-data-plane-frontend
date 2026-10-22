@@ -25,6 +25,7 @@ import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
+import { JobActionLockProvider } from '@/components/jobs/JobActionLock';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
@@ -1099,10 +1100,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      silences the section's button — nothing published yet, the tenant switch
      off, the JD disabled — silences the row menus with it, so the table can
      never offer an invite the section above refuses. */
+  /* A disabled or archived JD is read-only: AI Talent Match, Score Resumes,
+     Create / Send and every invite stay off for both, with the reason. */
+  const jobInactive = job.status === 'Disabled' || job.status === 'Archived';
+  const jobInactiveReason = job.status === 'Archived' ? 'JD is archived' : 'JD is disabled';
   const canInviteToAssessment =
-    hasPublishedAssessment && features.assessment && job.status !== 'Disabled';
+    hasPublishedAssessment && features.assessment && !jobInactive;
   const canInviteToAIInterview =
-    hasLiveAIInterview && features.ai_interview && job.status !== 'Disabled';
+    hasLiveAIInterview && features.ai_interview && !jobInactive;
 
   /* CREATE GATE, one answer per side, read by every Create on the page (the
      section toolbars, the tab empty states and the Quick Action tiles) so no
@@ -1144,8 +1149,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /** Why Create is off, for the button titles and tile tooltips. Null when on. */
   const assessmentCreateBlockedReason = !features.assessment
     ? 'Assessments not enabled'
-    : job.status === 'Disabled'
-      ? 'JD is disabled'
+    : jobInactive
+      ? jobInactiveReason
       : atAssessmentVersionCap
         ? `This job version has the maximum ${MAX_ASSESSMENT_VERSIONS} assessment versions — archived ones count too`
         : !assessmentExistenceChecked
@@ -1153,8 +1158,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           : null;
   const aiInterviewCreateBlockedReason = !features.ai_interview
     ? 'AI Interviews not enabled'
-    : job.status === 'Disabled'
-      ? 'JD is disabled'
+    : jobInactive
+      ? jobInactiveReason
       : atAIInterviewVersionCap
         ? `This job version has the maximum ${MAX_INTERVIEW_VERSIONS} AI interview versions — archived ones count too`
         : !aiInterviewExistenceChecked
@@ -1658,17 +1663,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   useEffect(() => {
     if (!initialAction || !job?.id) return;
     if (initialAction === 'ai-talent-match') {
-      if (permissions.canRunAiMatch && aiTalentMatchAvailable && features.ai_talent_match && job.status !== 'Disabled') {
+      if (permissions.canRunAiMatch && aiTalentMatchAvailable && features.ai_talent_match && !jobInactive) {
         // Deep link from the job-openings menu — same action, so it gets the
         // same prompt rather than starting a run the moment the page loads.
         setShowAIMatchConfirm(true);
       }
     } else if (initialAction === 'score-resumes') {
-      if (permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled') {
+      if (permissions.canRunScoring && hasPlanFeature('resume_scoring') && !jobInactive) {
         setShowSelectSourceModal(true);
       }
     } else if (initialAction === 'invite-assessment') {
-      if (permissions.canCreateAssessments && hasPlanFeature('assessment') && features.assessment && job.status !== 'Disabled') {
+      if (permissions.canCreateAssessments && hasPlanFeature('assessment') && features.assessment && !jobInactive) {
         openCreateSendAssessment();
       }
     } else if (initialAction === 'assessment-status') {
@@ -1676,11 +1681,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         setShowTrackInvitesModal(true);
       }
     } else if (initialAction === 'create-ai-interview') {
-      if (permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && job.status !== 'Disabled') {
+      if (permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && !jobInactive) {
         handleCreateAIInterview();
       }
     } else if (initialAction === 'invite-ai-interview') {
-      if (permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && job.status !== 'Disabled') {
+      if (permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && !jobInactive) {
         handleInviteAIInterview();
       }
     } else if (initialAction === 'ai-interview-status') {
@@ -2796,7 +2801,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           disabledReason={
             !(inviteDialog.kind === 'assessment' ? features.assessment : features.ai_interview)
               ? `${inviteDialog.kind === 'assessment' ? 'Assessments are' : 'AI Interviews are'} not enabled for your workspace.`
-              : job.status === 'Disabled' ? 'This job description is disabled, so nothing can be sent for it.' : null
+              : jobInactive ? `This job description is ${job.status === 'Archived' ? 'archived' : 'disabled'}, so nothing can be sent for it.` : null
           }
           /* Send (the picked version) and Browse all → Share Assessment via
              Email, pre-filled with the assessment(s) and the ticked
@@ -2914,10 +2919,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // results to hang a toolbar off).
   // Same gate for the Scored Resumes toolbar button and its empty-state CTA, so
   // the tab never offers scoring in one place and withholds it in the other.
-  // The permission part only greys the buttons out (scoreResumesDisabled /
-  // aria-disabled) — permission-gated controls are never hidden.
-  const canOfferScoreResumesFromTab =
-    hasPlanFeature('resume_scoring') && job.status !== 'Disabled';
+  // Missing permission or a disabled / archived JD only greys the buttons out
+  // (scoreResumesDisabled / aria-disabled) with the reason — never hidden.
+  const canOfferScoreResumesFromTab = hasPlanFeature('resume_scoring');
+  const scoreResumesBlockedReason = !permissions.canRunScoring
+    ? 'You do not have permission to score resumes'
+    : jobInactive
+      ? jobInactiveReason
+      : null;
 
   const hasAssessmentInviteSent = assessmentInviteCount > 0;
   // Result tabs open only once someone has a result to show.
@@ -2938,7 +2947,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         disabled={
           permissions.canCreateAIInterviews && (
             !features.ai_interview
-            || job.status === 'Disabled'
+            || jobInactive
             || resolvingAIInterviewTarget
             || blockAIInterviewCreate
           )
@@ -2971,8 +2980,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             ? 'You do not have permission to invite candidates to an AI interview'
             : !features.ai_interview
             ? 'AI Interviews not enabled'
-            : job.status === 'Disabled'
-              ? 'JD is disabled'
+            : jobInactive
+              ? jobInactiveReason
               : !hasAnyAIInterview
                 ? 'Create an AI interview first'
                 : !hasLiveAIInterview
@@ -3876,13 +3885,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 label="AI Talent Match"
                 onClick={() => { if (permissions.canRunAiMatch) handleAITalentMatch(); }}
                 planLocked={aiMatchPlanLocked}
-                disabled={!permissions.canRunAiMatch || !features.ai_talent_match || job.status === 'Disabled'}
+                disabled={!permissions.canRunAiMatch || !features.ai_talent_match || jobInactive}
                 disabledTooltip={
                   !permissions.canRunAiMatch
                     ? 'You do not have permission to run AI Talent Match'
                     : !features.ai_talent_match
                       ? 'AI Match not enabled'
-                      : 'JD is disabled'
+                      : jobInactiveReason
                 }
               />
 
@@ -3892,11 +3901,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 label="Score Resumes"
                 onClick={() => { if (permissions.canRunScoring) setShowSelectSourceModal(true); }}
                 planLocked={scoringPlanLocked}
-                disabled={!permissions.canRunScoring || job.status === 'Disabled'}
+                disabled={!permissions.canRunScoring || jobInactive}
                 disabledTooltip={
                   !permissions.canRunScoring
                     ? 'You do not have permission to score resumes'
-                    : 'JD is disabled'
+                    : jobInactiveReason
                 }
               />
             </QuickActionPanel>
@@ -3931,13 +3940,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       planLocked={assessmentPlanLocked}
                       onClick={() => openCreateSendFromTile('assessment')}
                       loading={isLoadingShareAssessments}
-                      disabled={!permissions.canCreateAssessments || !features.assessment || job.status === 'Disabled'}
+                      disabled={!permissions.canCreateAssessments || !features.assessment || jobInactive}
                       disabledTooltip={
                         !permissions.canCreateAssessments
                           ? 'You do not have permission to create or send assessments'
                           : !features.assessment
                             ? 'Assessments not enabled'
-                            : 'JD is disabled'
+                            : jobInactiveReason
                       }
                     />
                   </div>
@@ -4035,14 +4044,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       disabled={
                         (!permissions.canCreateAIInterviews && !permissions.canShareAIInterviews)
                         || !features.ai_interview
-                        || job.status === 'Disabled'
+                        || jobInactive
                       }
                       disabledTooltip={
                         !permissions.canCreateAIInterviews && !permissions.canShareAIInterviews
                           ? 'You do not have permission to create or send AI interviews'
                           : !features.ai_interview
                             ? 'AI Interviews not enabled'
-                            : 'JD is disabled'
+                            : jobInactiveReason
                       }
                     />
                   </div>
@@ -4463,6 +4472,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       )}
 
+      {/* The four result tabs: on a disabled / archived JD every Create /
+          Send and Score action in their tables — row menus and Select All ›
+          Actions — is greyed out with the reason. */}
+      <JobActionLockProvider value={jobInactive ? jobInactiveReason : null}>
       {/* Scored Resumes Tab Content */}
       {activeTab === 'scored-resumes' && (
         <div ref={scoredResumesSectionRef} className="mt-0 scroll-mt-5">
@@ -4516,10 +4529,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               action={canOfferScoreResumesFromTab ? (
                 <Button
                   variant="primary"
-                  onClick={() => { if (permissions.canRunScoring) setShowSelectSourceModal(true); }}
-                  aria-disabled={!permissions.canRunScoring || undefined}
-                  title={!permissions.canRunScoring ? 'You do not have permission to score resumes' : undefined}
-                  className={!permissions.canRunScoring ? 'opacity-60 cursor-not-allowed' : undefined}
+                  onClick={() => { if (!scoreResumesBlockedReason) setShowSelectSourceModal(true); }}
+                  aria-disabled={!!scoreResumesBlockedReason || undefined}
+                  title={scoreResumesBlockedReason ?? undefined}
+                  className={scoreResumesBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined}
                   icon={<ClipboardList className="w-4 h-4" />}
                 >
                   Score Resumes
@@ -4549,18 +4562,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               // "Select Applicants to Score" in place on this page.
               onScoreResumes={
                 canOfferScoreResumesFromTab
-                  ? () => { if (permissions.canRunScoring) setShowSelectSourceModal(true); }
+                  ? () => { if (!scoreResumesBlockedReason) setShowSelectSourceModal(true); }
                   : undefined
               }
-              /* Without the scoring permission the Score button stays visible
-                 but greyed out with a tooltip. */
-              scoreResumesDisabled={!permissions.canRunScoring}
+              /* Without the scoring permission, or on a disabled / archived
+                 JD, the Score button stays visible but greyed out with the
+                 reason as its tooltip. */
+              scoreResumesDisabled={!!scoreResumesBlockedReason}
+              scoreResumesDisabledReason={scoreResumesBlockedReason ?? undefined}
               /* Row-level "Invite → AI Interview". Same resolve-then-share
                  path as this page's own Invite button, seeded with the row's
                  candidate. Omitted when the viewer can't share, so the option
                  simply isn't offered. */
               onInviteAIInterview={
-                permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && job.status !== 'Disabled'
+                permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && !jobInactive
                   ? (candidate) => handleInviteAIInterview([candidate])
                   : undefined
               }
@@ -4594,9 +4609,39 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               (a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
             )[0];
             if (!anchor) {
-              return loadingAssessmentResults ? (
-                <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>
-              ) : null;
+              if (loadingAssessmentResults) {
+                return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>;
+              }
+              /* No assessment yet: say so, and offer Create / Send — the
+                 Quick Actions tile's gate, greyed out with its reason (no
+                 permission, switched off, disabled / archived JD). */
+              const createSendBlockedReason = !permissions.canCreateAssessments
+                ? 'You do not have permission to create or send assessments'
+                : !features.assessment
+                  ? 'Assessments not enabled'
+                  : jobInactive
+                    ? jobInactiveReason
+                    : null;
+              return (
+                <TabEmptyState
+                  bordered
+                  icon={ClipboardList}
+                  title="No Assessment Results"
+                  description="Create and send an assessment to see candidate results here."
+                  action={(
+                    <Button
+                      variant="primary"
+                      onClick={() => { if (!createSendBlockedReason) openCreateSendFromTile('assessment'); }}
+                      aria-disabled={!!createSendBlockedReason || undefined}
+                      title={createSendBlockedReason ?? undefined}
+                      className={createSendBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined}
+                      icon={<UserPlus className="w-4 h-4" />}
+                    >
+                      Create / Send
+                    </Button>
+                  )}
+                />
+              );
             }
             return (
               <AssessmentResults
@@ -4711,7 +4756,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               formatCandidateName={formatCandidateFirstName}
               jdShortId={job.job_id}
               emptyStateAction={aiInterviewEmptyActions}
-              readOnly={job.status === 'Disabled'}
+              readOnly={jobInactive}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
               jdTitle={aiInterviewConfig.jd_title || ''}
@@ -4752,6 +4797,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           sessions={aiMatchSessions}
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
+          jobLockedReason={jobInactive ? jobInactiveReason : null}
           onRunMatch={handleAITalentMatch}
           onScoreSelected={(selected) => { if (selected.length > 0) setAiMatchScoreReview(selected); }}
           onScoreAll={() => {
@@ -4786,6 +4832,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           )}
         />
       )}
+      </JobActionLockProvider>
 
       {/* Resume Upload Modal */}
       {showUploadModal && (
@@ -5338,7 +5385,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           // Revoke / Edit follow the same gate as Invite on this page.
-          canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && job.status !== 'Disabled'}
+          canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && !jobInactive}
           // Footer Invite More - this page's own Invite to Assessment dialog.
           onInviteMore={canInviteToAssessment && permissions.canCreateAssessments && canInviteJdAssessment ? () => {
             setShowTrackInvitesModal(false);
@@ -5547,6 +5594,7 @@ function AIMatchTabContent({
   sessions,
   loading,
   canRunAiMatch,
+  jobLockedReason = null,
   onRunMatch,
   onScoreSelected,
   onScoreAll,
@@ -5568,6 +5616,9 @@ function AIMatchTabContent({
   sessions: AIMatchSessionResponse[];
   loading: boolean;
   canRunAiMatch: boolean;
+  /* A disabled / archived JD: Run AI Match and Score (row and Score
+     Selected) stay visible, greyed out with this as the reason. */
+  jobLockedReason?: string | null;
   onRunMatch: () => void;
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
@@ -5578,6 +5629,9 @@ function AIMatchTabContent({
      handles it — pick one, or create the next. */
   onOpenInviteDrawer: (kind: InviteKind, selected: MatchedCandidate[]) => void;
 }) {
+  const runMatchBlockedReason = !canRunAiMatch
+    ? 'You do not have permission to run AI Talent Match'
+    : jobLockedReason ?? null;
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   /* Rows opened to show their remaining details (Phone, Location, Skills,
      Uploaded By / Date, Attachments) — display only. */
@@ -5886,10 +5940,10 @@ function AIMatchTabContent({
         action={(
           <Button
             variant="primary"
-            onClick={() => { if (canRunAiMatch) onRunMatch(); }}
-            aria-disabled={!canRunAiMatch || undefined}
-            title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : undefined}
-            className={!canRunAiMatch ? 'opacity-60 cursor-not-allowed' : undefined}
+            onClick={() => { if (!runMatchBlockedReason) onRunMatch(); }}
+            aria-disabled={!!runMatchBlockedReason || undefined}
+            title={runMatchBlockedReason ?? undefined}
+            className={runMatchBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined}
             icon={<Sparkles className="w-4 h-4" />}
           >
             Run AI Match
@@ -5991,6 +6045,17 @@ function AIMatchTabContent({
                       const eligibleCount = scoreEligibleCandidates.length;
                       const alreadyCount = selectedCount - eligibleCount;
                       const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+                      if (jobLockedReason) {
+                        return (
+                          <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                            <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                            <span className="min-w-0">
+                              <span className="block">Score Selected</span>
+                              <span className="block text-2xs text-gray-400 normal-case whitespace-normal">{jobLockedReason}</span>
+                            </span>
+                          </DropdownMenuItem>
+                        );
+                      }
                       if (!scoredResumesLoaded || eligibleCount === 0) {
                         // Disabled items take no pointer events, so the reason
                         // is spelled out on the row itself, not behind an ⓘ.
@@ -6131,11 +6196,11 @@ function AIMatchTabContent({
             <Button
               variant="primary"
               size="sm"
-              onClick={() => { if (canRunAiMatch) onRunMatch(); }}
-              aria-disabled={!canRunAiMatch || undefined}
-              title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : undefined}
+              onClick={() => { if (!runMatchBlockedReason) onRunMatch(); }}
+              aria-disabled={!!runMatchBlockedReason || undefined}
+              title={runMatchBlockedReason ?? undefined}
               icon={<Sparkles className="w-4 h-4" />}
-              className={`sm:h-9 whitespace-nowrap${!canRunAiMatch ? ' opacity-60 cursor-not-allowed' : ''}`}
+              className={`sm:h-9 whitespace-nowrap${runMatchBlockedReason ? ' opacity-60 cursor-not-allowed' : ''}`}
             >
               Run Match
             </Button>
@@ -6461,15 +6526,17 @@ function AIMatchTabContent({
                             {/* Score — Score Selected for this one candidate:
                                 off, with the reason, once scored for this job
                                 version (or while that is still being checked). */}
-                            {!scoredResumesLoaded || isScored ? (
+                            {jobLockedReason || !scoredResumesLoaded || isScored ? (
                               <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
                                 <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
                                 <span className="min-w-0">
                                   <span className="block">Score</span>
                                   <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
-                                    {!scoredResumesLoaded
-                                      ? 'Checking scored status…'
-                                      : 'Already scored for this job version.'}
+                                    {jobLockedReason
+                                      ? jobLockedReason
+                                      : !scoredResumesLoaded
+                                        ? 'Checking scored status…'
+                                        : 'Already scored for this job version.'}
                                   </span>
                                 </span>
                               </DropdownMenuItem>

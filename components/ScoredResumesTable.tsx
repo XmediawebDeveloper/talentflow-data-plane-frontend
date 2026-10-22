@@ -3,6 +3,7 @@ import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
+import { useJobActionLock } from '@/components/jobs/JobActionLock';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -370,6 +371,9 @@ interface ScoredResumesTableProps {
    *  handler above is still provided (guarded internally) so the button
    *  is never removed from the DOM. */
   scoreResumesDisabled?: boolean;
+  /** Tooltip on those disabled Score buttons (e.g. "JD is archived").
+   *  Omitted = the permission message. */
+  scoreResumesDisabledReason?: string;
   /**
    * Opens the host's "Send AI Interview via Email" flow for one candidate —
    * the AI Interview entry in each row's Invite menu. Omitted where the host
@@ -600,6 +604,9 @@ export function renderInviteTargetItems({
 export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   const { isTenantAdmin, hasPermissionCode, hasPermission, tenant } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
+  /* A disabled / archived job (Job Details' tabs): no invites from any of
+     its tables, whatever the permissions, with that as the reason. */
+  const jobLock = useJobActionLock();
 
   // Tenant-level feature toggle, independent of the subscription-plan check
   // — mirrors JobDetailView's own isFeatureEnabled(). Assumes enabled when
@@ -639,12 +646,13 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   const canDownloadScorecard = isTenantAdmin || hasPermissionCode('scoring:download');
 
   return {
-    canCreateAssessments,
-    assessmentDeniedReason,
-    mayInviteAIInterview,
-    aiInterviewDeniedReason,
+    canCreateAssessments: canCreateAssessments && !jobLock,
+    assessmentDeniedReason: jobLock ?? assessmentDeniedReason,
+    mayInviteAIInterview: mayInviteAIInterview && !jobLock,
+    aiInterviewDeniedReason: jobLock ?? aiInterviewDeniedReason,
     invitePlanLocked,
     canDownloadScorecard,
+    jobLockReason: jobLock,
   };
 }
 
@@ -669,6 +677,7 @@ export default function ScoredResumesTable({
   onScoreResumes,
   onScoreResumesFromEmptyState,
   scoreResumesDisabled,
+  scoreResumesDisabledReason,
   onInviteAIInterview,
   enableInternalAIInterviewInvite = false,
   assessmentConfigured,
@@ -718,6 +727,7 @@ export default function ScoredResumesTable({
     aiInterviewDeniedReason,
     invitePlanLocked,
     canDownloadScorecard,
+    jobLockReason,
   } = useScoringActionPermissions(!!onInviteAIInterview || enableInternalAIInterviewInvite);
 
   // Only the cross-job global list needs this — a single-job host (JobDetailView,
@@ -766,7 +776,9 @@ export default function ScoredResumesTable({
   const canInviteAIInterview = mayInviteAIInterview && aiInterviewConfigured !== false;
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
   const inviteDisabledTitle =
-    canCreateAssessments || mayInviteAIInterview
+    jobLockReason
+      ? jobLockReason
+      : canCreateAssessments || mayInviteAIInterview
       ? 'No published assessment or AI interview for this job yet'
       : invitePlanLocked
         ? PLAN_LOCKED_MESSAGE
@@ -1815,7 +1827,9 @@ Best regards`);
       rowInviteDisabled: !rowCanInviteAssessment && !rowCanInviteAIInterview,
       // The trigger stays visible but inert, with a tooltip naming the
       // reason, rather than disappearing outright.
-      rowInviteDisabledTitle: !(canCreateAssessments || mayInviteAIInterview)
+      rowInviteDisabledTitle: jobLockReason
+        ? jobLockReason
+        : !(canCreateAssessments || mayInviteAIInterview)
         ? (invitePlanLocked ? PLAN_LOCKED_MESSAGE : 'You do not have permission to invite candidates')
         : 'No published assessment or AI interview for this job yet',
     };
@@ -2473,7 +2487,7 @@ Best regards`);
               size="sm"
               onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
               aria-disabled={!!scoreResumesDisabled}
-              title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+              title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
               className={`sm:h-9 whitespace-nowrap ${scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}`}
             >
@@ -2741,7 +2755,7 @@ Best regards`);
                   size="md"
                   onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
                   aria-disabled={!!scoreResumesDisabled}
-                  title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                  title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
                   icon={<ClipboardList className="w-4 h-4" />}
                   className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
                 >
@@ -3511,7 +3525,7 @@ Best regards`);
                 size="md"
                 onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
                 aria-disabled={!!scoreResumesDisabled}
-                title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
                 icon={<ClipboardList className="w-4 h-4" />}
                 className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
               >
@@ -3710,7 +3724,7 @@ Best regards`);
                 size="md"
                 onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
                 aria-disabled={!!scoreResumesDisabled}
-                title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
                 icon={<ClipboardList className="w-4 h-4" />}
                 className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
               >

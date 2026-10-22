@@ -8,6 +8,7 @@ import {
   Archive, ArchiveRestore, BarChart, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -365,6 +366,19 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   );
 
   const [rows, setRows] = useState<AssessmentRow[]>([]);
+  /* Each row's job version status (by JD id): Archive is off on an Archived /
+     Disabled job version — the Assessments page's rule. One batched read. */
+  const [jobVersionStatusById, setJobVersionStatusById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const missing = Array.from(new Set(rows.map((r) => r.jdId).filter((id) => id && !(id in jobVersionStatusById))));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    loadJobVersionStatuses(missing)
+      .then((statuses) => { if (!cancelled) setJobVersionStatusById((prev) => ({ ...prev, ...statuses })); })
+      .catch(() => { /* the click-time check still blocks */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -772,6 +786,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const archiveRow = async (row: AssessmentRow) => {
     // Locked menu item is greyed with a tooltip; this is only a backstop.
     if (!canDeleteAssessment) return;
+    const jobLock = await checkAssessmentJobLock(row.jdId);
+    if (jobLock) {
+      toast.error(jobLock);
+      return;
+    }
     if (!await confirmArchive({
       title: `${row.jobName || row.title || 'Untitled'} - Assessment`,
       version: row.assessmentVersion,
@@ -843,8 +862,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       case 'published': {
         const archive: RowAction = {
           key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
-          disabled: !canDeleteAssessment,
-          title: !canDeleteAssessment ? 'You do not have permission to archive assessments' : undefined,
+          disabled: !canDeleteAssessment || isJobVersionLocked(jobVersionStatusById[row.jdId]),
+          title: !canDeleteAssessment
+            ? 'You do not have permission to archive assessments'
+            : isJobVersionLocked(jobVersionStatusById[row.jdId]) ? ASSESSMENT_JOB_LOCK_MESSAGE : undefined,
           run: () => void archiveRow(row),
         };
         /* With the host's extras (the Active tab), the Total Jobs order:

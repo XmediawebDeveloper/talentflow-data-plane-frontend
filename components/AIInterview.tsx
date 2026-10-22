@@ -2393,7 +2393,9 @@ export default function AIInterview() {
                 );
               })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-              {(() => {
+              {/* No Archive on a Draft — the Assessments rule: an unpublished
+                  version has nothing to archive; it is deleted instead. */}
+              {normalizedStatus !== 'draft' && (() => {
                 const isArchived = normalizedStatus === 'archived';
                 const archiveBlocked = jdLocked
                   ? jdLockReason
