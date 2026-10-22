@@ -18,6 +18,7 @@ import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
 import { isValidEmailFormat } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ListPagination from '@/components/ListPagination';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
@@ -517,8 +518,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   /* Add: a complete entry row joins the candidate list; a fresh empty row
      takes its place when it was the last one. */
+  /* A typed name with anything but letters and spaces. Database rows are
+     exempt: their name comes read-only from the resume, so the recruiter
+     could not correct it here. */
+  const hasInvalidName = (c: CandidateEmail) =>
+    c.source !== 'database' && !!c.name.trim() && !isValidCandidateName(c.name);
   const canAddEntry = (c: CandidateEmail) =>
-    !!c.name.trim() && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
+    !!c.name.trim() && !hasInvalidName(c) && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
   const addEntry = (id: string) => {
     setCandidates((prev) => {
       const next = prev.map((c) => (c.id === id ? { ...c, added: true } : c));
@@ -767,6 +773,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       toast.error('Please fill in candidate name and email first');
       return;
     }
+    if (hasInvalidName(candidate)) {
+      toast.error(NAME_FORMAT_ERROR);
+      return;
+    }
     if (!isValidEmail(candidate.email)) {
       toast.error('Please enter a valid email address');
       return;
@@ -850,6 +860,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
       if (candidatesWithData.length === 0) {
         toast.warning('Please add at least one candidate with name and email');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate all names
+      const invalidNames = candidatesWithData.filter(hasInvalidName);
+      if (invalidNames.length > 0) {
+        toast.error(`Invalid name(s): ${invalidNames.map((c) => c.name.trim()).join(', ')}. ${NAME_FORMAT_ERROR}`);
         setIsSubmitting(false);
         return;
       }
@@ -1015,13 +1033,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   //     in the list" / invalid email), so the button now disables whenever any
   //     of those are visible instead of letting the recruiter click Send.
   const hasAtLeastOneValid = sendCandidates.some(
-    (c) => c.name.trim() && c.email.trim() && isValidEmail(c.email),
+    (c) => c.name.trim() && !hasInvalidName(c) && c.email.trim() && isValidEmail(c.email),
   );
   const hasBlockingRowError = sendCandidates.some((c) => {
     const inUse = c.name.trim() || c.email.trim();
     if (!inUse) return false; // fully-empty row is ignored, not an error
     return (
       !c.name.trim() ||
+      hasInvalidName(c) ||
       !c.email.trim() ||
       !isValidEmail(c.email) ||
       sendCandidates.some((o) => o.id !== c.id && o.email.trim().toLowerCase() === c.email.trim().toLowerCase())
@@ -1426,10 +1445,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full h-10 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40 focus:border-transparent ${
-                                candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
+                              aria-invalid={hasInvalidName(candidate) ? 'true' : undefined}
+                              className={`w-full h-10 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset ${
+                                candidate.source === 'database'
+                                  ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
+                                  : hasInvalidName(candidate)
+                                    ? 'border-destructive-line focus:ring-destructive-line'
+                                    : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                               }`}
                             />
+                            {hasInvalidName(candidate) && (
+                              <p className="text-xs text-destructive mt-1">{NAME_FORMAT_ERROR}</p>
+                            )}
                           </div>
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>

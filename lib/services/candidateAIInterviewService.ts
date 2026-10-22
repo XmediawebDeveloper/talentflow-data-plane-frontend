@@ -35,6 +35,8 @@ export interface CandidateInterviewInfo {
   jd_description?: string | null;
   jd_department?: string | null;
   jd_location?: string | null;
+  /** Every saved city with its state; `jd_location` is only the first city. */
+  jd_locations?: Array<{ city: string; state?: string | null }> | null;
   jd_employment_type?: string | null;
   jd_remote_type?: string | null;
   jd_must_have_skills?: string[] | null;

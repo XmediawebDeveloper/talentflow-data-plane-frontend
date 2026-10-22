@@ -8678,146 +8678,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* POSSIBLY MISSED. JD phrases that ended up in no list. Every other Step 2
-                  note hangs off an item that survived extraction; a requirement that did
-                  not survive had nothing to hang off, so it was the one loss the tree could
-                  never show - "server-side application development" simply was not there,
-                  and nothing said so. Shown first, because it is the only thing on this
-                  screen that reports something ABSENT rather than explaining something
-                  present. */}
-              {(() => {
-                // A phrase the recruiter has since ADDED is not missing any more - but
-                // the entry stays in the trail, so deleting that skill brings the flag
-                // back. Only "Dismiss" removes it for good.
-                const missed = (extractedData.mergeTrail || []).filter(
-                  e => e.source === 'possibly-missed'
-                    && !onScreenWordings.has(String(e.removed?.[0] || '').trim().toLowerCase()),
-                );
-                if (missed.length === 0) return null;
-                // One entry per JD line, holding every phrase that came from it.
-                const bySource = new Map<string, typeof missed>();
-                for (const e of missed) {
-                  const src = e.removed_sources?.[0] || '';
-                  bySource.set(src, [...(bySource.get(src) || []), e]);
-                }
-                const groups = [...bySource.entries()];
-                const shownGroups = showAllMissed ? groups : groups.slice(0, MISSED_SOURCE_PREVIEW);
-                return (
-                  <div className="mb-6 rounded-lg border border-warning-line bg-warning-subtle/60 p-3 sm:p-4">
-                    <div className="flex items-start gap-2 mb-2">
-                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
-                          Possibly missed from the JD ({missed.length})
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-slate-400">
-                          These phrases appear in the JD&apos;s requirements but are not in any list below. Add the ones that matter for this role.
-                        </p>
-                      </div>
-                    </div>
-                    {/* GROUPED BY THE JD LINE THEY CAME FROM.
-                        One bullet can yield several phrases, and a flat list repeated
-                        that same quotation under every one of them - five identical
-                        "From the JD: Experience in Defect Management, including..." lines
-                        in a row, each followed by three text links. The quotation is the
-                        longest thing on the row and the only thing they had in common, so
-                        it is now said once per source and the phrases sit under it as
-                        chips. */}
-                    <div className="space-y-3 pl-6">
-                      {shownGroups.map(([source, items]) => (
-                        <div key={source || items[0].removed[0]}>
-                          {source && (
-                            <p className="text-2xs text-gray-500 dark:text-slate-500 italic mb-1 break-words">
-                              From the JD: &ldquo;{source}&rdquo;
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-1.5">
-                            {items.map((e) => {
-                              const phrase = e.removed[0];
-                              const suggestNice = e.list === 'nice_to_have_skills';
-                              const primary: MissedTarget = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
-                              return (
-                                <span
-                                  key={phrase}
-                                  className="inline-flex items-center gap-1.5 rounded-full border border-warning-line bg-white dark:bg-slate-900 pl-2.5 pr-1 py-1"
-                                >
-                                  <span className="text-sm text-gray-800 dark:text-slate-200">
-                                    {sentenceCaseForList(phrase, 'must_have_skills')}
-                                  </span>
-                                  {!isRegenerating && (
-                                    <>
-                                      {/* ONE menu, all four lists. Two buttons could only
-                                          reach the two skills lists, and these phrases are
-                                          as often requirement sentences as skill names -
-                                          "Team Player: Ability to work collaboratively
-                                          within a team environment" belongs in Additional
-                                          Requirements, and there was no way to put it
-                                          there without retyping it. */}
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <button
-                                            type="button"
-                                            aria-label={`Add "${phrase}" to a list`}
-                                            title="Choose where this belongs"
-                                            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-2xs font-medium text-brand-blue hover:bg-brand-blue/10"
-                                          >
-                                            <Plus className="w-3 h-3" />
-                                            Add
-                                            <ChevronDown className="w-3 h-3" />
-                                          </button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="start" className="w-64">
-                                          {MISSED_TARGETS.map(t => (
-                                            <DropdownMenuItem
-                                              key={t.category}
-                                              onClick={() => handleResolvePossiblyMissed(phrase, t.category)}
-                                              className="text-xs"
-                                            >
-                                              <span className={MENU_ITEM_SCALE_CLASS}>{t.label}</span>
-                                              {/* The JD said where it read this - under a
-                                                  "preferred" heading or not - so the
-                                                  likely list is marked rather than
-                                                  chosen for the recruiter. */}
-                                              {t.category === primary && (
-                                                <span className="ml-auto pl-2 text-2xs text-gray-400">suggested</span>
-                                              )}
-                                            </DropdownMenuItem>
-                                          ))}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResolvePossiblyMissed(phrase, null)}
-                                        aria-label="Dismiss"
-                                        title="Not needed for this role"
-                                        className="rounded-full p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </>
-                                  )}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {groups.length > MISSED_SOURCE_PREVIEW && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllMissed(v => !v)}
-                        className="ml-6 mt-2 text-2xs font-medium text-brand-blue hover:underline"
-                      >
-                        {showAllMissed
-                          ? 'Show fewer'
-                          : `Show all ${groups.length} JD lines`}
-                      </button>
-                    )}
-                  </div>
-                );
-              })()}
-
               {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Column 1: Must-Have Skills */}
@@ -9168,6 +9028,146 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 </div>
               </div>
+
+              {/* POSSIBLY MISSED. JD phrases that ended up in no list. Every other Step 2
+                  note hangs off an item that survived extraction; a requirement that did
+                  not survive had nothing to hang off, so it was the one loss the tree could
+                  never show - "server-side application development" simply was not there,
+                  and nothing said so. Sits directly under the four lists (MHS, NHS, MHAR,
+                  NHAR) - its Add menu files a phrase into one of them, so it reads as
+                  their follow-up. */}
+              {(() => {
+                // A phrase the recruiter has since ADDED is not missing any more - but
+                // the entry stays in the trail, so deleting that skill brings the flag
+                // back. Only "Dismiss" removes it for good.
+                const missed = (extractedData.mergeTrail || []).filter(
+                  e => e.source === 'possibly-missed'
+                    && !onScreenWordings.has(String(e.removed?.[0] || '').trim().toLowerCase()),
+                );
+                if (missed.length === 0) return null;
+                // One entry per JD line, holding every phrase that came from it.
+                const bySource = new Map<string, typeof missed>();
+                for (const e of missed) {
+                  const src = e.removed_sources?.[0] || '';
+                  bySource.set(src, [...(bySource.get(src) || []), e]);
+                }
+                const groups = [...bySource.entries()];
+                const shownGroups = showAllMissed ? groups : groups.slice(0, MISSED_SOURCE_PREVIEW);
+                return (
+                  <div className="mb-6 rounded-lg border border-warning-line bg-warning-subtle/60 p-3 sm:p-4">
+                    <div className="flex items-start gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                          Possibly missed from the JD ({missed.length})
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400">
+                          These phrases appear in the JD&apos;s requirements but are not in any list above. Add the ones that matter for this role.
+                        </p>
+                      </div>
+                    </div>
+                    {/* GROUPED BY THE JD LINE THEY CAME FROM.
+                        One bullet can yield several phrases, and a flat list repeated
+                        that same quotation under every one of them - five identical
+                        "From the JD: Experience in Defect Management, including..." lines
+                        in a row, each followed by three text links. The quotation is the
+                        longest thing on the row and the only thing they had in common, so
+                        it is now said once per source and the phrases sit under it as
+                        chips. */}
+                    <div className="space-y-3 pl-6">
+                      {shownGroups.map(([source, items]) => (
+                        <div key={source || items[0].removed[0]}>
+                          {source && (
+                            <p className="text-2xs text-gray-500 dark:text-slate-500 italic mb-1 break-words">
+                              From the JD: &ldquo;{source}&rdquo;
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {items.map((e) => {
+                              const phrase = e.removed[0];
+                              const suggestNice = e.list === 'nice_to_have_skills';
+                              const primary: MissedTarget = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
+                              return (
+                                <span
+                                  key={phrase}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-warning-line bg-white dark:bg-slate-900 pl-2.5 pr-1 py-1"
+                                >
+                                  <span className="text-sm text-gray-800 dark:text-slate-200">
+                                    {sentenceCaseForList(phrase, 'must_have_skills')}
+                                  </span>
+                                  {!isRegenerating && (
+                                    <>
+                                      {/* ONE menu, all four lists. Two buttons could only
+                                          reach the two skills lists, and these phrases are
+                                          as often requirement sentences as skill names -
+                                          "Team Player: Ability to work collaboratively
+                                          within a team environment" belongs in Additional
+                                          Requirements, and there was no way to put it
+                                          there without retyping it. */}
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button
+                                            type="button"
+                                            aria-label={`Add "${phrase}" to a list`}
+                                            title="Choose where this belongs"
+                                            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-2xs font-medium text-brand-blue hover:bg-brand-blue/10"
+                                          >
+                                            <Plus className="w-3 h-3" />
+                                            Add
+                                            <ChevronDown className="w-3 h-3" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-64">
+                                          {MISSED_TARGETS.map(t => (
+                                            <DropdownMenuItem
+                                              key={t.category}
+                                              onClick={() => handleResolvePossiblyMissed(phrase, t.category)}
+                                              className="text-xs"
+                                            >
+                                              <span className={MENU_ITEM_SCALE_CLASS}>{t.label}</span>
+                                              {/* The JD said where it read this - under a
+                                                  "preferred" heading or not - so the
+                                                  likely list is marked rather than
+                                                  chosen for the recruiter. */}
+                                              {t.category === primary && (
+                                                <span className="ml-auto pl-2 text-2xs text-gray-400">suggested</span>
+                                              )}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResolvePossiblyMissed(phrase, null)}
+                                        aria-label="Dismiss"
+                                        title="Not needed for this role"
+                                        className="rounded-full p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {groups.length > MISSED_SOURCE_PREVIEW && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllMissed(v => !v)}
+                        className="ml-6 mt-2 text-2xs font-medium text-brand-blue hover:underline"
+                      >
+                        {showAllMissed
+                          ? 'Show fewer'
+                          : `Show all ${groups.length} JD lines`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
             </div>
 

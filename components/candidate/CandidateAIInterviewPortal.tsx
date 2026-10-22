@@ -3976,6 +3976,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           jdDescription={interview.jd_description}
           jdDepartment={interview.jd_department}
           jdLocation={interview.jd_location}
+          jdLocations={interview.jd_locations}
           jdIndustryType={interview.jd_industry_type}
           jdEmploymentType={interview.jd_employment_type}
           jdRemoteType={interview.jd_remote_type}
