@@ -8,8 +8,6 @@ import {
   UserCheck,
   Plus,
   BarChart3,
-  ChevronLeft,
-  ChevronRight,
   TrendingUp,
   History,
 } from 'lucide-react';
@@ -44,10 +42,12 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import FadeIn from '@/components/ui/fade-in';
+import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
 import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
-// 12 fills whole rows in both the 2- and 3-column grid.
-const ITEMS_PER_PAGE = 12;
+// Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
+const TEAM_PAGE_SIZES = [6, 12, 24, 48];
 
 type TeamSort = 'name' | 'newest' | 'members' | 'jobs' | 'resumes';
 const TEAM_SORTS: { value: TeamSort; label: string }[] = [
@@ -97,7 +97,7 @@ export default function TeamManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeamLead, setFilterTeamLead] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [teamsGoToPage, setTeamsGoToPage] = useState('1');
+  const [itemsPerPage, setItemsPerPage] = useState(12);
   // Drill-in pattern: 'cards' shows only the 3 stat tiles; clicking one expands
   // into a focused list view. Each card maps to its own listView so the panel
   // reflects what was clicked. Mirrors /recruitment/job-openings and
@@ -123,7 +123,7 @@ export default function TeamManagementPage() {
   // mount, so a restored page would be immediately clobbered.
   useListStatePersistence(
     'org-team-management',
-    { activeTab, pageView, listView, searchQuery, filterTeamLead, sortBy, displayMode },
+    { activeTab, pageView, listView, searchQuery, filterTeamLead, sortBy, displayMode, itemsPerPage },
     (s) => {
       if (s.activeTab === 'teams' || s.activeTab === 'usage' || s.activeTab === 'analytics' || s.activeTab === 'history') {
         setActiveTab(s.activeTab as typeof activeTab);
@@ -137,6 +137,7 @@ export default function TeamManagementPage() {
       if (typeof s.filterTeamLead === 'string') setFilterTeamLead(s.filterTeamLead);
       if (TEAM_SORTS.some((o) => o.value === s.sortBy)) setSortBy(s.sortBy as TeamSort);
       if (s.displayMode === 'grid' || s.displayMode === 'list') setDisplayMode(s.displayMode);
+      if (typeof s.itemsPerPage === 'number' && TEAM_PAGE_SIZES.includes(s.itemsPerPage)) setItemsPerPage(s.itemsPerPage);
     },
   );
 
@@ -221,24 +222,27 @@ export default function TeamManagementPage() {
     [teams],
   );
 
-  const totalPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
   const paginatedTeams = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTeams.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredTeams, currentPage]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredTeams.slice(start, start + itemsPerPage);
+  }, [filteredTeams, currentPage, itemsPerPage]);
 
-  useEffect(() => {
-    setTeamsGoToPage(String(currentPage));
-  }, [currentPage]);
+  const teamsPagination = (attached: boolean) => (
+    <ListPagination
+      attached={attached}
+      currentPage={currentPage}
+      itemsPerPage={itemsPerPage}
+      totalItems={filteredTeams.length}
+      onPageChange={setCurrentPage}
+      onItemsPerPageChange={(size) => {
+        setItemsPerPage(size);
+        setCurrentPage(1);
+      }}
+      pageSizeOptions={TEAM_PAGE_SIZES}
+      itemLabel="teams"
+    />
+  );
 
-  const commitTeamsGoToPage = () => {
-    const page = Math.round(Number(teamsGoToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    } else {
-      setTeamsGoToPage(String(currentPage));
-    }
-  };
 
   // Team Members view: flatten members across all teams, tag each with their team.
   // Search filters by member name/email or the team they belong to.
@@ -249,7 +253,6 @@ export default function TeamManagementPage() {
         memberId: m.id,
         name: m.name,
         email: m.email,
-        initials: m.initials,
         avatar_url: m.avatar_url,
         role: m.role,
         teamId: team.id,
@@ -618,6 +621,8 @@ export default function TeamManagementPage() {
                 {teams.length > 0 && (
                   <ListToolbar
                     className="mb-4"
+                    // rounded-lg (8px) +10%
+                    searchInputClassName="rounded-[8.8px]"
                     searchValue={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
@@ -674,17 +679,22 @@ export default function TeamManagementPage() {
                     </div>
                   ) : displayMode === 'list' ? (
                     <FadeIn key={`list-${currentPage}`} duration={0.35} distance={8}>
-                      <TeamListTable teams={paginatedTeams} {...teamActionProps} />
+                      {/* Pagination is the table card's footer, as on the Users page. */}
+                      <TeamListTable teams={paginatedTeams} {...teamActionProps} footer={teamsPagination(true)} />
                     </FadeIn>
                   ) : (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      {paginatedTeams.map((team, index) => (
-                        // Short stagger on first paint / page change; capped so a full page settles fast.
-                        <FadeIn key={team.id} delay={Math.min(index, 8) * 0.04} duration={0.4} distance={10} className="h-full">
-                          <TeamCard team={team} {...teamActionProps} />
-                        </FadeIn>
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {paginatedTeams.map((team, index) => (
+                          // Short stagger on first paint / page change; capped so a full page settles fast.
+                          <FadeIn key={team.id} delay={Math.min(index, 8) * 0.04} duration={0.4} distance={10} className="h-full">
+                            <TeamCard team={team} {...teamActionProps} />
+                          </FadeIn>
+                        ))}
+                      </div>
+                      {/* No table card to attach to in the grid — standalone bar. */}
+                      {teamsPagination(false)}
+                    </>
                   )
                 )}
 
@@ -704,10 +714,10 @@ export default function TeamManagementPage() {
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                             <tr className="text-left">
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Member</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Team</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Lead</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Member</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Team</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Role</th>
+                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 text-right">Lead</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -715,9 +725,7 @@ export default function TeamManagementPage() {
                               <tr key={row.id} className="transition-colors hover:bg-brand-blue/[0.04]">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-sm font-semibold text-brand-blue">
-                                      {row.initials || row.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-                                    </span>
+                                    <NameAvatar name={row.name} fallback={row.email} size="md" />
                                     <div className="min-w-0">
                                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
                                       <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
@@ -750,53 +758,6 @@ export default function TeamManagementPage() {
                   </section>
                 )}
 
-                {listView !== 'members' && totalPages > 1 && (
-                  <div className="mt-8 flex flex-col gap-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-gray-600 dark:text-slate-400">
-                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
-                    </p>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={teamsGoToPage}
-                          onChange={(e) => setTeamsGoToPage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                              commitTeamsGoToPage();
-                            }
-                          }}
-                          onBlur={commitTeamsGoToPage}
-                          aria-label="Go to page"
-                          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                        />
-                      </div>
-                      <button
-                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                        disabled={currentPage === 1}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Previous page" title="Previous page"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                        <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                        disabled={currentPage === totalPages}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Next page" title="Next page"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
                 </>
                 )}
               </>

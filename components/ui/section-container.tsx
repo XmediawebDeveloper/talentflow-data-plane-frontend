@@ -73,7 +73,7 @@ export function SectionHeading({
   return (
     <div className={cn('flex items-start justify-between gap-3 mb-3', className)}>
       <div className="min-w-0">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
           {title}
         </h2>
         {description && (

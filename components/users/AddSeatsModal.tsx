@@ -289,7 +289,7 @@ export default function AddSeatsModal({
       subtitle="Add seats to your team capacity"
       bodyClassName="bg-white dark:bg-slate-900"
       footerStart={
-        <span className="flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-500">
+        <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
           <ShieldCheck className="w-3 h-3 text-brand-cyan" />
           Secured by Razorpay · 256-bit SSL encryption
         </span>
@@ -402,7 +402,7 @@ export default function AddSeatsModal({
                           <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-bold text-gray-900 dark:text-slate-50 text-base sm:text-lg leading-tight truncate">
+                          <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-base leading-tight truncate">
                             {addonDisplayName}
                           </h3>
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
@@ -410,7 +410,7 @@ export default function AddSeatsModal({
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs text-gray-500 dark:text-slate-500">Per pack</p>
-                        <p className="text-lg font-bold text-brand-blue">₹{pricePerPack}</p>
+                        <p className="text-xl font-bold text-brand-blue">₹{pricePerPack}</p>
                       </div>
                     </div>
                   </div>
@@ -420,7 +420,7 @@ export default function AddSeatsModal({
                 {pricing && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-semibold text-gray-800 dark:text-slate-100">Select Quantity</label>
+                      <label className="text-sm font-medium text-gray-800 dark:text-slate-100">Select Quantity</label>
                       <Badge variant="muted">Max {maxPacks} packs</Badge>
                     </div>
                     <div className="flex items-center gap-3">
@@ -453,7 +453,7 @@ export default function AddSeatsModal({
                         <span className="text-xs text-white/80">Total seats</span>
                         <div className="flex items-center gap-1.5">
                           <Users className="w-4 h-4 text-white/90" />
-                          <span className="font-bold text-lg">+{totalSeats}</span>
+                          <span className="font-bold text-xl">+{totalSeats}</span>
                         </div>
                       </div>
                     </div>
@@ -468,7 +468,7 @@ export default function AddSeatsModal({
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                           <Receipt className="w-4 h-4 text-white" />
                         </div>
-                        <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-sm">Order Summary</h4>
+                        <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-base">Order Summary</h4>
                       </div>
                       <Badge variant="secondary">{quantity} pack{quantity > 1 ? 's' : ''}</Badge>
                     </div>
@@ -495,7 +495,7 @@ export default function AddSeatsModal({
                           <p className="text-xs text-gray-500 dark:text-slate-500">Incl. all taxes</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl sm:text-3xl font-bold text-brand-blue">₹{total.toFixed(2)}</p>
+                          <p className="text-xl font-bold text-brand-blue">₹{total.toFixed(2)}</p>
                         </div>
                       </div>
                     </div>

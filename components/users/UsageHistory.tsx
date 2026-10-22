@@ -19,7 +19,6 @@ import {
   Users,
   TrendingDown,
   Download,
-  Filter,
   Search,
   RefreshCw,
   AlertTriangle,
@@ -64,6 +63,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageHeader } from '@/components/ui/page-header';
+import NameAvatar from '@/components/ui/name-avatar';
 import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
@@ -224,7 +224,7 @@ function Pagination({
       </p>
       <div className="flex items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+          <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
           <Input
             type="number"
             min={1}
@@ -357,7 +357,7 @@ function AnalyticsCards({
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
       {unitTypes.map((type) => {
         const sub = subscriptionUnits?.[type as keyof typeof subscriptionUnits] as import('@/lib/services/dashboardService').UnitAvailability | undefined;
@@ -374,26 +374,26 @@ function AnalyticsCards({
         const barColor = getBarColor(pct);
 
         return (
-          <div key={type} className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
-            <div className="flex items-start justify-between mb-4">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
-                <Icon className="w-5 h-5" />
+          <div key={type} className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
+                <Icon className="w-4 h-4" />
               </div>
-              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${ringByType[type]} ${cfg.bg} ${cfg.color}`}>{type}</span>
+              <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ${ringByType[type]} ${cfg.bg} ${cfg.color}`}>{type}</span>
             </div>
-            <h3 className="text-sm font-medium text-gray-500 mb-1">{cfg.label}</h3>
-            <div className="grid grid-cols-3 gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">{cfg.label}</h3>
+            <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Purchased</p>
-                <p className="text-lg font-bold text-gray-900 truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
+                <p className="truncate text-2xs text-gray-400">Purchased</p>
+                <p className="text-base font-semibold tabular-nums text-gray-900 truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Consumed</p>
-                <p className="text-lg font-bold text-gray-700 truncate">{consumed?.toLocaleString() ?? '—'}</p>
+                <p className="truncate text-2xs text-gray-400">Consumed</p>
+                <p className="text-base font-semibold tabular-nums text-gray-700 truncate">{consumed?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Remaining</p>
-                <p className={`text-lg font-bold truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className="truncate text-2xs text-gray-400">Remaining</p>
+                <p className={`text-base font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {isUnlimited ? '∞' : (remaining?.toLocaleString() ?? '—')}
                 </p>
               </div>
@@ -417,28 +417,28 @@ function AnalyticsCards({
         const pct = ru ? (ru.is_unlimited ? 0 : Math.min(100, Math.round(ru.percentage_used))) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
-                <FileText className="w-5 h-5" />
+          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
+                <FileText className="w-4 h-4" />
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
+              <span className="text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
             </div>
-            <h3 className="text-sm font-medium text-gray-500 mb-1">Resume Storage</h3>
-            <div className="grid grid-cols-3 gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">Resume Storage</h3>
+            <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Limit</p>
-                <p className="text-lg font-bold text-gray-900 truncate">
+                <p className="truncate text-2xs text-gray-400">Limit</p>
+                <p className="text-base font-semibold tabular-nums text-gray-900 truncate">
                   {ru ? (ru.is_unlimited ? '∞' : ru.limit.toLocaleString()) : '—'}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Used</p>
-                <p className="text-lg font-bold text-gray-700 truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
+                <p className="truncate text-2xs text-gray-400">Used</p>
+                <p className="text-base font-semibold tabular-nums text-gray-700 truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className="truncate text-2xs text-gray-400">Available</p>
+                <p className={`text-base font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {ru ? (ru.is_unlimited ? '∞' : ru.available.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -464,28 +464,28 @@ function AnalyticsCards({
         const pct = userLimits && !isUnlimited ? Math.min(100, Math.round(userLimits.usage_percentage)) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue-2 to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                <Users className="w-5 h-5" />
+          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue-2 to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                <Users className="w-4 h-4" />
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ring-gray-200 bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300">MAX</span>
+              <span className="text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ring-gray-200 bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300">MAX</span>
             </div>
-            <h3 className="text-sm font-medium text-gray-500 mb-1">User Seats</h3>
-            <div className="grid grid-cols-3 gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">User Seats</h3>
+            <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Max Users</p>
-                <p className="text-lg font-bold text-gray-900 truncate">
+                <p className="truncate text-2xs text-gray-400">Max Users</p>
+                <p className="text-base font-semibold tabular-nums text-gray-900 truncate">
                   {userLimits ? (isUnlimited ? '∞' : userLimits.max_users.toLocaleString()) : '—'}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Active</p>
-                <p className="text-lg font-bold text-gray-700 truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
+                <p className="truncate text-2xs text-gray-400">Active</p>
+                <p className="text-base font-semibold tabular-nums text-gray-700 truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className="truncate text-2xs text-gray-400">Available</p>
+                <p className={`text-base font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {userLimits ? (isUnlimited ? '∞' : userLimits.available_slots.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -546,13 +546,13 @@ function FeatureWiseTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Feature</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">User</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Entity</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Units</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Status</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Balance After</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Date & Time</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Feature</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">User</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Entity</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Units</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Status</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Balance After</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Date & Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -567,13 +567,13 @@ function FeatureWiseTab({
                       <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-800 text-xs leading-tight">{entry.user_name || '—'}</p>
+                      <p className="font-medium text-gray-800 text-sm leading-tight">{entry.user_name || '—'}</p>
                       <p className="text-gray-400 text-xs">{entry.user_email || '—'}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="text-gray-700 text-xs font-medium">{entry.entity_name || '—'}</p>
+                  <p className="text-gray-700 text-sm font-medium">{entry.entity_name || '—'}</p>
                   {entry.entity_type && <p className="text-gray-400 text-xs capitalize">{entry.entity_type.replace(/_/g, ' ')}</p>}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -586,7 +586,7 @@ function FeatureWiseTab({
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className="text-gray-600 text-xs font-medium">{entry.balance_after?.toLocaleString() ?? '—'}</span>
+                  <span className="text-gray-600 text-sm font-medium">{entry.balance_after?.toLocaleString() ?? '—'}</span>
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-gray-700 text-xs">{formatISTDate(entry.created_at)}</p>
@@ -712,12 +712,12 @@ function UserWiseTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">#</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">User</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">#</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">User</th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 return (
-                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">
+                  <th key={column.key} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
                     <span className="inline-flex items-center gap-1">
                       <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
                       {column.label}
@@ -725,9 +725,9 @@ function UserWiseTab({
                   </th>
                 );
               })}
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
-              <th className="text-center px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Success / Failed</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Total</th>
+              <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Success / Failed</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -736,11 +736,9 @@ function UserWiseTab({
                 <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                      <span className="text-xs font-bold">{u.userName.charAt(0).toUpperCase()}</span>
-                    </div>
+                    <NameAvatar name={u.userName} fallback={u.userEmail} size="sm" />
                     <div>
-                      <p className="font-medium text-gray-800 text-xs">{u.userName}</p>
+                      <p className="font-medium text-gray-800 text-sm">{u.userName}</p>
                       <p className="text-gray-400 text-xs">{u.userEmail}</p>
                     </div>
                   </div>
@@ -820,12 +818,12 @@ function TeamWiseTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">#</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Team</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">#</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Team</th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 return (
-                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">
+                  <th key={column.key} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
                     <span className="inline-flex items-center gap-1">
                       <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
                       {column.label}
@@ -833,8 +831,8 @@ function TeamWiseTab({
                   </th>
                 );
               })}
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">JDs Created</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Assessments</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">JDs Created</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Assessments</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -865,7 +863,7 @@ function TeamWiseTab({
                           <Users className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800 text-xs">{team.team_name || 'Unnamed Team'}</p>
+                          <p className="font-medium text-gray-800 text-sm">{team.team_name || 'Unnamed Team'}</p>
                           <p className="text-gray-400 text-xs">{totalConsumed.toLocaleString()} units total</p>
                         </div>
                       </div>
@@ -896,18 +894,18 @@ function TeamWiseTab({
           <tfoot>
             <tr className="border-t-2 border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50">
               <td className="px-4 py-3" colSpan={2}>
-                <span className="text-xs font-semibold text-gray-700">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
+                <span className="text-sm font-semibold text-gray-700">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-brand-blue">
+              <td className="px-4 py-3 text-right text-sm font-bold text-brand-blue">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.RS?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-brand-cyan">
+              <td className="px-4 py-3 text-right text-sm font-bold text-brand-cyan">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.AS?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-success">
+              <td className="px-4 py-3 text-right text-sm font-bold text-success">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.AIU?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-brand-orange-deep">
+              <td className="px-4 py-3 text-right text-sm font-bold text-brand-orange-deep">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.RU?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
               <td colSpan={2} />
@@ -1001,7 +999,7 @@ function InlineTeamMembersUsage({
             <Users className="w-4 h-4" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">{teamName} Users</p>
+            <p className="text-base font-semibold text-gray-900">{teamName} Users</p>
             <p className="text-xs text-gray-500">Usage details for team members</p>
           </div>
         </div>
@@ -1011,13 +1009,13 @@ function InlineTeamMembersUsage({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">User</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Resume Scoring</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Assessment</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">AI Interview</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Resume Storage</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Total</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">User</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Resume Scoring</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Assessment</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">AI Interview</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Resume Storage</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Total</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1031,11 +1029,9 @@ function InlineTeamMembersUsage({
                 <tr key={member.user_id} className="hover:bg-brand-blue/[0.03] transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex-shrink-0">
-                        <span className="text-xs font-bold">{(member.user_name || 'U').charAt(0).toUpperCase()}</span>
-                      </div>
+                      <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
                       <div>
-                        <p className="font-medium text-gray-800 text-xs">{member.user_name || 'Unknown User'}</p>
+                        <p className="font-medium text-gray-800 text-sm">{member.user_name || 'Unknown User'}</p>
                         <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>
                       </div>
                     </div>
@@ -1117,14 +1113,14 @@ function RefundsTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Type</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Feature</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Units</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Before</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">After</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Actor</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Reason</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wider">Date</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Type</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Feature</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Units</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Before</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">After</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Actor</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Reason</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1144,14 +1140,14 @@ function RefundsTab({
                       {isPositive ? '+' : '-'}{Math.abs(entry.units_amount).toLocaleString()}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-500 text-xs">{entry.balance_before.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-gray-700 text-xs font-medium">{entry.balance_after.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-gray-500 text-sm">{entry.balance_before.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-gray-700 text-sm font-medium">{entry.balance_after.toLocaleString()}</td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-700 text-xs">{entry.actor_name || entry.actor_email || '—'}</p>
+                    <p className="text-gray-700 text-sm">{entry.actor_name || entry.actor_email || '—'}</p>
                     <p className="text-gray-400 text-xs capitalize">{entry.actor_type?.toLowerCase()}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-600 text-xs max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
+                    <p className="text-gray-600 text-sm max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
                     {entry.notes && <p className="text-gray-400 text-xs truncate max-w-[200px]" title={entry.notes}>{entry.notes}</p>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatISTDate(entry.created_at)}</td>
@@ -1278,8 +1274,8 @@ export default function UsageHistory() {
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Shield className="w-8 h-8 text-brand-blue" />
         </div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-2">Access Restricted</h2>
-        <p className="text-gray-500 max-w-sm">Usage History is only accessible to Tenant Admins.</p>
+        <h2 className="text-base font-semibold text-gray-900 mb-2">Access Restricted</h2>
+        <p className="text-sm text-gray-500 max-w-sm">Usage History is only accessible to Tenant Admins.</p>
       </div>
     );
   }
@@ -1458,9 +1454,9 @@ export default function UsageHistory() {
     }
   };
 
-  const TABS: { id: TabId; label: string; icon: LucideIcon; count?: number }[] = [
+  const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
     { id: 'user', label: 'User-Wise', icon: User },
-    { id: 'team', label: 'Team-Wise', icon: Users, count: teamsData?.teams?.length || undefined },
+    { id: 'team', label: 'Team-Wise', icon: Users },
   ];
 
   return (
@@ -1505,126 +1501,120 @@ export default function UsageHistory() {
         userLimits={userLimits}
       />
 
-      {/* ── Filters ── */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-            <Filter className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="text-sm font-semibold text-gray-900">Filters</span>
-            <p className="text-xs text-gray-500">Refine your usage data view</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
-          {/* Quick Period */}
-          <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-            <label className="text-xs font-medium text-gray-600">Period</label>
-            <select
-              value={quickPeriod}
-              onChange={(e) => {
-                const val = e.target.value;
-                setQuickPeriod(val);
-                if (!val) {
-                  setStartDateInput('');
-                  setEndDateInput('');
-                  return;
-                }
-                const now = new Date();
-                const end = formatDateForInput(now);
-                let start = '';
-                if (val === 'last_week') {
-                  const d = new Date(now); d.setDate(d.getDate() - 7); start = formatDateForInput(d);
-                } else if (val === 'last_month') {
-                  const d = new Date(now); d.setMonth(d.getMonth() - 1); start = formatDateForInput(d);
-                } else if (val === 'last_quarter') {
-                  const d = new Date(now); d.setMonth(d.getMonth() - 3); start = formatDateForInput(d);
-                } else if (val === 'last_year') {
-                  const d = new Date(now); d.setFullYear(d.getFullYear() - 1); start = formatDateForInput(d);
-                }
-                setStartDateInput(start);
-                setEndDateInput(end);
-              }}
-              className="w-full lg:w-auto text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
-            >
-              <option value="">All Time</option>
-              <option value="last_week">Last Week</option>
-              <option value="last_month">Last Month</option>
-              <option value="last_quarter">Last Quarter</option>
-              <option value="last_year">Last Year</option>
-            </select>
-          </div>
-
-          {/* Date Range */}
-          <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-            <label className="text-xs font-medium text-gray-600">From</label>
-            <DateField
-              aria-label="From date"
-              value={startDateInput}
-              max={endDateInput || defaultEndDate}
-              onChange={(v) => { setStartDateInput(v); setQuickPeriod(''); }}
-              className="w-full lg:w-[150px]"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-            <label className="text-xs font-medium text-gray-600">To</label>
-            <DateField
-              aria-label="To date"
-              value={endDateInput}
-              min={startDateInput || undefined}
-              max={defaultEndDate}
-              onChange={(v) => { setEndDateInput(v); setQuickPeriod(''); }}
-              className="w-full lg:w-[150px]"
-            />
-          </div>
-
-          {/* Status */}
-          {(activeTab === 'feature') && (
-            <div className="flex flex-col gap-1.5 w-full lg:w-auto">
-              <label className="text-xs font-medium text-gray-600">Status</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full lg:w-auto text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
-              >
-                <option value="all">All Statuses</option>
-                <option value="SUCCESS">Success</option>
-                <option value="FAILED">Failed</option>
-                <option value="INSUFFICIENT_UNITS">Insufficient Units</option>
-                <option value="ABANDONED">Abandoned</option>
-                <option value="INTERRUPTED">Interrupted</option>
-              </select>
-            </div>
-          )}
-
-        </div>
-      </div>
-
-      {/* ── Tabs + Table ── */}
+      {/* ── Filters + view toggle + table: one card ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Tab bar */}
-        <div className="border-b border-gray-200 px-4 bg-gradient-to-b from-slate-50/50 to-white">
-          <div className="flex gap-1 overflow-x-auto">
+        {/* Toolbar: filters left, User-Wise / Team-Wise toggle right */}
+        <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+            {/* Quick Period */}
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+              Period
+              <select
+                value={quickPeriod}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setQuickPeriod(val);
+                  if (!val) {
+                    setStartDateInput('');
+                    setEndDateInput('');
+                    return;
+                  }
+                  const now = new Date();
+                  const end = formatDateForInput(now);
+                  let start = '';
+                  if (val === 'last_week') {
+                    const d = new Date(now); d.setDate(d.getDate() - 7); start = formatDateForInput(d);
+                  } else if (val === 'last_month') {
+                    const d = new Date(now); d.setMonth(d.getMonth() - 1); start = formatDateForInput(d);
+                  } else if (val === 'last_quarter') {
+                    const d = new Date(now); d.setMonth(d.getMonth() - 3); start = formatDateForInput(d);
+                  } else if (val === 'last_year') {
+                    const d = new Date(now); d.setFullYear(d.getFullYear() - 1); start = formatDateForInput(d);
+                  }
+                  setStartDateInput(start);
+                  setEndDateInput(end);
+                }}
+                className="h-9 flex-1 sm:flex-none text-sm font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+              >
+                <option value="">All Time</option>
+                <option value="last_week">Last Week</option>
+                <option value="last_month">Last Month</option>
+                <option value="last_quarter">Last Quarter</option>
+                <option value="last_year">Last Year</option>
+              </select>
+            </label>
+
+            {/* Date Range */}
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+              <span>From</span>
+              <DateField
+                aria-label="From date"
+                value={startDateInput}
+                max={endDateInput || defaultEndDate}
+                onChange={(v) => { setStartDateInput(v); setQuickPeriod(''); }}
+                className="flex-1 sm:flex-none sm:w-[150px]"
+              />
+              <span>To</span>
+              <DateField
+                aria-label="To date"
+                value={endDateInput}
+                min={startDateInput || undefined}
+                max={defaultEndDate}
+                onChange={(v) => { setEndDateInput(v); setQuickPeriod(''); }}
+                className="flex-1 sm:flex-none sm:w-[150px]"
+              />
+            </div>
+
+            {/* Status */}
+            {(activeTab === 'feature') && (
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                Status
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="h-9 flex-1 sm:flex-none text-sm font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="SUCCESS">Success</option>
+                  <option value="FAILED">Failed</option>
+                  <option value="INSUFFICIENT_UNITS">Insufficient Units</option>
+                  <option value="ABANDONED">Abandoned</option>
+                  <option value="INTERRUPTED">Interrupted</option>
+                </select>
+              </label>
+            )}
+          </div>
+
+          {/* View toggle — the sliding white tile from Resume Scoring's "View by"
+              toggle: equal halves on one track, the tile slides under the
+              active one. */}
+          <div
+            role="radiogroup"
+            aria-label="Usage view"
+            className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 self-start lg:self-auto shrink-0"
+          >
+            <span
+              aria-hidden
+              className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-white dark:bg-slate-800 shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
+                activeTab === TABS[1].id ? 'translate-x-full' : 'translate-x-0'
+              }`}
+            />
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${
-                    isActive
-                      ? 'border-brand-blue text-brand-blue'
-                      : 'border-transparent text-gray-500 hover:text-brand-blue hover:border-brand-blue/30'
+                  className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+                    isActive ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
                   {tab.label}
-                  {tab.count !== undefined && tab.count > 0 && (
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ring-1 ${isActive ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-gray-100 text-gray-500 ring-gray-200'}`}>
-                      {tab.count}
-                    </span>
-                  )}
                 </button>
               );
             })}

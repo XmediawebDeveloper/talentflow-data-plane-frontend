@@ -50,6 +50,7 @@ import { JobOpeningPrimaryItems } from '@/components/jobs/JobOpeningSummary';
 import type { Job as SharedJob } from '@/lib/types/types';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
+import NameAvatar from '@/components/ui/name-avatar';
 import ListPagination from './ListPagination';
 import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
@@ -5445,9 +5446,7 @@ export default function AITalentMatchPage({
                         selectionActive={selectedAllResumeKeys.size > 0}
                       />
                       <div className="flex items-start gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
-                          {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                        </div>
+                        <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
                           <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || '—'}</p>
@@ -5590,9 +5589,7 @@ export default function AITalentMatchPage({
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium">
-                                {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </div>
+                              <NameAvatar name={row.name} fallback={row.email} size="md" />
                               <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                                 {row.name || 'Unknown'}
                               </span>
@@ -8449,9 +8446,7 @@ export default function AITalentMatchPage({
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-sm text-brand-blue font-medium flex-shrink-0">
-                          {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                        </div>
+                        <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                         <div>
                           <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name || 'Unknown'}</div>
                         </div>
@@ -8650,9 +8645,7 @@ export default function AITalentMatchPage({
                         aria-label={`Select ${candidate.name || 'candidate'}`}
                         className="mt-3 rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
                       />
-                      <div className="w-11 h-11 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-sm text-brand-blue font-semibold flex-shrink-0">
-                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
+                      <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                       <div className="min-w-0 flex-1 pt-0.5">
                         <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={candidate.name || 'Unknown'}>
                           {candidate.name || 'Unknown'}
@@ -8792,9 +8785,7 @@ export default function AITalentMatchPage({
                         onClick={(e) => e.stopPropagation()}
                         className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
                       />
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-xs text-brand-blue font-medium flex-shrink-0">
-                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                      </div>
+                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
                         <div className="text-xs text-gray-500 dark:text-slate-500 truncate">

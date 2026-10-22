@@ -34,6 +34,7 @@ import {
   EditInvitationModal,
 } from '@/components/AssessmentInviteActions';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import NameAvatar from '@/components/ui/name-avatar';
 
 /* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
    still unopened) and Edit (name + email, revoked-only, then Save & Send) when
@@ -498,20 +499,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               {/* Mobile Card View */}
               <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
                 {visibleInvitations.map((invitation: any) => {
-                  const initials = invitation.candidate_name
-                    ?.split(' ')
-                    .map((n: string) => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2) || '??';
-
                   return (
                     <div key={invitation.id} className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-2.5">
                       {/* Candidate row */}
                       <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                        <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-2xs flex-shrink-0">
-                          {initials}
-                        </div>
+                        <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="xs" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">{invitation.candidate_name}</p>
                           <p className="text-2xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
@@ -629,13 +621,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                     {visibleInvitations.map((invitation: any) => {
-                      const initials = invitation.candidate_name
-                        ?.split(' ')
-                        .map((n: string) => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .slice(0, 2) || '??';
-
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
@@ -645,9 +630,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           </td>
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-2 lg:gap-3">
-                              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs lg:text-sm flex-shrink-0">
-                                {initials}
-                              </div>
+                              <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                               {/* Capped rather than free: with auto layout a single
                                   long email would otherwise set the column width. */}
                               <div className="min-w-0 max-w-[220px]">

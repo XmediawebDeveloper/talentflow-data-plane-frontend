@@ -133,6 +133,7 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
+import NameAvatar from '@/components/ui/name-avatar';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 
 
@@ -7276,13 +7277,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                             {pageItems.map((result) => {
-                              /* The Invitation Status avatar's initials. */
-                              const initials = result.candidate_name
-                                ?.split(' ')
-                                .map((n: string) => n[0])
-                                .join('')
-                                .toUpperCase()
-                                .slice(0, 2) || '??';
                               return (
                                 <tr
                                   key={`${result._assessment_id}-${result.invitation_id}`}
@@ -7292,9 +7286,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 >
                                   <td className="px-3 sm:px-4 py-3 align-middle">
                                     <div className="flex items-center gap-3">
-                                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
-                                        {initials}
-                                      </div>
+                                      <NameAvatar name={result.candidate_name} fallback={result.candidate_email} size="md" />
                                       <p className="min-w-0 max-w-[240px] font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={result.candidate_name || 'Unknown'}>
                                         {result.candidate_name || 'Unknown'}
                                       </p>
@@ -8103,12 +8095,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </td>
                                 </tr>
                               ) : pageItems.map((inv: any) => {
-                                const initials = inv.candidate_name
-                                  ?.split(' ')
-                                  .map((n: string) => n[0])
-                                  .join('')
-                                  .toUpperCase()
-                                  .slice(0, 2) || '??';
                                 return (
                                   <tr key={inv.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-800">
                                     {showInviteSelection && (
@@ -8128,9 +8114,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     )}
                                     <td className="px-3 sm:px-4 py-3 align-middle">
                                       <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
-                                          {initials}
-                                        </div>
+                                        <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                                         {/* Invited / Expired name the email on the
                                             name's own line ("Name — email"), so it
                                             is not repeated on a second one; every
@@ -10036,12 +10020,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                       {trackingInvitations.map((invitation: any) => {
-                            const initials = invitation.candidate_name
-                              ?.split(' ')
-                              .map((n: string) => n[0])
-                              .join('')
-                              .toUpperCase()
-                              .slice(0, 2) || '??';
   
                         /* Only Completed / Auto Completed rows are interactive —
                            other statuses have no Result Details to open, so the
@@ -10094,9 +10072,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </td>
                             <td className="px-3 sm:px-4 py-3 align-top">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
-                                  {initials}
-                                </div>
+                                <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                                 {/* Capped rather than free: under auto layout a
                                     single long email would otherwise set the
                                     column width for the whole table. */}

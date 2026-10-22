@@ -3,7 +3,9 @@
  * Handles chat API calls and WebSocket connections
  */
 
-import api from './api';
+import api, { getTokens } from './api';
+
+export type ChatConnectionStatus = 'connecting' | 'open' | 'closed';
 
 // Types
 export interface ChannelMember {
@@ -99,7 +101,7 @@ class ChatService {
   private messageHandlers: ((data: any) => void)[] = [];
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private statusHandlers: ((status: ChatConnectionStatus) => void)[] = [];
   private currentChannelId: string | null = null;
   private currentToken: string | null = null;
 
@@ -372,7 +374,11 @@ class ChatService {
     }
 
     if (this.ws) {
-      this.ws.close();
+      // Detach first: the old socket's onclose must not schedule a reconnect
+      // that would overwrite the new one (and leak a second live socket).
+      this.ws.onclose = null;
+      this.ws.onmessage = null;
+      this.ws.close(1000, 'Switching channel');
       this.ws = null;
     }
 
@@ -383,7 +389,15 @@ class ChatService {
     this._connect(channelId, token);
   }
 
-  private _connect(channelId: string, token: string): void {
+  private setStatus(status: ChatConnectionStatus): void {
+    this.statusHandlers.forEach((handler) => handler(status));
+  }
+
+  private _connect(channelId: string, initialToken: string): void {
+    // Always use the CURRENT access token — it is refreshed in the background,
+    // and reconnecting with the one captured at first connect gets rejected
+    // once it expires.
+    const token = getTokens().accessToken || initialToken;
     // Auto-detect WebSocket protocol based on page protocol
     const getWsBaseUrl = () => {
       if (process.env.NEXT_PUBLIC_WS_URL) {
@@ -398,14 +412,18 @@ class ChatService {
     };
 
     const wsUrl = `${getWsBaseUrl()}/api/v1/chat/ws/${channelId}?token=${token}`;
-    this.ws = new WebSocket(wsUrl);
+    const socket = new WebSocket(wsUrl);
+    this.ws = socket;
+    this.setStatus('connecting');
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (this.ws !== socket) return;
       console.log('[ChatService] WebSocket connected to channel', channelId);
       this.reconnectAttempts = 0;
+      this.setStatus('open');
     };
 
-    this.ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         this.messageHandlers.forEach(handler => handler(data));
@@ -414,21 +432,38 @@ class ChatService {
       }
     };
 
-    this.ws.onclose = (event) => {
+    socket.onclose = (event) => {
+      // A socket we already replaced — ignore it.
+      if (this.ws !== socket) return;
       console.log('[ChatService] WebSocket disconnected', event.code);
-      // Auto-reconnect if not intentionally closed (code 1000) and still on same channel
-      if (event.code !== 1000 && this.currentChannelId === channelId && this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.ws = null;
+      this.setStatus('closed');
+      // Keep reconnecting while this channel is still open in the UI — idle
+      // connections get dropped by proxies, and giving up after a few tries
+      // left the chat silently stale until a page refresh. Backoff caps at 30s.
+      if (event.code !== 1000 && this.currentChannelId === channelId) {
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
-        console.log(`[ChatService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+        console.log(`[ChatService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1})`);
         this.reconnectTimer = setTimeout(() => {
           this.reconnectAttempts++;
-          this._connect(channelId, token);
+          this._connect(channelId, initialToken);
         }, delay);
       }
     };
 
-    this.ws.onerror = (error) => {
+    socket.onerror = (error) => {
       console.error('[ChatService] WebSocket error:', error);
+    };
+  }
+
+  /**
+   * Register a handler for connection status changes ('connecting' | 'open' |
+   * 'closed'). Lets the page catch up on anything missed while disconnected.
+   */
+  onStatus(handler: (status: ChatConnectionStatus) => void): () => void {
+    this.statusHandlers.push(handler);
+    return () => {
+      this.statusHandlers = this.statusHandlers.filter(h => h !== handler);
     };
   }
 
@@ -443,8 +478,11 @@ class ChatService {
       this.reconnectTimer = null;
     }
     if (this.ws) {
-      this.ws.close(1000, 'Client disconnect');
+      const socket = this.ws;
       this.ws = null;
+      socket.onclose = null;
+      socket.onmessage = null;
+      socket.close(1000, 'Client disconnect');
     }
   }
 

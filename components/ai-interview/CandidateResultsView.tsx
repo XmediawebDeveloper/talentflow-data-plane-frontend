@@ -24,6 +24,7 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
+import NameAvatar from '@/components/ui/name-avatar';
 import { tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
@@ -2075,10 +2076,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     sm+: absolute, 144px wide, inset 10px from the banner's
                     left / top / bottom border with all four corners rounded —
                     the banner's height still comes from its content. */}
-                <div className="w-16 h-16 rounded-xl ring-1 ring-brand-blue/15 sm:absolute sm:top-2.5 sm:bottom-2.5 sm:left-2.5 sm:w-36 sm:h-auto sm:rounded-lg shadow-sm overflow-hidden bg-brand-blue/10 flex items-center justify-center shrink-0">
+                <div className={`w-16 h-16 rounded-xl ring-1 ring-brand-blue/15 sm:absolute sm:top-2.5 sm:bottom-2.5 sm:left-2.5 sm:w-36 sm:h-auto sm:rounded-lg shadow-sm overflow-hidden flex items-center justify-center shrink-0 ${
+                  // No photo: a plain slot, so the tinted NameAvatar isn't a tint-on-tint badge.
+                  identityPhotoUrl ? 'bg-brand-blue/10' : 'bg-white dark:bg-slate-900'
+                }`}>
                   {identityPhotoUrl
                     ? <img src={identityPhotoUrl} alt={interview.candidate_name || 'Candidate'} className="w-full h-full object-cover object-top" />
-                    : <span className="text-2xl sm:text-3xl font-bold text-brand-blue">{(interview.candidate_name || 'U')[0].toUpperCase()}</span>}
+                    : <NameAvatar name={interview.candidate_name} fallback={interview.candidate_email} size="xl" />}
                 </div>
                 <div className="min-w-0">
                 <div className="mb-2">
@@ -4265,9 +4269,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-brand-cyan ring-1 ring-white/20 shadow-sm shadow-brand-cyan/15 flex items-center justify-center text-white font-semibold text-2xs">
-                            {candidateName[0].toUpperCase()}
-                          </div>
+                          <NameAvatar name={candidateName} size="sm" />
                           <span className="text-xs text-gray-500">{candidateName}</span>
                         </div>
                       </div>
@@ -4328,11 +4330,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               key={idx}
                               className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-brand-teal/30' : 'border-brand-cyan/30'}` : ''}`}
                             >
-                              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm ${
-                                isAssistant ? 'bg-brand-blue text-white shadow-brand-blue/20' : 'bg-brand-cyan text-white shadow-brand-cyan/15'
-                              }`}>
-                                {isAssistant ? 'B' : candidateName[0].toUpperCase()}
-                              </div>
+                              {isAssistant ? (
+                                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm bg-brand-blue text-white shadow-brand-blue/20">
+                                  B
+                                </div>
+                              ) : (
+                                <NameAvatar name={candidateName} size="sm" className="mt-0.5" />
+                              )}
 
                               <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
                                 {(label || language) && (
