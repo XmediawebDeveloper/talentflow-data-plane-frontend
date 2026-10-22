@@ -87,7 +87,7 @@ function LoadingSteps({ steps }: { steps: string[] }) {
   }, [active, steps.length]);
 
   return (
-    <ol className="mt-8 flex items-start justify-center" aria-label="Progress">
+    <ol className="mt-8 flex items-start justify-center max-w-full overflow-x-auto" aria-label="Progress">
       {steps.map((label, i) => {
         const done = i < active;
         const current = i === active;

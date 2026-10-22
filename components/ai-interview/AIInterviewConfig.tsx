@@ -3238,8 +3238,10 @@ export default function AIInterviewConfig() {
                   setPendingNavigation('/recruitment/ai-interviews/jd-selection');
                   setShowUnsavedDialog(true);
                 }}
-                className="text-sm text-gray-600 hover:text-brand-blue px-3 py-1.5 rounded-lg hover:bg-brand-blue/5 transition-colors whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-1.5 text-sm text-brand-blue border border-brand-blue/40 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg hover:bg-brand-blue/10 hover:border-brand-blue transition-colors whitespace-nowrap"
+                title="Pick a different job description"
               >
+                <ArrowRightLeft className="w-4 h-4" />
                 Change JD
               </button>
               )}
@@ -3440,7 +3442,7 @@ export default function AIInterviewConfig() {
             {/* ── NTH ── */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100">
-                <div className="flex flex-1 items-start gap-2.5 min-w-[12rem]">
+                <div className="flex flex-1 items-start gap-2.5 min-w-0 sm:min-w-[12rem]">
                   <span className="flex items-center h-10 flex-shrink-0">
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" checked={nth.enabled} onChange={() => {
@@ -3835,12 +3837,12 @@ export default function AIInterviewConfig() {
                   {/* One dropdown rather than a row of chips: the interview runs
                       in a single language, and a chip that could not be removed
                       read as a status rather than as the setting it is. */}
-                  <div className="relative inline-block">
+                  <div className="relative inline-block max-w-full">
                     <select
                       value={availableLanguages[0] ?? CANDIDATE_LANGUAGES[0]}
                       onChange={e => setAvailableLanguages([e.target.value])}
                       aria-label="Interview language"
-                      className="appearance-none text-sm font-medium pl-3 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue min-w-[180px]"
+                      className="appearance-none max-w-full text-sm font-medium pl-3 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue min-w-0 sm:min-w-[180px]"
                     >
                       {CANDIDATE_LANGUAGES.map(lang => (
                         <option key={lang} value={lang}>{lang}</option>

@@ -190,7 +190,7 @@ export function QuestionDistributionPopover({
   // The row's section label, in its own fixed-width "Section" column so every
   // label starts at the same x on every row (it used to trail the chips,
   // landing wherever the content ended).
-  const SECTION_COL = 'w-[150px]';
+  const SECTION_COL = 'w-[96px] sm:w-[150px]';
   const rowSection = (key: 'mth' | 'nth' | 'hr') => (
     <td className={`align-top px-2 py-1.5 ${SECTION_COL}`}>
       <span className="inline-flex items-center whitespace-nowrap">
@@ -200,7 +200,7 @@ export function QuestionDistributionPopover({
   );
 
   const qCell = (n: number, tone: string) => (
-    <td className="align-top px-2 py-1.5 w-[40px]">
+    <td className="align-top px-2 py-1.5 w-[32px] sm:w-[40px]">
       <span className={`text-2xs font-mono font-semibold ${tone}`}>Q{n}</span>
     </td>
   );
@@ -286,7 +286,7 @@ export function QuestionDistributionPopover({
               scroll box would give a second scrollbar and a head that sticks
               to the wrong box. */}
           <div className="sticky top-0 z-10 bg-white">
-            <div className="grid grid-cols-[40px_1fr_150px] bg-gray-50 border border-gray-100 rounded-t-md">
+            <div className="grid grid-cols-[32px_1fr_96px] sm:grid-cols-[40px_1fr_150px] bg-gray-50 border border-gray-100 rounded-t-md">
               <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Q#</span>
               <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Skills/Questions</span>
               <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Section</span>

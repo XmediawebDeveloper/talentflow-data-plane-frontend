@@ -217,7 +217,7 @@ export function ProctoringWarningModal() {
   if (warnings.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 max-w-md w-full pointer-events-none">
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 max-w-md w-[calc(100%-2rem)] pointer-events-none">
       {warnings.map((warning) => (
         <div key={warning.id} className="pointer-events-auto">
           <WarningCard

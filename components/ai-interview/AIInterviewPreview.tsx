@@ -1297,7 +1297,7 @@ export default function AIInterviewPreview() {
 
       {/* ── Introduction video ── */}
       <Dialog open={showVideoPreview} onOpenChange={setShowVideoPreview}>
-        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl p-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-2 bg-gray-50 border-b border-gray-100">
             <DialogTitle className="text-sm font-semibold tracking-tight">Introduction Video</DialogTitle>
             <DialogDescription className="text-xs text-gray-500">

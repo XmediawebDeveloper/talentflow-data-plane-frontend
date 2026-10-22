@@ -1328,24 +1328,39 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     </>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Actions + Clear — their own full-width row BELOW the Select All
+                button (not inline beside it), matching the Resume Scoring toolbar.
+                `basis-full order-last` drops this group onto its own line at the
+                bottom of the wrap-row. */}
+            {sortedJobs.length > 0 && selectedJobs.size > 0 && (
+              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
 
                 {/* Actions Dropdown — shown whenever at least one job is selected. */}
                 {selectedJobs.size > 0 && (
                   <div className="relative" ref={bulkActionsRef}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="rounded-full"
+                      aria-label={`Actions for ${selectedJobs.size} selected`}
+                      className={`relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm animate-in fade-in zoom-in-95 duration-300 ${showBulkActions ? 'bg-gray-200' : ''}`}
                     >
-                      Actions
+                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                      </span>
+                      Actions ({selectedJobs.size})
                       <ChevronDown className="w-4 h-4" />
-                    </Button>
+                    </button>
 
                     {showBulkActions && (
-                      // Right-aligned + width clamped to the viewport so the menu
-                      // never runs off the right edge on narrow/mobile screens.
-                      <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      // Left-aligned: Actions now sits at the left of its own
+                      // row, so the menu opens rightward (left-0) and width is
+                      // clamped to the viewport, keeping it on-screen on every
+                      // size instead of running off the left edge.
+                      <div className="absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                         {showDisableAction && renderBulkStatusItem({
                           label: 'Disable Selected',
                           icon: Ban,
@@ -1428,6 +1443,20 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* Clear — a standalone button beside Actions, matching the
+                    Resume Scoring selection toolbar. */}
+                {selectedJobs.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    title="Clear the selection"
+                    className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear
+                  </button>
                 )}
               </div>
             )}

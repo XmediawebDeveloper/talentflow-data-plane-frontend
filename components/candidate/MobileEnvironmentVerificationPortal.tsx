@@ -914,9 +914,9 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     && !['loading', 'expired', 'error', 'permission_denied', 'instructions', 'requesting_permission', 'ready_to_submit', 'uploading', 'done'].includes(phase);
 
   return (
-    <div className={`min-h-[100dvh] bg-[var(--raw-0f1929)] text-white flex flex-col items-center justify-center p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20' : ''}`}>
+    <div className={`min-h-[100dvh] bg-[var(--raw-0f1929)] text-white flex flex-col items-center justify-center p-4 sm:p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20' : ''}`}>
       {showLinkTimer && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[var(--raw-0f1929)]/95 backdrop-blur px-6 py-3 shadow-lg shadow-black/30">
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[var(--raw-0f1929)]/95 backdrop-blur px-4 py-3 max-w-[calc(100vw-1rem)] shadow-lg shadow-black/30">
           <span className="font-mono font-bold text-3xl tracking-wider text-amber-400 tabular-nums">
             {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
             {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')}
@@ -1053,7 +1053,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             autoPlay
             muted
             playsInline
-            className="w-full landscape:w-auto landscape:h-[88dvh] aspect-video rounded-xl bg-black object-cover"
+            className="w-full max-w-full landscape:w-auto landscape:h-[88dvh] aspect-video rounded-xl bg-black object-cover"
           />
           {phase === 'aligning' && !canRecord && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">

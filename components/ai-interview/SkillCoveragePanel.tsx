@@ -153,7 +153,7 @@ export default function SkillCoveragePanel({
                           {isActiveSkill && (
                             <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
                           )}
-                          <span className="text-gray-300 truncate max-w-[120px]">{item.skill}</span>
+                          <span className="text-gray-300 truncate min-w-0">{item.skill}</span>
                           {showFollowUp && (
                             <span className="shrink-0 text-2xs px-1 py-px rounded bg-amber-900/70 text-amber-400 font-semibold border border-amber-700/50">
                               Follow-up

@@ -158,13 +158,13 @@ export default function StepJDReview({
       {/* Main Card */}
       <div className="w-full">
         {/* Gradient Header with Job Title */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-xl px-6 py-5 text-white">
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-t-xl px-4 sm:px-6 py-5 text-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
               <Briefcase className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold">{displayTitle}</h2>
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold break-words">{displayTitle}</h2>
               {(jdExperienceLevel || jdDepartment) && (
                 <p className="text-white/80 text-sm mt-0.5">
                   {jdExperienceLevel && <><Award className="w-3.5 h-3.5 inline mr-1" />{formatLabel(jdExperienceLevel)}</>}
