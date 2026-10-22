@@ -64,8 +64,9 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   const [teamsUsage, setTeamsUsage] = useState<AllTeamsUsageSummary | null>(null);
   // Drill-in: 'cards' shows only the 7 summary tiles; clicking one expands the
   // charts + tables below. activeCard highlights which tile was clicked.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  const [activeCard, setActiveCard] = useState<string | null>(null);
+  // Opens with the first card (Resume Scoring) already drilled in.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
+  const [activeCard, setActiveCard] = useState<string | null>('RS');
   const openList = (card: string) => { setActiveCard(card); setPageView('list'); };
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
