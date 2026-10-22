@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, ClipboardList, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, ClipboardList, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, Video, X } from 'lucide-react';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -2179,19 +2179,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     (the toolbar has no separate buttons for them in Job
                     Details) plus the selection-bound Download PDF Reports. */}
                 {selectedRows.length > 0 && (
+                <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                   <div className="relative">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="rounded-full sm:h-9"
+                        <button
+                          type="button"
+                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                           aria-label={`Actions for ${selectedRows.length} selected`}
                         >
+                          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                          </span>
                           {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                          Actions
+                          Actions ({selectedRows.length})
                           <ChevronDown className="w-4 h-4" />
-                        </Button>
+                        </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
@@ -2274,6 +2278,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRows([])}
+                    title="Clear the selection"
+                    className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear
+                  </button>
+                </div>
                 )}
               </>
             ) : undefined}
@@ -2406,18 +2420,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               />
               {/* AS-26: Bulk PDF download — once a row is ticked. */}
               {selectedRows.length > 0 && (
+              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="rounded-full whitespace-nowrap"
+                    <button
+                      type="button"
+                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                       aria-label={`Actions for ${selectedRows.length} selected`}
                     >
+                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                      </span>
                       {downloadingBulkPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                      Actions
+                      Actions ({selectedRows.length})
                       <ChevronDown className="w-4 h-4" />
-                    </Button>
+                    </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
@@ -2440,6 +2458,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRows([])}
+                  title="Clear the selection"
+                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
+              </div>
               )}
               {/* Status pills — as the Job Openings page's All Jobs /
                   Published / Draft … Same state the dropdown drove. */}

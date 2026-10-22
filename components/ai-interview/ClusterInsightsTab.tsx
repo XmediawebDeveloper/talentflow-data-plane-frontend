@@ -169,7 +169,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
 
   return (
     <div className="overflow-x-auto tf-table-shell">
-      <table className="w-full text-xs">
+      <table className="w-full min-w-[640px] text-xs">
         <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-2xs">
           <tr>
             <th className="px-3 py-2 text-left font-semibold w-14">Q #</th>
@@ -318,8 +318,8 @@ export default function ClusterInsightsTab({
       {/* ── Capability Score headline (no progress bar) ── */}
       {capabilityScore != null && capabilityScore > 0 && (
         <div className="bg-gray-900 text-white rounded-xl px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
               <div className="text-sm font-medium text-gray-300">Overall Capability Score</div>
               <div className="text-xs text-gray-500 mt-0.5">
                 Weighted across all sections

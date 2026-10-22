@@ -29,7 +29,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
-  Play, Video, MoreVertical, ClipboardList,
+  Play, Video, MoreVertical, ClipboardList, X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -976,7 +976,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   repeated the title underneath is gone. */}
               <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold text-gray-900 tracking-tight">
                 {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
-                <span>{jdTitle || configTitle || 'AI Interview'}</span>
+                <span className="min-w-0 break-words">{jdTitle || configTitle || 'AI Interview'}</span>
                 {/* One version's results: the table has no version columns, so
                     the title names the version — "App development - V1
                     Interview Version - V1", the Track popup's header. */}
@@ -1082,16 +1082,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               {selected.size > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="rounded-full sm:h-9"
+                    <button
+                      type="button"
+                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                       aria-label={`Actions for ${selected.size} selected`}
                     >
+                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                      </span>
                       {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                      Actions
+                      Actions ({selected.size})
                       <ChevronDown className="w-4 h-4" />
-                    </Button>
+                    </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1189,6 +1192,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     })()}
                   </DropdownMenuContent>
                 </DropdownMenu>
+              )}
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Map())}
+                  title="Clear the selection"
+                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
               )}
             </>
           ) : undefined}
@@ -1346,7 +1360,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               </div>
             </div>
             {!portaled && (
-              <div className="flex-[1.4] min-w-0 basis-[320px]">
+              <div className="flex-[1.4] min-w-0 basis-full sm:basis-[320px]">
                 <label className={filterLabelClass}>Completion Date</label>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <DateField
@@ -1535,18 +1549,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               onClear={() => setSelected(new Map())}
             />
             {selected.size > 0 && (
+              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="rounded-full whitespace-nowrap"
+                  <button
+                    type="button"
+                    className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                     aria-label={`Actions for ${selected.size} selected`}
                   >
+                    <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                      <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                    </span>
                     {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Actions
+                    Actions ({selected.size})
                     <ChevronDown className="w-4 h-4" />
-                  </Button>
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                   <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1586,6 +1604,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Map())}
+                  title="Clear the selection"
+                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
+              </div>
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
@@ -2134,7 +2162,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates
               </span>
-              <div className="flex items-center justify-center sm:justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                   <input

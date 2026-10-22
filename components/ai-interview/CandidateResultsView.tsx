@@ -1749,7 +1749,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         Please wait while the AI analyzes responses and verifies the results.
         The page will refresh automatically when ready.
       </p>
-      <div className="mt-6 flex items-start justify-center">
+      <div className="mt-6 flex items-start justify-center max-w-full overflow-x-auto">
         {EVAL_STAGES.map((label, i) => {
           const done = i < evalStage;
           const current = i === evalStage;
@@ -3210,14 +3210,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   const pct = Math.min(100, Math.max(0, (s.score / 10) * 100));
                                   return (
                                     <div key={i} className="bg-slate-50 rounded-lg p-3">
-                                      <div className="flex items-center justify-between mb-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-sm font-medium text-gray-900">{s.skill}</span>
+                                      <div className="flex flex-wrap items-center justify-between gap-y-1 mb-1.5">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-sm font-medium text-gray-900 truncate">{s.skill}</span>
                                           {s.priority > 0 && (
-                                            <span className="text-2xs text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200">P{s.priority}</span>
+                                            <span className="text-2xs text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200 flex-shrink-0">P{s.priority}</span>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-4 text-xs">
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                                           <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{formatScore1(s.score)}</span></div>
                                           <div><span className="text-gray-500">Weight</span> <span className="font-semibold text-gray-900">{w}</span></div>
                                           <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{formatScore1(contribution)}</span></div>
@@ -3237,7 +3237,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {skillsForQ.length > 0 && !isSkipped && totalW > 0 && (
                             <div className="bg-brand-blue/5 ring-1 ring-dashed ring-brand-blue/30 rounded-lg p-3">
                               <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
-                              <div className="font-mono text-xs text-gray-700 space-y-0.5">
+                              <div className="font-mono text-xs text-gray-700 space-y-0.5 break-words">
                                 <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
                                 <div>= ({skillsForQ.map(s => `${formatScore1(s.score)}×${priorityWeight(s.priority)}`).join(' + ')}) / {totalW} = {formatScore1(finalScore)}</div>
                               </div>
@@ -3495,8 +3495,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     return (
                       <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <ShieldAlert className="w-4 h-4 text-brand-blue" />
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
                             <button
                               type="button"
@@ -4147,8 +4147,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 return (
                   <div className="w-full">
                     {/* Header with view toggle */}
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
                             B

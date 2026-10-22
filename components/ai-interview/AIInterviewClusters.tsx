@@ -609,7 +609,7 @@ function ClusterRow({
                         Skills ({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})
                       </div>
                       {commandCount > 0 && (
-                        <div className="flex items-center gap-2 text-2xs text-gray-400">
+                        <div className="flex flex-wrap items-center gap-2 text-2xs text-gray-400 min-w-0">
                           <span className="flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
                           </span>

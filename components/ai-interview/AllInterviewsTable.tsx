@@ -1083,7 +1083,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                       )}
                     </td>
 
-                    <td className="px-3 py-2.5 align-middle max-w-[16rem]">
+                    <td className="px-3 py-2.5 align-middle max-w-[10rem] sm:max-w-[16rem]">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className="block truncate font-medium text-gray-900 dark:text-slate-50"

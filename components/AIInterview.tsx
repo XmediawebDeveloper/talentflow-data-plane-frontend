@@ -2225,7 +2225,7 @@ export default function AIInterview() {
             <div
               ref={versionMenuRef}
               data-tf-popover
-              className="fixed w-52 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700/60 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
+              className="fixed w-52 max-w-[calc(100vw-16px)] bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700/60 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
               style={{
                 top: menuDropUp ? undefined : menuAnchor.bottom + 4,
                 bottom: menuDropUp ? Math.max(8, window.innerHeight - menuAnchor.top + 4) : undefined,
@@ -2679,7 +2679,7 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
