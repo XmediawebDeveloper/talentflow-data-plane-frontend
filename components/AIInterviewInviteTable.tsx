@@ -15,6 +15,7 @@ import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
+import NameAvatar from '@/components/ui/name-avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -184,14 +185,6 @@ export const ResultBadge = ({ result }: { result: 'Pass' | 'Fail' | null }) =>
       {result}
     </span>
   ) : null;
-
-const initialsOf = (name: string | null | undefined): string =>
-  (name || '?')
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 
 const copyInterviewLink = async (inv: any) => {
   const link = `${window.location.origin}/ai-interview/${inv.interview_token}`;
@@ -849,9 +842,7 @@ export default function AIInterviewInviteTable({
             >
               <div className="flex items-center gap-2 min-w-0 mb-1.5">
                 <SelectBox inv={inv} />
-                <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xs font-medium text-brand-blue">{initialsOf(inv.candidate_name)}</span>
-                </div>
+                <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">
                     {inv.candidate_name || 'Unknown'}
@@ -1100,9 +1091,7 @@ export default function AIInterviewInviteTable({
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
-                        {initialsOf(inv.candidate_name)}
-                      </div>
+                      <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                       {/* Capped rather than free: with auto layout a single long
                           email would otherwise set the column width. */}
                       <div className="min-w-0 max-w-[220px]">

@@ -235,6 +235,7 @@ import CandidateActivityCard from '@/components/resumes/CandidateActivityCard';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
+import NameAvatar from '@/components/ui/name-avatar';
 import {
   INTERNAL_DB_PERMISSIONS,
   MY_RESUMES_PERMISSIONS,
@@ -1472,13 +1473,6 @@ Best regards`);
             const email = asText(resume.email);
             const phone = asText(resume.phone);
 
-            const initials = name
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase() ?? '')
-              .join('') || '?';
-
             const facts = [
               { icon: MapPin, text: asText(resume.location) },
               { icon: Briefcase, text: asText(resume.experience) },
@@ -1495,9 +1489,7 @@ Best regards`);
               <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-5 sm:p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
                 {/* Identity row */}
                 <div className="flex items-start gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-brand-blue text-white flex items-center justify-center text-lg font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
-                    {initials}
-                  </div>
+                  <NameAvatar name={asText(resume.name)} fallback={email} size="xl" />
 
                   <div className="min-w-0 flex-1">
                     {/* Below sm the Source / View chips drop under the name so the

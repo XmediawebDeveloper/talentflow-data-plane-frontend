@@ -430,14 +430,14 @@ export default function FeaturePermissionManager({
                               >
                                 <div className="flex-1 pr-4">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium text-gray-900">
+                                    <span className="text-sm font-medium text-gray-900">
                                       {feature.name}
                                     </span>
                                     {feature.locked && (
                                       <Badge
                                         variant="warning"
                                         title={feature.lockedReason}
-                                        className="text-2xs"
+                                        className="text-xs"
                                       >
                                         <Lock className="w-3 h-3" /> Locked
                                       </Badge>
@@ -445,14 +445,14 @@ export default function FeaturePermissionManager({
                                     {feature.dependencies.length > 0 && (
                                       <Badge
                                         variant="secondary"
-                                        className="text-2xs"
+                                        className="text-xs"
                                         title={`Requires: ${feature.dependencies.join(', ')}`}
                                       >
                                         <Link2 className="w-3 h-3" /> {feature.dependencies.length}
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-sm text-gray-500 mt-0.5">
+                                  <p className="text-xs text-gray-500 mt-0.5">
                                     {feature.description}
                                   </p>
                                 </div>

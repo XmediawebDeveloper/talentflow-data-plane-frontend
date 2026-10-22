@@ -131,7 +131,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
               }`}>
                 <Users className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">
+              <span className="text-sm font-medium text-gray-800 truncate">
                 {limits.current_users}/{limits.max_users === -1 ? '∞' : limits.max_users} users
               </span>
             </div>
@@ -195,7 +195,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Seats</h3>
+              <h3 className="text-base font-semibold text-gray-900">User Seats</h3>
               {limits.is_at_limit ? (
                 <Badge variant="destructive">At limit</Badge>
               ) : limits.approaching_limit ? (
@@ -204,18 +204,18 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                 <Badge variant="success">Active</Badge>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               {limits.plan_name} Plan
             </p>
           </div>
         </div>
 
         <div className="text-right flex-shrink-0">
-          <div className="text-lg sm:text-2xl font-bold text-gray-900">
+          <div className="text-xl font-bold text-gray-900">
             {limits.current_users}
-            <span className="text-sm sm:text-lg text-gray-400">/{limits.max_users}</span>
+            <span className="text-sm text-gray-400">/{limits.max_users}</span>
           </div>
-          <p className="text-xs sm:text-sm text-gray-500">
+          <p className="text-xs text-gray-500">
             {limits.available_slots} available
           </p>
         </div>
@@ -223,7 +223,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
       {/* Progress bar */}
       <div className="mt-4">
-        <div className="flex items-center justify-between text-xs sm:text-sm mb-1.5">
+        <div className="flex items-center justify-between text-sm mb-1.5">
           <span className="text-gray-500">Usage</span>
           <span className={`font-semibold ${
             limits.is_at_limit ? 'text-destructive' : limits.approaching_limit ? 'text-brand-orange-deep' : 'text-brand-blue'
@@ -246,8 +246,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs sm:text-sm font-semibold text-destructive-strong">User limit reached</p>
-            <p className="text-2xs sm:text-sm text-destructive mt-0.5">
+            <p className="text-sm font-semibold text-destructive-strong">User limit reached</p>
+            <p className="text-sm text-destructive mt-0.5">
               {isTrial
                 ? 'Purchasing additional seats is only available for paid subscriptions. Please upgrade your plan.'
                 : 'You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.'}
@@ -290,8 +290,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <Info className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs sm:text-sm font-semibold text-brand-orange-deep">Approaching user limit</p>
-            <p className="text-2xs sm:text-sm text-gray-600 mt-0.5">
+            <p className="text-sm font-semibold text-brand-orange-deep">Approaching user limit</p>
+            <p className="text-sm text-gray-600 mt-0.5">
               Only {limits.available_slots} user slot{limits.available_slots !== 1 ? 's' : ''} remaining.
               Consider adding more seats or upgrading your plan.
             </p>

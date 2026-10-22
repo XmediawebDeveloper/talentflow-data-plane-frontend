@@ -54,6 +54,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
+import NameAvatar from '@/components/ui/name-avatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1015,9 +1016,7 @@ export default function AuditTrailPage() {
                             className={`w-full text-left px-4 py-2.5 flex items-center justify-between gap-3 transition-colors ${isActive ? 'bg-brand-blue/[0.06]' : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'}`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-lg bg-brand-blue text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
-                                {(u.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                              </div>
+                              <NameAvatar name={u.user_name} fallback={u.user_email} size="sm" />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{u.user_name || 'Unknown'}</p>
                                 {u.user_email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{u.user_email}</p>}
@@ -1211,9 +1210,7 @@ export default function AuditTrailPage() {
                   <div key={log.id} className="p-3 sm:p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-brand-blue text-white flex items-center justify-center text-2xs font-semibold flex-shrink-0">
-                          {(log.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                        </div>
+                        <NameAvatar name={log.user_name} fallback={log.user_email} size="sm" />
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate">{log.user_name || 'Unknown'}</p>
                           <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">{log.user_email || ''}</p>
@@ -1306,9 +1303,7 @@ export default function AuditTrailPage() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-brand-blue text-white flex items-center justify-center text-xs font-semibold shadow-md shadow-brand-blue/15 ring-1 ring-white/10">
-                              {(log.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                            </div>
+                            <NameAvatar name={log.user_name} fallback={log.user_email} size="md" />
                             <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{log.user_name || 'Unknown'}</p>
                           </div>
                         </td>
@@ -1485,9 +1480,7 @@ export default function AuditTrailPage() {
             <div className="p-3 sm:p-4 md:p-6 flex-1 min-h-0 overflow-y-auto space-y-3 sm:space-y-4 md:space-y-5">
               {/* User & Action Header */}
               <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 pb-3 sm:pb-4 md:pb-5 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl bg-brand-blue text-white flex items-center justify-center text-2xs sm:text-xs md:text-sm font-bold flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-                  {(selectedLog.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                </div>
+                <NameAvatar name={selectedLog.user_name} fallback={selectedLog.user_email} size="lg" />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-xs sm:text-sm md:text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
                   {selectedLog.actor_role && (

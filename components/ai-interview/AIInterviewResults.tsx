@@ -17,6 +17,7 @@ import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_L
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
+import NameAvatar from '@/components/ui/name-avatar';
 import { DateField } from '@/components/ui/date-field';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { tabPill } from '@/components/ui/filter-pills';
@@ -348,20 +349,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         // Same "fetch every config, bucket by jd_id, sort oldest first" the
         // All Interviews table and the interview details page's own
         // sibling lookup use — there is no list-by-jd_id endpoint.
-        const live: AIInterviewResponse[] = [];
-        let apiPage = 1;
-        for (;;) {
-          const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-          const items = batch.items || [];
-          live.push(...items);
-          const total = batch.total ?? live.length;
-          if (items.length < 100 || live.length >= total) break;
-          apiPage += 1;
-        }
-        const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-        const archived = archivedProbe.total > archivedProbe.items.length
-          ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-          : archivedProbe.items;
+        const { live, archived } = await aiInterviewService.listAllConfigsSplit();
         if (cancelled) return;
         const siblings = [...live, ...archived].filter((c) => c.jd_id === own.jd_id);
         const sorted = siblings.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
@@ -1669,9 +1657,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       selectionActive={selected.size > 0}
                     />
                     <div className="flex items-start gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
-                        {(session.candidate_name || 'U')[0].toUpperCase()}
-                      </div>
+                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}
@@ -1863,9 +1849,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               </div>
                             ) : (
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
-                                {(session.candidate_name || 'U')[0].toUpperCase()}
-                              </div>
+                              <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">

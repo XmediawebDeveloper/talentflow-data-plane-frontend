@@ -12,17 +12,7 @@ import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
    every config is fetched and bucketed, as AIInterviewResults' own lookup does. */
 async function loadJobScope(own: AIInterviewResponse): Promise<ResultsJobScopeEntry[]> {
   const lineageKey = (c: AIInterviewResponse) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
-  const live: AIInterviewResponse[] = [];
-  for (let apiPage = 1; ; apiPage += 1) {
-    const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-    const items = batch.items || [];
-    live.push(...items);
-    if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
-  }
-  const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-  const archived = archivedProbe.total > archivedProbe.items.length
-    ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-    : archivedProbe.items;
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
   const all = [...live, ...archived];
   const lineage = all.filter((c) => lineageKey(c) === lineageKey(own));
   if (!lineage.some((c) => c.id === own.id)) lineage.push(own);

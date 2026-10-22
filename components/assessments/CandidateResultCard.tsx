@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Calendar, Clock, Eye } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import NameAvatar from '@/components/ui/name-avatar';
 
 /* ── Candidate result card ─────────────────────────────────────────────────
    The Candidate Results tab's card (Assessments page, Card View), lifted out so
@@ -65,13 +66,6 @@ export default function CandidateResultCard({
   selection,
   actions,
 }: CandidateResultCardProps) {
-  const initials = name
-    ?.split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2) || '??';
-
   return (
     <div
       role="button"
@@ -102,9 +96,7 @@ export default function CandidateResultCard({
             className="w-4 h-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
           />
         )}
-        <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
-          {initials}
-        </div>
+        <NameAvatar name={name} fallback={email} size="md" />
         <div className="min-w-0 flex-1">
           <p className="font-medium text-sm text-gray-900 dark:text-slate-50 truncate" title={name || 'Unknown'}>
             {name || 'Unknown'}

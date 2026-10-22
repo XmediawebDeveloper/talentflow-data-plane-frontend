@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 export default function ResumeScoringJDSelection() {
   const router = useRouter();
@@ -33,10 +34,7 @@ export default function ResumeScoringJDSelection() {
       // the same pattern the Resume Scoring page uses for its job list. A
       // flat page_size of 50 silently dropped every JD past the 50th.
       const params = { status: 'published' as const };
-      const probe = await jdService.list({ ...params, page: 1, page_size: 1 });
-      const result = probe.total > (probe.items || []).length
-        ? await jdService.list({ ...params, page: 1, page_size: probe.total })
-        : probe;
+      const result = await fetchAllRows((page_size, page) => jdService.list({ ...params, page, page_size }));
       setJds(result.items || []);
     } catch (error) {
       console.error('Failed to load JDs:', error);

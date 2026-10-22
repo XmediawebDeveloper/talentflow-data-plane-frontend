@@ -23,6 +23,7 @@ import { jdService } from '@/lib/services';
 import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
@@ -84,9 +85,7 @@ export default function AIInterviewJDSelection() {
     const jdParams = { source: 'my-jds' as const };
     Promise.allSettled([
       aiInterviewService.getPublishedJDs(),
-      jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
-        probe.total > probe.items.length ? jdService.list({ ...jdParams, page_size: probe.total }) : probe,
-      ),
+      fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
     ]).then(([published, full]) => {
       if (cancelled) return;
       if (published.status === 'fulfilled') {

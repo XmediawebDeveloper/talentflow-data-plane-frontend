@@ -28,6 +28,7 @@ import { DateField } from '@/components/ui/date-field';
 import { Team } from '@/lib/services/teamService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
+import NameAvatar from '@/components/ui/name-avatar';
 
 interface TeamMemberUsageProps {
   team: Team;
@@ -147,8 +148,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     return (
       <div className="bg-warning-subtle border border-warning-line rounded-xl p-6 text-center">
         <AlertCircle className="w-12 h-12 text-warning mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-warning-strong mb-2">Access Restricted</h3>
-        <p className="text-warning">
+        <h3 className="text-base font-semibold text-warning-strong mb-2">Access Restricted</h3>
+        <p className="text-sm text-warning">
           Only administrators can view individual member usage data.
         </p>
       </div>
@@ -204,8 +205,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     return (
       <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6 text-center">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-destructive-strong mb-2">Error Loading Data</h3>
-        <p className="text-destructive">{error}</p>
+        <h3 className="text-base font-semibold text-destructive-strong mb-2">Error Loading Data</h3>
+        <p className="text-sm text-destructive">{error}</p>
         <button
           onClick={fetchMembersUsage}
           className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive transition-colors"
@@ -227,7 +228,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
             <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">{team.name} - Member Usage</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{team.name} - Member Usage</h3>
             <p className="text-sm text-gray-600 dark:text-slate-400">Individual usage breakdown</p>
           </div>
         </div>
@@ -349,9 +350,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                 <tr key={member.user_id} className={index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue flex items-center justify-center text-sm font-semibold shrink-0">
-                        {member.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
+                      <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{member.user_name}</p>
                         <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{member.user_email}</p>
@@ -424,8 +423,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
       ) : (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
           <Users className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-300 mb-2">No Team Members</h3>
-          <p className="text-gray-600 dark:text-slate-400">
+          <h3 className="text-base font-semibold text-gray-700 dark:text-slate-300 mb-2">No Team Members</h3>
+          <p className="text-sm text-gray-600 dark:text-slate-400">
             This team has no members yet. Add members to see their usage data.
           </p>
         </div>

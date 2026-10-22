@@ -17,6 +17,7 @@ import {
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
@@ -226,21 +227,9 @@ export function JobArchivedBadge() {
 }
 
 function CreatedBy({ name }: { name: string }) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?';
-
   return (
     <span className="inline-flex items-center gap-2 min-w-0">
-      <span
-        aria-hidden="true"
-        className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-2xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
-      >
-        {initials}
-      </span>
+      <NameAvatar name={name} size="xs" title="" />
       <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
         {name}
       </span>
@@ -395,21 +384,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      archived configs (AIInterview.tsx loads them separately for the same
      reason), and "All Interviews" means every version regardless of status. */
   const fetchAll = useCallback(async (): Promise<InterviewRow[]> => {
-    const live: AIInterviewResponse[] = [];
-    let apiPage = 1;
-    for (;;) {
-      const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-      const items = batch.items || [];
-      live.push(...items);
-      const total = batch.total ?? live.length;
-      if (items.length < 100 || live.length >= total) break;
-      apiPage += 1;
-    }
-
-    const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-    const archived = archivedProbe.total > archivedProbe.items.length
-      ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-      : archivedProbe.items;
+    const { live, archived } = await aiInterviewService.listAllConfigsSplit();
 
     const seen = new Set<string>();
     const merged: AIInterviewResponse[] = [];

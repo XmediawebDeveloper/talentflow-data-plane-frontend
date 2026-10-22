@@ -5,6 +5,7 @@ import { User, Tenant, UserRole } from '@/lib/types/tenant';
 import { Clock, Building2, CreditCard, CalendarDays } from 'lucide-react';
 import { useQuota } from '@/contexts/QuotaContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import NameAvatar from '@/components/ui/name-avatar';
 
 interface WelcomeBannerProps {
   user?: User;
@@ -31,15 +32,6 @@ function getGreeting(hour: number): string {
   if (hour < 12) return 'Good morning';
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
-}
-
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 function formatDateTime(date: Date): string {
@@ -148,9 +140,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
           <div className="relative inline-flex">
             {/* Gradient ring â€” brand palette */}
             <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-cyan via-brand-teal to-brand-orange opacity-80 blur-[2px]" />
-            <div className="relative flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue-2 to-brand-blue text-base sm:text-lg font-semibold ring-2 ring-white/20 shadow-lg">
-              {user?.name ? getInitials(user.name) : 'U'}
-            </div>
+            <NameAvatar name={user?.name} fallback={user?.email} size="xl" className="relative bg-white dark:bg-white dark:text-brand-blue" />
           </div>
           <div className="mt-3 sm:mt-0">
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight capitalize">

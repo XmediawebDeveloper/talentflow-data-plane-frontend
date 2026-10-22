@@ -6,15 +6,17 @@ import { TeamAvatar, MemberStack, TeamActionHandlers, formatTeamDate } from './T
 
 interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails'> {
   teams: Team[];
+  /** Rendered inside the card under the table — e.g. `<ListPagination attached />`. */
+  footer?: React.ReactNode;
 }
 
-const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500';
+const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
 
 /**
  * List-view counterpart of the TeamCard grid: same data, one row per team.
  * Clicking a row opens the Team popup, like clicking a card.
  */
-export default function TeamListTable({ teams, onViewDetails }: TeamListTableProps) {
+export default function TeamListTable({ teams, onViewDetails, footer }: TeamListTableProps) {
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
       <div className="overflow-x-auto tf-table-shell">
@@ -96,6 +98,7 @@ export default function TeamListTable({ teams, onViewDetails }: TeamListTablePro
           </tbody>
         </table>
       </div>
+      {footer}
     </section>
   );
 }
