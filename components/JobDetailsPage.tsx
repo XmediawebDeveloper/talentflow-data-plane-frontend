@@ -1,7 +1,6 @@
 'use client';
 
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { useState, useEffect } from 'react';
@@ -459,10 +458,10 @@ ${job.certifications?.join(', ') || 'N/A'}
                     {job.department}
                   </span>
                 )}
-                {formatJdLocationText(job) && (
+                {job.location && (
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
-                    {formatJdLocationText(job)}
+                    {job.location}
                   </span>
                 )}
                 <span className="flex items-center gap-1">

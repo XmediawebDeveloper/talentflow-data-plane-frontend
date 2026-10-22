@@ -190,8 +190,8 @@ const mapVersion = (lineageVersion: JDLineageVersion, detail?: JDResponse): JDHi
      `detail` is THIS version's record: the caller fetches it by
      lineageVersion.id and pairs the two inside one closure, so a value can
      never land on a different version than the one it came from. */
-  location: (detail?.locations || []).map((entry) => entry?.city).filter(Boolean).join(', ')
-    || detail?.location
+  location: detail?.location
+    || (detail?.locations || []).map((entry) => entry?.city).filter(Boolean).join(', ')
     || undefined,
   salary_min: detail?.salary_min,
   salary_max: detail?.salary_max,

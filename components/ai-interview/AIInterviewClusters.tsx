@@ -4102,10 +4102,10 @@ export default function AIInterviewClusters() {
                         <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_experience_level}</span>
                       </div>
                     )}
-                    {(config.jd_location || (config.jd_locations?.length ?? 0) > 0) && (
+                    {config.jd_location && (
                       <div className="px-3 py-2 flex items-center justify-between gap-2">
                         <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
-                        <SummaryLocation value={config.jd_location} locations={config.jd_locations} />
+                        <SummaryLocation value={config.jd_location} />
                       </div>
                     )}
                     {config.jd_version != null && (

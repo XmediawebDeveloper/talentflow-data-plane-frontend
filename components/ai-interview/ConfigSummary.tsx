@@ -2,7 +2,6 @@
 
 import React from 'react';
 import ChipsReveal from '@/components/ui/chips-reveal';
-import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 
 /**
  * The heading every configuration card wears: an icon tile, the card's name,
@@ -88,17 +87,8 @@ export const splitLocations = (value?: string | null): string[] => {
  * uses for a JD's skills, so a count-with-a-chevron behaves the same wherever
  * it appears.
  */
-export function SummaryLocation({
-  value,
-  locations,
-}: {
-  value?: string | null;
-  locations?: Array<{ city?: string | null; state?: string | null }> | null;
-}) {
-  // Prefer the full locations array (grouped by state, as View JD shows it)
-  // over the legacy single-string `value`.
-  const grouped = formatLocationGroups(locations, null);
-  const places = grouped.length > 0 ? grouped : splitLocations(value);
+export function SummaryLocation({ value }: { value?: string | null }) {
+  const places = splitLocations(value);
 
   if (places.length === 0) {
     return <span className="text-xs font-semibold text-gray-900 text-right">—</span>;

@@ -893,11 +893,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   })();
 
   // Header-card values, mapped the same way the published JD page maps them.
-  // The full locations array wins over the legacy single `location` column
-  // (same rule as mapJDToJob), so every saved place is shown.
-  const jdLocation: string = (jdDetails?.locations?.length
-    ? jdDetails.locations.map((l: any) => l.city).filter(Boolean).join(', ')
-    : '') || jdDetails?.location || '';
+  const jdLocation: string = jdDetails?.location
+    || (jdDetails?.locations?.length ? jdDetails.locations.map((l: any) => l.city).filter(Boolean).join(', ') : '');
   const jdExperienceBadge = formatJobExperienceBadge({
     jobLevel: jdDetails?.experience_level || jdDetails?.job_level,
     experienceText: formatJobExperienceText({
@@ -3091,7 +3088,6 @@ Best regards`);
                       ? criterionScoringLabel(jdDetails.industry_type, jdDetails.industry_mandatory, { isIndustry: true })
                       : undefined}
                     location={jdLocation || null}
-                    locations={jdDetails?.locations}
                     locationNote={jdLocation ? criterionScoringLabel(jdLocation, jdDetails.location_mandatory) : undefined}
                     employmentType={employmentTypeLabel(jdDetails.employment_type)}
                     workMode={workModeLabel(jdDetails.remote_type)}

@@ -733,21 +733,3 @@ export const formatLocationGroups = (
     return state === 'Other' ? cities : `${state}: ${cities}`;
   });
 };
-
-
-/**
- * A JD's locations as one line of text. The full `locations` list wins over the
- * legacy single `location` column (which holds only one place). With `max`, a
- * longer list is cut to "A +N more" — the full list belongs in a title/tooltip.
- */
-export const formatJdLocationText = (
-  jd: { location?: string | null; locations?: Array<{ city?: string | null }> | null },
-  max?: number,
-): string => {
-  const cities = (jd.locations || []).map((l) => (l?.city || '').trim()).filter(Boolean);
-  if (cities.length === 0) return (jd.location || '').trim();
-  if (max && cities.length > max) {
-    return `${cities.slice(0, max).join(', ')} +${cities.length - max} more`;
-  }
-  return cities.join(', ');
-};

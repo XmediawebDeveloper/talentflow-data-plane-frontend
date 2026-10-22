@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import DisableJobModal from '@/components/DisableJobModal';
-import { formatJobVersionLabel, formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
+import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
@@ -461,7 +461,7 @@ export default function JDListPage() {
             currency: jd.salary_currency,
           })
         : '-',
-      location: formatJdLocationText(jd, 1) || '-',
+      location: jd.location || '-',
       job_level: jd.job_level || '-',
       published_at: jd.published_at ? formatISTDate(jd.published_at) : '-',
       created_at: formatISTDate(jd.created_at),
