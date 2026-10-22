@@ -157,6 +157,7 @@ export interface PublishedJD {
   title: string;
   department?: string;
   location?: string;
+  locations?: Array<{ city?: string | null; state?: string | null }>;
   employment_type?: string;
   job_level?: string;
   must_have_skills: string[];
