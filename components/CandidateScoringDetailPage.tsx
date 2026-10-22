@@ -3091,6 +3091,7 @@ Best regards`);
                       ? criterionScoringLabel(jdDetails.industry_type, jdDetails.industry_mandatory, { isIndustry: true })
                       : undefined}
                     location={jdLocation || null}
+                    locations={jdDetails?.locations}
                     locationNote={jdLocation ? criterionScoringLabel(jdLocation, jdDetails.location_mandatory) : undefined}
                     employmentType={employmentTypeLabel(jdDetails.employment_type)}
                     workMode={workModeLabel(jdDetails.remote_type)}

@@ -237,7 +237,8 @@ export default function JDOverviewSections({
             ? criterionScoringLabel(jd.industry_type, jd.industry_mandatory, { isIndustry: true })
             : undefined}
           location={showScoringDetail ? jd.location : null}
-          locationNote={showScoringDetail && jd.location ? criterionScoringLabel(jd.location, jd.location_mandatory) : undefined}
+          locations={showScoringDetail ? jd.locations : null}
+          locationNote={showScoringDetail && (jd.location || jd.locations?.length) ? criterionScoringLabel(jd.location || '', jd.location_mandatory) : undefined}
           employmentType={employmentTypeLabel(jd.employment_type)}
           workMode={workModeLabel(jd.remote_type)}
           scoring={showScoringDetail ? {

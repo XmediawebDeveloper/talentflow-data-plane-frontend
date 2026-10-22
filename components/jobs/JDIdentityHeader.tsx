@@ -100,7 +100,8 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
   });
   /* The bullet before the posted info only earns its place when something
      came before it — the page's own condition. */
-  const hasFactsBefore = Boolean(jd.location || employment || workMode || salary);
+  const hasLocation = Boolean(jd.location || jd.locations?.length);
+  const hasFactsBefore = Boolean(hasLocation || employment || workMode || salary);
 
   return (
     <div
@@ -144,7 +145,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
           {/* Row 2: Location + Experience + Employment Type + Work Mode +
               Salary + Posted Date + Posted By + Version */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
-            {jd.location && (
+            {hasLocation && (
               <>
                 {formatLocationGroups(jd.locations, jd.location).map((label) => (
                   <div key={label} className="flex items-center gap-1.5">
