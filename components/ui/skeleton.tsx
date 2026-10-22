@@ -17,12 +17,12 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-/** Matches PageBreadcrumb + PageHeader (icon + title + description | actions). NOT a hero banner. */
-function HeaderSkeleton({ actions = 2, className }: { actions?: number; className?: string }) {
+/** Matches PageBreadcrumb + PageHeader (icon + title + description | actions). NOT a hero banner.
+ *  `breadcrumb={false}` when the breadcrumb is drawn by a layout that stays on screen. */
+function HeaderSkeleton({ actions = 2, breadcrumb = true, className }: { actions?: number; breadcrumb?: boolean; className?: string }) {
   return (
     <div className={cn("mb-5", className)}>
-      {/* breadcrumb */}
-      <Skeleton className="h-3 w-44 mb-4" />
+      {breadcrumb && <Skeleton className="h-3 w-44 mb-4" />}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3 min-w-0">
           <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />

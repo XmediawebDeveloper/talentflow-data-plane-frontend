@@ -140,6 +140,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
     <AppModal
       open
       size="lg"
+      mobileSheet
       zIndexClass="z-50"
       onCancel={onClose}
       icon={<Network />}

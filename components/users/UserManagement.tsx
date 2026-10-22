@@ -1,6 +1,5 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
 import { SurfaceCard, SectionHeading } from '@/components/ui/section-container';
 import React, { useState, useEffect, useRef } from 'react';
@@ -35,6 +34,8 @@ import { ArrowLeft,
   UserX,
   Sparkles,
   Info,
+  ChevronDown,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -47,13 +48,13 @@ import FeaturePermissionManager from './FeaturePermissionManager';
 import DependencyMatrix from './DependencyMatrix';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
+import UserPermissionsSummary from './UserPermissionsSummary';
 import AddSeatsModal from './AddSeatsModal';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -79,7 +80,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { Tooltip } from '@/components/ui/tooltip';
 import NameAvatar from '@/components/ui/name-avatar';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
+import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from '@/components/ui/sortable-header';
 
 // Types
 interface UserPermissions {
@@ -441,7 +442,32 @@ const hashString = (str: string): number => {
 };
 
 // Get role label - use RBAC name or fallback to defaults
-const getRoleLabel = (role: string, availableRoles: RoleListItem[]): string => {
+type UserSortKey = 'id' | 'user' | 'role' | 'permissions' | 'status' | 'created';
+
+/** "just now" / "5 minutes ago" / "3 days ago" for the last 30 days; null when
+ *  older (or unparseable) so the caller shows the full date instead. */
+const relativeTimeFromNow = (iso: string): string | null => {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+  const seconds = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (seconds < 60) return 'just now';
+  const units: [number, string][] = [
+    [60, 'minute'],
+    [3600, 'hour'],
+    [86400, 'day'],
+  ];
+  if (seconds >= 30 * 86400) return null;
+  for (let i = units.length - 1; i >= 0; i--) {
+    const [size, name] = units[i];
+    if (seconds >= size) {
+      const n = Math.floor(seconds / size);
+      return `${n} ${name}${n === 1 ? '' : 's'} ago`;
+    }
+  }
+  return null;
+};
+
+const getRoleLabel =(role: string, availableRoles: RoleListItem[]): string => {
   const rbacRole = availableRoles.find(r => (r.code || '').toLowerCase() === (role || '').toLowerCase());
   // Role names are always shown in CAPITALS (see formatRoleName in rbacService).
   if (rbacRole) return formatRoleName(rbacRole.name);
@@ -609,8 +635,6 @@ const mockUsers: ApiUser[] = [
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 export default function UserManagement() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
   const dialog = useGlobalDialog();
@@ -758,9 +782,21 @@ export default function UserManagement() {
   // clicked so the list is pre-filtered.
   const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  // Role filter (client-side, over the already-loaded users). 'all' or a role code (lowercase).
+  const [roleFilter, setRoleFilter] = useState<string>('all');
   const isOverviewCardActive = (filter: typeof statusFilter) => pageView === 'list' && statusFilter === filter;
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  // Click-to-sort table headings. No default sort — the list keeps its server
+  // order until a heading is clicked; a sort change jumps back to page 1.
+  const userSort = useTableSort<UserSortKey>({ descFirst: ['permissions', 'status', 'created'] });
+  const userSortWithReset = {
+    ...userSort,
+    toggleSort: (key: UserSortKey) => {
+      userSort.toggleSort(key);
+      setCurrentPage(1);
+    },
+  };
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   // Restore memory belongs to one Edit User session.
@@ -790,6 +826,16 @@ export default function UserManagement() {
   // Track selected permission codes (for custom permission UI)
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
   const [editSelectedPermissionCodes, _setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  // Edit User permissions on phones: which module cards are expanded (all
+  // collapsed by default; from sm up every card is always open).
+  const [phonePermOpen, setPhonePermOpen] = useState<Set<string>>(() => new Set());
+  const togglePhonePermOpen = (id: string) =>
+    setPhonePermOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   // Backend (app/config/mandatory_permissions.py) always re-adds these 2 view-only
   // codes to permission_ids on save regardless of what the client sends — every
   // role, including admin, keeps baseline read access to the Analytics dashboard
@@ -887,7 +933,7 @@ export default function UserManagement() {
   // flips (cards overview vs. list). currentPage is intentionally not persisted:
   // the existing `setCurrentPage(1)` effect on [searchQuery] resets it on mount,
   // so a restored page would be immediately clobbered.
-  const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
+  const rootRef = useScrollRestoration<HTMLDivElement>('org-user-management', !isLoading, [pageView]);
   useListStatePersistence(
     'org-user-management',
     { searchQuery, itemsPerPage },
@@ -1597,10 +1643,60 @@ export default function UserManagement() {
       statusFilter === 'all' ||
       (statusFilter === 'active' && user.is_active) ||
       (statusFilter === 'inactive' && !user.is_active);
-    return matchesSearch && matchesStatus;
+    const matchesRole = roleFilter === 'all' || (user.role || '').toLowerCase() === roleFilter;
+    return matchesSearch && matchesStatus && matchesRole;
   });
 
-  const paginatedUsers = filteredUsers.slice(
+  // Role filter options — only roles that some loaded user actually has.
+  const roleFilterOptions = Array.from(
+    new Map(
+      users
+        .filter((u) => u.role)
+        .map((u) => [(u.role || '').toLowerCase(), getRoleLabel(u.role, availableRoles)] as const),
+    ).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+
+  // Anything narrowing the list (search, status pill, role) — drives "N of M" + Clear.
+  const isUserListNarrowed = searchQuery.trim() !== '' || statusFilter !== 'all' || roleFilter !== 'all';
+  const clearUserFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setRoleFilter('all');
+    userSort.clearSort?.();
+    setCurrentPage(1);
+  };
+  const hasRoleFilter = roleFilterOptions.length > 1;
+  // Role filter dropdown — rendered in two spots (beside search from sm up, on a
+  // second line on phones) so the phone search box keeps its full width.
+  const renderRoleFilter = (className: string) =>
+    hasRoleFilter ? (
+      <select
+        value={roleFilter}
+        onChange={(e) => setRoleFilter(e.target.value)}
+        aria-label="Filter by role"
+        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors max-sm:!text-xs hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
+          roleFilter === 'all'
+            ? 'border-gray-200 text-gray-700 dark:border-slate-700 dark:text-slate-300'
+            : 'border-brand-blue/40 text-brand-blue'
+        } ${className}`}
+      >
+        <option value="all">All roles</option>
+        {roleFilterOptions.map(([code, label]) => (
+          <option key={code} value={code}>{label}</option>
+        ))}
+      </select>
+    ) : null;
+
+  const sortedUsers = sortRows(filteredUsers, userSort.sortKey, userSort.sortDir, {
+    id: (user) => user.user_display_id,
+    user: (user) => user.name || user.email,
+    role: (user) => getRoleLabel(user.role, availableRoles),
+    permissions: (user) => getUserPermissionPills(user.permissions).length,
+    status: (user) => (user.is_active ? 1 : 0),
+    created: (user) => (user.created_at ? new Date(user.created_at).getTime() : null),
+  });
+
+  const paginatedUsers = sortedUsers.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -1722,22 +1818,45 @@ export default function UserManagement() {
   const renderUserDates = (user: (typeof users)[number], labels = true) => (
     <div className="space-y-0.5 text-xs text-gray-500 dark:text-slate-400">
       <div className="flex items-center gap-1.5" title="Created">
-        <Calendar className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+        <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
         {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Created</span>}
         <span className="text-gray-700 dark:text-slate-300">{formatIST(user.created_at)}</span>
       </div>
-      <div className="flex items-center gap-1.5" title="Last login">
-        <Clock className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
+      {/* Last login reads relative ("2 days ago"); the exact time is on hover. */}
+      <div className="flex items-center gap-1.5" title={user.last_login ? `Last login: ${formatIST(user.last_login)}` : 'Last login'}>
+        <Clock className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
         {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Last login</span>}
-        <span className="text-gray-700 dark:text-slate-300">{user.last_login ? formatIST(user.last_login) : 'Never'}</span>
+        {user.last_login ? (
+          <span className="text-gray-700 dark:text-slate-300">{relativeTimeFromNow(user.last_login) ?? formatIST(user.last_login)}</span>
+        ) : (
+          <span className="italic text-gray-400 dark:text-slate-500">Not logged in yet</span>
+        )}
       </div>
     </div>
   );
 
+  // Click-to-copy for emails and user IDs.
+  const copyText = async (text: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${what} copied`, { description: text });
+    } catch {
+      toast.error(`Couldn't copy ${what.toLowerCase()}`);
+    }
+  };
+
+  // "You" marker on the signed-in user's own row/card.
+  const renderYouTag = (user: (typeof users)[number]) =>
+    user.id === currentUserId ? (
+      <span className="shrink-0 rounded px-1.5 py-px text-2xs font-semibold bg-gray-100 text-gray-600 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+        You
+      </span>
+    ) : null;
+
   // Reset to first page when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, roleFilter]);
 
   const handleRoleChange = (role: string) => {
     let permissions = { ...defaultPermissions };
@@ -2769,22 +2888,15 @@ export default function UserManagement() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
-
-      {/* Shared organization tab bar — Users is the first tab */}
-      <OrganizationTabs stickyTop={orgCrumbHeight} />
-
-      {/* Active tab + its data enclosed together in one bordered panel that
-          connects to the tab bar's baseline (-mt-5 cancels the tab bar's mb-5). */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+    // Card, breadcrumb, organization tabs and the tab panel come from
+    // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
+    <div ref={rootRef}>
       {/* Header */}
       <PageHeader
         icon={<UserCog className="h-5 w-5" />}
         title="User Management"
-        description="Invite teammates, assign roles and fine-tune permissions"
+        // Hidden on phones — the title is enough there and the line costs a row.
+        description={<span className="hidden sm:inline">Invite teammates, assign roles and fine-tune permissions</span>}
         actions={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* RBAC07: Dependency Matrix button */}
@@ -2793,8 +2905,10 @@ export default function UserManagement() {
               onClick={() => setIsDependencyMatrixOpen(true)}
               icon={<Link2 className="w-4 h-4" />}
               aria-label="View Feature Dependencies" title="View Feature Dependencies"
+              className="max-sm:h-8 max-sm:gap-0 max-sm:px-2"
             >
-              Dependencies
+              {/* Icon-only on phones so it sits beside Invite User on one row */}
+              <span className="hidden sm:inline">Dependencies</span>
             </Button>
             {/* RBAC01: Check user limits before showing Add User button — also
                 requires users:create (greyed with a hover tooltip, never hidden). */}
@@ -2803,7 +2917,7 @@ export default function UserManagement() {
               icon={<Plus className="w-4 h-4" />}
               aria-disabled={!canCreateUser}
               title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
-              className={!canCreateUser ? 'opacity-60 cursor-not-allowed' : undefined}
+              className={`max-sm:h-8 max-sm:px-3 max-sm:text-xs ${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
                 if (!canCreateUser) return;
                 if (isAtLimit) {
@@ -2840,7 +2954,7 @@ export default function UserManagement() {
           click) and seat usage. Bottom row: search and the result count. */}
       <div className="mb-4 sm:mb-5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div role="group" aria-label="Filter users by status" className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Filter users by status" className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             {([
               { key: 'all', label: 'All users', Icon: UsersIcon, count: totalUsersCount, of: null },
               { key: 'active', label: 'Active', Icon: UserCheck, count: activeUsersCount, of: limits?.max_users === -1 ? '∞' : (limits?.max_users ?? null) },
@@ -2857,16 +2971,16 @@ export default function UserManagement() {
                     setPageView('list');
                     setCurrentPage(1);
                   }}
-                  className={`inline-flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
+                  className={`inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-medium sm:h-9 sm:gap-2 sm:px-3.5 sm:text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
                     active
                       ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                       : 'bg-brand-blue/5 text-gray-700 ring-1 ring-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue dark:bg-brand-blue/10 dark:text-slate-300'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
-                  {label}
+                  <Icon className="hidden h-4 w-4 sm:block" />
+                  {key === 'all' ? <><span className="sm:hidden">All</span><span className="hidden sm:inline">{label}</span></> : label}
                   <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
+                    className={`rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums sm:px-2 sm:text-xs ${
                       active ? 'bg-white/20 text-white' : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
                     }`}
                   >
@@ -2880,7 +2994,7 @@ export default function UserManagement() {
 
           {limits && limits.max_users > 0 && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-              <span className="text-xs font-medium text-gray-600 dark:text-slate-400 whitespace-nowrap">Seat usage</span>
+              <span className="text-xs font-medium text-gray-600 dark:text-slate-400 whitespace-nowrap"><span className="sm:hidden">Seats</span><span className="hidden sm:inline">Seat usage</span></span>
               <div className="flex items-center gap-2">
                 <div className="h-1.5 w-28 sm:w-36 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
                   <div
@@ -2898,7 +3012,7 @@ export default function UserManagement() {
                   {Math.min(limits.usage_percentage, 100)}%
                 </span>
               </div>
-              <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
+              <span className="hidden text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap sm:inline">
                 Plan{' '}
                 <span className="font-semibold text-gray-700 dark:text-slate-300">
                   {(() => {
@@ -2920,20 +3034,54 @@ export default function UserManagement() {
         </div>
 
         {pageView === 'list' && (
-          <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative w-full sm:max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-              <Input
-                type="text"
-                placeholder="Search users by name or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 rounded-[6.6px]"
-              />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3 dark:border-slate-700/60 sm:flex-nowrap sm:gap-3">
+            {/* Left: search + role filter */}
+            <div className={`flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl ${hasRoleFilter ? 'basis-full sm:basis-auto' : ''}`}>
+              <div className="relative min-w-0 flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                <Input
+                  type="text"
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 pl-9 rounded-[6.6px]"
+                />
+              </div>
+              {/* Role filter: here from sm up (one row); phones show it on the second line. */}
+              {renderRoleFilter('hidden sm:block')}
             </div>
-            <span className="shrink-0 self-start rounded-lg bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 dark:bg-brand-blue/15 dark:text-blue-200 sm:self-auto">
-              {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
-            </span>
+            {/* Right: clear-sort chip (desktop) + count. On phones with a role filter this
+                becomes the full-width second line: role filter left, count right. */}
+            <div className={`flex shrink-0 items-center gap-2 ${hasRoleFilter ? 'w-full justify-between sm:w-auto sm:justify-end' : ''}`}>
+              {renderRoleFilter('sm:hidden')}
+              {/* Visible only while a column is sorted; restores the server order. Hidden on
+                  phones, where the table headings (and so the sort) aren't shown. */}
+              <ClearSortChip
+                sort={userSort}
+                labels={{ id: 'User ID', user: 'User', role: 'Role', permissions: 'Permissions', status: 'Status', created: 'Created' }}
+                onClear={() => { userSort.clearSort?.(); setCurrentPage(1); }}
+                className="hidden lg:inline-flex"
+              />
+              {/* "9 users" — or "3 of 9" with a clear-all ✕ while anything narrows the list */}
+              {isUserListNarrowed ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-brand-blue/5 py-1 pl-2.5 pr-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 dark:bg-brand-blue/15 dark:text-blue-200">
+                  <span className="tabular-nums">{filteredUsers.length} of {users.length}</span>
+                  <button
+                    type="button"
+                    onClick={clearUserFilters}
+                    aria-label="Clear search and filters"
+                    title="Clear search and filters"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded text-brand-blue/70 transition-colors hover:bg-brand-blue/15 hover:text-brand-blue"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ) : (
+                <span className="shrink-0 rounded-lg bg-brand-blue/5 px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10 dark:bg-brand-blue/15 dark:text-blue-200">
+                  {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2947,8 +3095,30 @@ export default function UserManagement() {
              Role, Permissions, Status, Created / Last Login, Actions.
              Column count per breakpoint mirrors the real <thead> below: User ID
              hides below 2xl, Permissions below lg, Created / Last Login below xl
-             (both shown under the user's name instead); phones get cards. */
-          <div className="tf-table-shell">
+             (both shown under the user's name instead); below lg, cards. */
+          <>
+          <div className="grid grid-cols-1 gap-3 overflow-hidden rounded-xl p-3 sm:grid-cols-2 lg:hidden">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-slate-700">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-1.5">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-40 max-w-full" />
+                  </div>
+                  <Skeleton className="h-6 w-11 rounded-full" />
+                </div>
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-3 w-44" />
+                <div className="flex justify-end gap-1 border-t border-gray-100 pt-2 dark:border-slate-700/60">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden lg:block tf-table-shell">
             <div className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
               <div className="hidden 2xl:block"><Skeleton className="h-3 w-16" /></div>
               <Skeleton className="h-3 w-24" />
@@ -2986,31 +3156,33 @@ export default function UserManagement() {
               ))}
             </div>
           </div>
+          </>
         ) : (
           <>
-          <div className="hidden md:block tf-table-shell">
+          {/* Table from lg up — below that the columns get too cramped. */}
+          <div className="hidden lg:block tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden 2xl:table-cell whitespace-nowrap">
-                    User ID
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 hidden 2xl:table-cell whitespace-nowrap" aria-sort={ariaSort(userSort, 'id')}>
+                    <SortableHeader label="User ID" column="id" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                    User
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400" aria-sort={ariaSort(userSort, 'user')}>
+                    <SortableHeader label="User" column="user" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                    Role
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400" aria-sort={ariaSort(userSort, 'role')}>
+                    <SortableHeader label="Role" column="role" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
-                    Permissions
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
+                    <SortableHeader label="Permissions" column="permissions" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
-                    Status
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400" aria-sort={ariaSort(userSort, 'status')}>
+                    <SortableHeader label="Status" column="status" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden xl:table-cell">
-                    Created / Last Login
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
+                    <SortableHeader label="Created / Last Login" column="created" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-400 tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -3018,61 +3190,83 @@ export default function UserManagement() {
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {paginatedUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
-                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden 2xl:table-cell">
+                    <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden 2xl:table-cell ${user.is_active ? '' : 'opacity-60'}`}>
                       {user.user_display_id ? (
-                        <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                        <button
+                          type="button"
+                          onClick={() => copyText(user.user_display_id!, 'User ID')}
+                          title="Copy User ID"
+                          className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/10"
+                        >
                           {user.user_display_id}
-                        </span>
+                        </button>
                       ) : (
                         <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </td>
                     <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
-                      <div className="flex items-center gap-2 sm:gap-3">
+                      {/* Inactive users read faded (identity only — toggle/actions stay full strength). */}
+                      <div className={`flex items-center gap-2 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
                         <NameAvatar name={user.name} fallback={user.email} size="md" />
                         <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</div>
-                          <div className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate" title={user.email}>
-                            <Mail className="w-3 h-3 flex-shrink-0" />
-                            <span className="truncate">{user.email}</span>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
+                            {renderYouTag(user)}
                           </div>
+                          {user.email && (
+                            <button
+                              type="button"
+                              onClick={() => copyText(user.email, 'Email')}
+                              title={`Copy ${user.email}`}
+                              className="flex max-w-full items-center gap-1 text-left text-xs text-gray-500 transition-colors hover:text-brand-blue dark:text-slate-500"
+                            >
+                              <Mail className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{user.email}</span>
+                            </button>
+                          )}
                           {/* User ID / dates columns are hidden on narrower screens — show them here. */}
                           {user.user_display_id && (
-                            <span className="2xl:hidden mt-1 inline-block px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                            <button
+                              type="button"
+                              onClick={() => copyText(user.user_display_id!, 'User ID')}
+                              title="Copy User ID"
+                              className="2xl:hidden mt-1 inline-block px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/10"
+                            >
                               {user.user_display_id}
-                            </span>
+                            </button>
                           )}
                           <div className="mt-1 xl:hidden">{renderUserDates(user)}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
-                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                    <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
+                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.675rem] font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
                         {getRoleLabel(user.role, availableRoles)}
                       </span>
                     </td>
                     <td className="tf-wrap px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden lg:table-cell">
-                      <div className="flex flex-wrap gap-1 max-w-[170px] 2xl:max-w-xs">
+                      {/* One permission shown, the rest as a "+N more" count (opens the full list). */}
+                      <div className="flex items-center gap-1 max-w-[170px] 2xl:max-w-xs">
                         {(() => {
                           const pills = getUserPermissionPills(user.permissions);
                           return (
                             <>
-                              {pills.slice(0, 3).map((label) => (
+                              {pills.slice(0, 1).map((label) => (
                                 <span
                                   key={label}
-                                  className="px-2 py-0.5 text-xs font-medium bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15"
+                                  className="min-w-0 truncate px-2 py-0.5 text-xs font-medium bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15"
                                 >
                                   {label}
                                 </span>
                               ))}
-                              {pills.length > 3 && (
+                              {pills.length > 1 && (
                                 <button
                                   type="button"
                                   onClick={() => handleViewUserPermissions(user)}
                                   title="View all permissions"
-                                  className="px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15 hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 transition-colors cursor-pointer"
+                                  className="shrink-0 whitespace-nowrap px-2 py-0.5 text-xs font-medium bg-brand-cyan/5 text-brand-cyan rounded ring-1 ring-brand-cyan/15 hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 transition-colors cursor-pointer"
                                 >
-                                  +{pills.length - 3} more
+                                  +{pills.length - 1} more
                                 </button>
                               )}
                             </>
@@ -3102,6 +3296,7 @@ export default function UserManagement() {
                           icon={UserCog}
                           title="No users found"
                           description="Try adjusting your search, or invite a new teammate to get started."
+                          action={isUserListNarrowed ? { label: 'Clear filters', onClick: clearUserFilters, variant: 'secondary' } : undefined}
                         />
                       </div>
                     </td>
@@ -3110,36 +3305,79 @@ export default function UserManagement() {
               </tbody>
             </table>
           </div>
-          {/* Phone: one card per user — no sideways scrolling. */}
-          <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
+          {/* Below lg: one card per user. Phones: a compact divided list (no box
+              inside the table box). Tablets: 2 boxed cards per row.
+              grid-cols-1 = minmax(0,1fr) — without it the implicit column grew
+              to the cards' content and pushed them off the right edge. */}
+          {/* Own rounded corners: the hidden desktop table is the wrapper's first
+              child, so tf-round-edges never rounds this list and its white rows
+              squared off the card's corners. Bottom too unless pagination
+              (shown above 5 users) closes the card. */}
+          <div className={`grid grid-cols-1 divide-y divide-gray-100 overflow-hidden rounded-t-xl dark:divide-slate-700/60 sm:grid-cols-2 sm:gap-3 sm:divide-y-0 sm:p-3 lg:hidden ${filteredUsers.length <= 5 ? "rounded-b-xl" : ""}`}>
             {paginatedUsers.map((user) => (
-              <div key={user.id} className="space-y-3 p-4">
-                <div className="flex items-start gap-3">
-                  <NameAvatar name={user.name} fallback={user.email} size="md" />
+              <div key={user.id} className="flex min-w-0 flex-col gap-2 bg-white p-3 dark:bg-slate-900 sm:gap-3 sm:rounded-xl sm:border sm:border-gray-200 sm:p-4 sm:dark:border-slate-700">
+                {/* Identity left, status toggle top-right */}
+                <div className="flex items-start gap-2.5 sm:gap-3">
+                  {/* Inactive users read faded (identity only — the toggle stays full strength). */}
+                  <div className={`flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
+                  <NameAvatar name={user.name} fallback={user.email} size="sm" className="sm:h-9 sm:w-9 sm:text-sm" />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
                       <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
+                      {renderYouTag(user)}
                       {user.user_display_id && (
-                        <span className="shrink-0 px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                        <button
+                          type="button"
+                          onClick={() => copyText(user.user_display_id!, 'User ID')}
+                          title="Copy User ID"
+                          className="shrink-0 px-1 py-px text-[0.5625rem] leading-tight font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15 sm:px-1.5 sm:py-0.5 sm:text-2xs"
+                        >
                           {user.user_display_id}
-                        </span>
+                        </button>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
-                      <Mail className="w-3 h-3 flex-shrink-0" />
-                      <span className="truncate">{user.email}</span>
-                    </div>
+                    {user.email && (
+                      <button
+                        type="button"
+                        onClick={() => copyText(user.email, 'Email')}
+                        title={`Copy ${user.email}`}
+                        className="flex max-w-full items-center gap-1 text-left text-xs text-gray-500 transition-colors hover:text-brand-blue dark:text-slate-500"
+                      >
+                        <Mail className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{user.email}</span>
+                      </button>
+                    )}
                   </div>
+                  </div>
+                  {/* Toggle only — its colour says Active/Inactive; the word cost
+                      the width that was pushing the card off-screen. */}
+                  <div className="shrink-0 pt-0.5">{renderUserStatus(user, true)}</div>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span title={getRoleLabel(user.role, availableRoles)} className={`max-w-[60%] truncate px-2.5 py-1 text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
-                    {getRoleLabel(user.role, availableRoles)}
-                  </span>
-                  {renderUserStatus(user)}
-                </div>
-                {renderUserDates(user)}
-                <div className="flex items-center justify-end border-t border-gray-100 dark:border-slate-700/60 pt-2">
-                  {renderUserActions(user)}
+                {/* Dates (icons, no labels) — indented under the name */}
+                <div className={`pl-[2.625rem] sm:pl-12 ${user.is_active ? '' : 'opacity-60'}`}>{renderUserDates(user, false)}</div>
+                {/* Role + permissions count, then actions — one row */}
+                <div className="flex items-center justify-between gap-2 pl-[2.625rem] sm:mt-auto sm:border-t sm:border-gray-100 sm:pl-0 sm:pt-2 sm:dark:border-slate-700/60">
+                  <div className={`flex min-w-0 items-center gap-1.5 ${user.is_active ? '' : 'opacity-60'}`}>
+                    <span title={getRoleLabel(user.role, availableRoles)} className={`min-w-0 truncate px-2 py-0.5 text-2xs font-semibold rounded-full ring-1 ring-inset ring-black/5 sm:px-2.5 sm:py-1 sm:text-xs ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                      {getRoleLabel(user.role, availableRoles)}
+                    </span>
+                    {(() => {
+                      // Same count the desktop "+N more" badge comes from; opens the same popup.
+                      const count = getUserPermissionPills(user.permissions).length;
+                      return count > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => handleViewUserPermissions(user)}
+                          title={`${count} permissions — view all`}
+                          aria-label={`${count} permissions, view all`}
+                          className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-2xs font-medium bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/15 transition-colors hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 sm:px-2 sm:text-xs"
+                        >
+                          +{count}
+                        </button>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div className="shrink-0 [&_button]:p-1.5 sm:[&_button]:p-2.5">{renderUserActions(user)}</div>
                 </div>
               </div>
             ))}
@@ -3147,13 +3385,14 @@ export default function UserManagement() {
           </>
         )}
 
-        {/* Phones only — on md+ the message renders inside the table body. */}
+        {/* Below lg only — from lg up the message renders inside the table body. */}
         {!isLoading && filteredUsers.length === 0 && (
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <EmptyState
               icon={UserCog}
               title="No users found"
               description="Try adjusting your search, or invite a new teammate to get started."
+              action={isUserListNarrowed ? { label: 'Clear filters', onClick: clearUserFilters, variant: 'secondary' } : undefined}
             />
           </div>
         )}
@@ -3162,6 +3401,7 @@ export default function UserManagement() {
         {!isLoading && filteredUsers.length > 0 && (
           <ListPagination
             attached
+            minimalOnMobile
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
             totalItems={filteredUsers.length}
@@ -3173,13 +3413,13 @@ export default function UserManagement() {
       </div>
       </>
       )}
-      </div>
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <AppModal
           open
           size="md"
+          mobileSheet
           zIndexClass="z-50"
           onCancel={resetCreateModal}
           cancelDisabled={isSaving}
@@ -3368,6 +3608,7 @@ export default function UserManagement() {
         <AppModal
           open
           size="lg"
+          mobileSheet
           zIndexClass="z-50"
           onCancel={resetEditModal}
           cancelDisabled={isSaving}
@@ -3674,9 +3915,25 @@ export default function UserManagement() {
                                   </span>
                                 )}
                               </div>
-                              <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+                                {/* Phones only: expand/collapse. Stops the click so it
+                                    doesn't also toggle the whole module's permissions. */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); togglePhonePermOpen(category.id); }}
+                                  aria-expanded={phonePermOpen.has(category.id)}
+                                  aria-label={`${phonePermOpen.has(category.id) ? 'Collapse' : 'Expand'} ${category.name}`}
+                                  className="-mr-2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-brand-blue sm:hidden dark:hover:bg-slate-700"
+                                >
+                                  <ChevronDown className={`h-5 w-5 transition-transform duration-200 ${phonePermOpen.has(category.id) ? 'rotate-180' : ''}`} />
+                                </button>
+                              </div>
                             </div>
 
+                            {/* Body — collapsed on phones until its chevron opens it (one long
+                                scroll of every module otherwise); always open from sm up. */}
+                            <div className={phonePermOpen.has(category.id) ? "" : "max-sm:hidden"}>
                             {/* Permission Cards Grid */}
                             <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                               {/* View card */}
@@ -3909,6 +4166,7 @@ export default function UserManagement() {
                                 </div>
                               );
                             })}
+                            </div>
                           </div>
                         );
                       })}
@@ -4056,31 +4314,23 @@ export default function UserManagement() {
       {viewingUserPermissions && !viewingRolePopup && (
         <AppModal
           open
-          size="lg"
+          size="md"
+          mobileSheet
+          closeButton
           onCancel={closePermissionsPopup}
           icon={<Eye />}
           title={viewingUserPermissions.name || viewingUserPermissions.email}
           subtitle={viewingUserPermissions.email}
-          bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
+          bodyClassName="bg-slate-50/60 dark:bg-slate-800/30"
         >
-          <div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
-              <div>
-                <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role</div>
-                <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{getRoleLabel(viewingUserPermissions.role, availableRoles)}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Status</div>
-                <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingUserPermissions.is_active ? 'Active' : 'Inactive'}</div>
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingRolePopupShownCount}</div>
-              </div>
-            </div>
-
-            {renderAllocatedPermissions()}
-          </div>
+          {/* Compact summary: role · status · coverage, filter, collapsible modules of chips */}
+          <UserPermissionsSummary
+            codes={viewingRolePopupCodes}
+            isLoading={isViewingRolePopupLoading}
+            roleLabel={getRoleLabel(viewingUserPermissions.role, availableRoles)}
+            roleBadgeClass={getRoleBadgeColor(viewingUserPermissions.role, availableRoles)}
+            isActive={!!viewingUserPermissions.is_active}
+          />
         </AppModal>
       )}
 
@@ -4088,6 +4338,7 @@ export default function UserManagement() {
         <AppModal
           open
           size="lg"
+          mobileSheet
           onCancel={closePermissionsPopup}
           icon={<Eye />}
           title={viewingRolePopup.name}
@@ -4122,8 +4373,6 @@ export default function UserManagement() {
             </div>
         </AppModal>
       )}
-      </div>
-      </div>
       {permissionChangeDialog}
       <AppModal
         open={!!identityOtp}
@@ -4208,6 +4457,6 @@ export default function UserManagement() {
           </p>
         </div>
       </AppModal>
-    </main>
+    </div>
   );
 }

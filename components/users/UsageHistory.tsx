@@ -1,8 +1,6 @@
 'use client';
 
 import AppModal from '@/components/ui/app-modal';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
 
 /**
  * UsageHistory Component
@@ -64,16 +62,60 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageHeader } from '@/components/ui/page-header';
 import NameAvatar from '@/components/ui/name-avatar';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
+import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from '@/components/ui/sortable-header';
 
 type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
 
 /* Neutral-gray table skeleton whose columns mirror a specific usage-history
    tab. `cols` is one width class (e.g. 'w-24') per column, in table order. */
+/** Phone/tablet card body: the four unit types as a tidy 4-box row. */
+function UnitBreakdown({ values }: { values: Record<string, number | undefined> }) {
+  return (
+    <div className="grid grid-cols-4 gap-1.5">
+      {CONSUMPTION_COLUMNS.map((column) => {
+        const Icon = column.icon;
+        const value = values[column.key];
+        return (
+          <div key={column.key} title={column.label} className="min-w-0 rounded-lg bg-gray-50 px-2 py-1.5 dark:bg-slate-800/60">
+            <p className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">
+              <Icon className={`h-3 w-3 shrink-0 ${column.iconClass}`} />
+              {column.key}
+            </p>
+            <p className={`mt-0.5 truncate text-sm font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-600'}`}>
+              {value ? value.toLocaleString() : '—'}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function UsageTableSkeleton({ cols, rows = 8 }: { cols: string[]; rows?: number }) {
   const gridStyle = { gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` };
   return (
-    <div className="overflow-x-auto tf-table-shell">
+    <>
+    {/* Below lg: card skeletons, matching the card layout */}
+    <div className="divide-y divide-gray-100 lg:hidden">
+      {Array.from({ length: 4 }).map((_, r) => (
+        <div key={r} className="space-y-2.5 px-3 py-3 sm:px-4">
+          <div className="flex items-center gap-2.5">
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-28" />
+              <Skeleton className="h-3 w-40 max-w-full" />
+            </div>
+            <Skeleton className="h-6 w-12" />
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {Array.from({ length: 4 }).map((__, c) => (
+              <Skeleton key={c} className="h-11 rounded-lg" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+    <div className="hidden overflow-x-auto tf-table-shell lg:block">
       <div
         className="grid gap-4 border-b border-gray-200 bg-gray-50 px-4 py-3"
         style={gridStyle}
@@ -92,6 +134,7 @@ function UsageTableSkeleton({ cols, rows = 8 }: { cols: string[]; rows?: number 
         ))}
       </div>
     </div>
+    </>
   );
 }
 
@@ -133,6 +176,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 type TabId = 'feature' | 'user' | 'team' | 'refunds';
 type ExportFormat = 'csv' | 'excel';
 type ExistingUser = ExistingUsageUser;
+type UnitKey = 'RS' | 'AS' | 'AIU' | 'RU';
+const UNIT_KEYS: UnitKey[] = ['RS', 'AS', 'AIU', 'RU'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -218,12 +263,13 @@ function Pagination({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-y-3 gap-x-2 px-4 py-3 border-t border-gray-100 bg-gradient-to-b from-white to-slate-50/50">
-      <p className="text-sm text-gray-500">
-        Showing <span className="font-medium text-gray-900">{start}–{end}</span> of <span className="font-medium text-gray-900">{total}</span> records
+    <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:px-4 sm:py-3">
+      <p className="text-xs text-gray-500 sm:text-sm">
+        <span className="hidden sm:inline">Showing </span><span className="font-medium text-gray-900">{start}–{end}</span> of <span className="font-medium text-gray-900">{total}</span><span className="hidden sm:inline"> records</span>
       </p>
       <div className="flex items-center gap-2 sm:gap-3">
-        <div className="flex items-center gap-1.5">
+        {/* Go to — tablets and up; phones page with ‹ › */}
+        <div className="hidden items-center gap-1.5 sm:flex">
           <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
           <Input
             type="number"
@@ -357,7 +403,9 @@ function AnalyticsCards({
   };
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+    <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
+      {/* Phones: a swipeable row (cards snap into place) instead of five
+          stacked cards; sm and up: the grid. */}
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
       {unitTypes.map((type) => {
         const sub = subscriptionUnits?.[type as keyof typeof subscriptionUnits] as import('@/lib/services/dashboardService').UnitAvailability | undefined;
@@ -374,7 +422,7 @@ function AnalyticsCards({
         const barColor = getBarColor(pct);
 
         return (
-          <div key={type} className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div key={type} className="group w-[80%] shrink-0 snap-start sm:w-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
                 <Icon className="w-4 h-4" />
@@ -417,7 +465,7 @@ function AnalyticsCards({
         const pct = ru ? (ru.is_unlimited ? 0 : Math.min(100, Math.round(ru.percentage_used))) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div className="group w-[80%] shrink-0 snap-start sm:w-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
                 <FileText className="w-4 h-4" />
@@ -464,7 +512,7 @@ function AnalyticsCards({
         const pct = userLimits && !isUnlimited ? Math.min(100, Math.round(userLimits.usage_percentage)) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div className="group w-[80%] shrink-0 snap-start sm:w-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue-2 to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Users className="w-4 h-4" />
@@ -546,13 +594,13 @@ function FeatureWiseTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Feature</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">User</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Entity</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Units</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Status</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Balance After</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Date & Time</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Feature</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Entity</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Units</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Status</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Balance After</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Date & Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -621,6 +669,15 @@ function UserWiseTab({
   onPageChange: (p: number) => void;
   isLoading: boolean;
 }) {
+  const sort = useTableSort<'userName' | UnitKey | 'total' | 'successCount' | 'lastUsed'>({
+    descFirst: [...UNIT_KEYS, 'total', 'successCount', 'lastUsed'],
+  });
+  const handleSort = (key: Parameters<typeof sort.toggleSort>[0]) => {
+    sort.toggleSort(key);
+    onPageChange(1);
+  };
+  const tableSort = { ...sort, toggleSort: handleSort };
+
   // Aggregate by user
   const userMap = new Map<string, {
     userId: string;
@@ -679,7 +736,7 @@ function UserWiseTab({
     if (!u.lastUsed || entry.created_at > u.lastUsed) u.lastUsed = entry.created_at;
   });
 
-  const users = Array.from(userMap.values()).sort((a, b) => {
+  const defaultOrderedUsers = Array.from(userMap.values()).sort((a, b) => {
     if (a.isExistingUser !== b.isExistingUser) {
       return a.isExistingUser ? -1 : 1;
     }
@@ -687,6 +744,16 @@ function UserWiseTab({
       return b.total - a.total;
     }
     return a.userName.localeCompare(b.userName);
+  });
+  const users = sortRows(defaultOrderedUsers, sort.sortKey, sort.sortDir, {
+    userName: (u) => u.userName,
+    RS: (u) => u.byType.RS ?? 0,
+    AS: (u) => u.byType.AS ?? 0,
+    AIU: (u) => u.byType.AIU ?? 0,
+    RU: (u) => u.byType.RU ?? 0,
+    total: (u) => u.total,
+    successCount: (u) => u.successCount,
+    lastUsed: (u) => u.lastUsed,
   });
   const totalPages = Math.ceil(users.length / PAGE_SIZE);
   const paginatedUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -708,26 +775,82 @@ function UserWiseTab({
 
   return (
     <div>
-      <div className="overflow-x-auto tf-table-shell">
+      {/* Below lg: one card per user — name + total, the 4-unit breakdown,
+          then success/failed and last active. */}
+      <div className="divide-y divide-gray-100 dark:divide-slate-700/60 lg:hidden">
+        {paginatedUsers.map((u) => (
+          <div key={u.userId} className="space-y-2.5 px-3 py-3 sm:px-4">
+            <div className="flex items-center gap-2.5">
+              <NameAvatar name={u.userName} fallback={u.userEmail} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{u.userName}</p>
+                <p className="truncate text-xs text-gray-400">{u.userEmail}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-base font-semibold leading-tight tabular-nums text-brand-blue">{u.total.toLocaleString()}</p>
+                <p className="text-2xs text-gray-400">units</p>
+              </div>
+            </div>
+            <UnitBreakdown values={u.byType} />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Badge variant="success">
+                  <CheckCircle2 className="w-3 h-3" />{u.successCount}
+                </Badge>
+                <Badge variant="destructive">
+                  <XCircle className="w-3 h-3" />{u.failedCount}
+                </Badge>
+              </div>
+              <span className="truncate text-xs text-gray-400">
+                {u.lastUsed ? `Last active ${formatIST(u.lastUsed)}` : 'No activity yet'}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Clear-sort bar — only while a column is sorted (desktop table). */}
+      {sort.sortKey && (
+        <div className="hidden items-center justify-end border-b border-gray-100 px-4 py-2 lg:flex">
+          <ClearSortChip sort={sort} labels={{ userName: 'User', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', total: 'Total', successCount: 'Success', lastUsed: 'Last Active' }} onClear={() => { sort.clearSort?.(); onPageChange(1); }} />
+        </div>
+      )}
+      <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">#</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">User</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">#</th>
+              <th aria-sort={ariaSort(tableSort, 'userName')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="User" column="userName" sort={tableSort} />
+              </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
+                const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                    <span className="inline-flex items-center gap-1">
-                      <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
-                      {column.label}
-                    </span>
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                    <SortableHeader
+                      label={
+                        <span className="inline-flex items-center gap-1">
+                          <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
+                          {column.label}
+                        </span>
+                      }
+                      column={key}
+                      sort={tableSort}
+                      align="right"
+                    />
                   </th>
                 );
               })}
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Total</th>
-              <th className="text-center px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Success / Failed</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
+              <th aria-sort={ariaSort(tableSort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Total" column="total" sort={tableSort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(tableSort, 'successCount')} className="text-center px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Success / Failed" column="successCount" sort={tableSort} align="center" />
+              </th>
+              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Last Active" column="lastUsed" sort={tableSort} />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -792,6 +915,14 @@ function TeamWiseTab({
   isLoading: boolean;
 }) {
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const sort = useTableSort<'team_name' | UnitKey | 'jds_created' | 'assessments_created'>({
+    descFirst: [...UNIT_KEYS, 'jds_created', 'assessments_created'],
+  });
+  const handleSort = (key: Parameters<typeof sort.toggleSort>[0]) => {
+    sort.toggleSort(key);
+    onPageChange(1);
+  };
+  const tableSort = { ...sort, toggleSort: handleSort };
 
   if (isLoading) {
     // #, Team, RS, AS, AIU, RU, JDs Created, Assessments.
@@ -810,29 +941,125 @@ function TeamWiseTab({
 
   const totalTeams = teamsData.teams.length;
   const totalPages = Math.ceil(totalTeams / PAGE_SIZE);
-  const paginatedTeams = teamsData.teams.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sortedTeams = sortRows(teamsData.teams, sort.sortKey, sort.sortDir, {
+    team_name: (t) => t.team_name,
+    RS: (t) => t.by_type?.RS?.total_consumed ?? 0,
+    AS: (t) => t.by_type?.AS?.total_consumed ?? 0,
+    AIU: (t) => t.by_type?.AIU?.total_consumed ?? 0,
+    RU: (t) => t.by_type?.RU?.total_consumed ?? 0,
+    jds_created: (t) => t.jds_created,
+    assessments_created: (t) => t.assessments_created,
+  });
+  const paginatedTeams = sortedTeams.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const unitsOf = (t: (typeof teamsData.teams)[number]) => ({
+    RS: t.by_type?.RS?.total_consumed ?? 0,
+    AS: t.by_type?.AS?.total_consumed ?? 0,
+    AIU: t.by_type?.AIU?.total_consumed ?? 0,
+    RU: t.by_type?.RU?.total_consumed ?? 0,
+  });
+  const grandTotals = teamsData.teams.reduce(
+    (sum, t) => {
+      const u = unitsOf(t);
+      return { RS: sum.RS + u.RS, AS: sum.AS + u.AS, AIU: sum.AIU + u.AIU, RU: sum.RU + u.RU };
+    },
+    { RS: 0, AS: 0, AIU: 0, RU: 0 },
+  );
 
   return (
     <div>
-      <div className="overflow-x-auto tf-table-shell">
+      {/* Below lg: one card per team. Tap to open its members (also cards);
+          a totals card closes the list. */}
+      <div className="divide-y divide-gray-100 dark:divide-slate-700/60 lg:hidden">
+        {paginatedTeams.map((team) => {
+          const units = unitsOf(team);
+          const totalConsumed = units.RS + units.AS + units.AIU + units.RU;
+          const isExpanded = expandedTeamId === team.team_id;
+          return (
+            <div key={team.team_id} className={isExpanded ? 'bg-brand-blue/[0.03]' : ''}>
+              <button
+                type="button"
+                onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
+                aria-expanded={isExpanded}
+                className="w-full space-y-2.5 px-3 py-3 text-left sm:px-4"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</p>
+                    <p className="truncate text-xs text-gray-400">
+                      {team.jds_created ?? 0} JDs · {team.assessments_created ?? 0} assessments
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-base font-semibold leading-tight tabular-nums text-brand-blue">{totalConsumed.toLocaleString()}</p>
+                    <p className="text-2xs text-gray-400">units</p>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-brand-blue' : ''}`} />
+                </div>
+                <UnitBreakdown values={units} />
+              </button>
+              {isExpanded && (
+                <div className="px-3 pb-3 sm:px-4">
+                  <InlineTeamMembersUsage
+                    teamId={team.team_id}
+                    teamName={team.team_name || 'Unnamed Team'}
+                    startDate={startDate}
+                    endDate={endDate}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div className="space-y-2 bg-gray-50 px-3 py-3 sm:px-4 dark:bg-slate-800/40">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+            {totalTeams} team{totalTeams !== 1 ? 's' : ''} total
+          </p>
+          <UnitBreakdown values={grandTotals} />
+        </div>
+      </div>
+
+      {/* Clear-sort bar — only while a column is sorted (desktop table). */}
+      {sort.sortKey && (
+        <div className="hidden items-center justify-end border-b border-gray-100 px-4 py-2 lg:flex">
+          <ClearSortChip sort={sort} labels={{ team_name: 'Team', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', jds_created: 'JDs Created', assessments_created: 'Assessments' }} onClear={() => { sort.clearSort?.(); onPageChange(1); }} />
+        </div>
+      )}
+      <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">#</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Team</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">#</th>
+              <th aria-sort={ariaSort(tableSort, 'team_name')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Team" column="team_name" sort={tableSort} />
+              </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
+                const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">
-                    <span className="inline-flex items-center gap-1">
-                      <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
-                      {column.label}
-                    </span>
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                    <SortableHeader
+                      label={
+                        <span className="inline-flex items-center gap-1">
+                          <Icon className={`w-3.5 h-3.5 ${column.iconClass}`} />
+                          {column.label}
+                        </span>
+                      }
+                      column={key}
+                      sort={tableSort}
+                      align="right"
+                    />
                   </th>
                 );
               })}
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">JDs Created</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Assessments</th>
+              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="JDs Created" column="jds_created" sort={tableSort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Assessments" column="assessments_created" sort={tableSort} align="right" />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -859,7 +1086,7 @@ function TeamWiseTab({
                         >
                           {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </button>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex-shrink-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex-shrink-0">
                           <Users className="w-4 h-4" />
                         </div>
                         <div>
@@ -892,22 +1119,16 @@ function TeamWiseTab({
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50">
+            {/* Totals: plain and calm — the column headers already carry the unit colours. */}
+            <tr className="border-t border-gray-200 bg-gray-50">
               <td className="px-4 py-3" colSpan={2}>
-                <span className="text-sm font-semibold text-gray-700">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
               </td>
-              <td className="px-4 py-3 text-right text-sm font-bold text-brand-blue">
-                {teamsData.teams.reduce((s, t) => s + (t.by_type?.RS?.total_consumed ?? 0), 0).toLocaleString()}
-              </td>
-              <td className="px-4 py-3 text-right text-sm font-bold text-brand-cyan">
-                {teamsData.teams.reduce((s, t) => s + (t.by_type?.AS?.total_consumed ?? 0), 0).toLocaleString()}
-              </td>
-              <td className="px-4 py-3 text-right text-sm font-bold text-success">
-                {teamsData.teams.reduce((s, t) => s + (t.by_type?.AIU?.total_consumed ?? 0), 0).toLocaleString()}
-              </td>
-              <td className="px-4 py-3 text-right text-sm font-bold text-brand-orange-deep">
-                {teamsData.teams.reduce((s, t) => s + (t.by_type?.RU?.total_consumed ?? 0), 0).toLocaleString()}
-              </td>
+              {(['RS', 'AS', 'AIU', 'RU'] as const).map((key) => (
+                <td key={key} className="px-4 py-3 text-right text-sm font-semibold tabular-nums text-gray-900">
+                  {grandTotals[key].toLocaleString()}
+                </td>
+              ))}
               <td colSpan={2} />
             </tr>
           </tfoot>
@@ -934,6 +1155,9 @@ function InlineTeamMembersUsage({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [membersUsage, setMembersUsage] = useState<TeamMembersUsageSummary | null>(null);
+  const sort = useTableSort<'user_name' | UnitKey | 'total' | 'last_activity'>({
+    descFirst: [...UNIT_KEYS, 'total', 'last_activity'],
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -981,7 +1205,17 @@ function InlineTeamMembersUsage({
     );
   }
 
-  const members = membersUsage?.members || [];
+  const memberUnits = (m: TeamMembersUsageSummary['members'][number], key: UnitKey) =>
+    m.by_type?.[key]?.total_consumed ?? 0;
+  const members = sortRows(membersUsage?.members || [], sort.sortKey, sort.sortDir, {
+    user_name: (m) => m.user_name,
+    RS: (m) => memberUnits(m, 'RS'),
+    AS: (m) => memberUnits(m, 'AS'),
+    AIU: (m) => memberUnits(m, 'AIU'),
+    RU: (m) => memberUnits(m, 'RU'),
+    total: (m) => UNIT_KEYS.reduce((sum, key) => sum + memberUnits(m, key), 0),
+    last_activity: (m) => m.last_activity,
+  });
 
   if (!members.length) {
     return (
@@ -993,29 +1227,78 @@ function InlineTeamMembersUsage({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03]">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 sm:h-9 sm:w-9">
             <Users className="w-4 h-4" />
           </div>
-          <div>
-            <p className="text-base font-semibold text-gray-900">{teamName} Users</p>
-            <p className="text-xs text-gray-500">Usage details for team members</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-gray-900 sm:text-base">{teamName} Users</p>
+            <p className="hidden text-xs text-gray-500 sm:block">Usage details for team members</p>
           </div>
         </div>
-        <span className="text-xs font-medium text-brand-blue px-2.5 py-1 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
+        <span className="shrink-0 text-xs font-medium text-brand-blue px-2.5 py-1 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="overflow-x-auto tf-table-shell">
+
+      {/* Below lg: one row per member */}
+      <div className="divide-y divide-gray-100 lg:hidden">
+        {members.map((member) => {
+          const values = {
+            RS: member.by_type?.RS?.total_consumed ?? 0,
+            AS: member.by_type?.AS?.total_consumed ?? 0,
+            AIU: member.by_type?.AIU?.total_consumed ?? 0,
+            RU: member.by_type?.RU?.total_consumed ?? 0,
+          };
+          const total = values.RS + values.AS + values.AIU + values.RU;
+          return (
+            <div key={member.user_id} className="space-y-2 px-3 py-2.5">
+              <div className="flex items-center gap-2.5">
+                <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900">{member.user_name || 'Unknown User'}</p>
+                  <p className="truncate text-xs text-gray-400">
+                    {member.last_activity ? `Last active ${formatIST(member.last_activity)}` : member.user_email || '—'}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold tabular-nums text-brand-blue">{total.toLocaleString()}</p>
+              </div>
+              <UnitBreakdown values={values} />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Clear-sort bar — only while a column is sorted (desktop table). */}
+      {sort.sortKey && (
+        <div className="hidden items-center justify-end border-b border-gray-100 px-4 py-2 lg:flex">
+          <ClearSortChip sort={sort} labels={{ user_name: 'User', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', total: 'Total', last_activity: 'Last Active' }} onClear={() => { sort.clearSort?.(); }} />
+        </div>
+      )}
+      <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">User</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Resume Scoring</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Assessment</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">AI Interview</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Resume Storage</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Total</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Last Active</th>
+              <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="User" column="user_name" sort={sort} />
+              </th>
+              <th aria-sort={ariaSort(sort, 'RS')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(sort, 'AS')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Assessment" column="AS" sort={sort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(sort, 'AIU')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="AI Interview" column="AIU" sort={sort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(sort, 'RU')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Resume Storage" column="RU" sort={sort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(sort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Total" column="total" sort={sort} align="right" />
+              </th>
+              <th aria-sort={ariaSort(sort, 'last_activity')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+                <SortableHeader label="Last Active" column="last_activity" sort={sort} />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1113,14 +1396,14 @@ function RefundsTab({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Type</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Feature</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Units</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Before</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">After</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Actor</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Reason</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs uppercase tracking-wider">Date</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Feature</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Units</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Before</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">After</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Actor</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Reason</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1167,8 +1450,6 @@ function RefundsTab({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function UsageHistory() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const today = useMemo(() => new Date(), []);
   const defaultStartDate = useMemo(
@@ -1460,18 +1741,15 @@ export default function UsageHistory() {
   ];
 
   return (
-    <div ref={rootRef} className="flex-1 bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
-        <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Usage History' }]} />
-        <div>
-        <OrganizationTabs stickyTop={orgCrumbHeight} />
-        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 space-y-6">
+    // Card, breadcrumb, organization tabs and the tab panel come from
+    // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
+    <div ref={rootRef} className="space-y-6">
       {/* ── Page Header ── */}
       <PageHeader
         icon={<TrendingDown className="h-5 w-5" />}
         title="Usage History"
-        description="Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization."
+        // Hidden on phones — saves a row; the title says enough there.
+        description={<span className="hidden sm:inline">Comprehensive feature-wise, user-wise, and team-wise consumption tracking for your organization.</span>}
         actions={
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button
@@ -1479,13 +1757,18 @@ export default function UsageHistory() {
               onClick={handleRefresh}
               disabled={isRefreshing}
               icon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
+              aria-label="Refresh"
+              title="Refresh"
+              className="max-sm:h-8 max-sm:gap-0 max-sm:px-2"
             >
-              Refresh
+              {/* Icon-only on phones */}
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
             <Button
               variant="primary"
               onClick={() => setShowExportModal(true)}
               icon={<Download className="w-4 h-4" />}
+              className="max-sm:h-8 max-sm:px-3 max-sm:text-xs"
             >
               Export
             </Button>
@@ -1504,7 +1787,7 @@ export default function UsageHistory() {
       {/* ── Filters + view toggle + table: one card ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         {/* Toolbar: filters left, User-Wise / Team-Wise toggle right */}
-        <div className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-2.5 border-b border-gray-200 px-3 py-3 sm:gap-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
             {/* Quick Period */}
             <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
@@ -1545,23 +1828,23 @@ export default function UsageHistory() {
             </label>
 
             {/* Date Range */}
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
-              <span>From</span>
+            <div className="grid grid-cols-2 gap-2 text-sm font-medium text-gray-600 sm:flex sm:items-center">
+              <span className="hidden sm:inline">From</span>
               <DateField
                 aria-label="From date"
                 value={startDateInput}
                 max={endDateInput || defaultEndDate}
                 onChange={(v) => { setStartDateInput(v); setQuickPeriod(''); }}
-                className="flex-1 sm:flex-none sm:w-[150px]"
+                className="w-full min-w-0 sm:w-[150px]"
               />
-              <span>To</span>
+              <span className="hidden sm:inline">To</span>
               <DateField
                 aria-label="To date"
                 value={endDateInput}
                 min={startDateInput || undefined}
                 max={defaultEndDate}
                 onChange={(v) => { setEndDateInput(v); setQuickPeriod(''); }}
-                className="flex-1 sm:flex-none sm:w-[150px]"
+                className="w-full min-w-0 sm:w-[150px]"
               />
             </div>
 
@@ -1591,7 +1874,7 @@ export default function UsageHistory() {
           <div
             role="radiogroup"
             aria-label="Usage view"
-            className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 self-start lg:self-auto shrink-0"
+            className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
           >
             <span
               aria-hidden
@@ -1672,8 +1955,6 @@ export default function UsageHistory() {
         </div>
         <p className="pt-1">All dashboard access and exports are audit-logged with your Tenant ID, User ID, and timestamp in compliance with platform policies.</p>
       </div>
-      </div>
-      </div>
 
       {/* ── Export Modal ── */}
       <ExportModal
@@ -1682,8 +1963,6 @@ export default function UsageHistory() {
         onExport={handleExport}
         isExporting={isExporting}
       />
-      </div>
-      </div>
     </div>
   );
 }
