@@ -21,7 +21,13 @@ const ratingTone = (rank: number) =>
     : rank >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700'
     : 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border-gray-200 dark:border-slate-700';
 
-const SECTION = 'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
+/* The Scored Resumes tab's match status tones. */
+const matchTone = (status: string) =>
+  status === 'Exact Match' ? 'bg-success-subtle text-success-strong border-success-line'
+    : status === 'Partial Match' ? 'bg-warning-subtle text-warning-strong border-warning-line'
+    : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700';
+
+const SECTION ='text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
 
 
 /**
@@ -138,12 +144,28 @@ export default function SendToPanel({
                         {c.phone ? ` · ${c.phone}` : ''}
                       </span>
                     </span>
-                    <span
-                      title="Match rating"
-                      className={`shrink-0 inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-md text-xs font-bold border ${ratingTone(c.rating || 0)}`}
-                    >
-                      {c.rating || '-'}
-                    </span>
+                    {c.score === 'unscored' ? (
+                      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">
+                        Not scored
+                      </span>
+                    ) : c.score && (
+                      <span
+                        title={`Resume score ${c.score.percent}% · ${c.score.matchStatus}`}
+                        className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-semibold border tabular-nums ${matchTone(c.score.matchStatus)}`}
+                      >
+                        {c.score.percent}%<span className="hidden sm:inline font-medium">&nbsp;· {c.score.matchStatus}</span>
+                      </span>
+                    )}
+                    {/* A scored-only candidate has no Talent Match rating:
+                        its score chip stands alone rather than beside a "-". */}
+                    {(c.rating || !c.score) && (
+                      <span
+                        title="Match rating"
+                        className={`shrink-0 inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-md text-xs font-bold border ${ratingTone(c.rating || 0)}`}
+                      >
+                        {c.rating || '-'}
+                      </span>
+                    )}
                   </label>
                 </li>
               );

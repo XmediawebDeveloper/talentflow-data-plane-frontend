@@ -29,7 +29,7 @@ import {
  * column per VERSION can't represent that. It's shown per SCORED RESUME
  * instead, in ScoredResumesTable, where each row has its own real answer.
  */
-const buildBaseColumns = (showScoredBy: boolean, hideJdDetails: boolean): { label: string; minW: string }[] => [
+const buildBaseColumns = (showScoredBy: boolean, hideJdDetails: boolean, applicantsLabel: string): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[72px]' },
   { label: 'Job Title', minW: 'min-w-[160px]' },
   ...(hideJdDetails ? [] : [
@@ -41,7 +41,7 @@ const buildBaseColumns = (showScoredBy: boolean, hideJdDetails: boolean): { labe
     { label: 'Last Updated', minW: 'min-w-[110px]' },
   ]),
   ...(showScoredBy ? [{ label: 'Scored By', minW: 'min-w-[160px]' }] : []),
-  { label: 'Applicants', minW: 'min-w-[90px]' },
+  { label: applicantsLabel, minW: 'min-w-[90px]' },
 ];
 
 const buildColumns = (
@@ -50,9 +50,10 @@ const buildColumns = (
   showScoredBy: boolean,
   extraColumns: ExtraVersionColumn[],
   hideJdDetails: boolean,
+  applicantsLabel: string,
 ) => [
   ...(selectable ? [{ label: 'Select', minW: 'min-w-[64px]' }] : []),
-  ...buildBaseColumns(showScoredBy, hideJdDetails),
+  ...buildBaseColumns(showScoredBy, hideJdDetails, applicantsLabel),
   ...extraColumns.map(({ label, minW }) => ({ label, minW })),
   ...(actionable ? [{ label: 'Action', minW: 'min-w-[64px]' }] : []),
 ];
@@ -214,6 +215,8 @@ interface JobVersionHistoryPanelProps {
    * them doesn't either. Off by default; every other host is unchanged.
    */
   hideJdDetails?: boolean;
+  /** The count column's heading ("Scored" on Resume Scoring). */
+  applicantsLabel?: string;
 }
 
 /**
@@ -254,8 +257,9 @@ export default function JobVersionHistoryPanel({
   extraColumns = [],
   stickyVersionColumn = false,
   hideJdDetails = false,
+  applicantsLabel = 'Applicants',
 }: JobVersionHistoryPanelProps) {
-  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns, hideJdDetails);
+  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns, hideJdDetails, applicantsLabel);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
      including the latest.
 

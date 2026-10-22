@@ -431,14 +431,15 @@ function QuickActionTile({
   const disabledTooltip = planLocked ? PLAN_LOCKED_MESSAGE : disabledTooltipProp;
   const colors = QUICK_ACTION_ACCENTS[accent];
   return (
-    <div className="relative group">
+    <div className="relative group h-full">
       <button
         onClick={onClick}
         disabled={disabled || loading}
         title={disabled ? undefined : label}
         // Colour, shadow and the lift all animate together, so the tile rises
         // and settles on one curve instead of the border snapping ahead of it.
-        className={`w-full px-1 py-2.5 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,transform] ${QUICK_ACTION_HOVER_EASE} ${
+        // h-full: a tile whose label wraps (Create / Send …) keeps its row even.
+        className={`w-full h-full px-1 py-2.5 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,transform] ${QUICK_ACTION_HOVER_EASE} ${
           disabled
             ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 cursor-not-allowed'
             : `border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer hover:-translate-y-0.5 active:translate-y-0 ${colors.tile}`
@@ -451,7 +452,7 @@ function QuickActionTile({
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
         </span>
-        <span className={`text-2xs font-medium leading-none transition-colors ${QUICK_ACTION_HOVER_EASE} ${
+        <span className={`text-2xs font-medium leading-tight text-center transition-colors ${QUICK_ACTION_HOVER_EASE} ${
           disabled ? 'text-gray-400 dark:text-slate-500' : `text-gray-700 dark:text-slate-300 ${colors.labelHover}`
         }`}>
           {label}
@@ -1040,7 +1041,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /* The AI Talent Match tab's "Create / Send Assessment | AI Interview"
      popups (VersionInviteDialog — one per type): null = closed; else which
      popup and the candidates ticked in the table. */
-  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[] } | null>(null);
+  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[]; preselect?: boolean } | null>(null);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
   const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
@@ -1407,6 +1408,47 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /* Quick Actions › Assessment › Invite (and its deep link): Create / Send
      Assessment with nobody preset — candidates are chosen in its email step. */
   const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [] });
+  /* Quick Actions › Create / Send: the popup lists this job's AI Talent Match
+     candidates, then its Scored Resumes candidates (the two tabs' tables),
+     unticked — the recruiter picks who to send. A resume on both tabs is
+     listed once, under AI Talent Match, with its score chip; Score Resume
+     lists only resumes scored outside Talent Match. Each row carries its
+     latest score (the list is newest first), or "Not scored". */
+  const openCreateSendFromTile = (kind: InviteKind) => {
+    const latestScore = new Map<string, any>();
+    for (const r of scoredResumes) {
+      const id = r.resumeId || r.id;
+      if (id && !latestScore.has(id)) latestScore.set(id, r);
+    }
+    const scoreOf = (id: string): InviteCandidate['score'] => {
+      const r = latestScore.get(id);
+      return r ? { percent: r.scorePercentage, matchStatus: r.matchStatus } : 'unscored';
+    };
+    const candidates: InviteCandidate[] = aiMatchCandidates.map((c) => ({
+      id: c.resumeId,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      rating: c.rank,
+      resumeId: c.resumeId,
+      source: 'talent-match' as const,
+      score: scoreOf(c.resumeId),
+    }));
+    const listed = new Set(candidates.map((c) => c.id));
+    for (const [id, r] of latestScore) {
+      if (listed.has(id)) continue;
+      candidates.push({
+        id,
+        name: r.candidateName,
+        email: r.email,
+        phone: r.phone || undefined,
+        resumeId: r.resumeId || undefined,
+        source: 'score-resume',
+        score: scoreOf(id),
+      });
+    }
+    setInviteDialog({ kind, candidates, preselect: false });
+  };
 
   const handleAIInterviewStatus = () => {
     // Open the AI Interview Result tab on this page rather than navigating.
@@ -2747,6 +2789,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdTitle={job.title}
           jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
           candidates={inviteDialog.candidates}
+          preselect={inviteDialog.preselect}
           /* Create / Send AI Interview: no Duplicate in the version ⋯ menu. */
           hideDuplicate={inviteDialog.kind === 'interview'}
           disabledReason={
@@ -3857,7 +3900,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               />
             </QuickActionPanel>
 
-            {/* Assessment — Create, Invite, Track and Result four-up. The AI
+            {/* Assessment — Create / Send, Track and Result in one row. The AI
                 Interview group below mirrors it, on its own accent. Always
                 shown; tiles the user lacks permission for are greyed out. */}
             {(
@@ -3866,32 +3909,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   icon={<ClipboardList className="w-4 h-4" />}
                   title="Assessment"
                   accent="cyan"
-                  titleAction={(() => {
-                    const noPerm = !permissions.canCreateAssessments && !permissions.canViewAssessments;
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => { if (!noPerm) setShowAssessmentVersionHistory(true); }}
-                        disabled={assessmentPlanLocked}
-                        aria-disabled={assessmentPlanLocked || noPerm || undefined}
-                        title={
-                          assessmentPlanLocked
-                            ? PLAN_LOCKED_MESSAGE
-                            : noPerm
-                              ? 'You do not have permission to view assessment version history'
-                              : 'Assessment version history'
-                        }
-                        aria-label="Assessment version history"
-                        className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 ${
-                          noPerm
-                            ? 'text-gray-400 cursor-not-allowed opacity-60'
-                            : 'text-gray-400 hover:text-brand-cyan hover:bg-brand-cyan/10'
-                        }`}
-                      >
-                        <History className="w-4 h-4" />
-                      </button>
-                    );
-                  })()}
                   open={openActionGroups.assessment}
                   onToggle={() => toggleActionGroup('assessment')}
                   controls="quick-actions-assessment-panel"
@@ -3903,50 +3920,26 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 >
                   {/* Permission-gated tiles stay visible, greyed out with a
                       tooltip, when the user lacks the permission. */}
-                  {(
-                    <>
-                      <QuickActionTile
-                        icon={<Sparkles className="w-4 h-4" />}
-                        label="Create"
-                        accent="cyan"
-                        planLocked={assessmentPlanLocked}
-                        onClick={handleCreateAssessment}
-                        loading={resolvingAssessmentTarget}
-                        disabled={
-                          !permissions.canCreateAssessments
-                          || !features.assessment
-                          || job.status === 'Disabled'
-                          || blockAssessmentCreate
-                        }
-                        disabledTooltip={
-                          !permissions.canCreateAssessments
-                            ? 'You do not have permission to create assessments'
-                            : assessmentCreateBlockedReason ?? undefined
-                        }
-                      />
-
-                      <QuickActionTile
-                        icon={<UserPlus className="w-4 h-4" />}
-                        label="Invite"
-                        accent="cyan"
-                        planLocked={assessmentPlanLocked}
-                        onClick={openCreateSendAssessment}
-                        loading={isLoadingShareAssessments}
-                        disabled={!permissions.canCreateAssessments || !canInviteJdAssessment || !canInviteToAssessment}
-                        disabledTooltip={
-                          !permissions.canCreateAssessments || !canInviteJdAssessment
-                            ? 'You do not have permission to invite candidates to an assessment from a job description'
-                            : !features.assessment
-                              ? 'Assessments not enabled'
-                              : job.status === 'Disabled'
-                                ? 'JD is disabled'
-                                : !hasAnyAssessment
-                                  ? 'Create an assessment first'
-                                  : 'Publish the assessment first'
-                        }
-                      />
-                    </>
-                  )}
+                  {/* Create / Send Assessment — the popup creates, publishes
+                      and sends versions in place, so one tile covers both. */}
+                  <div className="contents">
+                    <QuickActionTile
+                      icon={<UserPlus className="w-4 h-4" />}
+                      label="Create / Send"
+                      accent="cyan"
+                      planLocked={assessmentPlanLocked}
+                      onClick={() => openCreateSendFromTile('assessment')}
+                      loading={isLoadingShareAssessments}
+                      disabled={!permissions.canCreateAssessments || !features.assessment || job.status === 'Disabled'}
+                      disabledTooltip={
+                        !permissions.canCreateAssessments
+                          ? 'You do not have permission to create or send assessments'
+                          : !features.assessment
+                            ? 'Assessments not enabled'
+                            : 'JD is disabled'
+                      }
+                    />
+                  </div>
 
                   {(
                     <>
@@ -3997,6 +3990,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                                   : 'Results appear once a candidate completes or is terminated'
                         }
                       />
+
+                      {/* Version history — was the icon on the section heading. */}
+                      <QuickActionTile
+                        icon={<History className="w-4 h-4" />}
+                        label="History"
+                        accent="cyan"
+                        planLocked={assessmentPlanLocked}
+                        onClick={() => setShowAssessmentVersionHistory(true)}
+                        disabled={!permissions.canCreateAssessments && !permissions.canViewAssessments}
+                        disabledTooltip="You do not have permission to view assessment version history"
+                      />
                     </>
                   )}
                 </QuickActionPanel>
@@ -4013,82 +4017,34 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   open={openActionGroups.aiInterview}
                   onToggle={() => toggleActionGroup('aiInterview')}
                   controls="quick-actions-ai-interview-panel"
-                  titleAction={(() => {
-                    const noPerm =
-                      !permissions.canCreateAIInterviews && !permissions.canShareAIInterviews && !permissions.canViewAIInterviews;
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => { if (!noPerm) setShowAIVersionHistory(true); }}
-                        disabled={aiInterviewPlanLocked}
-                        aria-disabled={aiInterviewPlanLocked || noPerm || undefined}
-                        title={
-                          aiInterviewPlanLocked
-                            ? PLAN_LOCKED_MESSAGE
-                            : noPerm
-                              ? 'You do not have permission to view AI interview version history'
-                              : 'AI Interview version history'
-                        }
-                        aria-label="AI Interview version history"
-                        className={`w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 ${
-                          noPerm
-                            ? 'text-gray-400 cursor-not-allowed opacity-60'
-                            : 'text-gray-400 hover:text-brand-orange-deep hover:bg-brand-orange/10'
-                        }`}
-                      >
-                        <History className="w-4 h-4" />
-                      </button>
-                    );
-                  })()}
                 />
                 <QuickActionPanel
                   id="quick-actions-ai-interview-panel"
                   open={openActionGroups.aiInterview}
                   className="grid grid-cols-4 gap-2"
                 >
-                  {(
-                    <QuickActionTile
-                      icon={<Sparkles className="w-4 h-4" />}
-                      label="Create"
-                      accent="orange"
-                      planLocked={aiInterviewPlanLocked}
-                      onClick={handleCreateAIInterview}
-                      loading={resolvingAIInterviewTarget}
-                      disabled={
-                        !permissions.canCreateAIInterviews
-                        || !features.ai_interview
-                        || job.status === 'Disabled'
-                        || blockAIInterviewCreate
-                      }
-                      disabledTooltip={
-                        !permissions.canCreateAIInterviews
-                          ? 'You do not have permission to create AI interviews'
-                          : aiInterviewCreateBlockedReason ?? undefined
-                      }
-                    />
-                  )}
-
-                  {(
+                  {/* Create / Send AI Interview — mirrors the Assessment tile. */}
+                  <div className="contents">
                     <QuickActionTile
                       icon={<UserPlus className="w-4 h-4" />}
-                      label="Invite"
+                      label="Create / Send"
                       accent="orange"
                       planLocked={aiInterviewPlanLocked}
-                      onClick={() => handleInviteAIInterview()}
-                      disabled={!permissions.canShareAIInterviews || !canInviteJdAIInterview || !canInviteToAIInterview}
+                      onClick={() => openCreateSendFromTile('interview')}
+                      disabled={
+                        (!permissions.canCreateAIInterviews && !permissions.canShareAIInterviews)
+                        || !features.ai_interview
+                        || job.status === 'Disabled'
+                      }
                       disabledTooltip={
-                        !permissions.canShareAIInterviews || !canInviteJdAIInterview
-                          ? 'You do not have permission to invite candidates to an AI interview from a job description'
+                        !permissions.canCreateAIInterviews && !permissions.canShareAIInterviews
+                          ? 'You do not have permission to create or send AI interviews'
                           : !features.ai_interview
                             ? 'AI Interviews not enabled'
-                            : job.status === 'Disabled'
-                              ? 'JD is disabled'
-                              : !hasAnyAIInterview
-                                ? 'Create an AI interview first'
-                                : 'Publish the AI interview first'
+                            : 'JD is disabled'
                       }
                     />
-                  )}
+                  </div>
 
                   {(
                     <>
@@ -4135,6 +4091,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                                   ? 'Send at least one invite first'
                                   : 'Results appear once a candidate completes or is terminated'
                         }
+                      />
+
+                      {/* Version history — was the icon on the section heading. */}
+                      <QuickActionTile
+                        icon={<History className="w-4 h-4" />}
+                        label="History"
+                        accent="orange"
+                        planLocked={aiInterviewPlanLocked}
+                        onClick={() => setShowAIVersionHistory(true)}
+                        disabled={
+                          !permissions.canCreateAIInterviews && !permissions.canShareAIInterviews && !permissions.canViewAIInterviews
+                        }
+                        disabledTooltip="You do not have permission to view AI interview version history"
                       />
                     </>
                   )}
@@ -6081,7 +6050,7 @@ function AIMatchTabContent({
                       }}
                     >
                       <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-                      <span>Create / Send Assessment</span>
+                      <span>Create / Send Assessment </span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       aria-disabled={!mayInviteAIInterview || undefined}
@@ -6097,7 +6066,7 @@ function AIMatchTabContent({
                       }}
                     >
                       <Video className="w-4 h-4 text-menu-icon-ai" />
-                      <span>Create / Send AI Interview</span>
+                      <span>Create / Send AI Interview </span>
                     </DropdownMenuItem>
                     {/* Export, last — the ticked candidates, through the AI
                         Talent Match page's CSV / Excel picker. */}
