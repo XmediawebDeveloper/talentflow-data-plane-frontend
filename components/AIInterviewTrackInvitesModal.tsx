@@ -8,6 +8,7 @@ import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
@@ -725,9 +726,12 @@ export default function AIInterviewTrackInvitesModal({
         </ConfirmationDialog>
 
         {/* Revoke — the old link stops working immediately. */}
-        <ConfirmationDialog
+        <RevokeLinkModal
           isOpen={!!revokeTarget}
-          onClose={() => { if (!revokingId) setRevokeTarget(null); }}
+          kind="interview"
+          email={revokeTarget?.candidate_email}
+          isLoading={!!revokingId && revokingId === revokeTarget?.id}
+          onCancel={() => { if (!revokingId) setRevokeTarget(null); }}
           onConfirm={async () => {
             const inv = revokeTarget;
             if (!inv) return;
@@ -744,15 +748,6 @@ export default function AIInterviewTrackInvitesModal({
               setRevokeTarget(null);
             }
           }}
-          title="Revoke Interview Link?"
-          description={
-            revokeTarget
-              ? `This will immediately expire the interview link sent to ${revokeTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
-              : ''
-          }
-          confirmText={revokingId && revokingId === revokeTarget?.id ? 'Revoking…' : 'Confirm'}
-          cancelText="Cancel"
-          variant="danger"
         />
 
         {/* Bulk revoke — selected Invited candidates only. */}

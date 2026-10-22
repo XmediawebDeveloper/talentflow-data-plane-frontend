@@ -90,10 +90,12 @@ const TOTAL_JOBS_BATCH_SIZE = 100;
 
 /** The query Prev / Next carries on: `tab` (none for the default tab), and the
  *  list being paged through, so the next record pages through the same one. */
-const pagerQuery = (tab?: string, list?: string | null) => {
+const pagerQuery = (tab?: string, list?: string | null, fromJobDetails = false) => {
   const params = new URLSearchParams();
   if (tab && tab !== 'overview') params.set('tab', tab);
   if (list) params.set(PAGER_LIST_PARAM, list);
+  // A visit anchored to Job Details keeps that trail on the next record.
+  if (fromJobDetails) params.set('from', 'job-details');
   const query = params.toString();
   return query ? `?${query}` : '';
 };
@@ -430,7 +432,7 @@ function AssessmentDetailsContent() {
     : jobStopByAssessmentId[assessmentId] ?? -1;
   const goTo = (targetId: string, tab?: string) => {
     pagerArrivalFor = targetId;
-    router.replace(`/recruitment/assessments/${targetId}${pagerQuery(tab, pagerList)}`);
+    router.replace(`/recruitment/assessments/${targetId}${pagerQuery(tab, pagerList, fromJobDetails)}`);
   };
   const goPrev = currentIndex > 0
     ? (tab?: string) => goTo(allAssessmentIds[currentIndex - 1], tab)
@@ -468,6 +470,7 @@ function AssessmentDetailsContent() {
           onPrev={goPrev}
           onNext={goNext}
           breadcrumbItems={breadcrumbItems}
+          originQuery={fromJobDetails ? '?from=job-details' : ''}
           /* This route does not carry a Version History tab. The assessment's
              own versions are still reachable here through the version badge in
              the header; the vertical nav no longer repeats them. */

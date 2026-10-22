@@ -17,7 +17,6 @@ import {
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
-import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -680,13 +679,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
               </Button>
             </div>
           </div>
-        }
-        countBadge={
-          <ListCountBadge
-            filtered={filteredRows.length}
-            total={rows.length}
-            noun="result"
-          />
         }
       >
         <Button

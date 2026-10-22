@@ -106,7 +106,15 @@ function AIInterviewDetailsContent() {
      sessionStorage; without it (another browser tab, cleared storage) the
      unfiltered list is rebuilt from the API. Absent: every interview. */
   const pagerList = parseAIInterviewPagerList(searchParams.get('list'));
-  const pagerQuery = pagerList ? `?list=${pagerList}` : '';
+  /* Prev / Next keep the list being walked AND where the page was opened
+     from, so a visit anchored to Job Details keeps that trail. */
+  const pagerQuery = (() => {
+    const q = new URLSearchParams();
+    if (pagerList) q.set('list', pagerList);
+    if (fromJobDetails) q.set('from', 'job-details');
+    const s = q.toString();
+    return s ? `?${s}` : '';
+  })();
   const [allIds, setAllIds] = useState<string[]>([]);
   const [jobStopById, setJobStopById] = useState<Record<string, number>>({});
 
@@ -296,6 +304,7 @@ function AIInterviewDetailsContent() {
       draftLocked={isDraftLocked}
       breadcrumbItems={breadcrumbItems}
       initialTab={initialTab}
+      originQuery={fromJobDetails ? '?from=job-details' : ''}
     />
   );
 }

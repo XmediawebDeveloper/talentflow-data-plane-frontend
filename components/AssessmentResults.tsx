@@ -154,6 +154,10 @@ interface AssessmentResultsProps {
   /** Job Details: told the table's record count (every page, current filters)
    *  whenever it changes, so the tab badge shows the number the table lists. */
   onTotalItemsChange?: (total: number) => void;
+  /** Job Details: open a candidate's result in the host's own in-page view
+   *  (whose trail keeps the job) instead of routing to the Assessments
+   *  module's Result Details page. Unset = route, as before. */
+  onViewCandidate?: (candidate: { id: string; assessmentId: string; name: string; candidateDisplayId?: string; assessmentVersion?: number }) => void;
 }
 
 interface CandidateResult {
@@ -253,7 +257,7 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate }: AssessmentResultsProps) {
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -1705,6 +1709,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
       ));
     } catch { /* ignore quota errors */ }
+    if (onViewCandidate) {
+      onViewCandidate({
+        id: candidate.id,
+        assessmentId: candidate.assessmentId,
+        name: candidate.name,
+        candidateDisplayId: candidate.candidateDisplayId,
+        assessmentVersion: candidate.assessmentVersion,
+      });
+      return;
+    }
     /* The details route is the CANDIDATE's assessment, which under a widened
        version scope is not this page's. So this page names itself as the way
        back: its own path (the Results tab when embedded in an assessment's
@@ -1823,7 +1837,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             className="mb-4 md:mb-6"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
+              { label: 'AI Assessments', href: '/recruitment/assessments' },
               // Name the assessment these results belong to, not just "Results".
               ...(assessmentTitle ? [{ label: assessmentTitle }] : [{ label: 'Results' }]),
             ]}

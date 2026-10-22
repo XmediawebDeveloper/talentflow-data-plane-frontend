@@ -4649,6 +4649,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
                 onTotalItemsChange={setAssessmentTableTotal}
+                /* A row opens this page's own inline result view — the one
+                   Track Invites' View Result opens — so the trail stays
+                   Job Descriptions › <job> › <candidate> instead of leaving
+                   for the Assessments module and losing the job. */
+                onViewCandidate={(c) => setViewingAssessmentResult({
+                  id: c.id,
+                  assessmentId: c.assessmentId,
+                  assessmentName: anchor.title || job.title,
+                  candidateName: c.name,
+                  candidateDisplayId: c.candidateDisplayId,
+                  assessmentVersion: c.assessmentVersion,
+                })}
               />
             );
           })()}

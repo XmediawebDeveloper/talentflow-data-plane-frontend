@@ -1662,7 +1662,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           they read as one straight line. */}
                       <div className="flex basis-full items-center gap-2">
                       <div className="contents">
-                      <div className="order-last ml-auto flex flex-nowrap items-center gap-2">
+                      {/* From lg (laptop / desktop) View Versions moves beside
+                          Edit and takes over the ml-auto that pushes the pair
+                          right; below lg the footer is unchanged. */}
+                      <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
                         {/* Edit Button - icon only. Shown on every row except
                             Archived/Disabled ones — those are already retired,
                             so there is nothing on them to edit in place.
@@ -1914,7 +1917,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                               toggleVersions(versionKey, job.id);
                             }}
                             aria-expanded={versionsExpanded}
-                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 ${
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 lg:order-[9998] lg:ml-auto ${
                               versionsExpanded
                                 ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
                                 : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'

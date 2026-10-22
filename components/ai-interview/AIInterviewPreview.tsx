@@ -576,6 +576,15 @@ export default function AIInterviewPreview() {
                       ...(candidateCrumb ? [candidateCrumb] : []),
                       { label: position },
                     ]
+                  : fromJobDetails && interview?.jd_id
+                  ? [
+                      // Published from a flow that started on Job Details: keep
+                      // that page's trail, as the unpublished state does.
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+                      { label: interview?.jd_title || position, href: `/recruitment/job-details?id=${encodeURIComponent(interview.jd_id)}` },
+                      { label: position },
+                    ]
                   : [
                       { label: 'Dashboard', href: '/dashboard' },
                       { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
@@ -697,6 +706,7 @@ export default function AIInterviewPreview() {
                       { label: 'Dashboard', href: '/dashboard' },
                       { label: 'Job Descriptions', href: '/recruitment/job-openings' },
                       { label: interview?.jd_title || position, href: `/recruitment/job-details?id=${encodeURIComponent(interview.jd_id)}` },
+                      { label: 'Create AI Interview' },
                       { label: 'Preview & Publish' },
                     ]
                   : [

@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 // Shared with the assessment results page — one duration probe for all four recordings.
 import { VideoWithDuration, type VideoMarker } from '@/components/recording/RecordingPlayer';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import {
   Clock, MessageSquare, ThumbsUp, ThumbsDown,
@@ -13,8 +14,11 @@ import {
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
-  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode,
+  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase,
 } from 'lucide-react';
+import { jdService, type JDResponse } from '@/lib/services/jdService';
+import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
@@ -95,7 +99,7 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-const TAB_KEYS = ['overview', 'eval', 'evaluation', 'eval_report', 'eval_dashboard', 'sentiment', 'qa', 'recording', 'transcript', 'coverage', 'violations', 'skill_breakdown', 'question_analysis', 'example_scenarios', 'verification'] as const;
+const TAB_KEYS = ['overview', 'eval', 'evaluation', 'eval_report', 'eval_dashboard', 'sentiment', 'qa', 'recording', 'transcript', 'coverage', 'violations', 'skill_breakdown', 'question_analysis', 'example_scenarios', 'verification', 'viewjd'] as const;
 type TabKey = typeof TAB_KEYS[number];
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
@@ -649,10 +653,31 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
   // liveSession must be declared before any useEffect that references it in its
   // dependency array, because dependency arrays are evaluated immediately during render.
+  const router = useRouter();
   const [liveSession, setLiveSession] = useState(interview);
   const [liveWsConnected, setLiveWsConnected] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   useEffect(() => { setLiveSession(interview); }, [interview]);
+
+  /* View JD — the interview's job description, fetched the first time the
+     button is opened and kept for this candidate (the AI Interview Details
+     page's View JD tab does the same). */
+  const resultJdId = interview.jd_id || liveSession.jd_id || '';
+  const [resultJd, setResultJd] = useState<JDResponse | null>(null);
+  // Keyed by JD id, so a failure for one job never shows against another.
+  const [resultJdFailure, setResultJdFailure] = useState<{ jdId: string; message: string } | null>(null);
+  const resultJdLoaded = !!resultJd && resultJd.id === resultJdId;
+  const resultJdError = resultJdFailure?.jdId === resultJdId ? resultJdFailure.message : null;
+  useEffect(() => {
+    if (activeTab !== 'viewjd' || !resultJdId || resultJdLoaded || resultJdError) return;
+    let cancelled = false;
+    jdService.getById(resultJdId)
+      .then((jd) => { if (!cancelled) setResultJd(jd); })
+      .catch((error: any) => {
+        if (!cancelled) setResultJdFailure({ jdId: resultJdId, message: error?.message || 'Failed to load job description' });
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, resultJdId, resultJdLoaded, resultJdError]);
   /* The candidate's CID for the header tagline. The invite LIST endpoints
      inject `candidate_cid`; the single-session GET this page loads often
      doesn't — so when it's missing, find this session in its interview's
@@ -1954,6 +1979,38 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     }
   };
 
+  /* The job link in the header. Inside that job's own Job Details page it
+     closes this view (the job is already the page underneath). Elsewhere it
+     opens Job Details carrying this result, so that page's trail reads
+     AI Interviews › <interview> › <candidate> › job instead of resetting to
+     Job Descriptions. */
+  const openJobFromResult = (jdId: string) => {
+    const here = new URL(window.location.href);
+    if (here.pathname.startsWith('/recruitment/job-details') && here.searchParams.get('id') === jdId) {
+      onBack();
+      return;
+    }
+    const params = new URLSearchParams({ id: jdId });
+    if (here.pathname.startsWith('/recruitment/ai-interviews/')) {
+      params.set('from', 'ai-interview-result');
+      /* Mirror this page's own trail: opened from the AI Interviews list's
+         Candidate Results / Invitation Status tab it has no interview crumb
+         (Dashboard › AI Interviews › <candidate>), so none is sent — only
+         which tab "AI Interviews" returns to. Otherwise the interview the
+         candidate sat sits between the list and the candidate. */
+      const resultOrigin = here.searchParams.get('from');
+      if (resultOrigin === 'candidate-results' || resultOrigin === 'invitation-status') {
+        params.set('result_origin', resultOrigin);
+      } else {
+        const configId = interview.config_id || liveSession.config_id;
+        if (configId) params.set('interview_id', configId);
+        params.set('interview_title', interview.position || (interview as any).jd_title || '');
+      }
+      params.set('candidate_name', interview.candidate_name || '');
+      params.set('return_to', `${here.pathname}${here.search}`);
+    }
+    router.push(`/recruitment/job-details?${params.toString()}`);
+  };
   const candidateBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
     onNavigateToList
@@ -2075,6 +2132,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <Link
                           key="job"
                           href={`/recruitment/job-details?id=${encodeURIComponent(jdId)}`}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                            e.preventDefault();
+                            openJobFromResult(jdId);
+                          }}
                           title="Open this job"
                           className="group inline-flex items-center gap-1 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
                         >
@@ -2444,6 +2506,23 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     </button>
                   );
                 })}
+                {/* View JD — below the result tabs, set off by a rule on the
+                    desktop rail; one more pill on tablet / mobile. Opens the
+                    interview's job description in the content pane. */}
+                <div aria-hidden="true" className="hidden lg:block my-1 h-px bg-gray-100 dark:bg-slate-700/60" />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('viewjd')}
+                  aria-current={activeTab === 'viewjd' ? 'page' : undefined}
+                  className={`${tabPill(activeTab === 'viewjd')} whitespace-nowrap lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                    activeTab === 'viewjd'
+                      ? 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                      : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                  }`}
+                >
+                  <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4"><Briefcase className="w-4 h-4" /></span>
+                  <span className="leading-snug lg:min-w-0 lg:flex-1">View JD</span>
+                </button>
               </div>
             </nav>
           </div>
@@ -2452,8 +2531,37 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             box instead of stretching the grid column. */}
         <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="p-6">
-            {/* Evaluation pending spinner — shown for ALL tabs while batch eval runs */}
-            {evaluationPending && renderEvaluationSpinner()}
+            {/* Evaluation pending spinner — shown for ALL tabs while batch eval
+                runs, except View JD, which does not depend on the evaluation. */}
+            {evaluationPending && activeTab !== 'viewjd' && renderEvaluationSpinner()}
+
+            {/* View JD — the linked job description, read-only, with the same
+                components (and so the same reading) as the AI Interview
+                Details page's View JD tab. */}
+            {activeTab === 'viewjd' && (
+              <div className="space-y-4 sm:space-y-5">
+                {!resultJdId ? (
+                  <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No linked job description found</p>
+                  </div>
+                ) : resultJdError ? (
+                  <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <AlertTriangle className="w-8 h-8 text-destructive mx-auto mb-2" />
+                    <p className="text-sm text-destructive">{resultJdError}</p>
+                  </div>
+                ) : !resultJdLoaded || !resultJd ? (
+                  <div className="px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    <JDIdentityHeader jd={resultJd} versionNumber={interview.jd_version ?? undefined} />
+                    <JDOverviewSections jd={resultJd} />
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Overview Tab — candidate profile + performance summary (new design) */}
             {!evaluationPending && activeTab === 'overview' && (() => {
