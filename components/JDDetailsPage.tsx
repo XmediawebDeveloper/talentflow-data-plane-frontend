@@ -1,6 +1,7 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -1048,10 +1049,10 @@ export default function JDDetailsPage() {
                     {jd.department}
                   </span>
                 )}
-                {jd.location && (
+                {formatJdLocationText(jd) && (
                   <span className="flex items-center gap-1">
                     <MapPin className="w-4 h-4" />
-                    {jd.location}
+                    {formatJdLocationText(jd)}
                   </span>
                 )}
                 {jd.employment_type && (

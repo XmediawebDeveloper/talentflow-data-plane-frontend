@@ -1,6 +1,7 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -869,10 +870,10 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                             {jd.department}
                           </span>
                         )}
-                        {jd.location && (
-                          <span className="flex items-center gap-1">
+                        {formatJdLocationText(jd) && (
+                          <span className="flex items-center gap-1" title={formatJdLocationText(jd)}>
                             <MapPin className="h-3 w-3" />
-                            {jd.location}
+                            {formatJdLocationText(jd, 1)}
                           </span>
                         )}
                         <span className="flex items-center gap-1">

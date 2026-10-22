@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import {
   Briefcase,
   Users,
@@ -296,7 +297,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                             </div>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
                               {jd.department && <span>{jd.department}</span>}
-                              {jd.location && <span>· {jd.location}</span>}
+                              {formatJdLocationText(jd) && <span title={formatJdLocationText(jd)}>· {formatJdLocationText(jd, 1)}</span>}
                               {daysOpen !== null && (
                                 <span className="inline-flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
