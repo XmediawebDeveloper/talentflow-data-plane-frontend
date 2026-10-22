@@ -1,7 +1,6 @@
 'use client';
 
 import { ArrowLeft, Briefcase, Clock, Plus, X, Sparkles, CheckCircle2, Loader2, Users, Brain, Shield, TrendingUp, MessageSquare, Lightbulb, Trash2, Save, Globe, Video, Upload, MessageCircle } from 'lucide-react';
-import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -452,7 +451,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                         <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
                           {jd.department && <span>{jd.department}</span>}
                           {jd.job_level && <span className="capitalize">{jd.job_level}</span>}
-                          {formatJdLocationText(jd) && <span title={formatJdLocationText(jd)}>{formatJdLocationText(jd, 1)}</span>}
+                          {jd.location && <span>{jd.location}</span>}
                           {jd.experience_min != null && (
                             <span>
                               {jd.experience_min}{jd.experience_max ? `-${jd.experience_max}` : '+'} yrs

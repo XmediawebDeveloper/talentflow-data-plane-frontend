@@ -3915,10 +3915,10 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-semibold text-gray-900 text-right">{formatIndustryType(selectedJd.industry_type)}</span>
                     </div>
                   )}
-                  {(selectedJd.location || (selectedJd.locations?.length ?? 0) > 0) && (
+                  {selectedJd.location && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
-                      <SummaryLocation value={selectedJd.location} locations={selectedJd.locations} />
+                      <SummaryLocation value={selectedJd.location} />
                     </div>
                   )}
                   {selectedJd.employment_type && (

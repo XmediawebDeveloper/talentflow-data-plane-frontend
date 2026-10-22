@@ -386,10 +386,7 @@ export default function AIInterviewPreview() {
     job_id: interview?.jd_short_id,
     title: interview?.jd_title ?? position,
     status: 'Published',
-    location: interview?.jd_locations?.length
-      ? interview.jd_locations.map((l: { city?: string | null }) => l?.city).filter(Boolean).join(', ')
-      : (interview?.jd_location ?? ''),
-    locations: (interview?.jd_locations ?? []) as Job['locations'],
+    location: interview?.jd_location ?? '',
     daysActive: 0,
     requiredMatch: 0,
     industry_type: interview?.jd_industry_type,
@@ -1137,10 +1134,10 @@ export default function AIInterviewPreview() {
                   <span className="text-xs font-semibold text-gray-900 text-right">{formatIndustryType(interview.jd_industry_type)}</span>
                 </div>
               )}
-              {(interview.jd_location || (interview.jd_locations?.length ?? 0) > 0) && (
+              {interview.jd_location && (
                 <div className="px-3 py-2 flex items-center justify-between gap-2">
                   <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
-                  <SummaryLocation value={interview.jd_location} locations={interview.jd_locations} />
+                  <SummaryLocation value={interview.jd_location} />
                 </div>
               )}
               {interview.jd_version != null && (

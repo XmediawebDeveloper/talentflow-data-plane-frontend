@@ -14,12 +14,7 @@ export const publishedJdToJob = (jd: PublishedJD): Job => ({
   job_id: jd.job_id,
   title: jd.title,
   status: 'Published',
-  // Same rule as mapJDToJob: the full locations array wins over the legacy
-  // single `location` column, so every saved place reaches the summary.
-  location: jd.locations && jd.locations.length > 0
-    ? jd.locations.map((loc) => loc?.city).filter(Boolean).join(', ')
-    : (jd.location || ''),
-  locations: (jd.locations || []) as Job['locations'],
+  location: jd.location || '',
   daysActive: 0,
   requiredMatch: 0,
   department: jd.department,

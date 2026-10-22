@@ -226,19 +226,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Email message — populated dynamically with config/user context
   const [customMessage, setCustomMessage] = useState('');
 
-  // All of the JD's saved places when the config carries them (single-config
-  // fetch); otherwise the one-place snapshot taken when the config was created.
-  const jdLocationLabel: string = (() => {
-    const locs = (config as any).jd_locations as Array<{ city?: string | null }> | undefined;
-    const cities = (locs || []).map((l) => l?.city).filter(Boolean) as string[];
-    return cities.length > 0 ? cities.join('; ') : ((config as any).jd_location || '');
-  })();
-
   useEffect(() => {
     if (!isOpen) return;
     const companyName = (user as any)?.tenantName || 'Our Company';
     const jobTitle = config.jd_title || config.position || 'the role';
-    const location = jdLocationLabel ? ` in ${jdLocationLabel}` : '';
+    const location = (config as any).jd_location ? ` in ${(config as any).jd_location}` : '';
     setCustomMessage(
       `You have been invited to complete an AI interview for the ${jobTitle} role at ${companyName}${location}. Please use the secure link below and complete it in one sitting. Before you begin, make sure your camera, microphone, and internet connection are ready.`
     );
@@ -2029,10 +2021,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   <div className="text-sm text-brand-blue/80 mt-1 font-medium">
                     {(user as any)?.tenantName || 'Our Company'}
                   </div>
-                  {jdLocationLabel && (
+                  {((config as any).jd_location) && (
                     <div className="flex items-center justify-center gap-1.5 mt-1.5 text-brand-blue/80 text-sm">
                       <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>{jdLocationLabel}</span>
+                      <span>{(config as any).jd_location}</span>
                     </div>
                   )}
                 </div>

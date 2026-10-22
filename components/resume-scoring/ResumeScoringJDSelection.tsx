@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { formatEmploymentType, formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
+import { formatEmploymentType } from '@/lib/utils/jobOpeningDisplay';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistory from '@/components/JDVersionHistory';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -213,10 +213,10 @@ export default function ResumeScoringJDSelection() {
                             {jd.department}
                           </span>
                         )}
-                        {formatJdLocationText(jd) && (
-                          <span className="flex items-center gap-1" title={formatJdLocationText(jd)}>
+                        {jd.location && (
+                          <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
-                            {formatJdLocationText(jd, 1)}
+                            {jd.location}
                           </span>
                         )}
                         {jd.employment_type && (

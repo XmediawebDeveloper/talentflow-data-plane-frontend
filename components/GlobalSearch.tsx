@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { formatJdLocationText } from '@/lib/utils/jobOpeningDisplay';
 import { Search, Loader2, FileText, Briefcase, ClipboardList, Video, X, Folder as FolderIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder } from '@/lib/services/resumeService';
@@ -277,7 +276,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {[jd.department, formatJdLocationText(jd, 1), jd.status].filter(Boolean).join(' · ')}
+                        {[jd.department, jd.location, jd.status].filter(Boolean).join(' · ')}
                       </div>
                     </button>
                   ))}
