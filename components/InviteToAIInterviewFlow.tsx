@@ -127,17 +127,7 @@ export default function InviteToAIInterviewFlow({
     setHasLoaded(true);
     setIsLoading(true);
     (async () => {
-      const live: AIInterviewResponse[] = [];
-      for (let page = 1; ; page += 1) {
-        const batch = await aiInterviewService.listConfigs({ page, page_size: 100, compact: true });
-        const items = batch.items || [];
-        live.push(...items);
-        if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
-      }
-      const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-      const archived = archivedProbe.total > archivedProbe.items.length
-        ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-        : archivedProbe.items;
+      const { live, archived } = await aiInterviewService.listAllConfigsSplit();
       const seen = new Set<string>();
       const all = [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
       // The job version's mapping, resolved with the list so the cards and

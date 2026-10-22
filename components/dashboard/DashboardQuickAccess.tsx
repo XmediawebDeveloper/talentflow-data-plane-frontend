@@ -169,7 +169,6 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   return (
     <Link
       href={href}
-      prefetch={false}
       className={`group relative flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 transition-[border-color,box-shadow,color,background-color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
     >
       {inner}

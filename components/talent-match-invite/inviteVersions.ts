@@ -187,17 +187,7 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
  *  AI interviews" hands the shared AIInterviewPicker, which lists the active
  *  ones and needs the rest to number versions and group jobs. */
 export async function loadAllInterviewConfigs(): Promise<AIInterviewResponse[]> {
-  const live: AIInterviewResponse[] = [];
-  for (let page = 1; ; page += 1) {
-    const batch = await aiInterviewService.listConfigs({ page, page_size: 100, compact: true });
-    const items = batch.items || [];
-    live.push(...items);
-    if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
-  }
-  const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-  const archived = archivedProbe.total > archivedProbe.items.length
-    ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-    : archivedProbe.items;
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
   const seen = new Set<string>();
   return [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 }

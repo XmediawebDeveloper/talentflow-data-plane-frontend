@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, RotateCcw, Trash2, Undo2 } from 'lucide-react';
+import { AlertTriangle, RotateCcw, Save, Trash2, Undo2 } from 'lucide-react';
 import AppModal from '@/components/ui/app-modal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 
@@ -25,8 +25,13 @@ export interface LeaveJDDialogProps {
   nothingSavedYet: boolean;
   /** Why Delete is unavailable (published JD, no record yet); null = allowed. */
   deleteBlockedReason: string | null;
-  busy: 'discard' | 'delete' | null;
+  /** Editing a published JD: Save writes the changes to it and it stays Published. */
+  isPublishedJD?: boolean;
+  /** Short name of the step the recruiter is on, e.g. "Step 2 (Extract)". */
+  currentStepLabel: string;
+  busy: 'save' | 'discard' | 'delete' | null;
   onCancel: () => void;
+  onSave: () => void;
   onDiscard: () => void;
   onDelete: () => void;
 }
@@ -49,13 +54,16 @@ export default function LeaveJDDialog({
   discardTarget,
   nothingSavedYet,
   deleteBlockedReason,
+  isPublishedJD = false,
+  currentStepLabel,
   busy,
   onCancel,
+  onSave,
   onDiscard,
   onDelete,
 }: LeaveJDDialogProps) {
   const isLaterVersion = versionNumber > 1;
-  const deleteLabel = isLaterVersion ? `Delete this version (V${versionNumber})` : 'Delete this entire JD';
+  const deleteLabel = isLaterVersion ? `Delete version V${versionNumber}` : 'Delete this entire JD';
   const discardDisabled = busy !== null || (!nothingSavedYet && discardTarget === null);
   const deleteDisabled = busy !== null || deleteBlockedReason !== null;
 
@@ -75,6 +83,8 @@ export default function LeaveJDDialog({
       icon={<AlertTriangle />}
       title="Leave this job description?"
       subtitle="Choose what happens to this JD before you go"
+      // Save as Draft is the primary action, so it is last: rightmost on desktop and
+      // on top when the buttons stack on a phone.
       actions={[
         {
           label: 'Discard current changes',
@@ -91,6 +101,14 @@ export default function LeaveJDDialog({
           loading: busy === 'delete',
           title: deleteBlockedReason ?? undefined,
         },
+        {
+          label: 'Save as Draft',
+          variant: 'primary',
+          icon: <Save className="h-4 w-4" />,
+          onClick: onSave,
+          disabled: busy !== null,
+          loading: busy === 'save',
+        },
       ]}
     >
       {(jobCode || jobTitle) && (
@@ -103,6 +121,15 @@ export default function LeaveJDDialog({
       )}
 
       <ul className="space-y-3 text-sm">
+        <li className="flex gap-3">
+          <Save className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+          <p className="text-gray-700 dark:text-slate-300">
+            <span className="font-semibold text-gray-900 dark:text-slate-100">Save as Draft</span> —{' '}
+            {isPublishedJD
+              ? 'save everything you changed to this JD (it stays Published) and leave.'
+              : <>keep everything as it is now and leave. Continue later from Job Descriptions → Draft; it reopens on {currentStepLabel}.</>}
+          </p>
+        </li>
         <li className="flex gap-3">
           <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-400" />
           <p className="text-gray-700 dark:text-slate-300">

@@ -3,7 +3,7 @@
  * Base configuration and axios instance
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
@@ -17,6 +17,80 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+/*
+ * Identical-GET sharing. Opening a module fired the same GET from several
+ * independent components at once (/usage/quota-status x3, /ai-interview/configs
+ * x3, /assessments x2, the whole /scoring/all table x2 ...), each a full round
+ * trip. A GET whose URL + params + token matches one still in flight, or one
+ * that finished under GET_REUSE_MS ago, shares that response instead.
+ *
+ * Done at the adapter, so every caller still runs its own response
+ * interceptors (401 refresh, subscription events) and its own
+ * transformResponse — the raw body is a string here, so each caller parses
+ * its own copy and nobody can mutate another caller's data. Any non-GET
+ * clears the cache when it starts AND when it finishes, so a read after a
+ * write never sees pre-write data. Pass `dedupe: false` in the request
+ * config to opt out (e.g. a poll that must hit the server every time).
+ */
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    dedupe?: boolean;
+  }
+}
+const GET_REUSE_MS = 1000;
+type SharedGet = { promise: Promise<AxiosResponse>; settledAt: number | null; raw?: unknown };
+const sharedGets = new Map<string, SharedGet>();
+const baseAdapter = axios.getAdapter(api.defaults.adapter);
+api.defaults.adapter = (config: InternalAxiosRequestConfig) => {
+  const method = (config.method || 'get').toLowerCase();
+  if (method !== 'get') {
+    sharedGets.clear();
+    return baseAdapter(config).finally(() => sharedGets.clear());
+  }
+  if (config.dedupe === false || config.signal || (config.responseType && config.responseType !== 'json')) {
+    return baseAdapter(config);
+  }
+  // Params sorted so `{ page, page_size }` and `{ page_size, page }` share.
+  let paramsKey: string;
+  if (config.params instanceof URLSearchParams) {
+    paramsKey = config.params.toString();
+  } else {
+    const params = (config.params ?? {}) as Record<string, unknown>;
+    paramsKey = JSON.stringify(Object.keys(params).sort()
+      .filter((k) => params[k] !== undefined && params[k] !== null)
+      .map((k) => [k, params[k]]));
+  }
+  const key = `${config.baseURL}|${config.url}|${paramsKey}|${config.headers?.Authorization ?? ''}`;
+  const hit = sharedGets.get(key);
+  if (hit && (hit.settledAt === null || Date.now() - hit.settledAt < GET_REUSE_MS)) {
+    return hit.promise.then(
+      // `hit.raw`, not `response.data`: axios parses the first caller's body
+      // by assigning onto this same response object.
+      (response) => ({
+        ...response,
+        config,
+        data: typeof hit.raw === 'string' ? hit.raw : structuredClone(hit.raw),
+      }),
+      (error) => {
+        throw axios.isAxiosError(error)
+          ? new AxiosError(error.message, error.code, config, error.request, error.response)
+          : error;
+      },
+    );
+  }
+  const entry: SharedGet = { promise: Promise.resolve(null as unknown as AxiosResponse), settledAt: null };
+  entry.promise = baseAdapter(config).then((response) => {
+    entry.raw = response.data;
+    return response;
+  });
+  sharedGets.set(key, entry);
+  entry.promise.then(
+    () => { entry.settledAt = Date.now(); },
+    () => { if (sharedGets.get(key) === entry) sharedGets.delete(key); },
+  );
+  return entry.promise;
+};
 
 // Token management
 let accessToken: string | null = null;
@@ -267,10 +341,13 @@ export const authFetch = async (
     ...options.headers,
   };
 
+  const isWrite = (options.method || 'GET').toUpperCase() !== 'GET';
+  if (isWrite) sharedGets.clear();
   const response = await fetch(url, {
     ...options,
     headers,
   });
+  if (isWrite) sharedGets.clear();
 
   // Handle 401 - logout and redirect
   if (response.status === 401) {

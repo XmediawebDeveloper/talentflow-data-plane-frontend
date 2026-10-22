@@ -722,8 +722,33 @@ export default function AITalentMatchPage({
     // so the roll-up waits on the slower of the two rather than their sum.
     const scoredIdsRequest = loadAllScoredResumeIds();
     try {
+      // Every uncached session in ONE batch request (chunks of 200) — one
+      // GET /sessions/{id} per session was ~100 parallel requests that queued
+      // behind the browser's connection limit and stalled the whole page.
+      const uncached = matchHistory.filter(item => !historyCandidatesById[item.id] && item.totalMatches > 0);
+      const batched = new Map<string, MatchedCandidateWithVersions[]>();
+      if (uncached.length > 0) {
+        try {
+          const ids = uncached.map(item => item.id);
+          const chunks: string[][] = [];
+          for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+          const maps = await Promise.all(chunks.map(chunk => aiMatchService.getSessionsBatch(chunk)));
+          for (const map of maps) {
+            for (const [id, { candidates }] of map) batched.set(id, candidates as MatchedCandidateWithVersions[]);
+          }
+          if (batched.size > 0) {
+            setHistoryCandidatesById(prev => ({ ...prev, ...Object.fromEntries(batched) }));
+          }
+        } catch (error) {
+          // Older backend without the batch route: fall back to per-session below.
+          console.warn('[AITalentMatch] Session batch failed, falling back to per-session fetch:', error);
+        }
+      }
       const perJob = await Promise.all(
-        matchHistory.map(async (item) => ({ item, candidates: await loadHistoryCandidates(item, { silent }) }))
+        matchHistory.map(async (item) => ({
+          item,
+          candidates: batched.get(item.id) ?? await loadHistoryCandidates(item, { silent }),
+        }))
       );
 
       const byKey = new Map<string, CandidateMatchRow>();

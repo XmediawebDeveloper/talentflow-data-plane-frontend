@@ -45,6 +45,7 @@ import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 interface SearchFilters {
   skills?: string[];
@@ -226,15 +227,10 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       const params = buildSearchParams();
       // Probe with the smallest possible window to learn the true total,
       // then issue one full-size request so the UI shows every record.
-      const [probe, folderResponse] = await Promise.all([
-        resumeService.list({ ...params, page_size: 1 }),
+      const [resumeResponse, folderResponse] = await Promise.all([
+        fetchAllRows((page_size, page) => resumeService.list({ ...params, page_size, page })),
         folderService.list().catch(() => []),
       ]);
-      if (isStale()) return;
-      const resumeResponse =
-        probe.total > probe.items.length
-          ? await resumeService.list({ ...params, page_size: probe.total })
-          : probe;
       if (isStale()) return;
 
       // Convert API Resume to component Resume type
@@ -516,10 +512,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // Fetch jobs for Apply to Job modal
   const fetchJobs = async () => {
     try {
-      const probe = await jdService.list({ page_size: 1, source: 'my-jds' });
-      const response = probe.total > probe.items.length
-        ? await jdService.list({ page_size: probe.total, source: 'my-jds' })
-        : probe;
+      const response = await fetchAllRows((page_size, page) => jdService.list({ page_size, page, source: 'my-jds' }));
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,

@@ -349,20 +349,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         // Same "fetch every config, bucket by jd_id, sort oldest first" the
         // All Interviews table and the interview details page's own
         // sibling lookup use — there is no list-by-jd_id endpoint.
-        const live: AIInterviewResponse[] = [];
-        let apiPage = 1;
-        for (;;) {
-          const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-          const items = batch.items || [];
-          live.push(...items);
-          const total = batch.total ?? live.length;
-          if (items.length < 100 || live.length >= total) break;
-          apiPage += 1;
-        }
-        const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-        const archived = archivedProbe.total > archivedProbe.items.length
-          ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-          : archivedProbe.items;
+        const { live, archived } = await aiInterviewService.listAllConfigsSplit();
         if (cancelled) return;
         const siblings = [...live, ...archived].filter((c) => c.jd_id === own.jd_id);
         const sorted = siblings.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());

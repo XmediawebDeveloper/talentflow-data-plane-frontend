@@ -384,21 +384,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      archived configs (AIInterview.tsx loads them separately for the same
      reason), and "All Interviews" means every version regardless of status. */
   const fetchAll = useCallback(async (): Promise<InterviewRow[]> => {
-    const live: AIInterviewResponse[] = [];
-    let apiPage = 1;
-    for (;;) {
-      const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-      const items = batch.items || [];
-      live.push(...items);
-      const total = batch.total ?? live.length;
-      if (items.length < 100 || live.length >= total) break;
-      apiPage += 1;
-    }
-
-    const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-    const archived = archivedProbe.total > archivedProbe.items.length
-      ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-      : archivedProbe.items;
+    const { live, archived } = await aiInterviewService.listAllConfigsSplit();
 
     const seen = new Set<string>();
     const merged: AIInterviewResponse[] = [];
