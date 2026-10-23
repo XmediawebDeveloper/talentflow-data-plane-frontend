@@ -427,6 +427,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
         <AppModal
           open
           size="lg"
+          mobileSheet
           zIndexClass="z-50"
           onCancel={handleClose}
           cancelDisabled={isSaving}

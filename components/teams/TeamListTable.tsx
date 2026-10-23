@@ -29,7 +29,39 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
   const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
-      <div className="overflow-x-auto tf-table-shell">
+      {/* Phones: compact rows instead of the 820px-wide table. Sorting stays
+          on the toolbar's Sort dropdown. */}
+      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+        {teams.map((team) => (
+          <li key={team.id}>
+            <button
+              type="button"
+              onClick={() => onViewDetails(team.id)}
+              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
+            >
+              <TeamAvatar team={team} className="h-9 w-9 rounded-lg text-xs" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
+                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                  {team.team_lead ? (
+                    <>
+                      <Crown className="h-3 w-3 shrink-0 text-brand-blue/60 dark:text-blue-300/70" />
+                      <span className="truncate">{team.team_lead.name}</span>
+                    </>
+                  ) : (
+                    <span className="italic text-gray-400 dark:text-slate-500">No lead</span>
+                  )}
+                </span>
+                <span className="mt-0.5 block truncate text-2xs text-gray-400 dark:text-slate-500">
+                  {team.member_count} members · {team.active_jobs_count.toLocaleString()} jobs · {team.resumes_count.toLocaleString()} resumes
+                </span>
+              </span>
+              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-600" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto tf-table-shell md:block">
         <table className="w-full min-w-[820px]">
           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
             <tr className="text-left">
