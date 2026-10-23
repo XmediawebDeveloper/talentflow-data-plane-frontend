@@ -11170,7 +11170,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 : 'rgba(148, 163, 184, 0.7) transparent',
             }}
           >
-            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing && (
+            {/* Hidden while the centred "Preparing your interview…" card is up
+                (turnBanner 'starting') — it peeked out above the card. */}
+            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
+              && (binaHasSpoken || isClosing || isRecording) && (
               <div className="flex items-center justify-center h-full">
                 <p className="text-gray-400 text-sm text-center">Conversation will appear here...</p>
               </div>
