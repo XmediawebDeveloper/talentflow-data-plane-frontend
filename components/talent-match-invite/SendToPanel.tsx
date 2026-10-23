@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { AlertTriangle, Lightbulb } from 'lucide-react';
 import { CANDIDATE_SOURCE_LABEL, type DeliveryMethod, type InviteCandidate, type InviteCandidateSource, type InviteKind } from './inviteVersions';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
@@ -48,6 +49,7 @@ export default function SendToPanel({
   onExpiry,
   candidatesOnly = false,
   addInNextStep = false,
+  listSlot,
 }: {
   kind: InviteKind;
   candidates: InviteCandidate[];
@@ -66,6 +68,11 @@ export default function SendToPanel({
    *  Upload Excel, Resume Database): nobody ticked is fine, and the panel
    *  says where to add them. */
   addInNextStep?: boolean;
+  /** Job Details' Create / Send for a whole job: the server-paged picker
+   *  (ServerCandidatePicker) stands in for the candidate list — it has its
+   *  own heading, counts and Select all. The delivery, message and expiry
+   *  controls below are unchanged. */
+  listSlot?: ReactNode;
 }) {
   /* The list, under the heading of where its candidates came from (the tab
      that opened the popup). */
@@ -90,6 +97,7 @@ export default function SendToPanel({
 
   return (
     <div className="space-y-4">
+      {listSlot ?? (
       <section aria-labelledby="send-to-heading">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
           <h3 id="send-to-heading" className={SECTION}>Candidates · {picked} of {candidates.length}</h3>
@@ -196,6 +204,7 @@ export default function SendToPanel({
           </p>
         )}
       </section>
+      )}
 
       {!candidatesOnly && (<>
       <fieldset>

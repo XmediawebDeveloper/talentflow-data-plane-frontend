@@ -1183,16 +1183,32 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     if (detail && typeof detail === 'object') { try { return JSON.stringify(detail); } catch { /* fall through */ } }
     return err?.message || 'Evaluation request failed';
   };
+  // The endpoint declines while the interview's own live evaluation is still
+  // running (stub carries evaluation_in_progress_since) — the 5s poll picks up
+  // that result. If it never lands, re-arm after 60s so the stub still gets
+  // re-evaluated once the server's in-progress window has passed.
+  const [autoReevalTick, setAutoReevalTick] = useState(0);
   useEffect(() => {
     if (!isCompleted || !evalIncomplete || wasTerminated || noAnswersRecorded) return;
     if (_autoReevalFiredRef.current === liveSession.id) return;
     _autoReevalFiredRef.current = liveSession.id;
     setEvalTriggerError(null);
+    let rearm: ReturnType<typeof setTimeout> | undefined;
     aiInterviewService.triggerEvaluation(liveSession.id)
       .then(() => aiInterviewService.get(liveSession.id))
-      .then(updated => setLiveSession(updated))
+      .then(updated => {
+        setLiveSession(updated);
+        if ((updated as any)?.ai_evaluation?.evaluation_in_progress_since
+            && (updated as any)?.ai_evaluation?.evaluation_incomplete) {
+          rearm = setTimeout(() => {
+            _autoReevalFiredRef.current = null;
+            setAutoReevalTick(t => t + 1);
+          }, 60000);
+        }
+      })
       .catch((err: any) => { setEvalTriggerError(describeEvalError(err)); /* poll fallback keeps trying; stub remains re-evaluable */ });
-  }, [isCompleted, evalIncomplete, wasTerminated, noAnswersRecorded, liveSession.id]);
+    return () => { if (rearm) clearTimeout(rearm); };
+  }, [isCompleted, evalIncomplete, wasTerminated, noAnswersRecorded, liveSession.id, autoReevalTick]);
 
   // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
   // Fallback for an interview whose candidate reached the END but whose result is
