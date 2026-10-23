@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 
 interface UseHandRaiseDetectionConfig {
   onHandRaised?: () => void;
@@ -312,10 +312,9 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
     };
   }, [enabled, isLoading]);
 
-  return {
-    isHandRaised,
-    isLoading,
-    error,
-    setVideoElement,
-  };
+  // Memoised so consumers' useCallback deps stay stable between renders.
+  return useMemo(
+    () => ({ isHandRaised, isLoading, error, setVideoElement }),
+    [isHandRaised, isLoading, error, setVideoElement],
+  );
 }

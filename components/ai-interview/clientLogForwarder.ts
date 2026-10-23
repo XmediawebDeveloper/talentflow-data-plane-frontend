@@ -68,6 +68,13 @@ function capture(level: 'log' | 'warn' | 'error', args: unknown[]): void {
   if (inCapture) return;
   inCapture = true;
   try {
+    // Decide on the STRING arguments first. JSON.stringify-ing every argument
+    // of every console call (WS events with full payloads, per-chunk audio
+    // logs, …) before the allowlist check cost CPU + garbage on the hot path
+    // for lines that were then thrown away.
+    let head = '';
+    for (const a of args) if (typeof a === 'string') head += (head ? ' ' : '') + a;
+    if (!ALLOW_PREFIXES.some((p) => head.startsWith(p)) && !CONN_SUBSTR.some((s) => head.includes(s))) return;
     const line = fmt(args);
     if (shouldForward(line)) {
       const ts = new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, Search, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Lock, Search, X } from 'lucide-react';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { folderService, type Folder } from '@/lib/services/resumeService';
 import {
   bulkInviteService,
   SERVER_MATCH_LABEL,
@@ -13,10 +15,31 @@ import {
   type ServerInviteCandidate,
   type ServerMatchStatus,
 } from '@/lib/services/bulkInviteService';
-import { CANDIDATE_SOURCE_LABEL } from './inviteVersions';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 
 const PAGE_SIZE = 50;
+
+/* The tabs: the job's two lists, then the resume database — the share
+   step's "Select From" (My Resumes / Shared Database), here as server-paged
+   tabs so the bulk path keeps it. */
+const TABS: InviteCandidateSourceTab[] = ['talent-match', 'score-resume', 'my-resumes', 'internal-db'];
+export const TAB_LABEL: Record<InviteCandidateSourceTab, string> = {
+  'talent-match': 'AI Talent Match',
+  'score-resume': 'Score Resume',
+  'my-resumes': 'My Resumes',
+  'internal-db': 'Shared Database',
+};
+const LIST_HEADING: Record<InviteCandidateSourceTab, string> = {
+  'talent-match': 'AI Talent Match Candidates',
+  'score-resume': 'Score Resume Candidates',
+  'my-resumes': 'My Resumes',
+  'internal-db': 'Shared Database',
+};
+const isDbTab = (s: InviteCandidateSourceTab) => s === 'my-resumes' || s === 'internal-db';
+
+interface FolderOption { id: string; name: string; depth: number; count: number }
+const flattenFolders = (list: Folder[], depth = 0): FolderOption[] =>
+  list.flatMap((f) => [{ id: f.id, name: f.name, depth, count: f.resume_count ?? 0 }, ...flattenFolders(f.children ?? [], depth + 1)]);
 
 /** A ticked (or, in filter mode, unticked) row, remembered across tabs and pages. */
 export interface PickedCandidate {
@@ -57,6 +80,7 @@ export const describeFilters = (f: InviteCandidateFilters): string => {
   if (f.min_rating) parts.push(`rating ≥ ${f.min_rating}`);
   if (f.min_score) parts.push(`score ≥ ${f.min_score}%`);
   if (f.exclude_invited) parts.push('not yet invited');
+  if (f.folder_id) parts.push('in the chosen folder');
   return parts.join(' · ');
 };
 
@@ -80,7 +104,8 @@ const fmt = (n: number) => n.toLocaleString();
 /**
  * The Create / Send popup's candidate list for a whole job: the server's
  * paged, filtered list (API 1) in place of every row loaded into the browser.
- * Two tabs with server counts, search and filters, 50 rows at a time loaded
+ * Four tabs (the job's two lists, My Resumes, Shared Database) with server
+ * counts, search and filters, 50 rows at a time loaded
  * on scroll, ticking by row or "Select all N matching"; the selection is
  * kept as ids or as the filter, never as the rows.
  */
@@ -102,6 +127,18 @@ export default function ServerCandidatePicker({
   pickingDisabled?: boolean;
 }) {
   const [source, setSource] = useState<InviteCandidateSourceTab>('talent-match');
+  /* The database tabs follow the resume list's own permissions (the share
+     step's rule): locked tabs stay visible, greyed, with the reason. */
+  const { user } = useAuth();
+  const perms = user?.permissions;
+  const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
+    'talent-match': true,
+    'score-resume': true,
+    'my-resumes': !!(perms?.canUploadResumes || perms?.canViewResumes),
+    'internal-db': !!(perms?.canAccessInternalDB || perms?.canViewInternalDB),
+  };
+  /* My Resumes' folders, read once the tab is first opened. */
+  const [folders, setFolders] = useState<FolderOption[] | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState<InviteCandidateFilters>({ sort: 'best' });
   const [rows, setRows] = useState<ServerInviteCandidate[]>([]);
@@ -124,6 +161,15 @@ export default function ServerCandidatePicker({
     }, 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    if (source !== 'my-resumes' || folders !== null) return;
+    let cancelled = false;
+    folderService.list()
+      .then((list) => { if (!cancelled) setFolders(flattenFolders(list)); })
+      .catch(() => { if (!cancelled) setFolders([]); });
+    return () => { cancelled = true; };
+  }, [source, folders]);
 
   /* One request per (tab, filters, version, page). Page 1 replaces the list;
      later pages append. A newer request cancels an older one. */
@@ -212,7 +258,7 @@ export default function ServerCandidatePicker({
   };
 
   const pickedBySource = useMemo(() => {
-    const out: Record<InviteCandidateSourceTab, number> = { 'talent-match': 0, 'score-resume': 0 };
+    const out: Record<InviteCandidateSourceTab, number> = { 'talent-match': 0, 'score-resume': 0, 'my-resumes': 0, 'internal-db': 0 };
     if (selection.mode === 'ids') for (const p of Object.values(selection.picked)) out[p.source] += 1;
     else out[selection.source] = selectionCount(selection);
     return out;
@@ -224,6 +270,13 @@ export default function ServerCandidatePicker({
 
   const setFilter = <K extends keyof InviteCandidateFilters>(key: K, value: InviteCandidateFilters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
+  const switchTab = (s: InviteCandidateSourceTab) => {
+    if (!tabAccess[s] || s === source) return;
+    setSource(s);
+    // The folder belongs to My Resumes; the rating to AI Talent Match.
+    if (s !== 'my-resumes' && filters.folder_id) setFilter('folder_id', undefined);
+    if (s !== 'talent-match' && filters.min_rating) setFilter('min_rating', undefined);
+  };
 
   return (
     <section aria-labelledby="server-send-to-heading" className="space-y-3">
@@ -264,23 +317,31 @@ export default function ServerCandidatePicker({
 
       {/* Tabs with the server's counts and this tab's picks. */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-slate-700" role="tablist" aria-label="Candidate source">
-        {(['talent-match', 'score-resume'] as const).map((s) => (
-          <button
-            key={s}
-            role="tab"
-            aria-selected={source === s}
-            onClick={() => setSource(s)}
-            className={`-mb-px px-3 py-2 text-xs font-medium border-b-2 transition-colors ${source === s
-              ? 'border-brand-blue text-brand-blue'
-              : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100'}`}
-          >
-            {CANDIDATE_SOURCE_LABEL[s].replace(' Candidates', '')}
-            <span className="ml-1 tabular-nums text-gray-500 dark:text-slate-500">({counts ? fmt(counts[s]) : '…'})</span>
-            {pickedBySource[s] > 0 && (
-              <span className="ml-1.5 inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(pickedBySource[s])}</span>
-            )}
-          </button>
-        ))}
+        {TABS.map((s) => {
+          const locked = !tabAccess[s];
+          return (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={source === s}
+              aria-disabled={locked}
+              onClick={() => switchTab(s)}
+              title={locked ? `You do not have permission to access ${TAB_LABEL[s]}` : undefined}
+              className={`-mb-px px-3 py-2 text-xs font-medium border-b-2 transition-colors ${source === s
+                ? 'border-brand-blue text-brand-blue'
+                : locked ? 'border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100'}`}
+            >
+              {locked && <Lock className="inline w-3 h-3 mr-1 -mt-px" aria-hidden="true" />}
+              {TAB_LABEL[s]}
+              {!locked && <span className="ml-1 tabular-nums text-gray-500 dark:text-slate-500">({counts ? fmt(counts[s]) : '…'})</span>}
+              {pickedBySource[s] > 0 && (
+                <span className="ml-1.5 inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(pickedBySource[s])}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Search + filters */}
@@ -296,6 +357,14 @@ export default function ServerCandidatePicker({
             className={`${CONTROL} w-full pl-8`}
           />
         </div>
+        {source === 'my-resumes' && (
+          <select aria-label="Folder" value={filters.folder_id ?? ''} onChange={(e) => setFilter('folder_id', e.target.value || undefined)} className={CONTROL}>
+            <option value="">All folders</option>
+            {(folders ?? []).map((f) => (
+              <option key={f.id} value={f.id}>{'\u00a0\u00a0'.repeat(f.depth)}{f.name} ({f.count})</option>
+            ))}
+          </select>
+        )}
         <select aria-label="Match status" value={filters.match_status ?? ''} onChange={(e) => setFilter('match_status', (e.target.value || undefined) as ServerMatchStatus | undefined)} className={CONTROL}>
           <option value="">Any match status</option>
           <option value="exact_match">Exact Match</option>
@@ -318,10 +387,10 @@ export default function ServerCandidatePicker({
           {[90, 80, 70, 60, 50, 40].map((n) => <option key={n} value={n}>Score ≥ {n}%</option>)}
         </select>
         <select aria-label="Sort" value={filters.sort ?? 'best'} onChange={(e) => setFilter('sort', e.target.value as InviteCandidateSort)} className={CONTROL}>
-          <option value="best">Best first</option>
+          <option value="best">{isDbTab(source) ? 'Newest first' : 'Best first'}</option>
           <option value="score">Score</option>
           {source === 'talent-match' && <option value="rating">Rating</option>}
-          <option value="recent">Recently scored</option>
+          {!isDbTab(source) && <option value="recent">Recently scored</option>}
           <option value="name">Name</option>
         </select>
         <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
@@ -340,13 +409,16 @@ export default function ServerCandidatePicker({
       ) : rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
           {counts && counts[source] === 0
-            ? (source === 'talent-match' ? 'No AI Talent Match candidates for this job yet.' : 'No scored resumes for this job outside AI Talent Match.')
+            ? (source === 'talent-match' ? 'No AI Talent Match candidates for this job yet.'
+              : source === 'score-resume' ? 'No scored resumes for this job outside AI Talent Match.'
+              : source === 'my-resumes' ? 'You have not uploaded any resumes yet.'
+              : 'No resumes in the Shared Database yet.')
             : 'No candidates match these filters.'}
         </p>
       ) : (
         <ul ref={listRef} className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
           <li className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
-            <span className="truncate">{CANDIDATE_SOURCE_LABEL[source]}</span>
+            <span className="truncate">{LIST_HEADING[source]}</span>
             <span className="shrink-0 tabular-nums">{fmt(rows.length)} of {fmt(total)}</span>
           </li>
           {rows.map((r) => {
@@ -373,6 +445,7 @@ export default function ServerCandidatePicker({
                     <span className="block text-xs text-gray-500 dark:text-slate-400 truncate">
                       {r.email ? r.email : <span className="font-medium text-warning-strong">No email</span>}
                       {r.phone ? ` · ${r.phone}` : ''}
+                      {r.title ? ` · ${r.title}` : ''}
                     </span>
                   </span>
                   {r.already_invited && (
