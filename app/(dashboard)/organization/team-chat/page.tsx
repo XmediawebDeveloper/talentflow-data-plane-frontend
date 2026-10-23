@@ -980,7 +980,7 @@ export default function TeamChatPage() {
   return (
     // Card, breadcrumb, organization tabs and the tab panel come from
     // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
-    <div className="flex flex-1 min-h-0 flex-col">
+    <div className="flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:h-[calc(100dvh-4.5rem)] [@media(max-height:500px)]:flex-none">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
         <div className="relative flex flex-1 min-h-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700 dark:bg-slate-900">
