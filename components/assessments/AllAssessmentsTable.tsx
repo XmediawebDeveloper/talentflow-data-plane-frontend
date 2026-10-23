@@ -8,7 +8,7 @@ import {
   Archive, ArchiveRestore, BarChart, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { assessmentJobLockMessage, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -366,8 +366,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   );
 
   const [rows, setRows] = useState<AssessmentRow[]>([]);
-  /* Each row's job version status (by JD id): Archive is off on an Archived /
-     Disabled job version — the Assessments page's rule. One batched read. */
+  /* Each row's job version status (by JD id): on an Archived / Disabled job
+     version every action that changes the assessment is off — the Assessments
+     page's rule. One batched read. */
   const [jobVersionStatusById, setJobVersionStatusById] = useState<Record<string, string>>({});
   useEffect(() => {
     const missing = Array.from(new Set(rows.map((r) => r.jdId).filter((id) => id && !(id in jobVersionStatusById))));
@@ -802,8 +803,13 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   /* No dedicated unarchive endpoint exists for assessments: Archive is a
      status write through PUT /assessments/{id}, so Unarchive is the same
      write back to `published` — the Active status Archive is offered from. */
-  const unarchiveRow = (row: AssessmentRow) => {
+  const unarchiveRow = async (row: AssessmentRow) => {
     if (!canDeleteAssessment) return;
+    const jobLock = await checkAssessmentJobLock(row.jdId);
+    if (jobLock) {
+      toast.error(jobLock);
+      return;
+    }
     void runStatusAction(row, 'unarchive', () => assessmentService.update(row.id, { status: 'published' }), 'Assessment restored to Active');
   };
 
@@ -813,6 +819,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     if (!canDeleteAssessment) return;
     if (row.invitations > 0 || row.completed > 0) {
       toast.error('Cannot delete — candidates have already been invited to this assessment');
+      return;
+    }
+    const jobLock = await checkAssessmentJobLock(row.jdId);
+    if (jobLock) {
+      toast.error(jobLock);
       return;
     }
     if (!await confirmDelete({
@@ -845,6 +856,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   };
 
   const rowActions = (row: AssessmentRow) => {
+    /* Disabled / Archived job version: views stay, every change is greyed. */
+    const jobLock = assessmentJobLockMessage(jobVersionStatusById[row.jdId]);
     /* `iconClassName` is the ⋮-menu icon token for the action — the
        `text-menu-icon-*` set the Invitation Status tab's menu colours its
        icons with (globals.css), so View reads the same blue there and here. */
@@ -862,10 +875,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       case 'published': {
         const archive: RowAction = {
           key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
-          disabled: !canDeleteAssessment || isJobVersionLocked(jobVersionStatusById[row.jdId]),
+          disabled: !canDeleteAssessment || !!jobLock,
           title: !canDeleteAssessment
             ? 'You do not have permission to archive assessments'
-            : isJobVersionLocked(jobVersionStatusById[row.jdId]) ? ASSESSMENT_JOB_LOCK_MESSAGE : undefined,
+            : jobLock ?? undefined,
           run: () => void archiveRow(row),
         };
         /* With the host's extras (the Active tab), the Total Jobs order:
@@ -885,8 +898,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           actions.push({
             // A draft is unfinished — its Edit reads "Continue Editing".
             key: 'edit', label: 'Continue Editing', icon: Pencil, iconClassName: 'text-menu-icon-edit',
-            disabled: !canUpdateAssessment,
-            title: !canUpdateAssessment ? 'You do not have permission to edit assessments' : undefined,
+            disabled: !canUpdateAssessment || !!jobLock,
+            title: !canUpdateAssessment ? 'You do not have permission to edit assessments' : jobLock ?? undefined,
             /* Straight to the Configure page for this assessment — the route
                the All tab's Edit and the page's own `handleEditAssessment`
                use. Without `step=configure&jd_id` the create flow opened on
@@ -902,9 +915,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         actions.push(
           {
             key: 'unarchive', label: 'Unarchive', icon: ArchiveRestore, iconClassName: 'text-menu-icon-archive',
-            disabled: !canDeleteAssessment,
-            title: !canDeleteAssessment ? 'You do not have permission to unarchive assessments' : undefined,
-            run: () => unarchiveRow(row),
+            disabled: !canDeleteAssessment || !!jobLock,
+            title: !canDeleteAssessment ? 'You do not have permission to unarchive assessments' : jobLock ?? undefined,
+            run: () => void unarchiveRow(row),
           },
           view,
         );
@@ -922,6 +935,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     if (!fixedStatus) {
       const editReason = !canUpdateAssessment
         ? 'You do not have permission to edit assessments'
+        : jobLock
+          ? jobLock
         : row.invitations > 0
           ? 'Cannot edit — this assessment has already been sent to candidates'
           : row.rawStatus === 'archived'
@@ -943,8 +958,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     if (row.rawStatus === 'draft' || fixedStatus === 'archived') {
       actions.push({
         key: 'delete', label: 'Delete', icon: Trash2, iconClassName: 'text-destructive', destructive: true,
-        disabled: !canDeleteAssessment,
-        title: !canDeleteAssessment ? 'You do not have permission to delete assessments' : undefined,
+        disabled: !canDeleteAssessment || !!jobLock,
+        title: !canDeleteAssessment ? 'You do not have permission to delete assessments' : jobLock ?? undefined,
         run: () => void deleteRow(row),
       });
     }

@@ -105,7 +105,7 @@ import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessme
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
-import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { assessmentJobLockMessage, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -862,9 +862,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   /** Why Duplicate / Share / Revoke / Archive is off for this assessment's
    *  job version, or null. */
   const jobLockReason = (assessment: { jd_id?: string } | null | undefined): string | null =>
-    assessment?.jd_id && isJobVersionLocked(jobVersionStatusById[assessment.jd_id])
-      ? ASSESSMENT_JOB_LOCK_MESSAGE
-      : null;
+    assessment?.jd_id ? assessmentJobLockMessage(jobVersionStatusById[assessment.jd_id]) : null;
   /* Share/Invite opens from many places (menus, details page, Send Invite,
      Track's Invite More). Whichever one did, the job version is read fresh
      here and a locked one closes the popup with the message. */
@@ -3474,6 +3472,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       toast.warning(`Cannot edit — assessment is published and ${inviteCount} candidate(s) have been invited. Please clone it as a new draft instead.`);
       return;
     }
+    // A Disabled / Archived job version takes no edits — the menu's job lock.
+    const editJobLock = jobLockReason(assessment);
+    if (editJobLock) {
+      toast.error(editJobLock);
+      return;
+    }
 
     // Redirect to the assessment creation page with edit mode
     router.push(`/recruitment/assessments/create?step=configure&jd_id=${assessment.jd_id}&edit=${assessment.id}`);
@@ -3821,6 +3825,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setOpenMenuId(null);
       return;
     }
+    const deleteJobLock = await checkAssessmentJobLock(
+      apiAssessments.find((a) => a.id === assessmentId)?.jd_id ?? assessment?.jd_id,
+    );
+    if (deleteJobLock) {
+      toast.error(deleteJobLock);
+      setOpenMenuId(null);
+      return;
+    }
 
     if (!await confirmDelete({
       jobShortId: assessment?.jd_short_id,
@@ -4041,6 +4053,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleUnarchiveAssessment = async (assessmentId: string) => {
     if (!canDeleteAssessment) {
       toast.error('You do not have permission to unarchive assessments');
+      return;
+    }
+    const unarchiveJobLock = await checkAssessmentJobLock(apiAssessments.find((a) => a.id === assessmentId)?.jd_id);
+    if (unarchiveJobLock) {
+      toast.error(unarchiveJobLock);
+      setOpenMenuId(null);
       return;
     }
     try {
@@ -5974,22 +5992,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 to archive. Archived is restored through
                 Unarchive, not Activate - the All Assessments
                 table's and details page's action. */}
-            {assessment.status === 'Archived' && (
+            {assessment.status === 'Archived' && (() => {
+              const unarchiveJobLocked = jobLockReason(assessment);
+              const unarchiveOff = !canDeleteAssessment || !!unarchiveJobLocked;
+              return (
               <button
                 onClick={() => {
-                  if (!canDeleteAssessment) return;
+                  if (unarchiveOff) return;
                   handleUnarchiveAssessment(assessment.id);
                 }}
-                aria-disabled={!canDeleteAssessment}
-                title={!canDeleteAssessment ? 'You do not have permission to unarchive assessments' : ''}
+                aria-disabled={unarchiveOff}
+                title={!canDeleteAssessment ? 'You do not have permission to unarchive assessments' : (unarchiveJobLocked ?? '')}
                 className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
-                  canDeleteAssessment ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 cursor-not-allowed opacity-60'
+                  unarchiveOff ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700 dark:text-slate-300'
                 }`}
               >
-                <ArchiveRestore className={`w-4 h-4 flex-shrink-0 ${canDeleteAssessment ? 'text-menu-icon-archive' : 'text-gray-300'}`} />
+                <ArchiveRestore className={`w-4 h-4 flex-shrink-0 ${unarchiveOff ? 'text-gray-300' : 'text-menu-icon-archive'}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
               </button>
-            )}
+              );
+            })()}
             {assessment.status !== 'Active' && assessment.status !== 'Draft' && assessment.status !== 'Archived' && (
               <button
                 onClick={() => {
@@ -6033,9 +6055,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
             {assessment.status !== 'Archived' && (() => {
               const hasCandidates = assessment.invitations_count > 0;
-              const isDisabled = !canDeleteAssessment || hasCandidates;
+              const deleteJobLocked = jobLockReason(assessment);
+              const isDisabled = !canDeleteAssessment || !!deleteJobLocked || hasCandidates;
               const disabledReason = !canDeleteAssessment
                 ? 'You do not have permission to delete assessments'
+                : deleteJobLocked
+                  ? deleteJobLocked
                 : hasCandidates
                   ? 'Cannot delete — candidates have already been invited to this assessment'
                   : '';
@@ -6090,6 +6115,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // backend only mints a new one once candidates were invited).
     const editReason = !canUpdateAssessment
       ? 'You do not have permission to edit assessments'
+      : jobLockReason(assessment)
+        ? jobLockReason(assessment)!
       : hasBeenShared
         ? 'Cannot edit — this assessment has already been sent to candidates'
         : '';
@@ -6231,14 +6258,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           // reason and stays clickable for it.
           // The cap no longer blocks Edit: a never-invited version keeps its
           // number when republished, so editing it never mints a version 6.
+          const editJobLocked = jobLockReason(assessment);
           const editReason = !canUpdateAssessment
             ? 'You do not have permission to edit assessments'
+            : editJobLocked
+            ? editJobLocked
             : hasBeenShared
             ? 'Cannot edit — this assessment has already been sent to candidates'
             : assessment.status === 'Archived'
             ? 'Archived assessments cannot be edited'
             : '';
-          const editDisabled = !canUpdateAssessment || hasBeenShared || assessment.status === 'Archived';
+          const editDisabled = !canUpdateAssessment || !!editJobLocked || hasBeenShared || assessment.status === 'Archived';
           const editGreyed = editDisabled;
           /* A draft isn't finished yet, so its Edit reads "Continue Editing" -
              same action, same Configure page. Status is checked loosely: the

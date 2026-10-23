@@ -5286,6 +5286,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           /* Turns on the popup's Job Version picker: score against any
              published version of this job, starting on this page's own. */
           job={job}
+          cancelInFooter
           onClose={() => setShowSelectSourceModal(false)}
           onScoringFinished={() => {
             // Run settled, popup still up: bring Scored Resumes in behind it.
@@ -5312,6 +5313,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         onClose={() => setShowJDHistory(false)}
         jdId={job.id}
         jdTitle={job.title}
+        cancelInFooter
       />
 
       {/* Resume Detail View Modal */}
