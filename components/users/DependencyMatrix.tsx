@@ -168,7 +168,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
             <div className="flex-1 overflow-auto p-3 sm:p-6">
               {/* Tree View */}
               <div className="space-y-4 sm:space-y-6">
-                <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-3 sm:p-4 text-sm text-gray-700 flex items-start gap-2">
+                <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-3 sm:p-4 text-sm max-sm:text-[13px] text-gray-700 flex items-start gap-2">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-semibold text-gray-900">How it works</p>
@@ -181,7 +181,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
                 {/* Whole sections that need another permission */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-                  <h3 className="text-base font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-destructive/90 flex items-center justify-center shadow-sm">
                       <AlertTriangle className="w-4 h-4 text-white" />
                     </div>
@@ -192,7 +192,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                   </p>
                   <div className="space-y-2.5">
                     {sectionRules.map(rule => (
-                      <div key={rule.code} className="flex items-start gap-2 flex-wrap text-sm">
+                      <div key={rule.code} className="flex items-start gap-2 flex-wrap text-sm max-sm:text-[13px]">
                         <button type="button" onClick={() => setSelectedFeature(selectedFeature === rule.code ? null : rule.code)}>
                           <Badge variant="info" className="text-xs">{getPermissionLabel(rule.code)}</Badge>
                         </button>
@@ -211,7 +211,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
                 {/* Root features (no dependencies) */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-                  <h3 className="text-base font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-success flex items-center justify-center shadow-sm">
                       <CheckCircle className="w-4 h-4 text-white" />
                     </div>
@@ -251,7 +251,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
                 {/* Main permission → entry points in other sections */}
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-                  <h3 className="text-base font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-brand-orange/90 flex items-center justify-center shadow-sm">
                       <ArrowRight className="w-4 h-4 text-white" />
                     </div>
@@ -262,7 +262,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                   </p>
                   <div className="space-y-2.5">
                     {ENTRY_POINT_GROUPS.map(group => (
-                      <div key={group.main} className="flex items-start gap-2 flex-wrap text-sm">
+                      <div key={group.main} className="flex items-start gap-2 flex-wrap text-sm max-sm:text-[13px]">
                         <Badge variant="info" className="text-xs">{getPermissionLabel(group.main)}</Badge>
                         <ArrowRight className="w-3.5 h-3.5 text-brand-cyan mt-1 flex-shrink-0" />
                         <div className="flex flex-wrap gap-1.5">
@@ -279,7 +279,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
                 {/* Dependent features */}
                 <div>
-                  <h3 className="text-base font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                     <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm">
                       <GitBranch className="w-4 h-4 text-white" />
                     </div>
@@ -306,7 +306,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                                 <div className="w-7 h-7 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center flex-shrink-0">
                                   <Link2 className="w-3.5 h-3.5 text-brand-blue" />
                                 </div>
-                                <span className="font-semibold text-gray-900 text-base truncate">{node.name}</span>
+                                <span className="font-semibold text-gray-900 text-base max-sm:text-sm truncate">{node.name}</span>
                               </div>
                               <div className="flex items-center gap-1.5 text-xs flex-shrink-0 pl-9 sm:pl-0">
                                 <span className="px-2 py-0.5 rounded-full ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue font-medium">
@@ -360,19 +360,19 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 <div className="w-8 h-8 rounded-lg bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
                   <Layers className="w-4 h-4 text-white" />
                 </div>
-                <h3 className="font-semibold text-gray-900 text-base truncate">{selectedFeatureInfo.name}</h3>
+                <h3 className="font-semibold text-gray-900 text-base max-sm:text-sm truncate">{selectedFeatureInfo.name}</h3>
               </div>
 
               {selectedFeatureInfo.dependencies.length > 0 && (
                 <div className="mb-4">
-                  <h4 className="text-base font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <h4 className="text-base max-sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <Badge variant="info" className="text-xs">
                       <ArrowRight className="w-3 h-3" /> Needs {selectedFeatureInfo.dependencies.length}
                     </Badge>
                   </h4>
                   <ul className="space-y-1.5">
                     {selectedFeatureInfo.dependencies.map(dep => (
-                      <li key={dep} className="text-sm text-gray-700 pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] transition-colors">
+                      <li key={dep} className="text-sm max-sm:text-[13px] text-gray-700 pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] transition-colors">
                         {matrix?.feature_names[dep] || dep}
                       </li>
                     ))}
@@ -386,14 +386,14 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
               {selectedFeatureInfo.dependents.length > 0 && (
                 <div>
-                  <h4 className="text-base font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <h4 className="text-base max-sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <Badge variant="secondary" className="text-xs">
                       <ArrowRight className="w-3 h-3 rotate-180" /> Needed by {selectedFeatureInfo.dependents.length}
                     </Badge>
                   </h4>
                   <ul className="space-y-1.5">
                     {selectedFeatureInfo.dependents.map(dep => (
-                      <li key={dep} className="text-sm text-gray-700 pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-cyan/30 hover:bg-brand-cyan/[0.03] transition-colors">
+                      <li key={dep} className="text-sm max-sm:text-[13px] text-gray-700 pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-cyan/30 hover:bg-brand-cyan/[0.03] transition-colors">
                         {matrix?.feature_names[dep] || dep}
                       </li>
                     ))}
@@ -406,7 +406,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               )}
 
               {selectedFeatureInfo.dependencies.length === 0 && selectedFeatureInfo.dependents.length === 0 && (
-                <div className="p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 flex items-start gap-2">
+                <div className="p-3 bg-white border border-gray-200 rounded-lg text-sm max-sm:text-[13px] text-gray-600 flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                   <span>This permission works on its own, and no other permission needs it.</span>
                 </div>

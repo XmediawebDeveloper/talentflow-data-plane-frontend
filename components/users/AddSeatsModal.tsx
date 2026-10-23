@@ -373,7 +373,7 @@ export default function AddSeatsModal({
                       <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-success-strong text-sm">Purchase Successful!</p>
+                      <p className="font-semibold text-success-strong text-sm max-sm:text-[13px]">Purchase Successful!</p>
                       <p className="text-xs text-success mt-0.5">{purchaseSuccess}</p>
                     </div>
                   </div>
@@ -386,7 +386,7 @@ export default function AddSeatsModal({
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-destructive-strong text-sm">Purchase Failed</p>
+                      <p className="font-semibold text-destructive-strong text-sm max-sm:text-[13px]">Purchase Failed</p>
                       <p className="text-xs text-destructive mt-0.5">{error}</p>
                     </div>
                   </div>
@@ -402,7 +402,7 @@ export default function AddSeatsModal({
                           <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-base leading-tight truncate">
+                          <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-base max-sm:text-sm leading-tight truncate">
                             {addonDisplayName}
                           </h3>
                           <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
@@ -410,7 +410,7 @@ export default function AddSeatsModal({
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs text-gray-500 dark:text-slate-500">Per pack</p>
-                        <p className="text-xl font-bold text-brand-blue">₹{pricePerPack}</p>
+                        <p className="text-xl max-sm:text-lg font-bold text-brand-blue">₹{pricePerPack}</p>
                       </div>
                     </div>
                   </div>
@@ -420,7 +420,7 @@ export default function AddSeatsModal({
                 {pricing && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-medium text-gray-800 dark:text-slate-100">Select Quantity</label>
+                      <label className="text-sm max-sm:text-[13px] font-medium text-gray-800 dark:text-slate-100">Select Quantity</label>
                       <Badge variant="muted">Max {maxPacks} packs</Badge>
                     </div>
                     <div className="flex items-center gap-3">
@@ -428,7 +428,7 @@ export default function AddSeatsModal({
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
                           aria-label="Decrease quantity"
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg max-sm:text-base text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           −
                         </button>
@@ -438,12 +438,12 @@ export default function AddSeatsModal({
                           max={maxPacks}
                           value={quantity}
                           onChange={(e) => setQuantity(Math.max(1, Math.min(maxPacks, parseInt(e.target.value) || 1)))}
-                          className="w-14 sm:w-16 text-center bg-transparent border-none outline-none font-bold text-xl sm:text-2xl text-gray-900 dark:text-slate-50"
+                          className="w-14 sm:w-16 text-center bg-transparent border-none outline-none font-bold text-xl max-sm:text-lg sm:text-2xl text-gray-900 dark:text-slate-50"
                         />
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
                           aria-label="Increase quantity"
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg max-sm:text-base text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           +
                         </button>
@@ -453,7 +453,7 @@ export default function AddSeatsModal({
                         <span className="text-xs text-white/80">Total seats</span>
                         <div className="flex items-center gap-1.5">
                           <Users className="w-4 h-4 text-white/90" />
-                          <span className="font-bold text-xl">+{totalSeats}</span>
+                          <span className="font-bold text-xl max-sm:text-lg">+{totalSeats}</span>
                         </div>
                       </div>
                     </div>
@@ -468,34 +468,34 @@ export default function AddSeatsModal({
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                           <Receipt className="w-4 h-4 text-white" />
                         </div>
-                        <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-base">Order Summary</h4>
+                        <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-base max-sm:text-sm">Order Summary</h4>
                       </div>
                       <Badge variant="secondary">{quantity} pack{quantity > 1 ? 's' : ''}</Badge>
                     </div>
                     <div className="p-4 sm:p-5 space-y-3">
-                      <div className="flex justify-between items-center text-sm">
+                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
                         <span className="text-gray-500 dark:text-slate-500">Pack size</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
+                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
                         <span className="text-gray-500 dark:text-slate-500">Quantity</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">×{quantity}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
+                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
                         <span className="text-gray-500 dark:text-slate-500">Subtotal</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">₹{subtotal.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
+                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
                         <span className="text-gray-500 dark:text-slate-500">GST (18%)</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">₹{gst.toFixed(2)}</span>
                       </div>
                       <div className="mt-1 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">Total Amount</p>
+                          <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Total Amount</p>
                           <p className="text-xs text-gray-500 dark:text-slate-500">Incl. all taxes</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-xl font-bold text-brand-blue">₹{total.toFixed(2)}</p>
+                          <p className="text-xl max-sm:text-lg font-bold text-brand-blue">₹{total.toFixed(2)}</p>
                         </div>
                       </div>
                     </div>

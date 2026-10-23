@@ -38,7 +38,7 @@ export default function MemberSelector({
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Team Members</label>
+        <label className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Team Members</label>
 
         <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -47,7 +47,7 @@ export default function MemberSelector({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search users by name or email..."
-            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-10 pr-4 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
           />
         </div>
 
@@ -82,7 +82,7 @@ export default function MemberSelector({
                     {isSelected && <Check className="w-3 h-3 text-white" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{user.name}</p>
+                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{user.name}</p>
                     <p className="truncate text-xs text-gray-500 dark:text-slate-500">{user.email}</p>
                   </div>
                   {user.role && (
@@ -95,7 +95,7 @@ export default function MemberSelector({
             })
           ) : (
             <div className="p-6 text-center text-gray-500 dark:text-slate-500">
-              <p className="text-sm">
+              <p className="text-sm max-sm:text-[13px]">
                 {searchQuery ? 'No users found matching your search' : 'No users available'}
               </p>
             </div>
@@ -109,11 +109,11 @@ export default function MemberSelector({
 
       {showTeamLeadSelector && selectedMemberIds.length > 0 && onTeamLeadChange && (
         <div>
-          <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Team Lead (Optional)</label>
+          <label className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Team Lead (Optional)</label>
           <select
             value={teamLeadId}
             onChange={(e) => onTeamLeadChange(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
           >
             <option value="">No team lead</option>
             {selectedMembers.map((user) => (

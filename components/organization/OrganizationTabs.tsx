@@ -122,7 +122,7 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
       >
         {tabs.map((tab) => {
           const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
-          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm font-medium transition-colors';
+          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm max-sm:text-[13px] font-medium transition-colors';
           if (tab.planLocked) {
             return (
               <span

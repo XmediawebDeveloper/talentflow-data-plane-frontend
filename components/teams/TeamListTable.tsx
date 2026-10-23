@@ -41,7 +41,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
             >
               <TeamAvatar team={team} className="h-9 w-9 rounded-lg text-xs" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
+                <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
                 <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
                   {team.team_lead ? (
                     <>
@@ -103,7 +103,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                           e.stopPropagation();
                           onViewDetails(team.id);
                         }}
-                        className="block truncate text-left text-sm font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
+                        className="block truncate text-left text-sm max-sm:text-[13px] font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
                       >
                         {team.name}
                       </button>
@@ -113,7 +113,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm">
+                <td className="px-4 py-3 text-sm max-sm:text-[13px]">
                   {team.team_lead ? (
                     <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
                       <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
@@ -127,16 +127,16 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                   {team.member_count > 0 ? (
                     <MemberStack members={team.members} total={team.member_count} max={3} size="sm" />
                   ) : (
-                    <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                    <span className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900 dark:text-slate-100">
+                <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">
                   {team.active_jobs_count.toLocaleString()}
                 </td>
-                <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900 dark:text-slate-100">
+                <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">
                   {team.resumes_count.toLocaleString()}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-slate-400">
+                <td className="whitespace-nowrap px-4 py-3 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
                   {formatTeamDate(team.created_at) || '—'}
                 </td>
                 <td className="py-3 pl-4 pr-5 text-right">
