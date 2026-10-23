@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { FileSpreadsheet, Plus, Trash2, UserPlus, X } from 'lucide-react';
+import { Edit3, FileSpreadsheet, Plus, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import readXlsxFile from 'read-excel-file/browser';
 import { isValidEmailFormat } from '@/lib/utils/email';
@@ -11,13 +11,42 @@ import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 export const MAX_EXTRA_CANDIDATES = 500;
 
 const SECTION = 'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
-const CONTROL = 'text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 disabled:opacity-60';
+
+/* Manual / Upload Excel — the invite modal's own switcher: plain buttons,
+   only the icons carry colour, the active one darker-bordered. */
+const modeTabClass = (active: boolean) =>
+  `flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
+    active
+      ? 'bg-gray-100 dark:bg-slate-800 border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-50 font-medium'
+      : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+  } disabled:opacity-50 disabled:cursor-not-allowed`;
+
+const INPUT = 'w-full h-10 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-inset disabled:opacity-60';
+const INPUT_OK = 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent';
+const INPUT_BAD = 'border-destructive-line focus:ring-destructive-line';
 
 const EMAIL_HEADER = /^(email|e.?mail|candidate.?email|email.?address)$/i;
 const NAME_HEADER = /^(name|full.?name|candidate.?name|first.?name)$/i;
 const PHONE_HEADER = /^(phone|mobile|phone.?number|mobile.?number|contact)$/i;
 
-/* A minimal CSV reader (quoted fields, doubled quotes) — the share step's own. */
+interface EntryRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  origin: 'manual' | 'excel';
+}
+
+const newRow = (partial: Partial<EntryRow> = {}): EntryRow => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  name: '',
+  email: '',
+  phone: '',
+  origin: 'manual',
+  ...partial,
+});
+
+/* A minimal CSV reader (quoted fields, doubled quotes) — the invite modal's own. */
 const parseCsvRows = (text: string): string[][] => {
   const lines = text.trim().split(/\r?\n/).filter((l) => l.trim());
   const parseRow = (line: string): string[] => {
@@ -55,67 +84,66 @@ const candidatesFromRows = (rows: unknown[][]): { found: BulkExtraCandidate[]; h
     const cell = (i: number) => (i === -1 ? '' : String(row[i] ?? '').trim());
     const email = cell(emailIdx).toLowerCase();
     if (!email || !isValidEmailFormat(email)) continue;
-    const name = cell(nameIdx) || email.split('@')[0];
-    const phone = cell(phoneIdx) || undefined;
-    found.push({ name, email, phone });
+    found.push({ name: cell(nameIdx) || email.split('@')[0], email, phone: cell(phoneIdx) || undefined });
   }
   return { found, hasEmailColumn: true };
 };
 
+/* The rows that will be sent: a valid email, not repeated (the first keeps
+   it), and a name. Blank rows are simply ignored. */
+const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
+  const seen = new Set<string>();
+  const out: BulkExtraCandidate[] = [];
+  for (const r of rows) {
+    const email = r.email.trim().toLowerCase();
+    const name = r.name.trim();
+    if (!email || !name || !isValidEmailFormat(email) || seen.has(email)) continue;
+    seen.add(email);
+    out.push({ name, email, phone: r.phone.trim() || undefined });
+  }
+  return out.slice(0, MAX_EXTRA_CANDIDATES);
+};
+
 /**
- * The share step's Manual and Upload Excel entry, for the bulk Create / Send
- * popup: candidates typed in (name, email, phone) or read from a sheet, sent
- * on top of whatever is ticked in the lists above. They go to the backend as
- * `extra_candidates`, which applies the same skips (team member, repeated
- * email, already invited) as every other row.
+ * The invite modal's Manual / Upload Excel entry, inside the bulk Create /
+ * Send popup: candidate cards with Full Name, Email Address and Phone, "Add
+ * Candidate" for another, and an .xlsx / .csv import that fills the same
+ * cards. The valid rows are handed up as `extra_candidates`, sent on top of
+ * whatever is ticked in the lists above; the backend applies the same skips
+ * as every other row (team member, repeated email, already invited).
  */
 export default function ExtraCandidatesInput({
-  value,
   onChange,
   disabled = false,
 }: {
-  value: BulkExtraCandidate[];
   onChange: (next: BulkExtraCandidate[]) => void;
   disabled?: boolean;
 }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<'manual' | 'excel' | null>(null);
+  const [rows, setRows] = useState<EntryRow[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
-  /* Merge new rows in, dropping repeats of an email already in the list. */
-  const addMany = (rows: BulkExtraCandidate[], from: string) => {
-    const have = new Set(value.map((c) => c.email.toLowerCase()));
-    const fresh: BulkExtraCandidate[] = [];
-    let repeated = 0;
-    for (const r of rows) {
-      const key = r.email.toLowerCase();
-      if (have.has(key)) { repeated += 1; continue; }
-      have.add(key);
-      fresh.push({ ...r, email: key });
-    }
-    const room = MAX_EXTRA_CANDIDATES - value.length;
-    const kept = fresh.slice(0, Math.max(0, room));
-    if (kept.length) onChange([...value, ...kept]);
-    const notes: string[] = [];
-    if (repeated) notes.push(`${repeated} already in the list`);
-    if (fresh.length > kept.length) notes.push(`${fresh.length - kept.length} over the ${MAX_EXTRA_CANDIDATES} limit`);
-    if (kept.length === 0) {
-      toast.error(`No new candidates ${from}${notes.length ? ` (${notes.join(', ')})` : ''}`);
-    } else {
-      toast.success(`Added ${kept.length} candidate${kept.length === 1 ? '' : 's'} ${from}${notes.length ? ` · ${notes.join(', ')}` : ''}`);
-    }
+  const commit = (next: EntryRow[]) => {
+    setRows(next);
+    onChange(toCandidates(next));
   };
 
-  const addTyped = () => {
-    const e = email.trim().toLowerCase();
-    if (!e) { toast.error('Enter an email address'); return; }
-    if (!isValidEmailFormat(e)) { toast.error('That email address does not look right'); return; }
-    addMany([{ name: name.trim() || e.split('@')[0], email: e, phone: phone.trim() || undefined }], 'by hand');
-    setName('');
-    setEmail('');
-    setPhone('');
+  const openManual = () => {
+    setMode('manual');
+    if (rows.length === 0) commit([newRow()]);
+  };
+  const addRow = () => commit([...rows, newRow()]);
+  const updateRow = (id: string, field: 'name' | 'email' | 'phone', value: string) =>
+    commit(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  const removeRow = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const clearAll = () => commit([]);
+
+  const emailOf = (r: EntryRow) => r.email.trim().toLowerCase();
+  const isDuplicate = (row: EntryRow) => {
+    const e = emailOf(row);
+    if (!e) return false;
+    const first = rows.find((r) => emailOf(r) === e);
+    return !!first && first.id !== row.id;
   };
 
   const onFile = async (ev: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,109 +151,178 @@ export default function ExtraCandidatesInput({
     if (fileRef.current) fileRef.current.value = '';
     if (!file) return;
     try {
-      let rows: BulkExtraCandidate[] = [];
+      let found: BulkExtraCandidate[] = [];
       let anyEmailColumn = false;
       if (file.name.toLowerCase().endsWith('.csv')) {
         const r = candidatesFromRows(parseCsvRows(await file.text()));
-        rows = r.found;
+        found = r.found;
         anyEmailColumn = r.hasEmailColumn;
       } else {
-        // All sheets at once: [{ sheet, data: Row[][] }] (or Row[][] for one sheet).
-        const sheets = (await readXlsxFile(file)) as unknown;
-        const list = Array.isArray(sheets) && sheets.length && !Array.isArray(sheets[0]) && typeof sheets[0] === 'object' && 'data' in (sheets[0] as object)
-          ? (sheets as { data: unknown[][] }[]).map((s) => s.data)
-          : [sheets as unknown[][]];
-        for (const data of list) {
+        // Either [{ sheet, data: Row[][] }] (every sheet) or Row[][] (one sheet).
+        const raw = (await readXlsxFile(file)) as unknown;
+        const sheets = Array.isArray(raw) && raw.length && !Array.isArray(raw[0]) && typeof raw[0] === 'object' && raw[0] !== null && 'data' in (raw[0] as object)
+          ? (raw as { data: unknown[][] }[]).map((s) => s.data)
+          : [raw as unknown[][]];
+        for (const data of sheets) {
           const r = candidatesFromRows(data ?? []);
           anyEmailColumn = anyEmailColumn || r.hasEmailColumn;
-          rows.push(...r.found);
+          found.push(...r.found);
         }
       }
       if (!anyEmailColumn) {
         toast.error('Could not find an "Email" column in the file. Expected headers: Name, Email, Phone (optional).');
         return;
       }
-      addMany(rows, `from ${file.name}`);
+      const have = new Set(rows.map(emailOf).filter(Boolean));
+      const fresh: EntryRow[] = [];
+      let repeated = 0;
+      for (const c of found) {
+        if (have.has(c.email)) { repeated += 1; continue; }
+        have.add(c.email);
+        fresh.push(newRow({ name: c.name, email: c.email, phone: c.phone || '', origin: 'excel' }));
+      }
+      const room = Math.max(0, MAX_EXTRA_CANDIDATES - rows.filter((r) => emailOf(r)).length);
+      const kept = fresh.slice(0, room);
+      if (kept.length === 0) {
+        toast.error(repeated ? `Every email in ${file.name} is already in the list` : `No valid candidates found in ${file.name}`);
+        return;
+      }
+      // Imported rows join the cards; an untouched blank card is dropped.
+      commit([...rows.filter((r) => r.name || r.email || r.phone), ...kept]);
+      setMode('manual');
+      const notes = [repeated ? `${repeated} already in the list` : '', fresh.length > kept.length ? `${fresh.length - kept.length} over the ${MAX_EXTRA_CANDIDATES} limit` : ''].filter(Boolean);
+      toast.success(`Added ${kept.length} candidate${kept.length === 1 ? '' : 's'} from ${file.name}${notes.length ? ` · ${notes.join(', ')}` : ''}`);
     } catch {
       toast.error('Could not read that file. Use an .xlsx, .xls or .csv with Name and Email columns.');
     }
   };
 
-  const remove = (i: number) => onChange(value.filter((_, n) => n !== i));
+  const ready = toCandidates(rows).length;
 
   return (
-    <section aria-labelledby="extra-candidates-heading" className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <section aria-labelledby="extra-candidates-heading" className="space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h3 id="extra-candidates-heading" className={SECTION}>
-          Add by email · {value.length.toLocaleString()} added
+          Add candidates directly{ready > 0 ? ` · ${ready.toLocaleString()} ready` : ''}
         </h3>
         <div className="flex items-center gap-2">
-          {value.length > 0 && (
-            <button type="button" onClick={() => onChange([])} disabled={disabled} className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 disabled:opacity-50">
-              <X className="w-3.5 h-3.5" /> Clear
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={disabled || value.length >= MAX_EXTRA_CANDIDATES}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-success" aria-hidden="true" /> Upload Excel / CSV
+          <button type="button" onClick={openManual} disabled={disabled} className={modeTabClass(mode === 'manual')}>
+            <Edit3 className="w-4 h-4 text-brand-blue" aria-hidden="true" />
+            Manual
+          </button>
+          <button type="button" onClick={() => { setMode('excel'); fileRef.current?.click(); }} disabled={disabled} className={modeTabClass(mode === 'excel')}>
+            <Upload className="w-4 h-4 text-success" aria-hidden="true" />
+            Upload Excel
           </button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            disabled={disabled}
-            aria-expanded={open}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border border-brand-blue/30 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/15 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <UserPlus className="w-3.5 h-3.5" aria-hidden="true" /> {open ? 'Hide form' : 'Enter manually'}
-          </button>
         </div>
       </div>
 
-      {open && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Candidate name" disabled={disabled} className={`${CONTROL} flex-1 min-w-[8rem]`} />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTyped(); } }}
-            placeholder="Email (required)"
-            aria-label="Candidate email"
-            disabled={disabled}
-            className={`${CONTROL} flex-1 min-w-[10rem]`}
-          />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone (optional)" aria-label="Candidate phone" disabled={disabled} className={`${CONTROL} w-36`} />
-          <button
-            type="button"
-            onClick={addTyped}
-            disabled={disabled || !email.trim() || value.length >= MAX_EXTRA_CANDIDATES}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-semibold bg-brand-blue text-white hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" /> Add
-          </button>
-        </div>
+      {mode === 'excel' && rows.length === 0 && (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={disabled}
+          className="w-full rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600 px-4 py-6 text-center hover:border-brand-blue/50 hover:bg-brand-blue/5 transition-colors disabled:opacity-50"
+        >
+          <FileSpreadsheet className="w-6 h-6 mx-auto mb-1.5 text-success" aria-hidden="true" />
+          <span className="block text-sm font-medium text-gray-900 dark:text-slate-50">Choose an .xlsx, .xls or .csv file</span>
+          <span className="block text-xs text-gray-500 dark:text-slate-400 mt-0.5">Columns: Name, Email, Phone (optional). Every sheet is read.</span>
+        </button>
       )}
 
-      {value.length > 0 && (
-        <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-40 overflow-y-auto">
-          {value.map((c, i) => (
-            <li key={c.email} className="flex items-center gap-2.5 px-3 py-1.5">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{c.name}</span>
-                <span className="block text-xs text-gray-500 dark:text-slate-400 truncate">{c.email}{c.phone ? ` · ${c.phone}` : ''}</span>
-              </span>
-              <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Manual</span>
-              <button type="button" onClick={() => remove(i)} disabled={disabled} aria-label={`Remove ${c.name}`} className="shrink-0 p-1 rounded text-gray-400 hover:text-destructive disabled:opacity-50">
-                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+      {rows.length > 0 && (
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600 dark:text-slate-400">Enter candidate details manually</p>
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={clearAll} disabled={disabled} className="text-xs font-medium text-gray-500 hover:text-gray-900 dark:hover:text-slate-100 disabled:opacity-50">
+                Clear all
               </button>
-            </li>
-          ))}
-        </ul>
+              <button
+                type="button"
+                onClick={addRow}
+                disabled={disabled || rows.length >= MAX_EXTRA_CANDIDATES}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-brand-blue hover:text-brand-blue-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" aria-hidden="true" />
+                Add Candidate
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-0.5">
+            {rows.map((row) => {
+              const email = row.email.trim();
+              const badEmail = !!email && !isValidEmailFormat(email);
+              const dup = !badEmail && isDuplicate(row);
+              const missingName = !!email && !row.name.trim();
+              return (
+                <div key={row.id} className="relative p-4 border rounded-lg bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">
+                  <span className={`absolute top-2 right-3 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${
+                    row.origin === 'excel'
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20'
+                      : 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700'
+                  }`}>
+                    {row.origin === 'excel' ? 'Excel' : 'Manual'}
+                  </span>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="min-w-0">
+                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
+                        <input
+                          type="text"
+                          value={row.name}
+                          onChange={(e) => updateRow(row.id, 'name', e.target.value)}
+                          placeholder="e.g., John Doe"
+                          disabled={disabled}
+                          aria-invalid={missingName || undefined}
+                          className={`${INPUT} ${missingName ? INPUT_BAD : INPUT_OK}`}
+                        />
+                        {missingName && <p className="text-xs text-destructive mt-1">Name is required</p>}
+                      </div>
+                      <div className="min-w-0">
+                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
+                        <input
+                          type="email"
+                          value={row.email}
+                          onChange={(e) => updateRow(row.id, 'email', e.target.value)}
+                          placeholder="e.g., john.doe@example.com"
+                          disabled={disabled}
+                          aria-invalid={badEmail || dup || undefined}
+                          className={`${INPUT} ${badEmail || dup ? INPUT_BAD : INPUT_OK}`}
+                        />
+                        {badEmail && <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>}
+                        {dup && <p className="text-xs text-destructive mt-1">This email is already in the list</p>}
+                      </div>
+                      <div className="min-w-0">
+                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Phone</label>
+                        <input
+                          type="tel"
+                          value={row.phone}
+                          onChange={(e) => updateRow(row.id, 'phone', e.target.value)}
+                          placeholder="Optional"
+                          disabled={disabled}
+                          className={`${INPUT} ${INPUT_OK}`}
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeRow(row.id)}
+                      disabled={disabled}
+                      aria-label="Remove candidate"
+                      title="Remove"
+                      className="mt-6 shrink-0 p-2 rounded-lg text-gray-400 hover:text-destructive hover:bg-destructive-subtle transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );

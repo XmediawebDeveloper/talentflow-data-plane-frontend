@@ -105,7 +105,9 @@ const fmt = (n: number) => n.toLocaleString();
  * The Create / Send popup's candidate list for a whole job: the server's
  * paged, filtered list (API 1) in place of every row loaded into the browser.
  * Four tabs (the job's two lists, My Resumes, Shared Database) with server
- * counts, search and filters, 50 rows at a time loaded
+ * counts, search and filters — the database tabs are plain resume lists
+ * (no score filters or chips; the resume permissions alone gate them) —
+ * 50 rows at a time loaded
  * on scroll, ticking by row or "Select all N matching"; the selection is
  * kept as ids or as the filter, never as the rows.
  */
@@ -276,6 +278,13 @@ export default function ServerCandidatePicker({
     // The folder belongs to My Resumes; the rating to AI Talent Match.
     if (s !== 'my-resumes' && filters.folder_id) setFilter('folder_id', undefined);
     if (s !== 'talent-match' && filters.min_rating) setFilter('min_rating', undefined);
+    if (isDbTab(s)) {
+      setFilters((f) => ({
+        ...f,
+        match_status: undefined, scored: undefined, min_score: undefined, min_rating: undefined,
+        sort: f.sort === 'name' ? 'name' : 'best',
+      }));
+    }
   };
 
   return (
@@ -365,6 +374,7 @@ export default function ServerCandidatePicker({
             ))}
           </select>
         )}
+        {!isDbTab(source) && (<>
         <select aria-label="Match status" value={filters.match_status ?? ''} onChange={(e) => setFilter('match_status', (e.target.value || undefined) as ServerMatchStatus | undefined)} className={CONTROL}>
           <option value="">Any match status</option>
           <option value="exact_match">Exact Match</option>
@@ -386,9 +396,10 @@ export default function ServerCandidatePicker({
           <option value="">Any score</option>
           {[90, 80, 70, 60, 50, 40].map((n) => <option key={n} value={n}>Score ≥ {n}%</option>)}
         </select>
+        </>)}
         <select aria-label="Sort" value={filters.sort ?? 'best'} onChange={(e) => setFilter('sort', e.target.value as InviteCandidateSort)} className={CONTROL}>
           <option value="best">{isDbTab(source) ? 'Newest first' : 'Best first'}</option>
-          <option value="score">Score</option>
+          {!isDbTab(source) && <option value="score">Score</option>}
           {source === 'talent-match' && <option value="rating">Rating</option>}
           {!isDbTab(source) && <option value="recent">Recently scored</option>}
           <option value="name">Name</option>
@@ -451,7 +462,7 @@ export default function ServerCandidatePicker({
                   {r.already_invited && (
                     <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Invited</span>
                   )}
-                  {r.score ? (
+                  {isDbTab(source) ? null : r.score ? (
                     <span title={`Resume score ${r.score.percent}% · ${SERVER_MATCH_LABEL[r.score.match_status]}`} className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-semibold border tabular-nums ${matchTone(r.score.match_status)}`}>
                       {r.score.percent}%<span className="hidden sm:inline font-medium">&nbsp;· {SERVER_MATCH_LABEL[r.score.match_status]}</span>
                     </span>

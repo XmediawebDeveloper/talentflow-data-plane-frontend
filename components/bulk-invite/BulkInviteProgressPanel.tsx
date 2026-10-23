@@ -115,7 +115,12 @@ export default function BulkInviteProgressPanel({
         setJob(fresh);
         setLoadError(null);
         reportJob(fresh);
-        if (isBulkInviteActive(fresh)) timer = setTimeout(load, POLL_MS);
+        if (isBulkInviteActive(fresh)) {
+          // Nobody has picked it up for two minutes: no point asking every 2s.
+          const since = fresh.status === 'queued' && fresh.created_at ? new Date(fresh.created_at).getTime() : NaN;
+          const stuck = Number.isFinite(since) && Date.now() - since > 120_000;
+          timer = setTimeout(load, stuck ? POLL_MS * 5 : POLL_MS);
+        }
       } catch (err) {
         if (cancelled) return;
         setLoadError((err as Error)?.message || 'Could not read the send’s progress.');

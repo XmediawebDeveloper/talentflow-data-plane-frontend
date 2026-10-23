@@ -3155,7 +3155,7 @@ export default function AIInterview() {
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} expandableRows />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -3168,7 +3168,6 @@ export default function AIInterview() {
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
               renderRowActions={renderInterviewVersionActions}
-              expandableRows
             />
           )}
 
@@ -4018,7 +4017,6 @@ export default function AIInterview() {
                         onViewDetails={(inv) => openCandidateResultRoute(inv, filtered, 'invitation-status')}
                         resendingId={resendingEmailFor}
                         revokingId={revokingInviteFor}
-                        expandableRows
                       />
                       <ListPagination
                         currentPage={safePage}
