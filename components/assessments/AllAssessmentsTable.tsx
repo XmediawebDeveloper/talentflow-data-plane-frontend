@@ -311,10 +311,10 @@ interface AllAssessmentsTableProps {
   /** Told whether the sort is at its default, so Clear Sort can disable
    *  itself when there is nothing to clear. */
   onSortDefaultChange?: (isDefault: boolean) => void;
-  /** More ⋮ items for an Active (published) row, from the host page — its
-   *  Edit / Share / Track (`main`, after View) and Duplicate / Revoke
-   *  (`more`, after View Results), so the Active tab offers what the same
-   *  assessment's row offers on Total Jobs, through the same handlers. */
+  /** More ⋮ items for any row, from the host page — its Edit / Share /
+   *  Track (`main`, after View) and Duplicate / Revoke (`more`, after View
+   *  Results), so every tab offers what the same assessment's row offers on
+   *  Total Jobs, through the same handlers. */
   extraRowActions?: (raw: AssessmentResponse) => { main: AssessmentRowAction[]; more: AssessmentRowAction[] } | undefined;
   /** Bumped by the host after one of those actions changes data (a share,
    *  a duplicate, a revoke) — the table refetches its rows. */
@@ -870,6 +870,59 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       run: () => router.push(`/recruitment/assessments/${row.id}/results`),
     };
 
+    /* With the host's extras (every tab on the Assessments page), the Total
+       Jobs menu for the row's status, in its order: View, Edit, Share/Invite,
+       Track, View Results, Duplicate, Revoke (Active), then Archive /
+       Unarchive, then Delete. Without them, the menu as it was, below. */
+    const extra = extraRowActions?.(row.raw);
+    if (extra) {
+      const shared = row.invitations > 0;
+      const gatedResults: RowAction = {
+        ...results,
+        disabled: !shared,
+        title: shared ? 'View results'
+          : row.rawStatus === 'draft' ? 'Publish the assessment to view results'
+          : 'Share the assessment to view results',
+      };
+      const archive: RowAction = {
+        key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
+        disabled: !canDeleteAssessment || !!jobLock,
+        title: !canDeleteAssessment ? 'You do not have permission to archive assessments' : jobLock ?? undefined,
+        run: () => void archiveRow(row),
+      };
+      const unarchive: RowAction = {
+        key: 'unarchive', label: 'Unarchive', icon: ArchiveRestore, iconClassName: 'text-menu-icon-archive',
+        disabled: !canDeleteAssessment || !!jobLock,
+        title: !canDeleteAssessment ? 'You do not have permission to unarchive assessments' : jobLock ?? undefined,
+        run: () => void unarchiveRow(row),
+      };
+      const deleteReason = !canDeleteAssessment
+        ? 'You do not have permission to delete assessments'
+        : jobLock
+          ? jobLock
+        : row.invitations > 0 || row.completed > 0
+          ? 'Cannot delete — candidates have already been invited to this assessment'
+          : '';
+      const del: RowAction = {
+        key: 'delete', label: 'Delete', icon: Trash2, iconClassName: 'text-destructive', destructive: true,
+        disabled: !!deleteReason, title: deleteReason || undefined,
+        run: () => void deleteRow(row),
+      };
+      const isArchived = row.rawStatus === 'archived';
+      return [
+        // No View on a draft: it is opened through Continue Editing.
+        ...(row.rawStatus === 'draft' ? [] : [view]),
+        ...extra.main,
+        gatedResults,
+        ...extra.more,
+        // Drafts publish from the Configure page, so they have no Archive.
+        ...(isArchived ? [unarchive] : row.rawStatus === 'draft' ? [] : [archive]),
+        /* Total Jobs offers Delete on every non-archived row; the Archived
+           tab keeps the Delete it already had. */
+        ...(!isArchived || fixedStatus === 'archived' ? [del] : []),
+      ];
+    }
+
     const actions: RowAction[] = [];
     switch (row.rawStatus) {
       case 'published': {
@@ -881,12 +934,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             : jobLock ?? undefined,
           run: () => void archiveRow(row),
         };
-        /* With the host's extras (the Active tab), the Total Jobs order:
-           View, Edit, Share/Invite, Track, View Results, Duplicate, Revoke,
-           then Archive. Without them, the menu as it was. */
-        const extra = extraRowActions?.(row.raw);
-        if (extra) actions.push(view, ...extra.main, results, ...extra.more, archive);
-        else actions.push(archive, view, results);
+        actions.push(archive, view, results);
         break;
       }
       case 'draft':
@@ -1176,7 +1224,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             <div ref={scrollRef} className="tf-table-shell">
               <table className="w-full text-sm border-collapse">
                 {hasBodyRows && (
-                <thead>
+                <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {COLUMNS.map((col) => {
                       const isSorted = sortKey === col.key;
@@ -1186,7 +1234,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           key={col.key}
                           scope="col"
                           aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                          className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${
+                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider ${
                             col.align === 'right' ? 'text-right' : 'text-left'
                           } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
                         >
@@ -1211,7 +1259,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     })}
                     <th
                       scope="col"
-                      className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 tf-sticky-col"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"
                     >
                       Actions
                     </th>
@@ -1219,17 +1267,17 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 </thead>
                 )}
 
-                <tbody>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {/* ── 8. Loading ── Skeleton rows INSIDE the real table, so
                       the header, the column widths and the shell stay put and
                       the page does not jump when data lands. */}
                   {isLoading &&
                     Array.from({ length: 8 }).map((_, i) => (
-                      <tr key={`skeleton-${i}`} className="border-b border-gray-100 dark:border-slate-700/60">
+                      <tr key={`skeleton-${i}`}>
                         {COLUMNS.map((col) => (
                           <td
                             key={col.key}
-                            className={`px-3 py-3 ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
+                            className={`px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
                           >
                             <div
                               className="h-3.5 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse"
@@ -1237,7 +1285,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             />
                           </td>
                         ))}
-                        <td className="px-3 py-3 tf-sticky-col">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
                           <div className="h-6 w-6 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                         </td>
                       </tr>
@@ -1314,12 +1362,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       <tr
                         key={row.id}
                         onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
-                        className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 ${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10`}
+                        className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10`}
                       >
                         {/* 1. Job ID — secondary by design: the chip is the
                             house Job Openings badge, which reads as a
                             reference rather than as the row's headline. */}
-                        <td className="px-3 py-2.5 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
                           {row.jobId ? (
                             <JobIdBadge>{row.jobId}</JobIdBadge>
                           ) : (
@@ -1330,7 +1378,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         {/* 2. Job Name — the row's anchor, so it carries the
                             weight. The job name only, truncated with the full
                             name in `title`. */}
-                        <td className="px-3 py-2.5 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
                           {/* The cap sits on the span: a table cell's own
                               max-width is ignored, so on the td it let a long
                               job name widen the column uncut. */}
@@ -1343,24 +1391,24 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 3. Job Version — its own column, blue chip. */}
-                        <td className="px-3 py-2.5 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
                           <VersionPill kind="job" version={row.jobVersion} />
                         </td>
 
                         {/* 4. Assessment Version — its own column, cyan chip. */}
-                        <td className="px-3 py-2.5 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
                           <VersionPill kind="assessment" version={row.assessmentVersion} />
                         </td>
 
                         {/* 5. Status */}
-                        <td className="px-3 py-2.5 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
                           <StatusBadge status={row.status} />
                         </td>
 
                         {/* 6. Invitations Sent — right-aligned and tabular, so
                             the digits line up down the column; "sent" stays
                             muted so the number is what is scanned. */}
-                        <td className="px-3 py-2.5 align-middle text-right">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.invitations.toLocaleString()}
                           </span>
@@ -1373,7 +1421,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             beside it, with "Completed" muted after the
                             number — whatever the count — the way "sent"
                             follows that one. */}
-                        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right whitespace-nowrap">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.completed.toLocaleString()}
                           </span>
@@ -1381,14 +1429,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 7. Created On — date AND time, fixed width. */}
-                        <td className="px-3 py-2.5 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
                           <span className="text-gray-600 dark:text-slate-400 tabular-nums">
                             {formatISTStamp(row.createdAt)}
                           </span>
                         </td>
 
                         {/* 8. Created By */}
-                        <td className={`px-3 py-2.5 align-middle ${HIDE_CLASS.lg}`}>
+                        <td className={`px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle ${HIDE_CLASS.lg}`}>
                           <CreatedBy name={row.createdBy} />
                         </td>
 
@@ -1399,7 +1447,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             by them, which a hand-rolled absolute menu inside
                             an overflow:auto shell would be. */}
                         <td
-                          className="px-3 py-2.5 align-middle text-right tf-sticky-col"
+                          className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right tf-sticky-col"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <DropdownMenu>
