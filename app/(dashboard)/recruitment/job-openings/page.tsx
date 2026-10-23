@@ -552,6 +552,14 @@ export default function JobOpeningsPage() {
   const markVersionStatus = (versionId: string, status: string) =>
     setVersionStatusOverrides(prev => ({ ...prev, [versionId]: status }));
 
+  /* Version ids the backend has confirmed deleted. The same stale-cache gap as
+   * the status overrides above: the View Versions table's lineage was fetched
+   * before the delete, so a deleted version stayed listed until a refresh.
+   * State, not deletedIdsRef, so the panel re-renders when one is added. */
+  const [deletedVersionIds, setDeletedVersionIds] = useState<Set<string>>(new Set());
+  const markVersionsDeleted = (versionIds: string[]) =>
+    setDeletedVersionIds(prev => new Set([...prev, ...versionIds]));
+
   const closeDisableDialog = () => setDisableDialog({ open: false, job: null, disabling: false });
 
   const handleDisableJob = (job: Job) => {
@@ -678,6 +686,7 @@ export default function JobOpeningsPage() {
       // All Jobs list. Dropping the whole lineage here hid v1 of a job whose v2
       // draft was deleted, which looked as if the entire job had been deleted.
       deletedIdsRef.current.add(job.id);
+      markVersionsDeleted([job.id]);
       setJobs(prev => prev.filter(j => j.id !== job.id));
       toast.success(isLaterVersion
         ? `V${job.versionNumber} of "${job.title}" has been deleted`
@@ -818,6 +827,7 @@ export default function JobOpeningsPage() {
       // the newest of them back on the All Jobs list - which is correct, because
       // the job itself was not deleted.
       deletedIds.forEach((id) => deletedIdsRef.current.add(id));
+      markVersionsDeleted(deletedIds);
       setJobs(prev => prev.filter(job => !deletedIds.includes(job.id)));
     }
 
@@ -862,6 +872,7 @@ export default function JobOpeningsPage() {
         onEditJob={handleEditJob}
         onPublishJob={handlePublishJob}
         versionStatusOverrides={versionStatusOverrides}
+        deletedVersionIds={deletedVersionIds}
         onDisableJob={handleDisableJob}
         onRepublishJob={handleRepublishJob}
         onArchiveJob={requestArchiveJob}

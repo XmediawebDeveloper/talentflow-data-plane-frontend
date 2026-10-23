@@ -38,7 +38,7 @@ export default function DeleteConfirmDialog({
         },
       ]}
     >
-      <p className="text-sm text-gray-600 dark:text-slate-400">
+      <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
         Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-slate-50">&quot;{teamName}&quot;</span>?
         This action cannot be undone. All team data will be permanently removed.
       </p>
