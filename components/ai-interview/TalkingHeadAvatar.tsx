@@ -118,6 +118,11 @@ const LIP_SHAPES: Record<string, Record<string, number>> = {
   "U":   { viseme_U:  0.22, jawOpen: 0.10 },
 };
 const NO_SHAPE: Record<string, number> = {};
+/** Lip easing time constants (ms): open into a shape, relax out of it, and
+ *  close at end of speech. Larger = slower, softer mouth movement. */
+const LIP_ATTACK_MS = 90;
+const LIP_RELEASE_MS = 110;
+const LIP_CLOSE_MS = 60;
 const LIP_MORPHS = [
   "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
   "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
@@ -399,10 +404,24 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // ══════════════════════════════════════════════════════════
 
           try {
-            // 1) Force straight pose (hands down, relaxed — NEVER hip)
-            head.poseName = "straight";
-            head.poseCurrentTemplate = head.poseTemplates["straight"];
-            head.setPoseFromTemplate(head.poseTemplates["straight"], 0);
+            // 1) Force straight pose (hands down, relaxed — NEVER hip) and keep
+            // it from ever MIRRORING. TalkingHead's setPoseFromTemplate mirrors
+            // the pose (weight onto the other leg) whenever the same template is
+            // applied again, and on a null "refresh" (end of any animation) when
+            // the weight isn't on the left. Pre-setting poseCurrentTemplate (the
+            // old code) made the very first call a "same template" call, so Bina
+            // started mirrored and then flipped side-to-side on later re-applies
+            // — the reported "suddenly moved to the other side, then normal".
+            const straightT = head.poseTemplates["straight"];
+            const origSetPose = head.setPoseFromTemplate.bind(head);
+            head.setPoseFromTemplate = (template: unknown, ms?: number) => {
+              head.poseWeightOnLeft = true;          // never take the mirror branch
+              head.poseName = "straight";
+              // Already straight → re-applying would only restart the transition.
+              if (template && head.poseCurrentTemplate === straightT && head.poseTarget?.template === straightT) return;
+              origSetPose(template ? straightT : null, ms);
+            };
+            head.setPoseFromTemplate(straightT, 0);
 
             // 2) Replace ALL pose animation alternatives with straight-only
             // (Don't touch poseBase/poseTarget/poseTemplates directly — causes clone errors)
@@ -534,9 +553,14 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           } catch {}
 
           // ── Per-frame: eye contact + behavior guard + amplitude lip sync ──
+          let lastLipFrameAt = performance.now();
           const enforce = () => {
             if (!mounted || !headRef.current) return;
             const h = headRef.current;
+            const frameNow = performance.now();
+            // Clamp so a background-tab pause doesn't make one giant step.
+            const lipDt = Math.min(100, frameNow - lastLipFrameAt);
+            lastLipFrameAt = frameNow;
 
             try {
               const mt = h.mtAvatar;
@@ -579,9 +603,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               }
 
               // ── Ensure pose stays straight (never hip) ──
-              if (h.poseName !== "straight") {
-                h.poseName = "straight";
-                h.poseCurrentTemplate = h.poseTemplates["straight"];
+              // (Through the setup wrapper — a direct poseCurrentTemplate write
+              // here is what set up the mirror flip.)
+              if (h.poseName !== "straight" || h.poseCurrentTemplate !== h.poseTemplates["straight"]) {
+                h.setPoseFromTemplate(h.poseTemplates["straight"], 800);
               }
 
               // ══════════════════════════════════════════════════════════
@@ -669,23 +694,33 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                     targetShape = LIP_SHAPES["DD"];
                   }
 
-                  // Instant articulation — no easing, direct viseme snap
+                  // Eased articulation. The old direct snap jumped between
+                  // viseme shapes every ~70 ms, which read as fast/jittery lips.
+                  // Each morph now glides toward its target (frame-rate
+                  // independent): ~LIP_ATTACK_MS to open, ~LIP_RELEASE_MS to relax.
                   for (const morph of LIP_MORPHS) {
                     const target = targetShape[morph] || 0;
-                    currentMorphsRef.current[morph] = target;
+                    const cur = currentMorphsRef.current[morph] || 0;
+                    const tau = target > cur ? LIP_ATTACK_MS : LIP_RELEASE_MS;
+                    const next = cur + (target - cur) * (1 - Math.exp(-lipDt / tau));
+                    currentMorphsRef.current[morph] = Math.abs(next - target) < 0.002 ? target : next;
                     if (mt[morph]) {
                       mt[morph].realtime = currentMorphsRef.current[morph];
                       mt[morph].needsUpdate = true;
                     }
                   }
                 } else {
-                  // Audio stopped — IMMEDIATELY zero all lip morphs (no decay)
+                  // Audio stopped — close the mouth quickly (LIP_CLOSE_MS), not a
+                  // one-frame snap; never a trailing "still talking" animation.
                   speechStartRef.current = null;
+                  const k = 1 - Math.exp(-lipDt / LIP_CLOSE_MS);
                   for (const morph of LIP_MORPHS) {
-                    if (currentMorphsRef.current[morph]) {
-                      currentMorphsRef.current[morph] = 0;
+                    const cur = currentMorphsRef.current[morph];
+                    if (cur) {
+                      const next = cur < 0.01 ? 0 : cur * (1 - k);
+                      currentMorphsRef.current[morph] = next;
                       if (mt[morph]) {
-                        mt[morph].realtime = 0;
+                        mt[morph].realtime = next;
                         mt[morph].needsUpdate = true;
                       }
                     }

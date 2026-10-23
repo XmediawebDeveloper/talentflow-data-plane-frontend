@@ -827,7 +827,7 @@ export default function VersionInviteDialog({
                           pickingDisabled={!selected?.sendable || !perms.canInvite || !!off}
                         />
                         {/* The share step's Manual / Upload Excel, kept on the bulk path. */}
-                        <ExtraCandidatesInput value={extras} onChange={setExtras} disabled={!selected?.sendable || !perms.canInvite || !!off} />
+                        <ExtraCandidatesInput onChange={setExtras} disabled={!selected?.sendable || !perms.canInvite || !!off} />
                       </div>
                     ) : undefined}
                   />
