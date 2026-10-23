@@ -111,7 +111,7 @@ export function EnvironmentVerificationOverlay({
         // Once the phone has opened the link, the QR/card's job is done —
         // show ONLY the full-screen color + ID so the phone's camera has a
         // clean, unobstructed target to film, per the candidate's request.
-        <span className="text-white text-6xl sm:text-7xl font-bold tracking-[0.3em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+        <span className="text-white text-6xl sm:text-7xl font-bold tracking-[0.3em] drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] max-w-[95vw] break-all text-center px-4">
           {challengeId}
         </span>
       ) : (

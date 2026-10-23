@@ -1,7 +1,6 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
+import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
 import { useState, useRef, useEffect, Fragment } from 'react';
 import {
   Search,
@@ -22,7 +21,7 @@ import {
   ArrowUpRight,
   LogOut,
   Trash2,
-  ChevronLeft,
+  Menu,
   X,
   RefreshCw,
 } from 'lucide-react';
@@ -38,7 +37,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useSearchParams } from 'next/navigation';
 import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
-import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -81,8 +80,10 @@ export default function TeamChatPage() {
   const [showPinnedPanel, setShowPinnedPanel] = useState(false);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
-  // Phones show one pane at a time: the conversation list, or the open chat.
-  const [mobileListOpen, setMobileListOpen] = useState(false);
+  // Tablet + phone (< lg): the conversation list is a slide-in drawer, open by
+  // default; picking a conversation closes it, the header hamburger reopens it.
+  // Desktop ignores this — the list is a fixed column there.
+  const [listOpen, setListOpen] = useState(true);
   const [showComposerEmoji, setShowComposerEmoji] = useState(false);
   const [isRefreshingChat, setIsRefreshingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -476,7 +477,7 @@ export default function TeamChatPage() {
 
   const handleSelectChannel = (channel: Channel) => {
     setSelectedChannel(channel);
-    setMobileListOpen(false);
+    setListOpen(false);
     setShowPinnedPanel(false);
     setShowHeaderMenu(false);
   };
@@ -693,8 +694,22 @@ export default function TeamChatPage() {
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [messageInput, selectedChannel?.id]);
 
+  // Esc closes the conversations drawer (tablet/phone) — unless a popup is
+  // open, in which case Esc belongs to the popup.
+  useEffect(() => {
+    if (!listOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (showCreateModal || showAddMembersModal || showNewDMModal) return;
+      if (window.matchMedia('(min-width: 1024px)').matches) return;
+      setListOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [listOpen, showCreateModal, showAddMembersModal, showNewDMModal]);
+
   if (isLoading) {
-    return <PageSkeleton variant="cards" showStats={false} />;
+    return <TeamChatSkeleton />;
   }
 
   const todayLabel = formatISTDate(new Date().toISOString());
@@ -704,8 +719,6 @@ export default function TeamChatPage() {
   };
   // The other person in a DM (falls back to the first member).
   const dmPartner = (c: Channel) => c.members.find((m) => m.user_id !== currentUser?.id) ?? c.members[0];
-  // Phones show one pane: the list until a conversation is open, then the chat.
-  const showListOnMobile = !selectedChannel || mobileListOpen;
   const partner = selectedChannel?.type === 'direct' ? dmPartner(selectedChannel) : null;
   const sortedMembers = [...(selectedChannel?.members ?? [])].sort(
     (a, b) => Number(b.is_online) - Number(a.is_online) || a.name.localeCompare(b.name),
@@ -810,21 +823,23 @@ export default function TeamChatPage() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-50 overflow-x-clip">
-      <div className="mx-auto w-full max-w-[1400px] flex flex-col flex-1 min-h-0">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl flex flex-col flex-1 min-h-0">
-      <div className="shrink-0">
-        <PageBreadcrumb className="mb-4" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Chat' }]} />
-        <OrganizationTabs />
-      </div>
-      <div className="flex flex-1 min-h-0 flex-col rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+    // Card, breadcrumb, organization tabs and the tab panel come from
+    // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
+    <div className="flex flex-1 min-h-0 flex-col">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
-        <div className="flex flex-1 min-h-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700 dark:bg-slate-900">
+        <div className="relative flex flex-1 min-h-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700 dark:bg-slate-900">
 
-        {/* ── Conversations ── */}
+        {/* ── Conversations ──
+            Below lg: a drawer that slides over the conversation from the left
+            (open by default; ☰ in the header toggles it). lg+: the fixed left
+            column, exactly as before. */}
         <aside
-          className={`${showListOnMobile ? 'flex' : 'hidden'} w-full shrink-0 flex-col border-gray-200 dark:border-slate-700 md:flex md:w-72 md:border-r lg:w-80`}
+          id="chat-conversations"
+          aria-label="Conversations"
+          className={`absolute inset-y-0 left-0 z-30 flex w-[85%] max-w-xs shrink-0 flex-col border-r border-gray-200 bg-white shadow-xl transition-transform duration-300 ease-out motion-reduce:transition-none dark:border-slate-700 dark:bg-slate-900 sm:w-80 sm:max-w-none ${
+            listOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:static lg:z-auto lg:w-80 lg:translate-x-0 lg:shadow-none lg:transition-none`}
         >
           <div className="space-y-3 border-b border-gray-100 p-3 dark:border-slate-700/60">
             <div className="flex items-center gap-2 px-1">
@@ -834,6 +849,16 @@ export default function TeamChatPage() {
                   {totalUnread}
                 </span>
               )}
+              {/* Close the drawer (tablet/phone only) */}
+              <button
+                type="button"
+                onClick={() => setListOpen(false)}
+                className="-mr-1 ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-brand-blue lg:hidden dark:hover:bg-slate-800"
+                aria-label="Close conversations"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
             <div className="relative">
@@ -909,19 +934,33 @@ export default function TeamChatPage() {
           </div>
         </aside>
 
+        {/* Dims the conversation while the drawer is open (tablet/phone); tap to close. */}
+        <div
+          aria-hidden
+          onClick={() => setListOpen(false)}
+          className={`absolute inset-0 z-20 bg-gray-900/30 transition-opacity duration-300 lg:hidden ${
+            listOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+          }`}
+        />
+
         {/* ── Conversation ── */}
-        <section className={`${showListOnMobile ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col md:flex`}>
+        <section className="flex min-w-0 flex-1 flex-col">
           {selectedChannel ? (
             <>
               <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-2 sm:px-4 dark:border-slate-700">
                 <div className="flex min-w-0 items-center gap-2.5">
+                  {/* Conversations drawer toggle — tablet/phone only, top-left
+                      corner (where the drawer slides in from). */}
                   <button
                     type="button"
-                    onClick={() => setMobileListOpen(true)}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-brand-blue md:hidden"
-                    aria-label="Back to conversations"
+                    onClick={() => setListOpen((v) => !v)}
+                    className={`-ml-0.5 shrink-0 lg:hidden ${iconButtonClass(listOpen)}`}
+                    aria-label={listOpen ? 'Close conversations' : 'Open conversations'}
+                    aria-expanded={listOpen}
+                    aria-controls="chat-conversations"
+                    title="Conversations"
                   >
-                    <ChevronLeft className="h-5 w-5" />
+                    <Menu className="h-5 w-5" />
                   </button>
                   {partner ? (
                     <span className="relative shrink-0">
@@ -1361,7 +1400,19 @@ export default function TeamChatPage() {
               </div>
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center bg-slate-50/60 p-8 dark:bg-slate-950/30">
+            <div className="relative flex flex-1 items-center justify-center bg-slate-50/60 p-6 sm:p-8 dark:bg-slate-950/30">
+              {/* No conversation open: the same top-left ☰ (tablet/phone) */}
+              <button
+                type="button"
+                onClick={() => setListOpen((v) => !v)}
+                className={`absolute left-2 top-2.5 lg:hidden ${iconButtonClass(listOpen)}`}
+                aria-label={listOpen ? 'Close conversations' : 'Open conversations'}
+                aria-expanded={listOpen}
+                aria-controls="chat-conversations"
+                title="Conversations"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
               <div className="max-w-sm text-center">
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <MessageCircle className="h-6 w-6 text-brand-blue" />
@@ -1443,6 +1494,7 @@ export default function TeamChatPage() {
           open={showCreateModal}
           onCancel={() => setShowCreateModal(false)}
           size="md"
+          mobileSheet
           icon={<Hash />}
           title="Create channel"
           subtitle="Bring teammates together around a topic."
@@ -1573,6 +1625,7 @@ export default function TeamChatPage() {
             setSelectedMemberIds([]);
           }}
           size="md"
+          mobileSheet
           icon={<Users />}
           title="Add members"
           subtitle="Invite teammates to this channel."
@@ -1632,6 +1685,7 @@ export default function TeamChatPage() {
           open={showNewDMModal}
           onCancel={() => setShowNewDMModal(false)}
           size="md"
+          mobileSheet
           icon={<MessageCircle />}
           title="New direct message"
           subtitle="Pick a teammate to start a private chat."
@@ -1681,9 +1735,6 @@ export default function TeamChatPage() {
                   )}
                 </div>
         </AppModal>
-      </div>
-      </div>
-      </div>
     </div>
   );
 }

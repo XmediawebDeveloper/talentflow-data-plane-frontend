@@ -20,6 +20,7 @@ import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
+import { draftVersionEditorUrl, openDraftVersionForEdit } from '@/lib/utils/jdDraftVersion';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   AlertDialog,
@@ -456,12 +457,26 @@ export default function JobOpeningsPage() {
         return;
       }
 
-      // JD not in use - allow edit
-      router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
     } catch (error) {
       console.error('Failed to check JD usage status:', error);
-      // If usage check fails, allow navigation (backend will validate on save)
-      router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+      // If the usage check fails, carry on - the backend validates again.
+    }
+
+    // JD not in use: edit its DRAFT VERSION, never the live row. The editor saves
+    // at every step, so opening it on the published JD put half-finished edits live
+    // before Republish. The job's existing open draft is reused if there is one.
+    await openPublishedJDForEdit(job.id);
+  };
+
+  const openPublishedJDForEdit = async (publishedJdId: string) => {
+    try {
+      const draft = await openDraftVersionForEdit(publishedJdId);
+      router.push(draftVersionEditorUrl(draft));
+    } catch (error) {
+      console.error('Failed to open a draft version for editing:', error);
+      toast.error('Could not open this JD for editing', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
     }
   };
 
@@ -478,15 +493,22 @@ export default function JobOpeningsPage() {
     try {
       const newJd = await jdService.createNewVersion(sourceId);
       setEditWarningDialog({ open: false, jobTitle: '', modules: [] });
-      toast.success('New version created', {
-        description: `Version ${(newJd as any).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
-      });
+      // The job already had an open draft version: that one is reopened, not a new copy.
+      if (newJd.reused_existing_draft) {
+        toast.success('Opened the existing draft version', {
+          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+        });
+      } else {
+        toast.success('New version created', {
+          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+        });
+      }
       // Start on Step 1 with ALL the source JD's data pre-filled (title, JD
       // text, extracted skills/experience/etc.). The no-change-no-LLM guard
       // keeps that data intact through the steps until the recruiter edits it.
       // `new_version=1`: the editor names this "New Version" (reopening the
       // draft later, without it, reads "Edit New Version").
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create&new_version=1`);
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create${newJd.reused_existing_draft ? '' : '&new_version=1'}`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setEditWarningDialog(prev => ({ ...prev, creating: false }));

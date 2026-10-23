@@ -24,6 +24,7 @@ import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import NameAvatar from '@/components/ui/name-avatar';
+import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort } from '@/components/ui/sortable-header';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -433,46 +434,46 @@ function TeamRow({
                     {/* Member table header — 9 cols */}
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">
                           Member
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
                             <span className="text-gray-500 dark:text-slate-500">Resume Scoring</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
                             <span className="text-gray-500 dark:text-slate-500">Assessment</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
                             <span className="text-gray-500 dark:text-slate-500">AI Interview</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
                             <span className="text-gray-500 dark:text-slate-500">Resume Storage</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500">
                           <span className="flex flex-col items-center gap-0.5">
                             <FileText className="w-3 h-3 text-brand-blue" />
                             JDs
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500">
                           <span className="flex flex-col items-center gap-0.5">
                             <ClipboardCheck className="w-3 h-3 text-brand-blue" />
                             Assessments
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">
                           Last Active
                         </th>
                       </tr>
@@ -605,6 +606,18 @@ export default function TeamUsageAnalytics() {
 
   useEffect(() => { fetchTeams(); }, [fetchTeams]);
 
+  const teamSort = useTableSort<'name' | 'RS' | 'AS' | 'AIU' | 'RU' | 'total'>({
+    descFirst: ['RS', 'AS', 'AIU', 'RU', 'total'],
+  });
+  const sortedTeams = sortRows(teams, teamSort.sortKey, teamSort.sortDir, {
+    name: (t) => t.team_name || 'Unnamed Team',
+    RS: (t) => getCount(t, 'RS'),
+    AS: (t) => getCount(t, 'AS'),
+    AIU: (t) => getCount(t, 'AIU'),
+    RU: (t) => getCount(t, 'RU'),
+    total: (t) => teamTotal(t),
+  });
+
   const totals = {
     rs:  teams.reduce((s, t) => s + getCount(t, 'RS'), 0),
     as_: teams.reduce((s, t) => s + getCount(t, 'AS'), 0),
@@ -716,6 +729,12 @@ export default function TeamUsageAnalytics() {
           used to hold the left slot is gone, and the tally belongs on the
           right. */}
       <div className="mb-4 flex items-center justify-end gap-2">
+        {/* Only while a column is sorted */}
+        <ClearSortChip
+          sort={teamSort}
+          labels={{ name: 'Team', RS: 'RS', AS: 'AS', AIU: 'AIU', RU: 'RU', total: 'Total' }}
+          onClear={() => teamSort.clearSort?.()}
+        />
         <span className="text-xs text-gray-500 dark:text-slate-400">
           {teams.length} {teams.length === 1 ? 'team' : 'teams'}
         </span>
@@ -726,15 +745,22 @@ export default function TeamUsageAnalytics() {
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Team</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, 'name')}>
+                <SortableHeader label="Team" column="name" sort={teamSort} />
+              </th>
               {(['RS', 'AS', 'AIU', 'RU'] as const).map(k => (
-                <th key={k} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
-                  <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500">
-                    <span className={`w-2 h-2 rounded-full ${UNIT_DOT[k]}`} />{k}
-                  </span>
+                // Colour moved from the inner span to the th so the sort button can turn it brand-blue.
+                <th key={k} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, k)}>
+                  <SortableHeader
+                    label={<><span className={`w-2 h-2 rounded-full ${UNIT_DOT[k]}`} />{k}</>}
+                    column={k}
+                    sort={teamSort}
+                  />
                 </th>
               ))}
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Total</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, 'total')}>
+                <SortableHeader label="Total" column="total" sort={teamSort} />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -771,7 +797,7 @@ export default function TeamUsageAnalytics() {
                 </td>
               </tr>
             ) : (
-              teams.map(team => (
+              sortedTeams.map(team => (
                 <TeamRow
                   key={team.team_id}
                   team={team}

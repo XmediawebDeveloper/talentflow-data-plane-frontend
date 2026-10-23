@@ -395,7 +395,7 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
 
       {/* Hand raised indicator */}
       {showHandIndicator && isHandRaised && (
-        <div className="absolute top-2 right-2 bg-orange-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg">
+        <div className="absolute top-2 right-2 max-w-[calc(100%-1rem)] whitespace-nowrap bg-orange-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg">
           <span className="text-lg">🖐️</span>
           Hand Raised!
         </div>

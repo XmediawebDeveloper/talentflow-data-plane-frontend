@@ -12,7 +12,8 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import UnsavedChangesModal from '@/components/UnsavedChangesModal';
+import LeaveInterviewDialog, { type LeaveInterviewBusy } from './LeaveInterviewDialog';
+import InterviewEditLockGate from './InterviewEditLockGate';
 import { useEmbeddedWizard, useWizardRouter, useWizardSearchParams, WizardLayer } from './embeddedWizardNav';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { loadAllInterviewConfigs } from '@/components/talent-match-invite/inviteVersions';
@@ -40,7 +41,12 @@ import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStep
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
-import { markUnsavedVersion, isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import { markUnsavedVersion, isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import {
+  clearStaging, hasPendingThisVisit, markStaging, shouldAnnounceRestoredEdits,
+} from '@/lib/utils/aiInterviewEditSession';
+import { deleteWizardConfig, discardWizardChanges, keepWizardChanges } from '@/lib/utils/aiInterviewWizardExit';
+import { formatIST } from '@/lib/utils/dateUtils';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
@@ -1400,6 +1406,15 @@ export default function AIInterviewConfig() {
   // through the handoff instead of flashing an empty page.
   const [redirecting, setRedirecting] = useState(false);
   const loadedStatusRef = useRef<string | null>(null); // status of the config this page opened (published → editing a live version)
+  /* The same facts about the config on screen, as state, for what the leave
+     prompt renders (refs cannot be read while rendering): its id once one
+     exists, status, V-number, and whether candidates were invited to it. */
+  const [loadedConfig, setLoadedConfig] = useState<{
+    id: string; status: string | null; version: number; invited: boolean;
+  } | null>(null);
+  /* Pending edits the config already had when this step loaded it (an earlier,
+     unfinished edit — or this visit's, from Clusters). Leaving then asks. */
+  const pendingOnLoadRef = useRef(false);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   /* True while editing a DUPLICATED version's draft (V2+, minted by Duplicate /
      New version). Its JD and job version were fixed when it was cloned, so the
@@ -1453,6 +1468,7 @@ export default function AIInterviewConfig() {
           existingDraftIdRef.current = created.id;
           // A new interview stays "unsaved" until Save as Draft keeps it.
           markUnsavedVersion(created.id);
+          setLoadedConfig({ id: created.id, status: 'draft', version: created.interview_version ?? 1, invited: false });
           return created.id;
         })
         .catch((err) => {
@@ -1622,6 +1638,8 @@ export default function AIInterviewConfig() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  /* Which leave-prompt option is running, so the prompt shows it and blocks the rest. */
+  const [leaveBusy, setLeaveBusy] = useState<LeaveInterviewBusy>(null);
   /** `pendingNavigation` value for "leave to the interview list" (Back to JD). */
   const LIST_TARGET = '__list__';
   const isNavigatingRef = useRef(false);
@@ -1644,7 +1662,9 @@ export default function AIInterviewConfig() {
         // Promise.all so it costs no extra round trip on the common path.
         const [jdResult, specificConfig, liveConfig] = await Promise.all([
           aiInterviewService.getPublishedJDs(),
-          configId ? aiInterviewService.get(configId).catch(() => null) : Promise.resolve(null),
+          // With pending edits overlaid: an existing config is edited as pending
+          // edits (lib/utils/aiInterviewEditSession), and this is where they show.
+          configId ? aiInterviewService.get(configId, { withPending: true }).catch(() => null) : Promise.resolve(null),
           // A failed lookup must not block configuring — fall through as "no
           // blocker" rather than stranding the recruiter on a transient error.
           configId ? Promise.resolve(null) : aiInterviewService.findLiveConfigForJd(jdId).catch(() => null),
@@ -1740,6 +1760,12 @@ export default function AIInterviewConfig() {
           existingDraft = draftResult?.items?.find(
             (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
           ) ?? null;
+          // The list row is the stored draft; with pending edits on it, read
+          // the wizard's view of it instead so those edits are what loads.
+          if (existingDraft?.has_pending_edits) {
+            const listed: AIInterviewResponse = existingDraft;
+            existingDraft = await aiInterviewService.get(listed.id, { withPending: true }).catch(() => listed);
+          }
         }
 
         // Mode + SI-backed settings restore on ANY existing draft (even if
@@ -1749,6 +1775,23 @@ export default function AIInterviewConfig() {
         if (existingDraft) {
           existingDraftIdRef.current = existingDraft.id;
           loadedStatusRef.current = existingDraft.status ?? null;
+          setLoadedConfig({
+            id: existingDraft.id,
+            status: existingDraft.status ?? null,
+            version: existingDraft.interview_version ?? 1,
+            invited: (existingDraft.invitations_count ?? 0) > 0,
+          });
+          pendingOnLoadRef.current = !!existingDraft.has_pending_edits;
+          // An existing config — not one created in this visit — is edited as
+          // pending edits: Continue / Save on this step are staged, so a
+          // published interview does not change mid-edit and Discard can drop
+          // everything. A new or just-duplicated version is written directly.
+          if (!isUnsavedVersion(existingDraft.id)) markStaging(existingDraft.id);
+          if (shouldAnnounceRestoredEdits(existingDraft)) {
+            toast.info(
+              `Unsaved changes from ${formatIST(existingDraft.pending_edits_updated_at)} restored. Save as Draft to keep them, or Discard to drop them.`,
+            );
+          }
           setEditingDuplicatedDraft(
             existingDraft.status === 'draft' && (existingDraft.interview_version ?? 1) > 1,
           );
@@ -2200,6 +2243,13 @@ export default function AIInterviewConfig() {
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
       if (isNavigatingRef.current) return;
+      if (!needsLeavePrompt()) {
+        // Nothing to keep or lose: Back only consumed the trap entry pushed
+        // above — take the real step back instead of asking.
+        isNavigatingRef.current = true;
+        window.history.back();
+        return;
+      }
       window.history.pushState(null, '', window.location.href);
       setPendingNavigation('__back__');
       setShowUnsavedDialog(true);
@@ -2219,7 +2269,7 @@ export default function AIInterviewConfig() {
             // Nothing changed: let the link (a breadcrumb crumb, say) go
             // straight where it points, without asking — the AI Interviews
             // crumb opening that page on its list, as Discard / Save do.
-            if (!hasUnsavedChanges()) {
+            if (!needsLeavePrompt()) {
               if (href === '/recruitment/ai-interviews') openInterviewListView();
               return;
             }
@@ -2240,7 +2290,7 @@ export default function AIInterviewConfig() {
      fires this — the guards above handle it. */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (isNavigatingRef.current || !hasUnsavedChanges()) return;
+      if (isNavigatingRef.current || !needsLeavePrompt()) return;
       e.preventDefault();
       e.returnValue = '';
     };
@@ -2689,15 +2739,20 @@ export default function AIInterviewConfig() {
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
         save_and_exit: isExiting,
-        // Saving a published (not yet invited) version as a draft takes it
-        // off "published" — otherwise it kept showing Published after Save as Draft.
-        ...(isExiting && loadedStatusRef.current === 'published' && { status: 'draft' }),
+        // No `status: 'draft'` for a published version any more: its edits are
+        // kept as pending edits and it stays live until Publish applies them
+        // (keepWizardChanges) — Save as Draft used to unpublish it.
         semantic_skill_check: false,
         special_instructions: buildClusterJson(),
         introduction_video_url: introVideoUrl || undefined,
       };
       if (existingDraftIdRef.current) {
-        await aiInterviewService.update(existingDraftIdRef.current, payload);
+        // Leaving a PUBLISHED config with nothing changed and nothing pending:
+        // no write — staging an identical copy would only flag it with
+        // "Unpublished changes" that change nothing.
+        const unchangedPublished = isExiting && loadedStatusRef.current === 'published'
+          && !hasUnsavedChanges() && !pendingOnLoadRef.current && !hasPendingThisVisit(existingDraftIdRef.current);
+        if (!unchangedPublished) await aiInterviewService.update(existingDraftIdRef.current, payload);
       } else {
         // Create the draft once, even if the debounced auto-save is racing this.
         const { id, mine } = await ensureDraftId(payload);
@@ -2706,7 +2761,6 @@ export default function AIInterviewConfig() {
       // This save carried the exit flag, so the server has just written the
       // visit's checkpoint row — the unmount net must not write a second one.
       if (isExiting) exitCheckpointedRef.current = true;
-      if (isExiting && loadedStatusRef.current === 'published') loadedStatusRef.current = 'draft';
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {
@@ -2722,10 +2776,24 @@ export default function AIInterviewConfig() {
     }
   };
 
+  /* Keep what saveDraft just wrote: on an existing draft its pending edits are
+     applied; a published config keeps them pending and stays live; a config
+     created this visit is only marked kept (keepWizardChanges). */
+  const keepSavedDraft = async (): Promise<boolean> => {
+    const id = existingDraftIdRef.current;
+    if (!id) return true;
+    try {
+      toast.success(await keepWizardChanges(id, loadedStatusRef.current));
+      return true;
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Failed to save draft');
+      return false;
+    }
+  };
+
   const handleSaveAsDraft = async () => {
-    const ok = await saveDraft(false, undefined, true);
-    if (!ok) return;
-    clearUnsavedVersion(existingDraftIdRef.current);
+    const ok = await saveDraft(true, undefined, true);
+    if (!ok || !(await keepSavedDraft())) return;
     // Started on a JD's Job Details page (including from its draft prompt) —
     // return there rather than to the AI Interviews list, matching the
     // breadcrumb this step already shows.
@@ -2993,21 +3061,24 @@ export default function AIInterviewConfig() {
       // Continue → Clusters (staying inside the wizard, where the checkpoint
       // belongs to the exit from THAT page), or a Save/Discard that has
       // already settled this visit's checkpoint.
+      // Only while this step is open does the service stage this config's
+      // saves (the next step marks it again when it loads).
+      clearStaging(existingDraftIdRef.current);
       if (isNavigatingRef.current) return;
       void checkpointExitRef.current();
     };
   }, []);
 
   const handleSaveAndNavigate = async () => {
-    setShowUnsavedDialog(false);
+    setLeaveBusy('save');
     isNavigatingRef.current = true;
-    const ok = await saveDraft(true, undefined, true);
+    const ok = await saveDraft(true, undefined, true) && await keepSavedDraft();
+    setLeaveBusy(null);
     if (!ok) {
       isNavigatingRef.current = false;
       return;
     }
-    clearUnsavedVersion(existingDraftIdRef.current);
-    toast.success('Draft saved');
+    setShowUnsavedDialog(false);
     // Same place Discard would have gone: Back to JD → the interview list,
     // a breadcrumb → the page it names.
     goTo(pendingNavigation ?? LIST_TARGET);
@@ -3040,7 +3111,9 @@ export default function AIInterviewConfig() {
      else is the address a breadcrumb or link pointed at — the recruiter goes
      where they clicked. */
   const goTo = (target: string) => {
-    if (target === '__back__') router.back();
+    // Back: two entries — the trap re-pushed when Back was caught, then this
+    // page's own; both are this URL, so one step would land here again.
+    if (target === '__back__') window.history.go(-2);
     else if (target === LIST_TARGET) navigateToInterviewList();
     else {
       // The "AI Interviews" crumb: open that page on its list, like every
@@ -3059,31 +3132,57 @@ export default function AIInterviewConfig() {
      nothing on this step writes without Save. */
   const discardDeletesVersion = unsavedVersionNumber !== null || !draftExistedOnLoadRef.current;
 
-  /* Discard — the footer button and the Unsaved Changes prompt's Discard do
-     the same thing; only the destination differs (see `goTo`). Nothing is
-     saved on the way out: Save as Draft (or the prompt's Save) is the only way
-     to keep edits. Every other version of the interview is untouched. */
+  /* Discard — the footer button and the leave prompt's Discard do the same
+     thing; only the destination differs (see `goTo`). A version this visit
+     created is deleted; any other has its pending edits dropped — Continue on
+     an existing config only ever staged them — so it is exactly as it was
+     last saved / published. Every other version of the interview is untouched. */
   const discardCurrentVersion = async (target: string) => {
-    setShowUnsavedDialog(false);
-    setPendingNavigation(null);
+    setLeaveBusy('discard');
     isNavigatingRef.current = true;
     // A create still in flight (a Save racing this click) lands its id first,
     // so a version this visit created is removed rather than orphaned.
     if (draftCreateRef.current) await draftCreateRef.current.catch(() => null);
     const draftId = existingDraftIdRef.current;
     const createdThisVisit = !!draftId && !draftExistedOnLoadRef.current;
-    if (draftId && (createdThisVisit || unsavedVersionNumber !== null)) {
-      try {
-        await aiInterviewService.delete(draftId);
-        clearUnsavedVersion(draftId);
+    const deleteIt = createdThisVisit || unsavedVersionNumber !== null;
+    if (draftId) {
+      // Best-effort — leaving is what was asked for; a failed delete leaves
+      // the draft in the list, where it can be removed directly.
+      const ok = await discardWizardChanges(draftId, deleteIt);
+      if (deleteIt && ok) {
         existingDraftIdRef.current = null;
         toast.success('Draft discarded');
-      } catch {
-        // Silent — leaving is what was asked for; a failed delete leaves the
-        // draft in the list, where it can be removed directly.
       }
     }
-    goTo(target);
+    setLeaveBusy(null);
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
+    // Back from a version just deleted could land on one of its own steps.
+    goTo(deleteIt && target === '__back__' ? LIST_TARGET : target);
+  };
+
+  /* The leave prompt's Delete: a saved draft nobody was invited to, removed
+     outright (the prompt offers it only then). */
+  const deleteCurrentInterview = async (target: string) => {
+    const draftId = existingDraftIdRef.current;
+    if (!draftId) return;
+    setLeaveBusy('delete');
+    isNavigatingRef.current = true;
+    try {
+      await deleteWizardConfig(draftId);
+      existingDraftIdRef.current = null;
+      toast.success('AI interview deleted');
+    } catch (err) {
+      isNavigatingRef.current = false;
+      toast.error((err as Error)?.message || 'Failed to delete AI interview');
+      return;
+    } finally {
+      setLeaveBusy(null);
+    }
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
+    goTo(target === '__back__' ? LIST_TARGET : target);
   };
 
   /* ── Inside the wizard popup: the footer's Cancel ──
@@ -3108,8 +3207,15 @@ export default function AIInterviewConfig() {
   function hasUnsavedChanges() {
     return editBaselineRef.current !== null && editBaselineRef.current !== editSnapshotRef.current;
   }
+  /** Does leaving need the prompt? Edits on this step, pending edits on the
+   *  config (this visit's, or earlier ones restored on load), or a version
+   *  created this visit and never kept. Nothing of these → leave silently. */
+  function needsLeavePrompt() {
+    const id = existingDraftIdRef.current;
+    return hasUnsavedChanges() || pendingOnLoadRef.current || hasPendingThisVisit(id) || isUnsavedVersion(id);
+  }
   const requestCancel = async () => {
-    const changed = hasUnsavedChanges();
+    const changed = needsLeavePrompt();
     if (changed) {
       // Any address outside the wizard ends the popup once saved / discarded.
       setPendingNavigation(jdId ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}` : '/recruitment/ai-interviews');
@@ -3238,8 +3344,10 @@ export default function AIInterviewConfig() {
                   setPendingNavigation('/recruitment/ai-interviews/jd-selection');
                   setShowUnsavedDialog(true);
                 }}
-                className="text-sm text-gray-600 hover:text-brand-blue px-3 py-1.5 rounded-lg hover:bg-brand-blue/5 transition-colors whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-1.5 text-sm text-brand-blue border border-brand-blue/40 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg hover:bg-brand-blue/10 hover:border-brand-blue transition-colors whitespace-nowrap"
+                title="Pick a different job description"
               >
+                <ArrowRightLeft className="w-4 h-4" />
                 Change JD
               </button>
               )}
@@ -3440,7 +3548,7 @@ export default function AIInterviewConfig() {
             {/* ── NTH ── */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100">
-                <div className="flex flex-1 items-start gap-2.5 min-w-[12rem]">
+                <div className="flex flex-1 items-start gap-2.5 min-w-0 sm:min-w-[12rem]">
                   <span className="flex items-center h-10 flex-shrink-0">
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" checked={nth.enabled} onChange={() => {
@@ -3835,12 +3943,12 @@ export default function AIInterviewConfig() {
                   {/* One dropdown rather than a row of chips: the interview runs
                       in a single language, and a chip that could not be removed
                       read as a status rather than as the setting it is. */}
-                  <div className="relative inline-block">
+                  <div className="relative inline-block max-w-full">
                     <select
                       value={availableLanguages[0] ?? CANDIDATE_LANGUAGES[0]}
                       onChange={e => setAvailableLanguages([e.target.value])}
                       aria-label="Interview language"
-                      className="appearance-none text-sm font-medium pl-3 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue min-w-[180px]"
+                      className="appearance-none max-w-full text-sm font-medium pl-3 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue min-w-0 sm:min-w-[180px]"
                     >
                       {CANDIDATE_LANGUAGES.map(lang => (
                         <option key={lang} value={lang}>{lang}</option>
@@ -4134,7 +4242,7 @@ export default function AIInterviewConfig() {
                   onClick={() => {
                     // Leaves to the interview list (never Step 1, Select JD);
                     // the prompt only when there is something to save or lose.
-                    if (!hasUnsavedChanges()) {
+                    if (!needsLeavePrompt()) {
                       navigateToInterviewList();
                       return;
                     }
@@ -4264,28 +4372,26 @@ export default function AIInterviewConfig() {
         </WizardLayer>
       )}
 
-      {/* Unsaved Changes — the shared prompt. Its own wording, because what
-          is being saved here is a configuration, not a job description. */}
-      <UnsavedChangesModal
-        isOpen={showUnsavedDialog}
-        {...(unsavedVersionNumber !== null && unsavedVersionNumber > 1
-          ? {
-              title: 'Discard this new version?',
-              description: `Delete this V${unsavedVersionNumber} draft? ${
-                unsavedVersionNumber === 2 ? 'V1 is' : `V1–V${unsavedVersionNumber - 1} are`
-              } not affected.`,
-              discardLabel: 'Delete draft',
-            }
-          : unsavedVersionNumber !== null || !draftExistedOnLoadRef.current
-          ? { description: 'Save your configuration as a draft before leaving?', discardLabel: 'Discard' }
-          : {
-              description: 'Save your changes, or discard them and keep this interview as it was saved?',
-              discardLabel: 'Discard changes',
-            })}
-        onClose={() => setShowUnsavedDialog(false)}
+      {/* "Being edited by X" - View only / Take over (see InterviewEditLockGate). */}
+      <InterviewEditLockGate configId={loadedConfig?.id} />
+
+      {/* Leaving with something unsaved — the wizard's shared leave prompt
+          (Clusters and Preview & Publish show the same one). */}
+      <LeaveInterviewDialog
+        open={showUnsavedDialog}
+        jdCode={selectedJd?.job_id}
+        title={selectedJd?.title}
+        versionNumber={unsavedVersionNumber ?? loadedConfig?.version ?? 1}
+        nothingSavedYet={!loadedConfig}
+        createdThisVisit={!!loadedConfig && discardDeletesVersion}
+        isPublished={loadedConfig?.status === 'published'}
+        canDelete={!!loadedConfig && loadedConfig.status === 'draft' && !loadedConfig.invited && !discardDeletesVersion}
+        currentStepLabel="Configure"
+        busy={leaveBusy ?? (savingDraft ? 'save' : null)}
+        onCancel={() => { setShowUnsavedDialog(false); setPendingNavigation(null); }}
         onDiscard={() => void discardCurrentVersion(pendingNavigation ?? LIST_TARGET)}
-        onSave={handleSaveAndNavigate}
-        isSaving={savingDraft}
+        onDelete={() => void deleteCurrentInterview(pendingNavigation ?? LIST_TARGET)}
+        onSave={() => void handleSaveAndNavigate()}
       />
 
       </div>

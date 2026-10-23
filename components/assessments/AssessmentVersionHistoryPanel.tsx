@@ -10,6 +10,7 @@ import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import { isStandardExperienceLevel } from '@/lib/utils/jobExperience';
 import { toOneDecimalScore } from '@/lib/utils/score';
+import { ASSESSMENT_JOB_LOCK_MESSAGE } from '@/lib/utils/assessmentJobLock';
 
 /**
  * Job Versions for an assessment row, expanded in place beneath it.
@@ -414,9 +415,8 @@ export const createAssessmentBlockedReason = (status?: string, currentVersion?: 
   const label = jobVersionDisplayStatus(status, currentVersion);
   switch (label) {
     case 'Archived':
-      return 'Archived job versions cannot have new assessments';
     case 'Disabled':
-      return 'Disabled job versions cannot have new assessments';
+      return ASSESSMENT_JOB_LOCK_MESSAGE;
     case 'Draft':
       return 'Publish this job version to create an assessment for it';
     case '':

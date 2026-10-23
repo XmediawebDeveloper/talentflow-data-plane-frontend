@@ -563,6 +563,9 @@ export interface InviteCandidate {
   rating?: number;
   resumeId?: string;
   source?: InviteCandidateSource;
+  /** This job's resume score (Job Details' Create / Send): the latest score
+   *  and match status, or 'unscored'. Omitted = no score chip. */
+  score?: { percent: number; matchStatus: string } | 'unscored';
 }
 
 export type DeliveryMethod = 'email' | 'link';

@@ -47,6 +47,7 @@ import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMod
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { Skeleton } from '@/components/ui/skeleton';
+import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 
 /* The Version History tab's eye opens a version's configuration in the same
    read-only dialog used elsewhere. Loaded lazily: that dialog renders this
@@ -826,9 +827,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   the feature named anywhere. */}
               {PROXY_INTEGRITY_VERIFICATION_ENABLED && (
               <SectionCard title="Mobile Environment Verification" icon={QrCode}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${config.environment_verification_enabled ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-gray-100 ring-1 ring-gray-200'}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${config.environment_verification_enabled ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-gray-100 ring-1 ring-gray-200'}`}>
                       <QrCode className={`w-5 h-5 ${config.environment_verification_enabled ? 'text-brand-blue' : 'text-gray-400'}`} />
                     </div>
                     <div>
@@ -852,8 +853,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <SectionCard title="Time Allocation" icon={Clock}>
                   {/* No .tf-table-shell — a fixed, at-most-3-row table that
                       should size to its content, not the shell's 400px min-height. */}
-                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                    <table className="w-full min-w-[420px] text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-left border-b border-gray-100">
                           <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
@@ -1348,10 +1349,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 {config.jd_short_id && (
                   <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
                 )}
-                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                <h1 className="min-w-0 font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
                   {config.jd_title || config.position || 'Untitled'}
                 </h1>
                 <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
+                {/* Live, with saved edits waiting for Publish — this page shows the published version. */}
+                {hasUnpublishedChanges(config) && <UnpublishedChangesChip />}
               </div>
 
               {/* Row 2: quiet bulleted facts. Experience level and the invite count
@@ -2044,7 +2047,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             const loading = activityLoading || lifecycleEvents === null;
 
             return (
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <TabHeading icon={Clock} title="Recent Activity" />
                 {loading && events.length === 0 ? (
                   <div className="space-y-4">

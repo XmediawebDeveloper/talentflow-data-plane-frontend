@@ -304,7 +304,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
   }) => (
     <div className="flex items-start gap-2 py-2.5 text-sm">
       {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />}
-      <span className="w-28 flex-shrink-0 text-gray-500">{label}</span>
+      <span className="w-20 sm:w-28 flex-shrink-0 text-gray-500">{label}</span>
       <span className="flex-shrink-0 text-gray-400">:</span>
       <span className="min-w-0 flex-1 text-gray-900 break-words">{value || '-'}</span>
     </div>
@@ -325,16 +325,16 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] flex flex-col">
           {/* Header */}
-          <div className="flex items-start justify-between gap-4 p-6 flex-shrink-0">
-            <div className="flex items-start gap-4 min-w-0">
-              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-                <ShieldX className="w-7 h-7 text-red-600" />
+          <div className="flex items-start justify-between gap-4 p-4 sm:p-6 flex-shrink-0">
+            <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ShieldX className="w-6 h-6 sm:w-7 sm:h-7 text-red-600" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
                   Duplicate Resume{exactDuplicates.length > 1 ? 's' : ''} Detected
                 </h2>
-                <p className="text-base text-gray-600 dark:text-slate-400 mt-1">
+                <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mt-1">
                   {exactDuplicates.length === 1
                     ? 'This resume matches an existing candidate in the system and cannot be uploaded.'
                     : 'These resumes match existing candidates in the system and cannot be uploaded.'}
@@ -344,7 +344,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
           </div>
 
           {/* The two records side by side: what is on file, and what was refused. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-2 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pb-2 space-y-6">
             {exactDuplicates.map(({ file, originalIndex }) => {
               const existing = file.existingResume;
               /* Two different folders, and they were showing the same one. The
@@ -428,7 +428,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
           </div>
 
           {/* Footer — no X, this closes the same way. */}
-          <div className="flex-shrink-0 flex justify-end gap-3 p-6 pt-4 border-t border-gray-100 dark:border-slate-700/60">
+          <div className="flex-shrink-0 flex justify-end gap-3 p-4 sm:p-6 sm:pt-4 border-t border-gray-100 dark:border-slate-700/60">
             <button
               onClick={closeAsDiscarded}
               className="px-5 py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors font-medium"
@@ -454,13 +454,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <AlertTriangle className="w-6 h-6 text-amber-600" />
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
                 Resume Update Detected
               </h2>
               <p className="text-sm text-gray-600 dark:text-slate-400">
@@ -471,7 +471,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         </div>
 
         {/* File Counter */}
-        <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
               Resume {currentVersionIndex + 1} of {versionsWithChanges.length}
@@ -490,7 +490,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 p-6 overflow-y-auto">
+        <div className="flex-1 min-h-0 p-4 sm:p-6 overflow-y-auto">
           {/* Candidate Info */}
           <div className="mb-6 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-2">
@@ -751,9 +751,9 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-end p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
           {/* Actions */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <button
               onClick={onClose}
               disabled={isSubmitting}
@@ -764,7 +764,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             <button
               onClick={handleConfirm}
               disabled={!selectedAction || isSubmitting}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
             >
               {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {isSubmitting ? 'Processing...' : allVersionsResolved ? 'Confirm All' : 'Continue'}

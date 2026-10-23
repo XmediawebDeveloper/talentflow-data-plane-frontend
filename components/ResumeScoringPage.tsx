@@ -5589,6 +5589,9 @@ export default function ResumeScoringPage({
           /* The "N assessed" / "N interviewed" tags the Job Descriptions
              cards carry, so each job reads the same in both lists. */
           showCandidateCounts
+          /* Coloured like the Job Openings badges. */
+          coloredCountBadges
+          applicantsLabel="Scored"
         />
 
       </div>

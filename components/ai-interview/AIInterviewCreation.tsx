@@ -331,7 +331,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-slate-50">
+    <div className="flex-1 p-4 sm:p-8 overflow-y-auto bg-slate-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -376,7 +376,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
         {/* Step 1: Select JD */}
         {step === 'select-jd' && (
           <div>
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
               <input
                 type="text"
                 placeholder="Search job descriptions..."
@@ -448,7 +448,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                           <h3 className="font-semibold tracking-tight text-gray-900 truncate min-w-0" title={jd.title}>{jd.title}</h3>
                           <span className="px-2 py-0.5 text-xs bg-success-subtle text-success rounded-full">Published</span>
                         </div>
-                        <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-sm text-gray-500">
                           {jd.department && <span>{jd.department}</span>}
                           {jd.job_level && <span className="capitalize">{jd.job_level}</span>}
                           {jd.location && <span>{jd.location}</span>}
@@ -482,9 +482,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
 
         {/* Step 2: Configure Rounds */}
         {step === 'configure' && selectedJd && (
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left column: Round configuration */}
-            <div className="col-span-2 space-y-4">
+            <div className="space-y-4 lg:col-span-2">
               {/* Selected JD info */}
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
                 <div className="flex items-center justify-between">

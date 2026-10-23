@@ -1433,7 +1433,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           </span>
                         );
                       })()}
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         {/* Full Name and Email Address are equal-width columns; Copy Link / Add
                             sit beside the grid, so they don't squeeze either input. */}
                         <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1691,7 +1691,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             {inputMode === 'database' && (
               <div className="border-2 border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
+                <div className="flex overflow-x-auto border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
                   {/* RBAC: both source tabs are always listed; one the user
                       cannot open is greyed with a tooltip (never hidden). */}
                   {(() => {
@@ -1973,7 +1973,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               type="button"
               onClick={() => setShowEmailPreview(v => !v)}
               aria-expanded={showEmailPreview}
-              className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
+              className="w-full flex flex-wrap items-center justify-between gap-y-2 gap-3 px-4 sm:px-6 py-4 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-brand-blue" />
@@ -1995,13 +1995,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             {/* Actual Email Template Preview */}
             <div className="bg-white rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden max-w-xl mx-auto">
               {/* Brand Header */}
-              <div className="bg-brand-blue px-8 py-8 text-center">
+              <div className="bg-brand-blue px-5 sm:px-8 py-8 text-center">
                 <h1 className="text-white text-2xl font-bold mb-2">AI Interview Invitation</h1>
                 <p className="text-white/80 text-sm">TalentFlow</p>
               </div>
 
               {/* Email Body */}
-              <div className="p-8">
+              <div className="p-5 sm:p-8">
                 {/* Greeting and Message */}
                 <div className="mb-6 text-gray-700 text-base leading-relaxed whitespace-pre-line">
                   {customMessage
@@ -2046,7 +2046,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               </div>
 
               {/* Footer */}
-              <div className="bg-gray-50 px-8 py-6 text-center border-t border-gray-200">
+              <div className="bg-gray-50 px-5 sm:px-8 py-6 text-center border-t border-gray-200">
                 <p className="text-gray-500 text-xs mb-2">© 2026 TalentFlow. All rights reserved.</p>
                 <p className="text-gray-400 text-xs">If you did not expect this email, please ignore it.</p>
               </div>
@@ -2060,7 +2060,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   );
   const footerContent = (
     <>
-          <div className="text-sm text-gray-600 dark:text-slate-400">
+          <div className="text-sm text-gray-600 dark:text-slate-400 min-w-0">
             {(() => {
               const validRows = sendCandidates.filter((c) => c.name.trim() && c.email.trim());
               const validCount = validRows.length;
@@ -2079,7 +2079,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               );
             })()}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0 w-full sm:w-auto justify-end">
             {onBack && (
               <Button variant="secondary" onClick={onBack} disabled={isSubmitting} icon={<ArrowLeft className="w-4 h-4" />}>
                 Back
@@ -2204,7 +2204,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         </div>
 
         {contentBlock}
-        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           {footerContent}
         </div>
       </div>

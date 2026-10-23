@@ -3463,7 +3463,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             force the candidate back into fullscreen. Re-entering needs a user
             gesture, so it happens on this button's click. */}
         {finalConsentFsExited && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <Maximize2 className="w-8 h-8 text-warning" />
@@ -3731,7 +3731,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
     if (screenReshareOnResume) {
       return (
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-5">
               <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400" />
@@ -3780,7 +3780,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -3812,7 +3812,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {/* Grace-period countdown — shown while candidate has 10s to return
             before the hard-pause overlay kicks in. Silent otherwise. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
@@ -3841,7 +3841,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {/* Hard-pause overlay (STAGING) — shown after the fullscreen grace expires.
             Production uses the unified "return to the interview" pause below. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>

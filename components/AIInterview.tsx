@@ -71,6 +71,7 @@ import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/job
 import AllInterviewsTable, { VersionPill, JobDisabledBadge, JobArchivedBadge, jobLockBadgeFor } from '@/components/ai-interview/AllInterviewsTable';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -2245,7 +2246,7 @@ export default function AIInterview() {
             <div
               ref={versionMenuRef}
               data-tf-popover
-              className="fixed w-52 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700/60 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
+              className="fixed w-52 max-w-[calc(100vw-16px)] bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700/60 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
               style={{
                 top: menuDropUp ? undefined : menuAnchor.bottom + 4,
                 bottom: menuDropUp ? Math.max(8, window.innerHeight - menuAnchor.top + 4) : undefined,
@@ -2393,7 +2394,9 @@ export default function AIInterview() {
                 );
               })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-              {(() => {
+              {/* No Archive on a Draft — the Assessments rule: an unpublished
+                  version has nothing to archive; it is deleted instead. */}
+              {normalizedStatus !== 'draft' && (() => {
                 const isArchived = normalizedStatus === 'archived';
                 const archiveBlocked = jdLocked
                   ? jdLockReason
@@ -2696,7 +2699,7 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -3325,11 +3328,13 @@ export default function AIInterview() {
 
                           {/* Status of the job's representative interview —
                               boxed to a fixed width so the metric columns line up. */}
-                          <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
+                          <div className="flex-shrink-0 @4xl/ai-row:w-[104px] flex flex-wrap items-center gap-1">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${statusPill}`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                               {statusPillLabel}
                             </span>
+                            {/* Live, with saved edits waiting for Publish. */}
+                            {hasUnpublishedChanges(config) && <UnpublishedChangesChip />}
                           </div>
 
                           {/* Totals for the job. Two columns on a phone, four in a

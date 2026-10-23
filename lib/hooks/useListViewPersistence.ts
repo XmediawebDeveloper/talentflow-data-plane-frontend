@@ -64,10 +64,15 @@ export function useScrollRestoration<T extends HTMLElement = HTMLDivElement>(
     // height first, then a couple of short retries in case rows are still
     // settling (otherwise scrollTop clamps to a shorter interim height).
     if (!restoredRef.current) {
+      // Done after the FIRST ready pass, whether or not anything was saved.
+      // Marking it only when saved > 0 let a later pass (a cards → list
+      // switch re-runs this effect via `deps`) "restore" the offset the user
+      // had just scrolled to — yanking the page back on top of in-page
+      // scrolling such as jump-to-list on a stat-card click.
+      restoredRef.current = true;
       let saved = 0;
       try { saved = Number(sessionStorage.getItem(storageKey) || '0'); } catch { /* ignore */ }
       if (saved > 0) {
-        restoredRef.current = true;
         const apply = () => { scroller.scrollTop = saved; };
         requestAnimationFrame(() => requestAnimationFrame(apply));
         setTimeout(apply, 120);

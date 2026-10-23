@@ -23,7 +23,15 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import WizardDiscardButton from './WizardDiscardButton';
-import { isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import { isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import {
+  clearStaging, endEditSession, hasPendingThisVisit, markStaging, shouldAnnounceRestoredEdits,
+} from '@/lib/utils/aiInterviewEditSession';
+import { discardWizardChanges, keepWizardChanges } from '@/lib/utils/aiInterviewWizardExit';
+import { formatIST } from '@/lib/utils/dateUtils';
+import { WizardLeavePrompt } from './LeaveInterviewDialog';
+import InterviewEditLockGate from './InterviewEditLockGate';
+import { useInterviewLeaveGuard } from './useInterviewLeaveGuard';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
@@ -295,7 +303,9 @@ export default function AIInterviewPreview() {
     if (!id) return;
     setLoading(true);
     try {
-      const data = await aiInterviewService.get(id);
+      // With pending edits overlaid: the review shows what the recruiter has
+      // set up in this edit, not the config as it was last saved / published.
+      const data = await aiInterviewService.get(id, { withPending: true });
       // A disabled JD's interview is view-only — no publishing or editing it
       // until the job is enabled again; show its read-only details instead.
       if (isJdDisabled(data.jd_status)) {
@@ -303,6 +313,14 @@ export default function AIInterviewPreview() {
         if (wizardNav) wizardNav.exit();
         else router.replace(`/recruitment/ai-interviews/${data.id}`);
         return;
+      }
+      // An existing config (not one created in this visit) is edited as pending
+      // edits — see lib/utils/aiInterviewEditSession.
+      if (!isUnsavedVersion(data.id)) markStaging(data.id);
+      if (shouldAnnounceRestoredEdits(data)) {
+        toast.info(
+          `Unsaved changes from ${formatIST(data.pending_edits_updated_at)} restored. Save as Draft to keep them, or Discard to drop them.`,
+        );
       }
       setInterview(data);
 
@@ -337,6 +355,9 @@ export default function AIInterviewPreview() {
   useEffect(() => {
     loadInterview();
   }, [loadInterview]);
+
+  /* Only while this step is open does the service stage this config's saves. */
+  useEffect(() => () => clearStaging(id), [id]);
 
   /* Derived values */
   const mode: 'fixed' | 'flexible' = interviewMode;
@@ -442,7 +463,9 @@ export default function AIInterviewPreview() {
   const handlePublish = async () => {
     setPublishing(true);
     try {
+      // The backend applies the pending edits first, then publishes.
       await aiInterviewService.publishConfig(id);
+      endEditSession(id);
       setShowConfirm(false);
       /* In the popup, publishing ends the flow there — as the Assessment
          Configure popup does: the record goes back to the version list. */
@@ -493,46 +516,70 @@ export default function AIInterviewPreview() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [published, listHref, router, embedded]);
 
+  /* Write this step's state: stamp it so a draft reopens on Preview. A
+     PUBLISHED config is not stamped — it does not reopen from a step, and the
+     stamp alone would leave it with "Unpublished changes" that change nothing.
+     On an existing config the write is staged (aiInterviewEditSession). */
+  const saveState = async (): Promise<boolean> => {
+    if (!id || !interview || interview.status === 'published') return true;
+    try {
+      let si: Record<string, unknown> = {};
+      try { si = JSON.parse(interview.special_instructions || '{}') ?? {}; } catch { /* keep {} */ }
+      si.wizard_step = CURRENT_STEP;
+      await aiInterviewService.update(id, {
+        special_instructions: JSON.stringify(si),
+        save_and_exit: true,
+      });
+      return true;
+    } catch {
+      toast.error('Failed to save draft');
+      return false;
+    }
+  };
+
   const handleSaveAsDraft = async () => {
-    // Stamp this step so the draft reopens on Preview; a published version
-    // being edited is also taken off "published".
-    if (id && interview) {
+    // Save as Draft never unpublishes: a published version keeps its edits
+    // pending and stays live (keepWizardChanges).
+    if (!(await saveState())) return;
+    let message = 'Draft saved!';
+    if (id) {
       try {
-        let si: Record<string, unknown> = {};
-        try { si = JSON.parse(interview.special_instructions || '{}') ?? {}; } catch { /* keep {} */ }
-        si.wizard_step = CURRENT_STEP;
-        await aiInterviewService.update(id, {
-          special_instructions: JSON.stringify(si),
-          save_and_exit: true,
-          ...(interview.status === 'published' && { status: 'draft' as const }),
-        });
-      } catch {
-        toast.error('Failed to save draft');
+        message = await keepWizardChanges(id, interview?.status);
+      } catch (err) {
+        toast.error((err as Error)?.message || 'Failed to save draft');
         return;
       }
     }
-    clearUnsavedVersion(id);
-    toast.success('Draft saved!');
+    leaveGuard.isNavigatingRef.current = true;
+    toast.success(message);
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
 
   /* Discard — the wizard's one rule (lib/utils/aiInterviewUnsavedVersion):
      an UNSAVED draft (a new interview, or the version Duplicate just minted)
-     is deleted; a draft the recruiter saved earlier, or a published / live
-     version, is left as last saved — Discard never deletes it. */
+     is deleted; any other version — a draft saved earlier, a published / live
+     one — has this edit's pending changes dropped and stays as last saved. */
   const discardDeletesVersion = !!id && interview?.status === 'draft' && isUnsavedVersion(id);
   const handleDiscard = async () => {
-    if (id && discardDeletesVersion) {
-      try {
-        await aiInterviewService.delete(id);
-        clearUnsavedVersion(id);
-        toast.success('Draft discarded');
-      } catch {
-        // Silent
-      }
+    leaveGuard.isNavigatingRef.current = true;
+    if (id) {
+      const ok = await discardWizardChanges(id, discardDeletesVersion);
+      if (ok && discardDeletesVersion) toast.success('Draft discarded');
     }
     router.push(exitHref ?? '/recruitment/ai-interviews');
   };
+
+  /* ── Leaving with something unsaved ──
+     Asks only when there is something to keep or lose: pending edits on this
+     config (this visit's, or earlier ones restored on load) or a new interview
+     never saved. Nothing on this step itself is editable. Not once published —
+     that screen has its own Back handling (above). */
+  const leaveGuard = useInterviewLeaveGuard({
+    active: !loading && !!interview && !published,
+    wizardNav,
+    needsPrompt: () =>
+      !!id && (!!interview?.has_pending_edits || hasPendingThisVisit(id) || isUnsavedVersion(id)),
+  });
 
   /* ───────────── Loading state ───────────── */
   if (loading) {
@@ -1297,7 +1344,7 @@ export default function AIInterviewPreview() {
 
       {/* ── Introduction video ── */}
       <Dialog open={showVideoPreview} onOpenChange={setShowVideoPreview}>
-        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl p-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-2 bg-gray-50 border-b border-gray-100">
             <DialogTitle className="text-sm font-semibold tracking-tight">Introduction Video</DialogTitle>
             <DialogDescription className="text-xs text-gray-500">
@@ -1315,6 +1362,26 @@ export default function AIInterviewPreview() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* "Being edited by X" - View only / Take over (see InterviewEditLockGate). */}
+      <InterviewEditLockGate configId={id} />
+
+      {/* ── Leave prompt ── */}
+      <WizardLeavePrompt
+        target={leaveGuard.leaveTarget}
+        onStay={leaveGuard.cancelLeave}
+        onLeave={leaveGuard.leaveTo}
+        configId={id}
+        status={interview.status}
+        createdThisVisit={discardDeletesVersion}
+        canDelete={!(interview.invitations_count ?? 0)}
+        versionNumber={interview.interview_version ?? undefined}
+        jdCode={interview.jd_short_id}
+        title={interview.jd_title ?? position}
+        currentStepLabel="Preview & Publish"
+        saveState={saveState}
+        afterDeleteHref={exitHref ?? '/recruitment/ai-interviews'}
+      />
 
       {/* ── Confirmation Dialog ── */}
       <ConfirmationDialog

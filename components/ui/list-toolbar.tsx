@@ -276,7 +276,7 @@ export default function ListToolbar({
         filterPanel ? undefined : className
       )}
     >
-      {beforeSearch && <div className="flex items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
+      {beforeSearch && <div className="flex flex-wrap items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
       <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input

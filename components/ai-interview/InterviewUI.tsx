@@ -447,7 +447,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
     return (
       <div className="flex gap-2 flex-row-reverse">
         <YouAvatar photoUrl={candidatePhotoUrl} />
-        <div className="max-w-[80%]">
+        <div className="max-w-[80%] min-w-0">
           <div className="flex items-center justify-end gap-2 mb-0.5">
             <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400">Your Response</span>
             {msg.responseTimeSeconds != null && (
@@ -464,7 +464,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
             )}
           </div>
           <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
-            <p className="text-sm leading-relaxed">{msg.content}</p>
+            <p className="text-sm leading-relaxed break-words">{msg.content}</p>
           </div>
           {msg.timestamp && (
             <p className="text-2xs text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
@@ -481,14 +481,14 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
         alt="Bina"
         className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
       />
-      <div className="max-w-[80%]">
+      <div className="max-w-[80%] min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
         <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
           {/* pre-line: keeps the committed opening warm-up (role summary +
               AII16 tips) laid out the same way it streamed. */}
-          <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">{msg.content}</p>
         </div>
         {msg.timestamp && (
           <p className="text-2xs text-gray-400 mt-0.5">{msg.timestamp}</p>
@@ -521,7 +521,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
         alt="Bina"
         className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
       />
-      <div className="max-w-[80%]">
+      <div className="max-w-[80%] min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
@@ -534,7 +534,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
           {/* pre-line: Bina's opening warm-up carries the AII16 tips as
               newline-separated lines. Questions have no newlines, so this is a
               no-op for every other turn. */}
-          <p className="text-sm leading-relaxed whitespace-pre-line">{text}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">{text}</p>
         </div>
       </div>
     </div>
@@ -10256,7 +10256,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
     return (
       <div className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-300">
-        <div className={`pointer-events-auto relative flex items-center gap-3 pl-3 pr-4 py-3 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[260px] max-w-[94%] overflow-hidden`}>
+        <div className={`pointer-events-auto relative flex items-center gap-3 pl-3 pr-4 py-3 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[260px] max-w-[94%] overflow-hidden`}>
           {/* top sheen for a glassy, modern finish */}
           <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
           {/* icon in a frosted circle with a soft pulse ring */}
@@ -10302,7 +10302,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
       {concurrentBlocked && (
         <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-400 text-5xl mb-4">🔒</div>
             <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
             <p className="text-gray-300 mb-6 text-sm leading-relaxed">
@@ -10369,7 +10369,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-500 text-5xl mb-4">👤</div>
             <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
             <p className="text-gray-400 mb-4">
@@ -10411,7 +10411,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Microphone issue popup ── */}
       {showMicPopup && (
         <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
             <p className="text-gray-400 mb-3">We couldn&apos;t detect any audio. Is your microphone working?</p>
@@ -10421,7 +10421,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 Try setting it to &quot;Standard&quot; in brave://settings/shields, then refresh.
               </p>
             )}
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center">
               <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
               <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
             </div>
@@ -11112,7 +11112,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               !(structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) && (
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
-                <div className="max-w-[80%]">
+                <div className="max-w-[80%] min-w-0">
                   <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
                     {(isRecording || currentTranscript) ? (

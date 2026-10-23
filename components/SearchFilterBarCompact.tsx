@@ -539,6 +539,8 @@ export default function SearchFilterBarCompact({
         <div className="relative">
           <button
             onClick={() => setShowSort(!showSort)}
+            aria-label={inline ? 'Sort by' : 'Sort'}
+            title={inline ? 'Sort by' : 'Sort'}
             className={`flex items-center gap-1.5 ${inline ? 'h-10' : 'h-9'} px-3 bg-slate-100 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors`}
           >
             <span className="hidden sm:inline text-sm text-gray-700 font-medium">{inline ? 'Sort by' : 'Sort'}</span>
@@ -548,7 +550,7 @@ export default function SearchFilterBarCompact({
           {showSort && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowSort(false)}></div>
-              <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20">
+              <div className="fixed inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-auto sm:absolute sm:right-0 sm:mt-2 w-auto sm:w-56 max-w-[calc(100vw-1rem)] sm:max-w-[calc(100vw-1.5rem)] max-h-[60dvh] sm:max-h-[70dvh] overflow-y-auto bg-white rounded-xl sm:rounded-lg shadow-2xl sm:shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-50">
                 {[
                   { value: 'latest', label: 'Latest Upload' },
                   { value: 'lastUpdated', label: 'Recently Updated' },

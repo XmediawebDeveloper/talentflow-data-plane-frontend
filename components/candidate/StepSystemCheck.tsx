@@ -2432,7 +2432,7 @@ export default function StepSystemCheck({
                       </span>
                     </div>
                     <p className="text-sm text-gray-500">Supported Browsers</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       {SUPPORTED_BROWSERS.map((b) => {
                         const isCurrent = deviceInfo.browser.name === b.name;
                         return (

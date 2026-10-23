@@ -2,33 +2,53 @@
 
 import { Crown, ChevronRight } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
+import { SortableHeader, ariaSort, type SortDir, type TableSort } from '@/components/ui/sortable-header';
 import { TeamAvatar, MemberStack, TeamActionHandlers, formatTeamDate } from './TeamCard';
+
+/** The page's sort keys ('newest' is the Created column). `sortDir` is the true
+ *  direction of the column's values, so newest-first Created is 'desc'. */
+export type TeamListSortKey = 'name' | 'newest' | 'members' | 'jobs' | 'resumes';
 
 interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails'> {
   teams: Team[];
   /** Rendered inside the card under the table — e.g. `<ListPagination attached />`. */
   footer?: React.ReactNode;
+  /** Active sort, owned by the page (shared with its Sort dropdown and the grid view). */
+  sortKey: TeamListSortKey;
+  sortDir: SortDir;
+  onSort: (key: TeamListSortKey) => void;
 }
 
-const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
+const TH = 'px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500';
 
 /**
  * List-view counterpart of the TeamCard grid: same data, one row per team.
  * Clicking a row opens the Team popup, like clicking a card.
  */
-export default function TeamListTable({ teams, onViewDetails, footer }: TeamListTableProps) {
+export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort }: TeamListTableProps) {
+  const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
       <div className="overflow-x-auto tf-table-shell">
         <table className="w-full min-w-[820px]">
           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
             <tr className="text-left">
-              <th className={`${TH} pl-5`}>Team</th>
+              <th className={`${TH} pl-5`} aria-sort={ariaSort(sort, 'name')}>
+                <SortableHeader label="Team" column="name" sort={sort} />
+              </th>
               <th className={TH}>Lead</th>
-              <th className={TH}>Members</th>
-              <th className={`${TH} text-right`}>Active jobs</th>
-              <th className={`${TH} text-right`}>Resumes</th>
-              <th className={TH}>Created</th>
+              <th className={TH} aria-sort={ariaSort(sort, 'members')}>
+                <SortableHeader label="Members" column="members" sort={sort} />
+              </th>
+              <th className={`${TH} text-right`} aria-sort={ariaSort(sort, 'jobs')}>
+                <SortableHeader label="Active Jobs" column="jobs" sort={sort} align="right" />
+              </th>
+              <th className={`${TH} text-right`} aria-sort={ariaSort(sort, 'resumes')}>
+                <SortableHeader label="Resumes" column="resumes" sort={sort} align="right" />
+              </th>
+              <th className={TH} aria-sort={ariaSort(sort, 'newest')}>
+                <SortableHeader label="Created" column="newest" sort={sort} />
+              </th>
               <th className={`${TH} w-10 pr-5`}>
                 <span className="sr-only">Open</span>
               </th>
