@@ -16,6 +16,27 @@ export const isJobVersionLocked = (status?: string | null): boolean => {
   return s === 'archived' || s === 'disabled';
 };
 
+/* The ⋮ menu's lock messages, one per status — the AI Interview split
+   (`JD_DISABLED_ACTION_MESSAGE` / `JD_ARCHIVED_ACTION_MESSAGE`). The combined
+   message above stays for the Create flow, where the fix is to pick another
+   job version. */
+export const ASSESSMENT_JOB_DISABLED_MESSAGE =
+  'This job is disabled. Enable the job to make changes or send assessments.';
+export const ASSESSMENT_JOB_ARCHIVED_MESSAGE =
+  'This job is archived. Assessments of an archived job cannot be changed or sent.';
+
+/**
+ * Why an assessment's actions are locked by its job version, or null when they
+ * are not: Disabled and Archived each name themselves. Views, Track and Results
+ * stay; every action that changes the assessment is greyed with this.
+ */
+export const assessmentJobLockMessage = (status?: string | null): string | null => {
+  const s = (status || '').toLowerCase();
+  if (s === 'disabled') return ASSESSMENT_JOB_DISABLED_MESSAGE;
+  if (s === 'archived') return ASSESSMENT_JOB_ARCHIVED_MESSAGE;
+  return null;
+};
+
 /**
  * Each job version's live status, keyed by its own JD id, for these ids — one
  * batched lineage read. Ids the server does not return are left out.
@@ -43,7 +64,7 @@ export async function checkAssessmentJobLock(jdId?: string | null): Promise<stri
   if (!jdId) return null;
   try {
     const jd = await jdService.get(jdId);
-    return isJobVersionLocked(jd?.status) ? ASSESSMENT_JOB_LOCK_MESSAGE : null;
+    return assessmentJobLockMessage(jd?.status);
   } catch {
     return null;
   }
