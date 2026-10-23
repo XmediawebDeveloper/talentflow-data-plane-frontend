@@ -1,7 +1,7 @@
 'use client';
 
 import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
-import { useState, useRef, useEffect, Fragment } from 'react';
+import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import {
   Search,
   Hash,
@@ -45,6 +45,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import NameAvatar from '@/components/ui/name-avatar';
+import ChatAttachmentViewer, { type ChatAttachment } from '@/components/organization/ChatAttachmentViewer';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -68,6 +69,9 @@ export default function TeamChatPage() {
   // Tapped message — shows its time + actions row (touch has no hover).
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  // Image attachment open in the in-page viewer.
+  const [viewerAttachment, setViewerAttachment] = useState<ChatAttachment | null>(null);
+  const closeViewer = useCallback(() => setViewerAttachment(null), []);
   // Selected messages (long-press on touch, double-click on desktop; once
   // one is selected a tap/click adds or removes more). The header's pin
   // button then pins/unpins them.
@@ -994,7 +998,7 @@ export default function TeamChatPage() {
         >
           <div className="space-y-3 border-b border-gray-100 p-3 dark:border-slate-700/60">
             <div className="flex items-center gap-2 px-1">
-              <h1 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Chat</h1>
+              <h1 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Team Chat</h1>
               {totalUnread > 0 && (
                 <span className="rounded-full bg-brand-blue px-2 py-0.5 text-xs font-semibold text-white" title={`${totalUnread} unread`}>
                   {totalUnread}
@@ -1020,7 +1024,7 @@ export default function TeamChatPage() {
                 placeholder="Search conversations"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none focus-visible:!outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 
@@ -1127,7 +1131,7 @@ export default function TeamChatPage() {
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h2 className="truncate text-base font-semibold text-gray-900 dark:text-slate-50">{selectedChannel.name}</h2>
+                      <h2 className="truncate text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedChannel.name}</h2>
                       {isMuted && <BellOff className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Muted" />}
                     </div>
                     <p className="truncate text-xs text-gray-500 dark:text-slate-400">
@@ -1211,14 +1215,14 @@ export default function TeamChatPage() {
                             <Pin className="h-3.5 w-3.5" /> Pinned messages
                           </div>
                           {pinnedMessages.length === 0 ? (
-                            <p className="px-3 py-6 text-center text-sm text-gray-400">No pinned messages yet</p>
+                            <p className="px-3 py-6 text-center text-sm max-sm:text-[13px] text-gray-400">No pinned messages yet</p>
                           ) : (
                             <div className="space-y-0.5">
                               {pinnedMessages.map((m) => (
                                 <div key={m.id} className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-gray-50 sm:px-3 dark:hover:bg-slate-800/60">
                                   <div className="min-w-0 flex-1">
                                     <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
-                                    <p className="mt-0.5 line-clamp-2 break-words text-sm text-gray-700 dark:text-slate-300">{m.content}</p>
+                                    <p className="mt-0.5 line-clamp-2 break-words text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{m.content}</p>
                                   </div>
                                   {/* Time, with Unpin under it */}
                                   <div className="flex shrink-0 flex-col items-end gap-1">
@@ -1275,7 +1279,7 @@ export default function TeamChatPage() {
                           <button
                             type="button"
                             onClick={() => { toggleMute(); setShowHeaderMenu(false); }}
-                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
                           >
                             {isMuted ? <Bell className="h-4 w-4 text-gray-400" /> : <BellOff className="h-4 w-4 text-gray-400" />}
                             {isMuted ? 'Unmute notifications' : 'Mute notifications'}
@@ -1285,7 +1289,7 @@ export default function TeamChatPage() {
                               <button
                                 type="button"
                                 onClick={handleLeaveChannel}
-                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
                               >
                                 <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
                               </button>
@@ -1341,8 +1345,8 @@ export default function TeamChatPage() {
                     <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                       <MessageCircle className="h-6 w-6 text-brand-blue" />
                     </div>
-                    <p className="text-base font-semibold text-gray-900 dark:text-slate-50">No messages yet</p>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No messages yet</p>
+                    <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
                       {selectedChannel.type === 'channel'
                         ? `Start the conversation in #${selectedChannel.name}.`
                         : `Say hello to ${selectedChannel.name}.`}
@@ -1426,15 +1430,26 @@ export default function TeamChatPage() {
                                 }}
                               >
                                 {isImage ? (
-                                  <a href={message.metadata!.file_url} target="_blank" rel="noopener noreferrer">
+                                  // Opens the in-page viewer (download / open in new tab live there).
+                                  <button
+                                    type="button"
+                                    className="block cursor-zoom-in"
+                                    aria-label={`View ${message.metadata!.file_name || 'image attachment'}`}
+                                    onClick={(e) => {
+                                      // Long-press or selection mode: let the bubble handle the tap.
+                                      if (longPressFiredRef.current || isSelecting) return;
+                                      e.stopPropagation();
+                                      setViewerAttachment({ url: message.metadata!.file_url!, name: message.metadata!.file_name });
+                                    }}
+                                  >
                                     <img
                                       src={message.metadata!.file_url}
                                       alt={message.metadata!.file_name || 'Image attachment'}
                                       className="block max-h-64 max-w-full object-contain"
                                     />
-                                  </a>
+                                  </button>
                                 ) : (
-                                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                  <p className="whitespace-pre-wrap break-words text-sm max-sm:text-[13px] leading-relaxed">
                                     {message.is_deleted ? 'This message was deleted' : message.content}
                                   </p>
                                 )}
@@ -1447,7 +1462,7 @@ export default function TeamChatPage() {
                                       key={rIdx}
                                       type="button"
                                       onClick={() => handleAddReaction(message.id, reaction.emoji)}
-                                      className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-sm ring-1 ring-gray-200 transition-colors hover:ring-brand-blue/40 dark:bg-slate-800 dark:ring-slate-700"
+                                      className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-sm max-sm:text-[13px] ring-1 ring-gray-200 transition-colors hover:ring-brand-blue/40 dark:bg-slate-800 dark:ring-slate-700"
                                       title={reaction.users.join(', ')}
                                     >
                                       <span>{reaction.emoji}</span>
@@ -1501,7 +1516,7 @@ export default function TeamChatPage() {
                                                   key={emoji}
                                                   type="button"
                                                   onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
-                                                  className="rounded-md p-1 text-base transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
+                                                  className="rounded-md p-1 text-base max-sm:text-sm transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
                                                 >
                                                   {emoji}
                                                 </button>
@@ -1587,7 +1602,7 @@ export default function TeamChatPage() {
                     onKeyDown={handleKeyDown}
                     placeholder={`Message ${selectedChannel.type === 'channel' ? '#' : ''}${selectedChannel.name}`}
                     rows={1}
-                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
+                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
                   />
                   <div className="relative shrink-0">
                     <button
@@ -1610,7 +1625,7 @@ export default function TeamChatPage() {
                               key={emoji}
                               type="button"
                               onClick={() => insertEmoji(emoji)}
-                              className="rounded-md p-1.5 text-lg transition-transform hover:scale-110 hover:bg-brand-blue/[0.06]"
+                              className="rounded-md p-1.5 text-lg max-sm:text-base transition-transform hover:scale-110 hover:bg-brand-blue/[0.06]"
                             >
                               {emoji}
                             </button>
@@ -1653,8 +1668,8 @@ export default function TeamChatPage() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <MessageCircle className="h-6 w-6 text-brand-blue" />
                 </div>
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Welcome to Team Chat</h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Welcome to Team Chat</h2>
+                <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
                   {channels.length === 0
                     ? 'No channels yet. Create one to bring your team into the conversation.'
                     : 'Pick a channel or direct message to start the conversation.'}
@@ -1684,7 +1699,7 @@ export default function TeamChatPage() {
           <aside className="hidden w-64 shrink-0 flex-col border-l border-gray-200 lg:flex xl:w-72 dark:border-slate-700">
             <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 dark:border-slate-700">
               <div className="min-w-0">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Members</h3>
+                <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Members</h3>
                 <p className="text-xs text-gray-500">
                   {selectedChannel.member_count} total · {onlineMembersCount} online
                 </p>
@@ -1712,7 +1727,7 @@ export default function TeamChatPage() {
                     />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-100">
+                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-100">
                       {member.name}
                       {member.user_id === currentUser?.id && <span className="font-normal text-gray-400"> (You)</span>}
                     </p>
@@ -1747,7 +1762,7 @@ export default function TeamChatPage() {
           ]}
         >
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">
                     Channel name <span className="text-brand-orange">*</span>
                   </span>
                   <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 transition-all focus-within:border-brand-blue/30 focus-within:ring-4 focus-within:ring-brand-blue/10">
@@ -1757,24 +1772,24 @@ export default function TeamChatPage() {
                       value={newChannelName}
                       onChange={(e) => setNewChannelName(e.target.value)}
                       placeholder="e.g. engineering-team"
-                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
+                      className="flex-1 bg-transparent text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
                     />
                   </div>
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Description</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Description</span>
                   <textarea
                     value={newChannelDescription}
                     onChange={(e) => setNewChannelDescription(e.target.value)}
                     placeholder="What's this channel about?"
                     rows={2}
-                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus-visible:!outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </label>
 
                 <div>
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Visibility</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Visibility</span>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setNewChannelPrivate(false)}
@@ -1786,7 +1801,7 @@ export default function TeamChatPage() {
                     >
                       <Globe className="h-4 w-4" />
                       <div className="text-left">
-                        <div className="text-sm font-semibold">Public</div>
+                        <div className="text-sm max-sm:text-[13px] font-semibold">Public</div>
                         <div className={`text-xs ${!newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Anyone can join
                         </div>
@@ -1802,7 +1817,7 @@ export default function TeamChatPage() {
                     >
                       <Lock className="h-4 w-4" />
                       <div className="text-left">
-                        <div className="text-sm font-semibold">Private</div>
+                        <div className="text-sm max-sm:text-[13px] font-semibold">Private</div>
                         <div className={`text-xs ${newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Invite only
                         </div>
@@ -1812,7 +1827,7 @@ export default function TeamChatPage() {
                 </div>
 
                 <div>
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Add members (optional)</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Add members (optional)</span>
                   {availableUsers.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center">
                       <Users className="mx-auto mb-2 h-6 w-6 text-gray-300" />
@@ -1842,7 +1857,7 @@ export default function TeamChatPage() {
                             </span>
                             <NameAvatar name={user.name} fallback={user.email} size="sm" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
+                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
                           </button>
@@ -1878,7 +1893,7 @@ export default function TeamChatPage() {
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
                     <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                    <p className="text-sm text-gray-500">No teammates left to add.</p>
+                    <p className="text-sm max-sm:text-[13px] text-gray-500">No teammates left to add.</p>
                   </div>
                 ) : (
                   <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white">
@@ -1906,7 +1921,7 @@ export default function TeamChatPage() {
                             </span>
                             <NameAvatar name={user.name} fallback={user.email} size="md" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
+                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
                           </button>
@@ -1944,7 +1959,7 @@ export default function TeamChatPage() {
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="px-4 py-10 text-center text-gray-500">
                       <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                      <p className="text-sm">No team members found</p>
+                      <p className="text-sm max-sm:text-[13px]">No team members found</p>
                     </div>
                   ) : (
                     <div className="max-h-80 overflow-y-auto">
@@ -1959,7 +1974,7 @@ export default function TeamChatPage() {
                           >
                             <NameAvatar name={user.name} fallback={user.email} size="lg" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
+                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
                             <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-600 sm:inline-flex">
@@ -1971,6 +1986,8 @@ export default function TeamChatPage() {
                   )}
                 </div>
         </AppModal>
+
+      <ChatAttachmentViewer attachment={viewerAttachment} onClose={closeViewer} />
     </div>
   );
 }

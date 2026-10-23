@@ -87,9 +87,9 @@ export default function TeamDetailsModal({
         {/* Name + lead on one line, stats beside them on wide screens. */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
-            {team.description && <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-slate-400">{team.description}</p>}
-            <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-500 dark:text-slate-400">
+            <h3 className="truncate text-base max-sm:text-sm font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
+            {team.description && <p className="mt-1 line-clamp-2 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{team.description}</p>}
+            <p className="mt-2 flex items-center gap-1.5 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
               <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
               {team.team_lead ? (
                 <>
@@ -109,7 +109,7 @@ export default function TeamDetailsModal({
                   <Icon className="h-3.5 w-3.5 text-brand-blue" />
                   {label}
                 </dt>
-                <dd className="mt-0.5 text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">
+                <dd className="mt-0.5 text-xl max-sm:text-lg font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">
                   {value.toLocaleString()}
                 </dd>
               </div>
@@ -128,7 +128,7 @@ export default function TeamDetailsModal({
                 <div key={member.id} className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/50">
                   <NameAvatar name={member.name} fallback={member.email} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
+                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
                     <p className="truncate text-xs text-gray-500 dark:text-slate-500">{member.email}</p>
                   </div>
                   {team.team_lead?.id === member.id ? (
@@ -144,7 +144,7 @@ export default function TeamDetailsModal({
           ) : (
             <div className="flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6 text-gray-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500">
               <Users className="mr-2 h-4 w-4" />
-              <p className="text-sm">No members</p>
+              <p className="text-sm max-sm:text-[13px]">No members</p>
             </div>
           )}
         </div>

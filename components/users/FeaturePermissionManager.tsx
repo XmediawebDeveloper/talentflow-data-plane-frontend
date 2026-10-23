@@ -342,7 +342,7 @@ export default function FeaturePermissionManager({
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Permission Expansion Blocked</h3>
-                  <p className="text-sm text-gray-700 mt-1">
+                  <p className="text-sm max-sm:text-[13px] text-gray-700 mt-1">
                     Users with the "{userRole}" role cannot have their permissions expanded.
                     This role is read-only by design.
                   </p>
@@ -358,7 +358,7 @@ export default function FeaturePermissionManager({
                     <Link2 className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">
+                    <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900">
                       Auto-enable dependencies
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
@@ -430,7 +430,7 @@ export default function FeaturePermissionManager({
                               >
                                 <div className="flex-1 pr-4">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm font-medium text-gray-900">
+                                    <span className="text-sm max-sm:text-[13px] font-medium text-gray-900">
                                       {feature.name}
                                     </span>
                                     {feature.locked && (
@@ -490,7 +490,7 @@ export default function FeaturePermissionManager({
                       <div className="w-9 h-9 rounded-lg bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
                         <Info className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-semibold text-brand-blue">
+                      <span className="text-sm max-sm:text-[13px] font-semibold text-brand-blue">
                         {Object.keys(pendingChanges).length} change(s) pending
                       </span>
                     </div>

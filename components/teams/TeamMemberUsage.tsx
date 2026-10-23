@@ -134,8 +134,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     return (
       <div className="bg-warning-subtle border border-warning-line rounded-xl p-6 text-center">
         <AlertCircle className="w-12 h-12 text-warning mx-auto mb-4" />
-        <h3 className="text-base font-semibold text-warning-strong mb-2">Access Restricted</h3>
-        <p className="text-sm text-warning">
+        <h3 className="text-base max-sm:text-sm font-semibold text-warning-strong mb-2">Access Restricted</h3>
+        <p className="text-sm max-sm:text-[13px] text-warning">
           Only administrators can view individual member usage data.
         </p>
       </div>
@@ -191,8 +191,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     return (
       <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6 text-center">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-        <h3 className="text-base font-semibold text-destructive-strong mb-2">Error Loading Data</h3>
-        <p className="text-sm text-destructive">{error}</p>
+        <h3 className="text-base max-sm:text-sm font-semibold text-destructive-strong mb-2">Error Loading Data</h3>
+        <p className="text-sm max-sm:text-[13px] text-destructive">{error}</p>
         <button
           onClick={fetchMembersUsage}
           className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive transition-colors"
@@ -214,8 +214,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
             <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{team.name} - Member Usage</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-400">Individual usage breakdown</p>
+            <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{team.name} - Member Usage</h3>
+            <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">Individual usage breakdown</p>
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -324,13 +324,13 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="flex items-center gap-3">
                       <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{member.user_name}</p>
+                        <p className="text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50 truncate">{member.user_name}</p>
                         <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{member.user_email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-blue-600 dark:text-blue-400 tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-medium text-blue-600 dark:text-blue-400 tabular-nums">
                       {Math.round(member.by_type.RS?.total_consumed || 0)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">
@@ -338,7 +338,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-success tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-medium text-success tabular-nums">
                       {(member.by_type.AS?.total_consumed || 0).toFixed(1)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">
@@ -346,7 +346,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-purple-600 dark:text-purple-400 tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-medium text-purple-600 dark:text-purple-400 tabular-nums">
                       {Math.round(member.by_type.AIU?.total_consumed || 0)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">
@@ -354,7 +354,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-orange-600 dark:text-orange-400 tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-medium text-orange-600 dark:text-orange-400 tabular-nums">
                       {Math.round(member.by_type.RU?.total_consumed || 0)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">
@@ -362,19 +362,19 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
                       {member.jds_created || 0}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-teal-600 dark:text-teal-400 tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-medium text-teal-600 dark:text-teal-400 tabular-nums">
                       {member.assessments_created || 0}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">
+                    <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 tabular-nums">
                       {member.total_consumed.toFixed(1)}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">
@@ -382,7 +382,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-1 text-sm text-gray-600 dark:text-slate-400">
+                    <div className="flex items-center justify-end gap-1 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
                       <Clock className="w-3.5 h-3.5" />
                       {formatLastActivity(member.last_activity)}
                     </div>
@@ -395,8 +395,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
       ) : (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
           <Users className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
-          <h3 className="text-base font-semibold text-gray-700 dark:text-slate-300 mb-2">No Team Members</h3>
-          <p className="text-sm text-gray-600 dark:text-slate-400">
+          <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">No Team Members</h3>
+          <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
             This team has no members yet. Add members to see their usage data.
           </p>
         </div>
