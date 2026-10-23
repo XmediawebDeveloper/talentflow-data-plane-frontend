@@ -33,6 +33,9 @@ interface JDVersionHistoryModalProps {
    * Match. Omitted, it opens the page's default tab.
    */
   goToJdTab?: string;
+  /** Swap the header's Close (X) icon for a Cancel button in the footer.
+   *  Both just close the popup. */
+  cancelInFooter?: boolean;
 }
 
 interface JDHistoryVersion {
@@ -328,6 +331,7 @@ export default function JDVersionHistoryModal({
   initialVersionNumber,
   showGoToJd = false,
   goToJdTab,
+  cancelInFooter = false,
 }: JDVersionHistoryModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -560,16 +564,18 @@ export default function JDVersionHistoryModal({
                 {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={closeModal}
-              className="px-2"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            {!cancelInFooter && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={closeModal}
+                className="px-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -767,6 +773,15 @@ export default function JDVersionHistoryModal({
                   : `${versions.length} version${versions.length !== 1 ? 's' : ''}`}
             </p>
             <div className="flex items-center gap-2">
+              {cancelInFooter && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={closeModal}
+                >
+                  Cancel
+                </Button>
+              )}
               {!selectedVersion && versions.length > 1 && (
                 <Button
                   type="button"
