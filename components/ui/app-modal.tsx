@@ -80,6 +80,10 @@ interface AppModalProps {
   closeButton?: boolean;
   /** Overrides the `size` width (e.g. `sm:max-w-[840px]`). Rare — prefer `size`. */
   widthClassName?: string;
+  /** Phones (below sm): full-screen sheet that slides up, instead of a
+   *  centred box — for long forms. The footer stays pinned at the bottom.
+   *  From sm up nothing changes. Off by default. */
+  mobileSheet?: boolean;
 }
 
 export function AppModalFooterButtons({
@@ -143,6 +147,7 @@ export default function AppModal({
   ariaLabel,
   closeButton = false,
   widthClassName,
+  mobileSheet = false,
 }: AppModalProps) {
   const showFooter = !closeButton || !!footer || !!footerStart || (actions?.length ?? 0) > 0;
   useEffect(() => {
@@ -158,13 +163,13 @@ export default function AppModal({
 
   return (
     <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-gray-900/60 p-2 backdrop-blur-sm sm:p-6`}
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-gray-900/60 p-2 backdrop-blur-sm sm:p-6 ${mobileSheet ? "max-sm:items-end max-sm:p-0" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel ?? (typeof title === 'string' ? title : undefined)}
     >
       <div
-        className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${widthClassName ?? APP_MODAL_WIDTH[size]}`}
+        className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${widthClassName ?? APP_MODAL_WIDTH[size]} ${mobileSheet ? "max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none max-sm:border-0 max-sm:animate-in max-sm:slide-in-from-bottom max-sm:duration-300 motion-reduce:animate-none" : ""}`}
       >
         {/* Header — no close button unless `closeButton`; otherwise Cancel in the footer is the way out. */}
         <div className="flex shrink-0 items-center justify-between gap-3 bg-brand-blue px-4 py-4 sm:px-6">

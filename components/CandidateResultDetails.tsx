@@ -34,6 +34,7 @@ import {
   getDisplaySectionPercentage,
 } from '@/lib/utils/assessmentResultScoring';
 import { exportAssessmentReportPDF } from '@/lib/reports/assessmentReportPdf';
+import NameAvatar from '@/components/ui/name-avatar';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -1162,9 +1163,7 @@ export default function CandidateResultDetails({
         <div className="rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl ring-1 ring-brand-blue/15 bg-brand-blue/10 shadow-sm flex items-center justify-center text-brand-blue text-xl sm:text-2xl font-bold flex-shrink-0">
-                {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
-              </div>
+              <NameAvatar name={candidateData?.name} fallback={candidateData?.email} size="xl" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
                   <h1 className="min-w-0 text-lg sm:text-xl text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>

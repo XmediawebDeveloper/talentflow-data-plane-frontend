@@ -240,10 +240,7 @@ export default function AIInterviewReviewPreviewModal({
     job_id: interview?.jd_short_id,
     title: interview?.jd_title ?? position,
     status: 'Published',
-    location: interview?.jd_locations?.length
-      ? interview.jd_locations.map((l: { city?: string | null }) => l?.city).filter(Boolean).join(', ')
-      : (interview?.jd_location ?? ''),
-    locations: (interview?.jd_locations ?? []) as Job['locations'],
+    location: interview?.jd_location ?? '',
     daysActive: 0,
     requiredMatch: 0,
     industry_type: interview?.jd_industry_type,
@@ -369,8 +366,8 @@ export default function AIInterviewReviewPreviewModal({
                             <Clock className="w-4 h-4 text-brand-blue" />
                             <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-100 tracking-tight">Time Allocation</h4>
                           </div>
-                          <div className="overflow-hidden rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]">
-                            <table className="w-full text-sm">
+                          <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]">
+                            <table className="w-full min-w-[360px] text-sm">
                               <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800 text-left">
                                   <th className="px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Round</th>
@@ -617,10 +614,10 @@ export default function AIInterviewReviewPreviewModal({
                             <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{formatIndustryType(interview.jd_industry_type)}</span>
                           </div>
                         )}
-                        {(interview.jd_location || (interview.jd_locations?.length ?? 0) > 0) && (
+                        {interview.jd_location && (
                           <div className="px-3 py-2 flex items-center justify-between gap-2">
                             <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Location</span>
-                            <SummaryLocation value={interview.jd_location} locations={interview.jd_locations} />
+                            <SummaryLocation value={interview.jd_location} />
                           </div>
                         )}
                         {interview.jd_version != null && (

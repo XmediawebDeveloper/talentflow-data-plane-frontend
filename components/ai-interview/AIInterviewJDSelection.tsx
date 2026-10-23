@@ -431,6 +431,9 @@ export default function AIInterviewJDSelection() {
                                     ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                                     : job}
                                   metaSingleLine
+                                  /* Coloured like the Job Openings badges; applicants read "scored". */
+                                  coloredCountBadges
+                                  applicantsLabel="scored"
                                   trailingBadges={lineageSelected ? (
                                     <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
                                   ) : jobDisabled ? (
@@ -514,6 +517,7 @@ export default function AIInterviewJDSelection() {
                               loading={jdLineage.isLoading(versionKey)}
                               versionDetails={jdLineage.versionDetails}
                               versionApplicants={jdLineage.versionApplicants}
+                              applicantsLabel="Scored"
                               openInNewTab
                               staticRows
                               plainTitle

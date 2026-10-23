@@ -259,6 +259,10 @@ export default function ApplyToJobModal({
               scrollContainerRef={listRef}
               excludeDraftsOnly={excludeDraftsOnly}
               showCandidateCounts={excludeDraftsOnly}
+              /* With the counts, the Job Openings badges' colours, and
+                 applicants read "scored". */
+              coloredCountBadges={excludeDraftsOnly}
+              applicantsLabel={excludeDraftsOnly ? 'Scored' : undefined}
             />
           )}
 

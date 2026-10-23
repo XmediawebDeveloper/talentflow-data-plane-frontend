@@ -1,15 +1,10 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
-import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
 import {
   Users,
   UserCheck,
   Plus,
   BarChart3,
-  ChevronLeft,
-  ChevronRight,
   TrendingUp,
   History,
 } from 'lucide-react';
@@ -44,12 +39,18 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import FadeIn from '@/components/ui/fade-in';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
+import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
+import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
+import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 
-// 12 fills whole rows in both the 2- and 3-column grid.
-const ITEMS_PER_PAGE = 12;
+// Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
+const TEAM_PAGE_SIZES = [6, 12, 24, 48];
 
-type TeamSort = 'name' | 'newest' | 'members' | 'jobs' | 'resumes';
+type TeamSort = TeamListSortKey;
+// Each key's natural direction (what its dropdown option means): names A–Z,
+// everything else largest / newest first. `sortDir` holds the true direction.
+const naturalTeamSortDir = (key: TeamSort): SortDir => (key === 'name' ? 'asc' : 'desc');
 const TEAM_SORTS: { value: TeamSort; label: string }[] = [
   { value: 'name', label: 'Name (A–Z)' },
   { value: 'newest', label: 'Newest first' },
@@ -68,8 +69,6 @@ const getErrorDetail = (error: unknown): string | undefined => {
 };
 
 export default function TeamManagementPage() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -97,7 +96,7 @@ export default function TeamManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeamLead, setFilterTeamLead] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [teamsGoToPage, setTeamsGoToPage] = useState('1');
+  const [itemsPerPage, setItemsPerPage] = useState(12);
   // Drill-in pattern: 'cards' shows only the 3 stat tiles; clicking one expands
   // into a focused list view. Each card maps to its own listView so the panel
   // reflects what was clicked. Mirrors /recruitment/job-openings and
@@ -106,24 +105,36 @@ export default function TeamManagementPage() {
   const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [listView, setListView] = useState<'teams-all' | 'members' | 'teams-by-jobs'>('teams-all');
   const [sortBy, setSortBy] = useState<TeamSort>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  // Dropdown / card drill-in: pick a key in its natural direction.
+  const applyTeamSort = (key: TeamSort) => {
+    setSortBy(key);
+    setSortDir(naturalTeamSortDir(key));
+  };
+  // List-table header click: the sorted column flips, a new one opens in its natural direction.
+  const handleHeaderSort = (key: TeamSort) => {
+    if (key === sortBy) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else applyTeamSort(key);
+    setCurrentPage(1);
+  };
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('grid');
   const openListView = (card: 'total' | 'members' | 'jobs') => {
     setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : 'teams-by-jobs');
     // The Active Jobs card lands on the busiest teams first.
-    if (card === 'jobs') setSortBy('jobs');
+    if (card === 'jobs') applyTeamSort('jobs');
     setPageView('list');
   };
 
   // Persist scroll + view state so returning to this page lands where the user
   // left off. Re-detect the scroll container when the tab or two-step view flips
   // (height changes drastically between the cards overview and the list).
-  const rootRef = useScrollRestoration<HTMLElement>('org-team-management', !isLoading, [pageView, activeTab]);
+  const rootRef = useScrollRestoration<HTMLDivElement>('org-team-management', !isLoading, [pageView, activeTab]);
   // currentPage is intentionally not persisted: the existing
   // `setCurrentPage(1)` effect on [searchQuery, filterTeamLead] resets it on
   // mount, so a restored page would be immediately clobbered.
   useListStatePersistence(
     'org-team-management',
-    { activeTab, pageView, listView, searchQuery, filterTeamLead, sortBy, displayMode },
+    { activeTab, pageView, listView, searchQuery, filterTeamLead, sortBy, sortDir, displayMode, itemsPerPage },
     (s) => {
       if (s.activeTab === 'teams' || s.activeTab === 'usage' || s.activeTab === 'analytics' || s.activeTab === 'history') {
         setActiveTab(s.activeTab as typeof activeTab);
@@ -135,8 +146,14 @@ export default function TeamManagementPage() {
       }
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.filterTeamLead === 'string') setFilterTeamLead(s.filterTeamLead);
-      if (TEAM_SORTS.some((o) => o.value === s.sortBy)) setSortBy(s.sortBy as TeamSort);
+      if (TEAM_SORTS.some((o) => o.value === s.sortBy)) {
+        const key = s.sortBy as TeamSort;
+        setSortBy(key);
+        // Snapshots saved before sortDir existed fall back to the key's natural direction.
+        setSortDir(s.sortDir === 'asc' || s.sortDir === 'desc' ? s.sortDir : naturalTeamSortDir(key));
+      }
       if (s.displayMode === 'grid' || s.displayMode === 'list') setDisplayMode(s.displayMode);
+      if (typeof s.itemsPerPage === 'number' && TEAM_PAGE_SIZES.includes(s.itemsPerPage)) setItemsPerPage(s.itemsPerPage);
     },
   );
 
@@ -213,32 +230,37 @@ export default function TeamManagementPage() {
       jobs: (a, b) => (b.active_jobs_count || 0) - (a.active_jobs_count || 0) || byName(a, b),
       resumes: (a, b) => (b.resumes_count || 0) - (a.resumes_count || 0) || byName(a, b),
     };
-    return [...result].sort(sorters[sortBy]);
-  }, [teams, searchQuery, filterTeamLead, sortBy]);
+    // sortDir opposite to the key's natural direction reverses the sorter.
+    const sign = sortDir === naturalTeamSortDir(sortBy) ? 1 : -1;
+    return [...result].sort((a, b) => sign * sorters[sortBy](a, b));
+  }, [teams, searchQuery, filterTeamLead, sortBy, sortDir]);
 
   const activeJobsTotal = useMemo(
     () => teams.reduce((sum, team) => sum + (team.active_jobs_count || 0), 0),
     [teams],
   );
 
-  const totalPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
   const paginatedTeams = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTeams.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredTeams, currentPage]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredTeams.slice(start, start + itemsPerPage);
+  }, [filteredTeams, currentPage, itemsPerPage]);
 
-  useEffect(() => {
-    setTeamsGoToPage(String(currentPage));
-  }, [currentPage]);
+  const teamsPagination = (attached: boolean) => (
+    <ListPagination
+      attached={attached}
+      currentPage={currentPage}
+      itemsPerPage={itemsPerPage}
+      totalItems={filteredTeams.length}
+      onPageChange={setCurrentPage}
+      onItemsPerPageChange={(size) => {
+        setItemsPerPage(size);
+        setCurrentPage(1);
+      }}
+      pageSizeOptions={TEAM_PAGE_SIZES}
+      itemLabel="teams"
+    />
+  );
 
-  const commitTeamsGoToPage = () => {
-    const page = Math.round(Number(teamsGoToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    } else {
-      setTeamsGoToPage(String(currentPage));
-    }
-  };
 
   // Team Members view: flatten members across all teams, tag each with their team.
   // Search filters by member name/email or the team they belong to.
@@ -249,7 +271,6 @@ export default function TeamManagementPage() {
         memberId: m.id,
         name: m.name,
         email: m.email,
-        initials: m.initials,
         avatar_url: m.avatar_url,
         role: m.role,
         teamId: team.id,
@@ -266,6 +287,18 @@ export default function TeamManagementPage() {
         r.teamName.toLowerCase().includes(q),
     );
   }, [teams, searchQuery]);
+
+  const memberSort = useTableSort<'name' | 'team' | 'role' | 'lead'>({ descFirst: ['lead'] });
+  const sortedMembers = useMemo(
+    () =>
+      sortRows(flattenedMembers, memberSort.sortKey, memberSort.sortDir, {
+        name: (r) => r.name,
+        team: (r) => r.teamName,
+        role: (r) => r.role,
+        lead: (r) => r.isLead,
+      }),
+    [flattenedMembers, memberSort.sortKey, memberSort.sortDir],
+  );
 
   useEffect(() => {
     setCurrentPage(1);
@@ -318,11 +351,11 @@ export default function TeamManagementPage() {
   // Inner view tabs — single source of truth so the mobile pill row and the
   // desktop underline row stay identical (labels, icons, permission gating).
   type InnerTabKey = 'teams' | 'usage' | 'analytics' | 'history';
-  const innerTabs: { key: InnerTabKey; label: string; icon: typeof Users; enabled: boolean; denyMsg?: string }[] = [
-    { key: 'teams', label: 'Teams', icon: Users, enabled: true },
-    { key: 'usage', label: 'Team Usage', icon: BarChart3, enabled: canViewUsageTab, denyMsg: 'You do not have permission to view team usage' },
-    { key: 'analytics', label: 'Analytics', icon: TrendingUp, enabled: canViewAnalyticsTab, denyMsg: 'You do not have permission to view team analytics' },
-    ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', icon: History, enabled: true }] : []),
+  const innerTabs: { key: InnerTabKey; label: string; short: string; icon: typeof Users; enabled: boolean; denyMsg?: string }[] = [
+    { key: 'teams', label: 'Teams', short: 'Teams', icon: Users, enabled: true },
+    { key: 'usage', label: 'Team Usage', short: 'Usage', icon: BarChart3, enabled: canViewUsageTab, denyMsg: 'You do not have permission to view team usage' },
+    { key: 'analytics', label: 'Analytics', short: 'Analytics', icon: TrendingUp, enabled: canViewAnalyticsTab, denyMsg: 'You do not have permission to view team analytics' },
+    ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', short: 'History', icon: History, enabled: true }] : []),
   ];
   const selectInnerTab = (t: { key: InnerTabKey; enabled: boolean; denyMsg?: string }) => {
     // Locked tab: greyed with a hover tooltip; click is a no-op.
@@ -496,12 +529,9 @@ export default function TeamManagementPage() {
 
   return (
     <FeatureGate feature="teams">
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
-          <OrganizationTabs stickyTop={orgCrumbHeight} />
-          <div className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+      {/* Card, breadcrumb, organization tabs and the tab panel come from
+          app/(dashboard)/organization/layout.tsx — this renders the panel's content. */}
+      <div ref={rootRef}>
             <PageHeader
               icon={<Users className="h-5 w-5" />}
               title="Team Management"
@@ -524,35 +554,59 @@ export default function TeamManagementPage() {
             />
 
             <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-              {/* Mobile / tablet (<lg): scrollable pills with an always-visible
-                  scrollbar — matches the current-plan / OrganizationTabs reference. */}
-              <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-3 lg:hidden">
-                <ScrollableTabs ariaLabel="Team management views">
-                  {innerTabs.map((t) => {
-                    const Icon = t.icon;
-                    const active = activeTab === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        role="tab"
-                        aria-selected={active}
-                        aria-disabled={!t.enabled}
-                        title={!t.enabled ? t.denyMsg : ''}
-                        onClick={() => selectInnerTab(t)}
-                        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                          !t.enabled
-                            ? 'cursor-not-allowed border-gray-200 bg-white text-gray-300 opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
-                            : active
-                              ? 'border-brand-blue bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-brand-blue/30 hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </ScrollableTabs>
+              {/* Mobile / tablet (<lg): one segmented control — the sliding
+                  white-tile toggle used across the app (same as the organization
+                  tabs above). Equal cells on a fixed grid, so it never scrolls;
+                  short labels on phones, icons from sm up. */}
+              <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-2.5 lg:hidden">
+                {(() => {
+                  const activeIndex = innerTabs.findIndex((t) => t.key === activeTab);
+                  return (
+                    <div
+                      role="tablist"
+                      aria-label="Team management views"
+                      className="relative grid h-9 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10"
+                      style={{ gridTemplateColumns: `repeat(${innerTabs.length}, minmax(0, 1fr))` }}
+                    >
+                      {activeIndex >= 0 && (
+                        <span
+                          aria-hidden
+                          style={{
+                            width: `calc((100% - 0.5rem) / ${innerTabs.length})`,
+                            transform: `translateX(${activeIndex * 100}%)`,
+                          }}
+                          className="absolute bottom-1 left-1 top-1 rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
+                        />
+                      )}
+                      {innerTabs.map((t) => {
+                        const Icon = t.icon;
+                        const active = activeTab === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            aria-disabled={!t.enabled}
+                            title={!t.enabled ? t.denyMsg : t.label}
+                            onClick={() => selectInnerTab(t)}
+                            className={`relative z-10 inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-xs font-medium transition-colors duration-300 sm:text-sm ${
+                              !t.enabled
+                                ? 'cursor-not-allowed text-gray-300 opacity-60 dark:text-slate-600'
+                                : active
+                                  ? 'text-brand-blue'
+                                  : 'text-gray-600 hover:text-brand-blue dark:text-slate-400'
+                            }`}
+                          >
+                            <Icon className="hidden h-4 w-4 shrink-0 sm:block" />
+                            <span className="truncate sm:hidden">{t.short}</span>
+                            <span className="hidden truncate sm:inline">{t.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Desktop (lg+): underline tabs */}
@@ -618,6 +672,8 @@ export default function TeamManagementPage() {
                 {teams.length > 0 && (
                   <ListToolbar
                     className="mb-4"
+                    // rounded-lg (8px) +10%
+                    searchInputClassName="rounded-[8.8px]"
                     searchValue={searchQuery}
                     onSearchChange={setSearchQuery}
                     searchPlaceholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
@@ -650,13 +706,29 @@ export default function TeamManagementPage() {
                       </ToolbarFilterSelect>
                     )}
                     {listView !== 'members' && (
-                      <ToolbarFilterSelect value={sortBy} onChange={(v) => setSortBy(v as TeamSort)} ariaLabel="Sort teams">
+                      <ToolbarFilterSelect value={sortBy} onChange={(v) => applyTeamSort(v as TeamSort)} ariaLabel="Sort teams">
                         {TEAM_SORTS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
                         ))}
                       </ToolbarFilterSelect>
+                    )}
+                    {/* Clear sort: shown only away from the default order (Teams: Name A–Z;
+                        Members: unsorted). */}
+                    {listView !== 'members' ? (
+                      <ClearSortChip
+                        sort={{ sortKey: sortBy, sortDir }}
+                        labels={{ name: 'Team', newest: 'Created', members: 'Members', jobs: 'Active Jobs', resumes: 'Resumes' }}
+                        isDefault={sortBy === 'name' && sortDir === 'asc'}
+                        onClear={() => { applyTeamSort('name'); setCurrentPage(1); }}
+                      />
+                    ) : (
+                      <ClearSortChip
+                        sort={memberSort}
+                        labels={{ name: 'Member', team: 'Team', role: 'Role', lead: 'Lead' }}
+                        onClear={() => memberSort.clearSort?.()}
+                      />
                     )}
                   </ListToolbar>
                 )}
@@ -674,17 +746,29 @@ export default function TeamManagementPage() {
                     </div>
                   ) : displayMode === 'list' ? (
                     <FadeIn key={`list-${currentPage}`} duration={0.35} distance={8}>
-                      <TeamListTable teams={paginatedTeams} {...teamActionProps} />
+                      {/* Pagination is the table card's footer, as on the Users page. */}
+                      <TeamListTable
+                        teams={paginatedTeams}
+                        {...teamActionProps}
+                        footer={teamsPagination(true)}
+                        sortKey={sortBy}
+                        sortDir={sortDir}
+                        onSort={handleHeaderSort}
+                      />
                     </FadeIn>
                   ) : (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      {paginatedTeams.map((team, index) => (
-                        // Short stagger on first paint / page change; capped so a full page settles fast.
-                        <FadeIn key={team.id} delay={Math.min(index, 8) * 0.04} duration={0.4} distance={10} className="h-full">
-                          <TeamCard team={team} {...teamActionProps} />
-                        </FadeIn>
-                      ))}
-                    </div>
+                    <>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {paginatedTeams.map((team, index) => (
+                          // Short stagger on first paint / page change; capped so a full page settles fast.
+                          <FadeIn key={team.id} delay={Math.min(index, 8) * 0.04} duration={0.4} distance={10} className="h-full">
+                            <TeamCard team={team} {...teamActionProps} />
+                          </FadeIn>
+                        ))}
+                      </div>
+                      {/* No table card to attach to in the grid — standalone bar. */}
+                      {teamsPagination(false)}
+                    </>
                   )
                 )}
 
@@ -704,20 +788,26 @@ export default function TeamManagementPage() {
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                             <tr className="text-left">
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Member</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Team</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Lead</th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'name')}>
+                                <SortableHeader label="Member" column="name" sort={memberSort} />
+                              </th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'team')}>
+                                <SortableHeader label="Team" column="team" sort={memberSort} />
+                              </th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'role')}>
+                                <SortableHeader label="Role" column="role" sort={memberSort} />
+                              </th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500 text-right" aria-sort={ariaSort(memberSort, 'lead')}>
+                                <SortableHeader label="Lead" column="lead" sort={memberSort} align="right" />
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                            {flattenedMembers.map((row) => (
+                            {sortedMembers.map((row) => (
                               <tr key={row.id} className="transition-colors hover:bg-brand-blue/[0.04]">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-sm font-semibold text-brand-blue">
-                                      {row.initials || row.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-                                    </span>
+                                    <NameAvatar name={row.name} fallback={row.email} size="md" />
                                     <div className="min-w-0">
                                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
                                       <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
@@ -750,62 +840,12 @@ export default function TeamManagementPage() {
                   </section>
                 )}
 
-                {listView !== 'members' && totalPages > 1 && (
-                  <div className="mt-8 flex flex-col gap-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-gray-600 dark:text-slate-400">
-                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
-                    </p>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={teamsGoToPage}
-                          onChange={(e) => setTeamsGoToPage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                              commitTeamsGoToPage();
-                            }
-                          }}
-                          onBlur={commitTeamsGoToPage}
-                          aria-label="Go to page"
-                          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                        />
-                      </div>
-                      <button
-                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                        disabled={currentPage === 1}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Previous page" title="Previous page"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                        <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                        disabled={currentPage === totalPages}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Next page" title="Next page"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
                 </>
                 )}
               </>
             )}
               </div>
             </div>
-          </div>
-        </div>
-        </div>
 
         <TeamFormModal
           key={`create-${showCreateModal ? 'open' : 'closed'}`}
@@ -864,7 +904,7 @@ export default function TeamManagementPage() {
           onConfirm={handleDeleteTeam}
           isDeleting={isDeleting}
         />
-      </main>
+      </div>
     </FeatureGate>
   );
 }

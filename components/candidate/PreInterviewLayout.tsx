@@ -110,7 +110,7 @@ export default function PreInterviewLayout({
       {/* Footer */}
       {showFooter && (
         <footer className="sticky bottom-0 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:px-6 sm:py-4">
-          <div className="w-full max-w-7xl mx-auto flex items-center justify-between">
+          <div className="w-full max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
             <div>
               {shouldShowBack && (
                 <Button

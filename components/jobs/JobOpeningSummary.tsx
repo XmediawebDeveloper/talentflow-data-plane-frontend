@@ -67,7 +67,23 @@ function MetaLabelValue({ label, value }: { label: string; value: React.ReactNod
   );
 }
 
-function JobOpeningMetaItems({ job, showIcons = true, showCounts = true }: { job: Job; showIcons?: boolean; showCounts?: boolean }) {
+/* The Job Openings count badges' tones, spelled out in full so Tailwind
+   keeps the classes. */
+const COUNT_TONES = {
+  info: 'bg-info-subtle text-info-strong',
+  success: 'bg-success-subtle text-success-strong',
+  warning: 'bg-warning-subtle text-warning-strong',
+} as const;
+
+/* A count chip's icon: grey, or the chip's own colour when coloured. */
+const countIcon = (colored: boolean) =>
+  `w-4 h-4 flex-shrink-0 ${colored ? '' : 'text-gray-400 dark:text-slate-500'}`;
+
+function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, coloredCounts = false, applicantsLabel }: { job: Job; showIcons?: boolean; showCounts?: boolean; coloredCounts?: boolean; applicantsLabel?: string }) {
+  /* Grey by default; `coloredCounts` takes the Job Openings badges' tones —
+     info (applicants), success (assessed), warning (interviewed). */
+  const countChip = (tone: keyof typeof COUNT_TONES) =>
+    `flex items-center gap-1.5 px-2 py-0.5 rounded-lg ${coloredCounts ? COUNT_TONES[tone] : 'bg-gray-50 dark:bg-slate-800'}`;
   return (
     <>
       {/* By / Posted / Last Updated. With icons (the default, every other
@@ -110,21 +126,21 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true }: { job
           `showCounts` lets a host (the Job Openings cards) suppress these three
           chips here and render them elsewhere instead. */}
       {showCounts && job.applicants != null && (
-        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
-          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
+        <span className={countChip('info')}>
+          <Users className={countIcon(coloredCounts)} />
+          {job.applicants} {applicantsLabel ?? (job.applicants === 1 ? 'applicant' : 'applicants')}
         </span>
       )}
       {/* Only the Job Openings list sets these; other hosts render as before. */}
       {showCounts && job.assessed != null && (
-        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
-          <ClipboardCheck className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <span className={countChip('success')}>
+          <ClipboardCheck className={countIcon(coloredCounts)} />
           {job.assessed} assessed
         </span>
       )}
       {showCounts && job.interviewed != null && (
-        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
-          <Video className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        <span className={countChip('warning')}>
+          <Video className={countIcon(coloredCounts)} />
           {job.interviewed} interviewed
         </span>
       )}
@@ -216,14 +232,14 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
 const SINGLE_LINE_ROW =
   'flex-wrap gap-x-3 gap-y-1.5 sm:flex-nowrap sm:gap-y-0 sm:whitespace-nowrap sm:overflow-x-auto sm:scrollbar-hide sm:[&>span]:flex-shrink-0';
 
-export function JobOpeningMeta({ job, singleLine = false, showIcons = true, showCounts = true }: { job: Job; singleLine?: boolean; showIcons?: boolean; showCounts?: boolean }) {
+export function JobOpeningMeta({ job, singleLine = false, showIcons = true, showCounts = true, coloredCounts = false, applicantsLabel }: { job: Job; singleLine?: boolean; showIcons?: boolean; showCounts?: boolean; coloredCounts?: boolean; applicantsLabel?: string }) {
   return (
     <div
       className={`flex items-center text-sm text-gray-600 dark:text-slate-400 ${
         singleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
       }`}
     >
-      <JobOpeningMetaItems job={job} showIcons={showIcons} showCounts={showCounts} />
+      <JobOpeningMetaItems job={job} showIcons={showIcons} showCounts={showCounts} coloredCounts={coloredCounts} applicantsLabel={applicantsLabel} />
     </div>
   );
 }
@@ -271,6 +287,12 @@ interface JobOpeningSummaryProps {
    * Defaults true, so every other surface is unchanged.
    */
   showCountBadges?: boolean;
+  /** Colour those chips like the Job Openings badges (Resume Scoring's
+   *  Score Resumes list). Off by default: grey everywhere else. */
+  coloredCountBadges?: boolean;
+  /** The word after the applicant count ("scored" on Resume Scoring).
+   *  Omitted = "applicant" / "applicants". */
+  applicantsLabel?: string;
 }
 
 /**
@@ -293,6 +315,8 @@ export default function JobOpeningSummary({
   showMetaIcons = true,
   hideEmptyFields = false,
   showCountBadges = true,
+  coloredCountBadges = false,
+  applicantsLabel,
 }: JobOpeningSummaryProps) {
   const displayStatus = getDisplayStatus(job.status, job.currentVersion);
   const statusConfig = getStatusConfig(displayStatus);
@@ -343,7 +367,7 @@ export default function JobOpeningSummary({
         /* Both rows as one line */
         <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${SINGLE_LINE_ROW}`}>
           <JobOpeningPrimaryItems job={job} hideEmpty={hideEmptyFields} />
-          {showMetaRow && <JobOpeningMetaItems job={job} showIcons={showMetaIcons} showCounts={showCountBadges} />}
+          {showMetaRow && <JobOpeningMetaItems job={job} showIcons={showMetaIcons} showCounts={showCountBadges} coloredCounts={coloredCountBadges} applicantsLabel={applicantsLabel} />}
         </div>
       ) : (
         <>
@@ -359,7 +383,7 @@ export default function JobOpeningSummary({
           {/* Primary Info Row 2 - Dates / Posted By / Applicants */}
           {showMetaRow && (
             <div className="mb-2">
-              <JobOpeningMeta job={job} singleLine={metaSingleLine} showIcons={showMetaIcons} showCounts={showCountBadges} />
+              <JobOpeningMeta job={job} singleLine={metaSingleLine} showIcons={showMetaIcons} showCounts={showCountBadges} coloredCounts={coloredCountBadges} applicantsLabel={applicantsLabel} />
             </div>
           )}
         </>

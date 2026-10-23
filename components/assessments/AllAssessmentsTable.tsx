@@ -8,6 +8,7 @@ import {
   Archive, ArchiveRestore, BarChart, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +18,7 @@ import {
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 /* The app's one list search/filter layout — the same row and the same panel
@@ -198,21 +200,9 @@ export function VersionPill({ kind, version, label }: {
    the spec asks to keep subtle. The monogram gives the column a scannable left
    edge without inventing data. */
 function CreatedBy({ name }: { name: string }) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?';
-
   return (
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[12rem]">
-      <span
-        aria-hidden="true"
-        className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-2xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
-      >
-        {initials}
-      </span>
+      <NameAvatar name={name} size="xs" title="" />
       <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
         {name}
       </span>
@@ -376,6 +366,19 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   );
 
   const [rows, setRows] = useState<AssessmentRow[]>([]);
+  /* Each row's job version status (by JD id): Archive is off on an Archived /
+     Disabled job version — the Assessments page's rule. One batched read. */
+  const [jobVersionStatusById, setJobVersionStatusById] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const missing = Array.from(new Set(rows.map((r) => r.jdId).filter((id) => id && !(id in jobVersionStatusById))));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    loadJobVersionStatuses(missing)
+      .then((statuses) => { if (!cancelled) setJobVersionStatusById((prev) => ({ ...prev, ...statuses })); })
+      .catch(() => { /* the click-time check still blocks */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -783,6 +786,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const archiveRow = async (row: AssessmentRow) => {
     // Locked menu item is greyed with a tooltip; this is only a backstop.
     if (!canDeleteAssessment) return;
+    const jobLock = await checkAssessmentJobLock(row.jdId);
+    if (jobLock) {
+      toast.error(jobLock);
+      return;
+    }
     if (!await confirmArchive({
       title: `${row.jobName || row.title || 'Untitled'} - Assessment`,
       version: row.assessmentVersion,
@@ -854,8 +862,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       case 'published': {
         const archive: RowAction = {
           key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
-          disabled: !canDeleteAssessment,
-          title: !canDeleteAssessment ? 'You do not have permission to archive assessments' : undefined,
+          disabled: !canDeleteAssessment || isJobVersionLocked(jobVersionStatusById[row.jdId]),
+          title: !canDeleteAssessment
+            ? 'You do not have permission to archive assessments'
+            : isJobVersionLocked(jobVersionStatusById[row.jdId]) ? ASSESSMENT_JOB_LOCK_MESSAGE : undefined,
           run: () => void archiveRow(row),
         };
         /* With the host's extras (the Active tab), the Total Jobs order:

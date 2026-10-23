@@ -4,6 +4,7 @@ import { Users, Shield, Briefcase, FileText, Pencil, Trash2, Crown } from 'lucid
 import AppModal, { AppModalAction } from '@/components/ui/app-modal';
 import { Team } from '@/lib/services/teamService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import NameAvatar from '@/components/ui/name-avatar';
 
 /** Width of the Team popup in both modes (details + edit form): ~25% wider than `md`. */
 export const TEAM_MODAL_WIDTH = 'sm:max-w-[840px]';
@@ -86,7 +87,7 @@ export default function TeamDetailsModal({
         {/* Name + lead on one line, stats beside them on wide screens. */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <h3 className="truncate text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
+            <h3 className="truncate text-base font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
             {team.description && <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-slate-400">{team.description}</p>}
             <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-500 dark:text-slate-400">
               <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
@@ -117,7 +118,7 @@ export default function TeamDetailsModal({
         </div>
 
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
             Team Members ({team.members?.length || 0})
           </h4>
           {team.members && team.members.length > 0 ? (
@@ -125,17 +126,15 @@ export default function TeamDetailsModal({
             <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
               {team.members.map((member) => (
                 <div key={member.id} className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/50">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-blue text-xs font-semibold text-white">
-                    {member.initials || 'U'}
-                  </div>
+                  <NameAvatar name={member.name} fallback={member.email} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
                     <p className="truncate text-xs text-gray-500 dark:text-slate-500">{member.email}</p>
                   </div>
                   {team.team_lead?.id === member.id ? (
-                    <span className="shrink-0 rounded-full bg-brand-blue px-2 py-0.5 text-2xs font-medium text-white">Lead</span>
+                    <span className="shrink-0 rounded-full bg-brand-blue px-2 py-0.5 text-xs font-medium text-white">Lead</span>
                   ) : member.role ? (
-                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-2xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
+                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
                       {member.role}
                     </span>
                   ) : null}

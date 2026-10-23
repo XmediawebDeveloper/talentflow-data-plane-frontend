@@ -19,6 +19,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
+import NameAvatar from '@/components/ui/name-avatar';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -1229,9 +1230,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             }}
             className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-brand-blue/5 rounded-lg px-1.5 sm:px-3 py-1 sm:py-2 transition-colors"
           >
-            <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-brand-blue text-white flex items-center justify-center">
-              <span className="text-xs sm:text-sm">{(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}</span>
-            </div>
+            <NameAvatar name={user.name} fallback={user.email} size="md" />
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
               <div className="text-2xs lg:text-xs text-gray-500">{prettyRole(user.role)}</div>
@@ -1262,9 +1261,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   <div className="pointer-events-none absolute -bottom-16 left-16 h-36 w-36 rounded-full bg-white/[0.07] blur-2xl" />
                   <div className="relative flex items-center gap-4">
                     <div className="relative shrink-0">
-                      <div className="w-14 h-14 rounded-full bg-white/15 ring-2 ring-white/25 text-white flex items-center justify-center text-lg font-semibold">
-                        {(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                      </div>
+                      <NameAvatar name={user.name} fallback={user.email} size="xl" className="bg-white dark:bg-white dark:text-brand-blue" />
                       {/* Presence dot, ringed in the banner's own blue rather
                           than white, so it reads as cut out of the avatar
                           instead of floating over it. */}

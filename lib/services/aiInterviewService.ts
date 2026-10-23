@@ -190,7 +190,6 @@ export interface PublishedJD {
   title: string;
   department?: string;
   location?: string;
-  locations?: Array<{ city?: string | null; state?: string | null }>;
   employment_type?: string;
   job_level?: string;
   must_have_skills: string[];
@@ -284,7 +283,6 @@ export interface AIInterviewResponse {
   jd_version?: number;
   jd_experience_level?: string;
   jd_location?: string;
-  jd_locations?: Array<{ city?: string | null; state?: string | null }>;
   jd_must_have_skills?: string[];
   jd_nice_to_have_skills?: string[];
   jd_description?: string;

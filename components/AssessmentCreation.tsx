@@ -46,6 +46,7 @@ import {
 } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
+import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked } from '@/lib/utils/assessmentJobLock';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -426,11 +427,14 @@ const fetchAllJdVersions = async () => {
  * Enabled only where both say yes; otherwise the button stays put and the
  * reason becomes its tooltip.
  */
-const addButtonState = (versionNumber: number | undefined, published: boolean, created: boolean) => {
+const addButtonState = (versionNumber: number | undefined, published: boolean, created: boolean, status?: string) => {
   if (!published) {
     return {
       enabled: false,
-      label: `v${versionNumber ?? 1} is not published — an assessment can only be created against a published or republished version`,
+      /* Archived / Disabled: the one message Create and Duplicate share. */
+      label: isJobVersionLocked(status)
+        ? ASSESSMENT_JOB_LOCK_MESSAGE
+        : `v${versionNumber ?? 1} is not published — an assessment can only be created against a published or republished version`,
     };
   }
   if (created) {
@@ -709,6 +713,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       return next;
     });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  /* The job version a link pre-selected is Archived / Disabled: it is not
+     selected, the picker shows instead, with the message. */
+  const [preselectedJobLocked, setPreselectedJobLocked] = useState(false);
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
   /**
@@ -1662,6 +1669,18 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
     const job = jobsForSelection.find(j => j.id === jdIdToSelect);
     if (!job) {
+      return;
+    }
+
+    /* A new assessment cannot be built on an Archived / Disabled job version,
+       even by link — the picker's own rule. Edit keeps its existing rules. */
+    if (!editAssessmentId && isJobVersionLocked(job.status)) {
+      if (!preselectedJobLocked) {
+        setPreselectedJobLocked(true);
+        toast.error(ASSESSMENT_JOB_LOCK_MESSAGE);
+        // Back to the picker (clears ?step=configure&jd_id), never Configure.
+        setStep('select-jd');
+      }
       return;
     }
 
@@ -3344,6 +3363,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     !!preselectedJdId &&
     !selectedJob &&
     !isEditMode &&
+    !preselectedJobLocked &&
     (!hasLoadedAssessmentEligibility || isLoadingJobs || preselectedJobResolvable);
 
   /* EDIT: the saved configuration comes before any fallback default.
@@ -3670,7 +3690,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                      thing to read on a card. Then names the way through, which
                      is the same one in every case: the published version this
                      job still has is a row in its own View Versions. */
-                  const latestUnpublishedReason = `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
+                  const latestUnpublishedReason = isJobVersionLocked(job.status)
+                    ? ASSESSMENT_JOB_LOCK_MESSAGE
+                    : `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
                   /* The card's Add acts on the version the card shows, so it
                      answers the same published-only rule its version rows do —
                      stated here rather than assumed from the list being
@@ -3681,6 +3703,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     job.versionNumber,
                     isSelectableVersion(job),
                     latestHasAssessment,
+                    job.status,
                   );
 
                   return (
@@ -3765,6 +3788,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                 ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                                 : job}
                               metaSingleLine
+                              /* Coloured like the Job Openings badges; applicants read "scored". */
+                              coloredCountBadges
+                              applicantsLabel="scored"
                               /* The picker's tick: some version of this job is the pick. */
                               trailingBadges={lineageSelected ? (
                                 <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
@@ -3943,6 +3969,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           loading={jdLineage.isLoading(versionKey) || !!loadingLineageAssessments[versionKey]}
                           versionDetails={jdLineage.versionDetails}
                           versionApplicants={jdLineage.versionApplicants}
+                          applicantsLabel="Scored"
                           openInNewTab
                           staticRows
                           /* The role name is plain text here. This table is a
@@ -3999,7 +4026,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               return `v${versionJob.versionNumber ?? 1} already has an assessment`;
                             }
                             if (!isSelectableVersion(versionJob)) {
-                              return `v${versionJob.versionNumber ?? 1} is ${String(versionJob.status || 'not published').toLowerCase()} — an assessment can only be created against a published or republished version`;
+                              return isJobVersionLocked(versionJob.status)
+                                ? ASSESSMENT_JOB_LOCK_MESSAGE
+                                : `v${versionJob.versionNumber ?? 1} is ${String(versionJob.status || 'not published').toLowerCase()} — an assessment can only be created against a published or republished version`;
                             }
                             return null;
                           }}
@@ -4073,6 +4102,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               versionJob.versionNumber,
                               isSelectableVersion(versionJob),
                               versionHasAssessment(versionKey, versionJob.id),
+                              versionJob.status,
                             );
                             return (
                               <>

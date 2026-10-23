@@ -17,6 +17,7 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import NameAvatar from '@/components/ui/name-avatar';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 // v3: Result Status split into Score + Result, Completed became Status —
@@ -877,9 +878,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="py-3 px-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs">
-                                  {(result.candidateName || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                </div>
+                                <NameAvatar name={result.candidateName} fallback={result.email} size="sm" />
                                 <div className="text-sm text-gray-900 font-medium">{result.candidateName}</div>
                               </div>
                             </td>
@@ -1204,9 +1203,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     selectionActive={selectedResults.length > 0}
                   />
                   <div className="flex items-start gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
-                      {(result.candidateName || 'U')[0].toUpperCase()}
-                    </div>
+                    <NameAvatar name={result.candidateName} fallback={result.email} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 truncate">{result.candidateName}</p>
                       <p className="text-xs text-gray-500 truncate">{result.email}</p>

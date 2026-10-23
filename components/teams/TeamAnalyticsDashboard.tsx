@@ -259,8 +259,8 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
     return (
       <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6 text-center">
         <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-destructive-strong mb-2">Error Loading Analytics</h3>
-        <p className="text-destructive">{error}</p>
+        <h3 className="text-base font-semibold text-destructive-strong mb-2">Error Loading Analytics</h3>
+        <p className="text-sm text-destructive">{error}</p>
         <Button
           variant="primary"
           onClick={fetchAnalyticsData}
@@ -281,7 +281,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Team Analytics</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Analytics</h3>
             <p className="text-sm text-gray-600 dark:text-slate-400">
               {isTenantAdmin ? 'Organization-wide usage analytics' : 'Your team usage analytics'}
             </p>
@@ -382,7 +382,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         {/* Team Comparison Bar Chart */}
         {teamComparisonData.length > 0 && (
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4">Usage by Team</h4>
+            <h4 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Usage by Team</h4>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamComparisonData} layout="vertical">
@@ -416,7 +416,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         {/* Unit Distribution Pie Chart */}
         {unitDistributionData.length > 0 && (
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4">Unit Type Distribution</h4>
+            <h4 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Unit Type Distribution</h4>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -465,7 +465,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       {/* Top Performing Teams */}
       {topTeams.length > 0 && (
         <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-4">Top Performing Teams</h4>
+          <h4 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Top Performing Teams</h4>
           <div className="space-y-3">
             {topTeams.map((team, index) => (
               <div
@@ -476,7 +476,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   {index + 1}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{team.name}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{team.name}</p>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                     <span className="text-xs text-blue-600 dark:text-blue-400">RS: {Math.round(team.RS)}</span>
                     <span className="text-xs text-success">AS: {team.AS.toFixed(1)}</span>
@@ -500,8 +500,8 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       {(!teamsUsage?.teams || teamsUsage.teams.length === 0) && (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
           <BarChart3 className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-300 mb-2">No Usage Data</h3>
-          <p className="text-gray-600 dark:text-slate-400">
+          <h3 className="text-base font-semibold text-gray-700 dark:text-slate-300 mb-2">No Usage Data</h3>
+          <p className="text-sm text-gray-600 dark:text-slate-400">
             No team usage data available for the selected period.
           </p>
         </div>

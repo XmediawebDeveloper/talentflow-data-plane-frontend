@@ -445,7 +445,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
           <div className="space-y-4 sm:space-y-5">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Name <span className="text-brand-orange">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Role Name <span className="text-brand-orange">*</span></label>
                 <Input
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value.toUpperCase() })}
@@ -456,7 +456,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                 {showError('name') && <span className="mt-1.5 block text-xs font-medium text-destructive">{fieldErrors.name}</span>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Code <span className="text-brand-orange">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Role Code <span className="text-brand-orange">*</span></label>
                 <Input
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value })}
@@ -469,7 +469,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>
                 <Input
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -477,7 +477,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Copy permissions from</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Copy permissions from</label>
                 <select
                   value={formData.parent_role_id || ''}
                   onChange={(e) => handleParentRoleChange(e.target.value)}
@@ -571,11 +571,11 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
             <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
               <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
                 <div className="text-xs text-gray-500">Available roles</div>
-                <div className="mt-1 text-sm font-semibold text-gray-900">{roles.length}</div>
+                <div className="mt-1 text-xl font-semibold text-gray-900">{roles.length}</div>
               </div>
               <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
                 <div className="text-xs text-gray-500">Selected permissions</div>
-                <div className="mt-1 text-sm font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
+                <div className="mt-1 text-xl font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
               </div>
             </div>
           }
@@ -584,7 +584,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
-              <h2 className="text-lg font-semibold text-gray-900">Role Details</h2>
+              <h2 className="text-base font-semibold text-gray-900">Role Details</h2>
               <p className="text-sm text-gray-500">Start with the role identity, then configure the access surface below.</p>
             </div>
 
@@ -660,7 +660,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
 
               <div>
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Permissions</h3>
+                  <h3 className="text-base font-semibold text-gray-900">Permissions</h3>
                   <p className="text-sm text-gray-500">Choose only what this role needs. View access will be carried automatically where required.</p>
                 </div>
                 {renderPermissionCategories()}

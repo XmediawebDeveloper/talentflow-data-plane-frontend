@@ -1409,7 +1409,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
               </div>
             </div>
 
-          <div className="grid lg:grid-cols-2 gap-4 lg:gap-5 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 items-start">
             {/* Camera Preview */}
             <div>
               <h2 className={`${T_SECTION} mb-3`}>Camera Preview</h2>

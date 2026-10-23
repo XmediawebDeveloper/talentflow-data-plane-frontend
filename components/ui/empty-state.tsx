@@ -42,10 +42,10 @@ export function EmptyState({
         </div>
 
         {/* Title */}
-        <h3 className="text-[var(--text-primary)] text-lg sm:text-xl font-semibold mb-2 tracking-tight">{title}</h3>
+        <h3 className="text-[var(--text-primary)] text-base font-semibold mb-2 tracking-tight">{title}</h3>
 
         {/* Description */}
-        <p className="text-[var(--text-secondary)] text-sm sm:text-base mb-5 sm:mb-6 leading-relaxed">{description}</p>
+        <p className="text-[var(--text-secondary)] text-sm mb-5 sm:mb-6 leading-relaxed">{description}</p>
 
         {/* Actions */}
         {(action || secondaryAction) && (
@@ -100,8 +100,8 @@ export function SimpleEmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-10 sm:py-12 px-4 text-center">
-      <div className="text-[var(--text-secondary)] mb-1.5 text-sm sm:text-base font-medium">{message}</div>
-      <div className="text-xs sm:text-sm text-[var(--text-muted)]">{suggestion}</div>
+      <div className="text-[var(--text-secondary)] mb-1.5 text-base font-semibold">{message}</div>
+      <div className="text-sm text-[var(--text-muted)]">{suggestion}</div>
     </div>
   );
 }

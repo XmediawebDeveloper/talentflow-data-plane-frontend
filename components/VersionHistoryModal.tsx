@@ -166,7 +166,7 @@ export default function VersionHistoryModal({
         {comparison ? (
           /* ---- Comparison view ------------------------------------------ */
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="grid grid-cols-[1fr_1fr] gap-3 mb-4 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400">
+            <div className="grid grid-cols-[1fr_1fr] gap-2 sm:gap-3 mb-4 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400">
               <span>Older · {labelForVersion(comparison.older.id)}</span>
               <span>Newer · {labelForVersion(comparison.newer.id)}</span>
             </div>
@@ -189,11 +189,11 @@ export default function VersionHistoryModal({
                         <span className="ml-2 normal-case tracking-normal text-brand-orange-deep">changed</span>
                       )}
                     </p>
-                    <div className="grid grid-cols-[1fr_1fr] gap-3 text-sm">
-                      <span className={changed ? 'text-gray-500 dark:text-slate-400 line-through decoration-gray-300' : 'text-gray-700 dark:text-slate-300'}>
+                    <div className="grid grid-cols-[1fr_1fr] gap-2 sm:gap-3 text-sm">
+                      <span className={`min-w-0 break-words ${changed ? 'text-gray-500 dark:text-slate-400 line-through decoration-gray-300' : 'text-gray-700 dark:text-slate-300'}`}>
                         {before || <span className="text-gray-300 dark:text-slate-600">—</span>}
                       </span>
-                      <span className={changed ? 'font-medium text-gray-900 dark:text-slate-50' : 'text-gray-700 dark:text-slate-300'}>
+                      <span className={`min-w-0 break-words ${changed ? 'font-medium text-gray-900 dark:text-slate-50' : 'text-gray-700 dark:text-slate-300'}`}>
                         {after || <span className="text-gray-300 dark:text-slate-600">—</span>}
                       </span>
                     </div>
@@ -234,7 +234,7 @@ export default function VersionHistoryModal({
           </div>
         ) : (
         /* ---- Version timeline ------------------------------------------- */
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {sortedVersions.length === 0 ? (
             <div className="text-center py-12">
               <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -382,10 +382,10 @@ export default function VersionHistoryModal({
                       </div>
 
                       {/* Details Row */}
-                      <div className="flex items-center gap-4 pt-3 border-t border-gray-100 dark:border-slate-700/60">
-                        <div className="flex items-center gap-2">
-                          <User className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
-                          <span className="text-xs text-gray-600 dark:text-slate-400">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-3 border-t border-gray-100 dark:border-slate-700/60">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <User className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
+                          <span className="text-xs text-gray-600 dark:text-slate-400 truncate">
                             Uploaded by <span className="text-gray-900 dark:text-slate-50">{version.uploadedBy}</span>
                           </span>
                         </div>

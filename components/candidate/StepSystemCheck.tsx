@@ -416,6 +416,13 @@ export default function StepSystemCheck({
   const voicePlaybackUrlRef = useRef<string | null>(null);
   const voicePlaybackAudioRef = useRef<HTMLAudioElement | null>(null);
   const [voicePlaying, setVoicePlaying] = useState(false);
+  // Per-bar peak heights (%) decoded from the recording, so the waveform shows
+  // its real shape; null until decoded (falls back to VOICE_WAVE_BARS).
+  const [voicePeaks, setVoicePeaks] = useState<number[] | null>(null);
+  // Playhead as a 0..1 fraction while playing — fills the bars in sync.
+  const [voicePlayProgress, setVoicePlayProgress] = useState(0);
+  // Decoded duration: a MediaRecorder WebM blob reports duration = Infinity.
+  const voiceDurationRef = useRef(0);
   // Whether a live mic stream/analyser is up, acquired proactively (below)
   // instead of waiting for "Run Check" — Voice Verification must be
   // completable before Run Check is even enabled.
@@ -626,11 +633,60 @@ export default function StepSystemCheck({
     if (voicePlaybackUrlRef.current) URL.revokeObjectURL(voicePlaybackUrlRef.current);
   }, []);
 
+  // Decode the recording into one peak per waveform bar.
+  useEffect(() => {
+    setVoicePeaks(null);
+    voiceDurationRef.current = 0;
+    if (!voicePlaybackUrl) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await (await fetch(voicePlaybackUrl)).arrayBuffer();
+        const buffer = await new OfflineAudioContext(1, 1, 44100).decodeAudioData(data);
+        if (cancelled) return;
+        const samples = buffer.getChannelData(0);
+        const n = VOICE_WAVE_BARS.length;
+        const step = Math.max(1, Math.floor(samples.length / n));
+        const peaks = Array.from({ length: n }, (_, i) => {
+          let peak = 0;
+          for (let j = i * step, end = Math.min(samples.length, j + step); j < end; j++) {
+            const v = Math.abs(samples[j]);
+            if (v > peak) peak = v;
+          }
+          return peak;
+        });
+        const max = Math.max(...peaks) || 1;
+        voiceDurationRef.current = buffer.duration;
+        setVoicePeaks(peaks.map(p => 15 + (p / max) * 85));
+      } catch { /* undecodable — keep the static bars */ }
+    })();
+    return () => { cancelled = true; };
+  }, [voicePlaybackUrl]);
+
+  // Track the playhead every frame while playing.
+  useEffect(() => {
+    if (!voicePlaying) { setVoicePlayProgress(0); return; }
+    let raf = 0;
+    const tick = () => {
+      const audio = voicePlaybackAudioRef.current;
+      if (audio) {
+        const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : voiceDurationRef.current;
+        if (dur > 0) setVoicePlayProgress(Math.min(1, audio.currentTime / dur));
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [voicePlaying]);
+
   const toggleVoicePlayback = useCallback(() => {
     const audio = voicePlaybackAudioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      audio.currentTime = 0;
+      // load(), not currentTime = 0: the WebM blob has no seek index, so
+      // Chrome can ignore the seek and resume from where it was paused.
+      // Reloading always restarts at 0:00.
+      audio.load();
       void audio.play().then(() => setVoicePlaying(true)).catch(() => setVoicePlaying(false));
     } else {
       audio.pause();
@@ -2376,7 +2432,7 @@ export default function StepSystemCheck({
                       </span>
                     </div>
                     <p className="text-sm text-gray-500">Supported Browsers</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       {SUPPORTED_BROWSERS.map((b) => {
                         const isCurrent = deviceInfo.browser.name === b.name;
                         return (
@@ -2563,22 +2619,32 @@ export default function StepSystemCheck({
                         : 'Record Voice Sample'}
                     </p>
                     {/* Bars fill with the capture's real progress — a progress
-                        meter shaped like a waveform, not live audio levels. */}
+                        meter shaped like a waveform, not live audio levels.
+                        Once recorded, the bars take the recording's real
+                        shape and, during playback, fill with the playhead. */}
                     <div className="w-full flex items-center gap-px sm:gap-[3px] h-8" aria-hidden>
                       {VOICE_WAVE_BARS.map((h, i) => {
-                        const filled = voiceEnrollStatus === 'success' || voiceEnrollStatus === 'verifying'
-                          || (i / VOICE_WAVE_BARS.length) * 100 < voiceEnrollProgress;
+                        const n = VOICE_WAVE_BARS.length;
+                        const filled = voicePlaying
+                          ? i / n < voicePlayProgress
+                          : voiceEnrollStatus === 'success' || voiceEnrollStatus === 'verifying'
+                            || (i / n) * 100 < voiceEnrollProgress;
+                        const isPlayhead = voicePlaying && i === Math.min(n - 1, Math.floor(voicePlayProgress * n));
+                        const height = voiceEnrollStatus === 'success' && voicePeaks ? voicePeaks[i] : h;
                         return (
                           <span
                             key={i}
-                            className={`flex-1 rounded-full transition-colors ${filled ? 'bg-brand-blue' : 'bg-brand-blue/15'}`}
-                            style={{ height: `${h}%` }}
+                            className={`flex-1 rounded-full transition-[background-color,transform] duration-150 ${filled || isPlayhead ? 'bg-brand-blue' : 'bg-brand-blue/15'} ${isPlayhead ? 'scale-y-125' : ''}`}
+                            style={{ height: `${height}%` }}
                           />
                         );
                       })}
                     </div>
                     <span className="text-sm tabular-nums text-gray-600 whitespace-nowrap">
-                      {fmtClock(voiceEnrollStatus === 'success' || voiceEnrollStatus === 'verifying' ? VOICE_CAPTURE_SECONDS : recordSeconds)} / {fmtClock(VOICE_CAPTURE_SECONDS)}
+                      {/* During playback the clock counts up from 0:00 with the playhead. */}
+                      {fmtClock(voicePlaying
+                        ? Math.floor(voicePlayProgress * (voiceDurationRef.current || VOICE_CAPTURE_SECONDS))
+                        : voiceEnrollStatus === 'success' || voiceEnrollStatus === 'verifying' ? VOICE_CAPTURE_SECONDS : recordSeconds)} / {fmtClock(VOICE_CAPTURE_SECONDS)}
                     </span>
                     <div className="flex flex-wrap items-center justify-center gap-2">
                       {canStartRecording && (

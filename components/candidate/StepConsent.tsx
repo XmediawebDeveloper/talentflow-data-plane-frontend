@@ -260,10 +260,10 @@ export default function StepConsent({
                   {metaItems.length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-y-1 text-sm text-gray-500">
                       {metaItems.map((item, i) => (
-                        <span key={item.text} className="flex items-center">
-                          {i > 0 && <span aria-hidden className="mx-2.5 h-1 w-1 rounded-full bg-gray-300" />}
+                        <span key={item.text} className="flex items-center min-w-0">
+                          {i > 0 && <span aria-hidden className="mx-2.5 h-1 w-1 rounded-full bg-gray-300 flex-shrink-0" />}
                           <item.icon className="w-3.5 h-3.5 text-gray-400 mr-1.5 flex-shrink-0" />
-                          {item.text}
+                          <span className="min-w-0 break-words">{item.text}</span>
                         </span>
                       ))}
                     </div>

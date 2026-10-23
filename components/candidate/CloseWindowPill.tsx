@@ -43,7 +43,7 @@ export function CloseWindowPill({ className = '' }: { className?: string }) {
       type="button"
       onClick={handleClose}
       aria-label="Close this window"
-      className={`group relative inline-flex items-center justify-center overflow-hidden rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-200 shadow-sm cursor-pointer transition-shadow duration-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue ${className}`}
+      className={`group relative inline-flex max-w-full items-center justify-center overflow-hidden rounded-full bg-white px-4 py-2 text-sm font-medium text-gray-700 ring-1 ring-gray-200 shadow-sm cursor-pointer transition-shadow duration-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue ${className}`}
     >
       {/* Liquid — sweeps in from the left, with a moving wave crest
           on its leading (right) edge. */}

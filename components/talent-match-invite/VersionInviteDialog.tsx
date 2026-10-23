@@ -79,6 +79,7 @@ export default function VersionInviteDialog({
   hideDuplicate = false,
   inviteAllowed = true,
   inviteDeniedReason,
+  preselect = true,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -110,6 +111,9 @@ export default function VersionInviteDialog({
   inviteAllowed?: boolean;
   /** Shown when `inviteAllowed` is false. */
   inviteDeniedReason?: string;
+  /** Tick every candidate on open (the page ticked them). False = list them
+   *  unticked for the recruiter to pick (Job Details' Create / Send tiles). */
+  preselect?: boolean;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -140,7 +144,7 @@ export default function VersionInviteDialog({
   const [loading, setLoading] = useState(!off);
   const [error, setError] = useState<string | null>(null);
   const [versionId, setVersionId] = useState<string | null>(null);
-  const [candidateIds, setCandidateIds] = useState<string[]>(() => candidates.filter((c) => c.email).map((c) => c.id));
+  const [candidateIds, setCandidateIds] = useState<string[]>(() => (preselect ? candidates.filter((c) => c.email).map((c) => c.id) : []));
   const [method, setMethod] = useState<DeliveryMethod>('email');
   const [message, setMessage] = useState('');
   const [expiryDays, setExpiryDays] = useState(1);

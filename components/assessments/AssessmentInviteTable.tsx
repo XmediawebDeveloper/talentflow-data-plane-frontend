@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import NameAvatar from '@/components/ui/name-avatar';
 import { timelineEvents, buildInvitationRowActions, InvitationActionsMenu } from '@/components/AssessmentInviteActions';
 
 /**
@@ -313,12 +314,6 @@ export default function AssessmentInviteTable({
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {invitations.map((invitation: any) => {
-                    const initials = invitation.candidate_name
-                      ?.split(' ')
-                      .map((n: string) => n[0])
-                      .join('')
-                      .toUpperCase()
-                      .slice(0, 2) || '??';
   
                 /* Only Completed / Auto Completed rows are interactive —
                    other statuses have no Result Details to open, so the
@@ -371,9 +366,7 @@ export default function AssessmentInviteTable({
                     </td>
                     <td className="py-3 px-4 align-top">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
-                          {initials}
-                        </div>
+                        <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                         {/* Capped rather than free: under auto layout a
                             single long email would otherwise set the
                             column width for the whole table. */}
