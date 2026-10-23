@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  allowedDevOrigins: ['abi.0sms.com', '*.0sms.com'],
+  allowedDevOrigins: ['abi.0sms.com', '*.0sms.com','10.10.9.149'],
   serverExternalPackages: [
     '@mediapipe/hands', '@mediapipe/face_detection', '@mediapipe/face_mesh',
     '@mediapipe/camera_utils', '@mediapipe/drawing_utils',
