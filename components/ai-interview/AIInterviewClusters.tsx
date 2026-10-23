@@ -29,6 +29,7 @@ import {
 import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
+import { useJdLocations } from '@/hooks/useJdLocations';
 import WizardDiscardButton from './WizardDiscardButton';
 import { isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import {
@@ -1107,6 +1108,7 @@ export default function AIInterviewClusters() {
 
   /* Config from server */
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
+  const clusterJdLocations = useJdLocations(config?.jd_id);
 
   /* Where leaving the flow lands. Started from a JD's Job Details page — the
      draft prompt there included — means the recruiter came to finish one job's
@@ -4159,7 +4161,7 @@ export default function AIInterviewClusters() {
                     {config.jd_location && (
                       <div className="px-3 py-2 flex items-center justify-between gap-2">
                         <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
-                        <SummaryLocation value={config.jd_location} />
+                        <SummaryLocation value={config.jd_location} locations={clusterJdLocations} />
                       </div>
                     )}
                     {config.jd_version != null && (
