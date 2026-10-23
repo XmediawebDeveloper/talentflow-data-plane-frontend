@@ -217,8 +217,18 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
             use `.tf-table-shell`), so nothing nested inside competes for the
             scroll or the sticky context — which is what used to bleed the table
             past the card. The class is kept as the scroll container itself and
-            as the hook the globals.css note refers to. */}
-        <div className="score-table-modal-body flex-1 overflow-y-auto p-4 sm:p-6">
+            as the hook the globals.css note refers to.
+
+            `overflow-x-hidden` is explicit, not incidental: CSS's overflow
+            interaction rule computes a bare `visible` x-axis to `auto` the
+            moment the y-axis isn't `visible`, so leaving it unstated made this
+            box sideways-scrollable the instant ANY descendant overflowed
+            horizontally — one long unbroken run in the AI-generated reasoning
+            text was enough to drag the whole body into a scrolled state, which
+            read as the table and summary card being cut off with blank space
+            stranded beside them. Stating it kills that axis outright regardless
+            of what a future child does. */}
+        <div className="score-table-modal-body flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           {loading ? (
             <div className="space-y-4">
               {/* Overall score summary row */}
