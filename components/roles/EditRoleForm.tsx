@@ -457,6 +457,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         <AppModal
           open
           size="lg"
+          mobileSheet
           zIndexClass="z-50"
           onCancel={handleClose}
           cancelDisabled={isSaving}

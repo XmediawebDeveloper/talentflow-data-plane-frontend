@@ -24,12 +24,16 @@ import {
   Menu,
   X,
   RefreshCw,
+  Copy,
+  Check,
+  PinOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import chatService, {
   ChatConnectionStatus,
   Channel,
   Message,
+  Reaction,
 } from '@/lib/services/chatService';
 import { getTokens } from '@/lib/services/api';
 import userService, { ApiUser } from '@/lib/services/userService';
@@ -61,6 +65,108 @@ export default function TeamChatPage() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showMembersSidebar, setShowMembersSidebar] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
+  // Tapped message — shows its time + actions row (touch has no hover).
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  // Selected messages (long-press on touch, double-click on desktop; once
+  // one is selected a tap/click adds or removes more). The header's pin
+  // button then pins/unpins them.
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [isPinning, setIsPinning] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
+  const isSelecting = selectedMessageIds.size > 0;
+
+  const clearSelection = () => setSelectedMessageIds(new Set());
+  const toggleSelectMessage = (messageId: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+    setShowEmojiPicker(null);
+    setShowPinnedPanel(false);
+  };
+  const startLongPress = (messageId: string) => {
+    longPressFiredRef.current = false;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true;
+      navigator.vibrate?.(15);
+      toggleSelectMessage(messageId);
+    }, 450);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  // Esc clears the selection.
+  useEffect(() => {
+    if (!isSelecting) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedMessageIds(new Set()); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSelecting]);
+
+  // Any unpinned in the selection → pin those; all already pinned → unpin all.
+  const handleTogglePinSelected = async () => {
+    const selected = messages.filter((m) => selectedMessageIds.has(m.id) && !m.is_deleted);
+    if (selected.length === 0 || isPinning) return;
+    const unpinned = selected.filter((m) => !m.is_pinned);
+    const pin = unpinned.length > 0;
+    const targets = pin ? unpinned : selected;
+    setIsPinning(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map((m) => (pin ? chatService.pinMessage(m.id) : chatService.unpinMessage(m.id))),
+      );
+      const done = new Set(targets.filter((_, i) => results[i].status === 'fulfilled').map((m) => m.id));
+      if (done.size > 0) {
+        setMessages((prev) => prev.map((m) => (done.has(m.id) ? { ...m, is_pinned: pin } : m)));
+        const noun = done.size === 1 ? 'Message' : `${done.size} messages`;
+        toast.success(`${noun} ${pin ? 'pinned' : 'unpinned'}`);
+      }
+      const failed = targets.length - done.size;
+      if (failed > 0) {
+        toast.error(`Failed to ${pin ? 'pin' : 'unpin'} ${failed} message${failed === 1 ? '' : 's'}`);
+        // Keep only the failed ones selected so a retry is one tap.
+        setSelectedMessageIds(new Set(targets.filter((m) => !done.has(m.id)).map((m) => m.id)));
+      } else {
+        clearSelection();
+      }
+    } finally {
+      setIsPinning(false);
+    }
+  };
+
+  const [unpinningId, setUnpinningId] = useState<string | null>(null);
+  const handleUnpinMessage = async (messageId: string) => {
+    if (unpinningId) return;
+    setUnpinningId(messageId);
+    try {
+      await chatService.unpinMessage(messageId);
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, is_pinned: false } : m)));
+      toast.success('Message unpinned');
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to unpin message');
+    } finally {
+      setUnpinningId(null);
+    }
+  };
+
+  const handleCopyMessage = async (message: Message) => {
+    try {
+      await navigator.clipboard.writeText(message.content ?? '');
+      setCopiedMessageId(message.id);
+      toast.success('Message copied');
+      setTimeout(() => setCopiedMessageId((id) => (id === message.id ? null : id)), 1500);
+    } catch {
+      toast.error('Could not copy message');
+    }
+  };
   const [permissions, setPermissions] = useState<{ can_create_channel: boolean; role: string }>({
     can_create_channel: false,
     role: '',
@@ -142,7 +248,13 @@ export default function TeamChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Scroll to the bottom only when a new message arrives (or a conversation
+  // opens) — not when an existing one changes (reaction, pin, edit).
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const lastId = messages[messages.length - 1]?.id;
+    if (lastId === lastMessageIdRef.current) return;
+    lastMessageIdRef.current = lastId;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -480,6 +592,7 @@ export default function TeamChatPage() {
     setListOpen(false);
     setShowPinnedPanel(false);
     setShowHeaderMenu(false);
+    clearSelection();
   };
 
   // Manual refresh of the chat only (open conversation + conversation list) —
@@ -565,15 +678,50 @@ export default function TeamChatPage() {
   };
 
   const handleAddReaction = async (messageId: string, emoji: string) => {
+    setShowEmojiPicker(null);
+    const me = currentUser?.id;
+    const myName = currentUser?.name || 'You';
+    // Optimistic: toggle my reaction in place — no loading skeleton, no scroll.
+    if (me) {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const existing = m.reactions.find((r) => r.emoji === emoji);
+          let reactions: Reaction[];
+          if (!existing) {
+            reactions = [...m.reactions, { emoji, count: 1, users: [myName], user_ids: [me] }];
+          } else if (existing.user_ids?.includes(me)) {
+            reactions = m.reactions
+              .map((r) =>
+                r.emoji === emoji
+                  ? {
+                      ...r,
+                      count: r.count - 1,
+                      user_ids: r.user_ids.filter((id) => id !== me),
+                      users: r.users.filter((_, i) => r.user_ids[i] !== me),
+                    }
+                  : r,
+              )
+              .filter((r) => r.count > 0);
+          } else {
+            reactions = m.reactions.map((r) =>
+              r.emoji === emoji
+                ? { ...r, count: r.count + 1, users: [...r.users, myName], user_ids: [...(r.user_ids ?? []), me] }
+                : r,
+            );
+          }
+          return { ...m, reactions };
+        }),
+      );
+    }
     try {
       await chatService.addReaction(messageId, emoji);
-      if (selectedChannel) {
-        await fetchMessages(selectedChannel.id);
-      }
     } catch (error) {
       console.error('Error adding reaction:', error);
+      toast.error('Failed to add reaction');
     }
-    setShowEmojiPicker(null);
+    // Reconcile with the server quietly (also undoes the optimistic change on failure).
+    if (selectedChannel) void fetchMessages(selectedChannel.id, { silent: true });
   };
 
   const handleCreateChannel = async () => {
@@ -685,6 +833,9 @@ export default function TeamChatPage() {
   const onlineMembersCount = selectedChannel?.members?.filter((m) => m.is_online).length || 0;
   const isMuted = selectedChannel ? mutedChannels.has(selectedChannel.id) : false;
   const pinnedMessages = messages.filter((m) => m.is_pinned && !m.is_deleted);
+  const selectedMessages = messages.filter((m) => selectedMessageIds.has(m.id) && !m.is_deleted);
+  // The pin button unpins only when everything selected is already pinned.
+  const selectionAllPinned = selectedMessages.length > 0 && selectedMessages.every((m) => m.is_pinned);
 
   // Composer grows with its text, up to ~5 lines, then scrolls.
   useEffect(() => {
@@ -947,7 +1098,7 @@ export default function TeamChatPage() {
         <section className="flex min-w-0 flex-1 flex-col">
           {selectedChannel ? (
             <>
-              <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-2 sm:px-4 dark:border-slate-700">
+              <div className="relative flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-2 sm:px-4 dark:border-slate-700">
                 <div className="flex min-w-0 items-center gap-2.5">
                   {/* Conversations drawer toggle — tablet/phone only, top-left
                       corner (where the drawer slides in from). */}
@@ -995,6 +1146,18 @@ export default function TeamChatPage() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-0.5">
+                  {/* Clear the message selection */}
+                  {isSelecting && (
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="inline-flex h-7 items-center gap-1 rounded-full bg-brand-blue/10 px-2 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/15"
+                      aria-label="Clear selection"
+                      title="Clear selection (Esc)"
+                    >
+                      {selectedMessageIds.size} <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   {/* Refresh this chat */}
                   <button
                     type="button"
@@ -1007,17 +1170,34 @@ export default function TeamChatPage() {
                     <RefreshCw className={`h-4 w-4 ${isRefreshingChat ? 'animate-spin text-brand-blue' : ''}`} />
                   </button>
 
-                  {/* Pinned messages */}
-                  <div className="relative">
+                  {/* Pinned messages — the panel anchors to the button from sm up,
+                      and to the full header width on phones. */}
+                  <div className="sm:relative">
                     <button
                       type="button"
-                      onClick={() => { setShowPinnedPanel((v) => !v); setShowHeaderMenu(false); }}
-                      className={`relative ${iconButtonClass(showPinnedPanel)}`}
-                      aria-label="Pinned messages"
-                      title="Pinned messages"
+                      onClick={() => {
+                        if (isSelecting) { void handleTogglePinSelected(); return; }
+                        setShowPinnedPanel((v) => !v);
+                        setShowHeaderMenu(false);
+                      }}
+                      disabled={isPinning}
+                      className={`relative ${iconButtonClass(showPinnedPanel || isSelecting)} disabled:cursor-wait`}
+                      aria-label={isSelecting ? `${selectionAllPinned ? 'Unpin' : 'Pin'} ${selectedMessageIds.size} selected` : 'Pinned messages'}
+                      title={isSelecting ? `${selectionAllPinned ? 'Unpin' : 'Pin'} selected (${selectedMessageIds.size})` : 'Pinned messages'}
                     >
-                      <Pin className="h-4 w-4" />
-                      {pinnedMessages.length > 0 && (
+                      {/* Tilts while a message is selected — the button now pins it. */}
+                      <Pin
+                        className={`h-4 w-4 transition-transform duration-300 ${isSelecting ? 'rotate-45 text-brand-blue' : ''} ${
+                          selectionAllPinned ? 'fill-brand-blue/20' : ''
+                        }`}
+                      />
+                      {/* Badge: selection count while selecting, else the pinned count. */}
+                      {isSelecting && (
+                        <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-orange px-1 text-2xs font-semibold text-white">
+                          {selectedMessageIds.size}
+                        </span>
+                      )}
+                      {!isSelecting && pinnedMessages.length > 0 && (
                         <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-blue px-1 text-2xs font-semibold text-white">
                           {pinnedMessages.length}
                         </span>
@@ -1026,7 +1206,7 @@ export default function TeamChatPage() {
                     {showPinnedPanel && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowPinnedPanel(false)} />
-                        <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-80 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                        <div className="absolute top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl max-sm:inset-x-2 sm:right-0 sm:mt-2 sm:max-h-96 sm:w-80 dark:border-slate-700 dark:bg-slate-900">
                           <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
                             <Pin className="h-3.5 w-3.5" /> Pinned messages
                           </div>
@@ -1035,12 +1215,25 @@ export default function TeamChatPage() {
                           ) : (
                             <div className="space-y-0.5">
                               {pinnedMessages.map((m) => (
-                                <div key={m.id} className="rounded-lg px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800/60">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
-                                    <span className="shrink-0 text-xs text-gray-400">{formatISTTime(m.created_at)}</span>
+                                <div key={m.id} className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-gray-50 sm:px-3 dark:hover:bg-slate-800/60">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
+                                    <p className="mt-0.5 line-clamp-2 break-words text-sm text-gray-700 dark:text-slate-300">{m.content}</p>
                                   </div>
-                                  <p className="mt-0.5 line-clamp-2 text-sm text-gray-700 dark:text-slate-300">{m.content}</p>
+                                  {/* Time, with Unpin under it */}
+                                  <div className="flex shrink-0 flex-col items-end gap-1">
+                                    <span className="text-xs text-gray-400">{formatISTTime(m.created_at)}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUnpinMessage(m.id)}
+                                      disabled={unpinningId === m.id}
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue disabled:cursor-wait"
+                                      aria-label="Unpin message"
+                                      title="Unpin"
+                                    >
+                                      {unpinningId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PinOff className="h-3.5 w-3.5" />}
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -1127,7 +1320,7 @@ export default function TeamChatPage() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30">
+              <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30">
                 {isLoadingMessages ? (
                   <div className="flex flex-col gap-4">
                     {/* Mirrors the message list: received (avatar + bubble, left)
@@ -1167,7 +1360,8 @@ export default function TeamChatPage() {
                       const groupStart = showDateSeparator || !prev || prev.user_id !== message.user_id;
                       const groupEnd =
                         !next || formatISTDate(next.created_at) !== dayLabel || next.user_id !== message.user_id;
-                      const showMeta = groupEnd || message.is_pinned || message.is_edited;
+                      const showMeta = groupEnd || message.is_pinned || message.is_edited || activeMessageId === message.id;
+                      const actionsOpen = activeMessageId === message.id || showEmojiPicker === message.id;
                       const isImage = message.message_type === 'file' && !message.is_deleted && message.metadata?.file_url;
                       const bubbleRadius = isSender
                         ? `rounded-2xl${groupStart ? ' rounded-tr-md' : ''}`
@@ -1207,59 +1401,42 @@ export default function TeamChatPage() {
                                 </span>
                               )}
 
-                              <div className={`flex items-center gap-1 ${isSender ? 'flex-row-reverse' : ''}`}>
-                                <div className={bubbleClass}>
-                                  {isImage ? (
-                                    <a href={message.metadata!.file_url} target="_blank" rel="noopener noreferrer">
-                                      <img
-                                        src={message.metadata!.file_url}
-                                        alt={message.metadata!.file_name || 'Image attachment'}
-                                        className="block max-h-64 max-w-full object-contain"
-                                      />
-                                    </a>
-                                  ) : (
-                                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                                      {message.is_deleted ? 'This message was deleted' : message.content}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* React — on every message, revealed on hover/focus. */}
-                                {!message.is_deleted && (
-                                  <div className="relative shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
-                                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition-opacity hover:bg-white hover:text-brand-blue focus-visible:opacity-100 group-hover:opacity-100 dark:hover:bg-slate-800 ${
-                                        showEmojiPicker === message.id ? 'opacity-100' : 'opacity-0'
-                                      }`}
-                                      aria-label="Add reaction"
-                                      title="Add reaction"
-                                    >
-                                      <Smile className="h-4 w-4" />
-                                    </button>
-                                    {showEmojiPicker === message.id && (
-                                      <>
-                                        <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
-                                        <div
-                                          className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900 ${
-                                            isSender ? 'right-0' : 'left-0'
-                                          }`}
-                                        >
-                                          {quickEmojis.map((emoji) => (
-                                            <button
-                                              key={emoji}
-                                              type="button"
-                                              onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
-                                              className="rounded-md p-1.5 text-lg transition-transform hover:scale-110 hover:bg-brand-blue/[0.06]"
-                                            >
-                                              {emoji}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
+                              <div
+                                className={`${bubbleClass} max-w-full transition-shadow [@media(hover:none)]:select-none [-webkit-touch-callout:none] ${
+                                  selectedMessageIds.has(message.id) ? 'ring-2 ring-brand-blue/50 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-950' : ''
+                                }`}
+                                aria-selected={selectedMessageIds.has(message.id)}
+                                onTouchStart={() => { if (!message.is_deleted) startLongPress(message.id); }}
+                                onTouchEnd={cancelLongPress}
+                                onTouchMove={cancelLongPress}
+                                onContextMenu={(e) => { if (longPressFiredRef.current) e.preventDefault(); }}
+                                // Stop the double-click from highlighting text.
+                                onMouseDown={(e) => { if (e.detail > 1) e.preventDefault(); }}
+                                onDoubleClick={() => { if (!isSelecting && !message.is_deleted) toggleSelectMessage(message.id); }}
+                                onClick={(e) => {
+                                  if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+                                  // Selecting: a tap/click adds or removes this message.
+                                  if (isSelecting) {
+                                    e.preventDefault();
+                                    if (!message.is_deleted) toggleSelectMessage(message.id);
+                                    return;
+                                  }
+                                  if ((e.target as HTMLElement).closest('a')) return;
+                                  setActiveMessageId((id) => (id === message.id ? null : message.id));
+                                }}
+                              >
+                                {isImage ? (
+                                  <a href={message.metadata!.file_url} target="_blank" rel="noopener noreferrer">
+                                    <img
+                                      src={message.metadata!.file_url}
+                                      alt={message.metadata!.file_name || 'Image attachment'}
+                                      className="block max-h-64 max-w-full object-contain"
+                                    />
+                                  </a>
+                                ) : (
+                                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                    {message.is_deleted ? 'This message was deleted' : message.content}
+                                  </p>
                                 )}
                               </div>
 
@@ -1288,6 +1465,65 @@ export default function TeamChatPage() {
                                     <span className="inline-flex items-center gap-0.5 text-xs text-brand-blue">
                                       · <Pin className="h-3 w-3" /> Pinned
                                     </span>
+                                  )}
+
+                                  {/* React + Copy — on the inner side of the time (after it for
+                                      received, before it for sent, so the time stays flush with the
+                                      bubble); on hover/focus, always on touch screens or once tapped. */}
+                                  {!message.is_deleted && (
+                                    <div
+                                      className={`flex items-center gap-0.5 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${
+                                        isSender ? 'order-first flex-row-reverse' : ''
+                                      } ${actionsOpen ? 'opacity-100' : 'opacity-0'}`}
+                                    >
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Add reaction"
+                                          title="Add reaction"
+                                        >
+                                          <Smile className="h-3.5 w-3.5" />
+                                        </button>
+                                        {showEmojiPicker === message.id && (
+                                          <>
+                                            <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
+                                            <div
+                                              className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg sm:p-1.5 dark:border-slate-700 dark:bg-slate-900 ${
+                                                isSender ? 'right-0' : 'left-0'
+                                              }`}
+                                            >
+                                              {quickEmojis.map((emoji) => (
+                                                <button
+                                                  key={emoji}
+                                                  type="button"
+                                                  onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
+                                                  className="rounded-md p-1 text-base transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
+                                                >
+                                                  {emoji}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                      {!isImage && message.content && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyMessage(message)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Copy message"
+                                          title="Copy"
+                                        >
+                                          {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </button>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               )}
