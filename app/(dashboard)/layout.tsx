@@ -27,6 +27,7 @@ import { AdminAssignedPlanProvider } from '@/components/providers/AdminAssignedP
 import AdminAssignedPlanBanner from '@/components/admin-assigned-plan/AdminAssignedPlanBanner';
 import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssignedPlanModal';
 import GlobalScoringProgressIndicator from '@/components/GlobalScoringProgressIndicator';
+import BulkInviteProgressIndicator from '@/components/bulk-invite/BulkInviteProgressIndicator';
 import RouteGuard from '@/components/RouteGuard';
 
 // Paths allowed when subscription is expired/inactive
@@ -433,6 +434,9 @@ export default function DashboardLayout({
                 never mounts on the (public) candidate-facing pages (assessment/
                 AI-interview token links) or the (auth)/(marketing) routes. */}
             <GlobalScoringProgressIndicator />
+            {/* Create / Send bulk invitations - the same idea, bottom-LEFT, so a
+                scoring run and a send can be followed at the same time. */}
+            <BulkInviteProgressIndicator />
 
             {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
             <PlanChangeSuspendedOverlay />

@@ -47,6 +47,7 @@ import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMod
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { Skeleton } from '@/components/ui/skeleton';
+import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 
 /* The Version History tab's eye opens a version's configuration in the same
    read-only dialog used elsewhere. Loaded lazily: that dialog renders this
@@ -1352,6 +1353,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   {config.jd_title || config.position || 'Untitled'}
                 </h1>
                 <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
+                {/* Live, with saved edits waiting for Publish — this page shows the published version. */}
+                {hasUnpublishedChanges(config) && <UnpublishedChangesChip />}
               </div>
 
               {/* Row 2: quiet bulleted facts. Experience level and the invite count

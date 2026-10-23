@@ -73,6 +73,9 @@ export interface JDCreate {
   creation_stage?: 'create' | 'extract' | 'review';  // Where user left off in draft
   creation_method?: 'manual' | 'ai_generated';  // How the JD was created
   ai_prompt?: string;  // Original AI prompt used to generate JD
+  /** Create the editor's WORKING COPY of a new JD: hidden from every list, and no
+   *  JD ID until Save as Draft / Publish commits it (commitWorkingCopy). */
+  as_working_copy?: boolean;
   locations?: JDLocation[];
   // Mandatory-flag mirror of `JDExtractedParams`; persisted on the JD record so
   // scoring/AI-match enforce the recruiter-chosen strictness.
@@ -111,8 +114,28 @@ export interface JDResponse extends JDCreate {
   // as current_version: a new version is its own JD row, so its publish count
   // starts again at 1 while this is N+1.
   version_number?: number;
+  // Only on createNewVersion: true when the job already had an open draft version
+  // and that draft was returned instead of a new fork.
+  reused_existing_draft?: boolean;
+  /** The JD editor's private working copy (hidden everywhere else). */
+  is_working_copy?: boolean;
+  /** For a working copy of an existing draft: that draft's id. Null for a new JD. */
+  working_copy_of?: string | null;
+  /** Only from startWorkingCopy: an earlier unsaved copy was reopened. */
+  resumed_working_copy?: boolean;
+  working_copy_updated_at?: string | null;
+  /** Only from commitWorkingCopy: a new JD was saved for the first time. */
+  committed_new_jd?: boolean;
   // Extracted seniority level from the JD body (matches JDExtractedParams.experience_level)
   experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
+}
+
+/** Another user is editing this draft (they changed it in the last 30 minutes). */
+export class JDBeingEditedError extends Error {
+  constructor(public editorName: string | null, public since: string | null) {
+    super(`This job description is being edited by ${editorName || 'another user'}.`);
+    this.name = 'JDBeingEditedError';
+  }
 }
 
 export interface JDListResponse {
@@ -854,6 +877,36 @@ export const jdService = {
    * version lineage (version N+1); downstream assessments/interviews/scores are
    * NOT copied. Open the editor on the returned id.
    */
+  /**
+   * Open a DRAFT JD in the editor through a working copy. Returns this user's
+   * earlier unsaved copy when there is one (`resumed_working_copy`), otherwise a
+   * fresh copy; the draft itself is untouched until commitWorkingCopy.
+   */
+  async startWorkingCopy(id: string, takeOver = false): Promise<JDResponse> {
+    try {
+      const response = await api.post<JDResponse>(`/jd/${id}/working-copy${takeOver ? '?take_over=true' : ''}`);
+      return response.data;
+    } catch (error) {
+      // 409: another user is editing this draft right now - the caller offers
+      // View only / Take over instead of a generic error.
+      const response = (error as { response?: { status?: number; data?: { detail?: { error?: string; editor_name?: string | null; since?: string | null } } } })?.response;
+      if (response?.status === 409 && response.data?.detail?.error === 'JD_BEING_EDITED') {
+        throw new JDBeingEditedError(response.data.detail.editor_name ?? null, response.data.detail.since ?? null);
+      }
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Save as Draft for a working copy: returns the real JD it became / was saved onto. */
+  async commitWorkingCopy(id: string): Promise<JDResponse> {
+    try {
+      const response = await api.post<JDResponse>(`/jd/${id}/working-copy/commit`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   async createNewVersion(id: string): Promise<JDResponse> {
     try {
       const response = await api.post<JDResponse>(`/jd/${id}/new-version`);

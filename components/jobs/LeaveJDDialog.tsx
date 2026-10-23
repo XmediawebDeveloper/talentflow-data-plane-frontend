@@ -16,15 +16,18 @@ export interface LeaveJDDialogProps {
    * What "Discard current changes" goes back to, phrased to finish the
    * sentence "Goes back to …" — e.g. "the version you opened" or "the version
    * saved when you finished Step 1". Null when there is nothing saved to go
-   * back to (a brand-new job before its first step save): the button is then
-   * disabled, because discarding would leave nothing and Delete is the honest
-   * choice.
+   * back to (a brand-new job before its first step save): the option is then
+   * not shown at all, because discarding would leave nothing and Delete is the
+   * honest choice.
    */
   discardTarget: string | null;
   /** True when no record exists yet — discarding simply leaves the page. */
   nothingSavedYet: boolean;
   /** Why Delete is unavailable (published JD, no record yet); null = allowed. */
   deleteBlockedReason: string | null;
+  /** Leave Delete out: Discard already removes the record (a draft version made
+   *  for this visit), so a second button doing the same would only confuse. */
+  hideDelete?: boolean;
   /** Editing a published JD: Save writes the changes to it and it stays Published. */
   isPublishedJD?: boolean;
   /** Short name of the step the recruiter is on, e.g. "Step 2 (Extract)". */
@@ -54,6 +57,7 @@ export default function LeaveJDDialog({
   discardTarget,
   nothingSavedYet,
   deleteBlockedReason,
+  hideDelete = false,
   isPublishedJD = false,
   currentStepLabel,
   busy,
@@ -64,14 +68,15 @@ export default function LeaveJDDialog({
 }: LeaveJDDialogProps) {
   const isLaterVersion = versionNumber > 1;
   const deleteLabel = isLaterVersion ? `Delete version V${versionNumber}` : 'Delete this entire JD';
-  const discardDisabled = busy !== null || (!nothingSavedYet && discardTarget === null);
+  // Discard is offered only when it can do something: before any record exists
+  // (it just leaves), or when there is a saved version to go back to. Otherwise
+  // it is left out entirely rather than shown greyed out.
+  const canDiscard = nothingSavedYet || discardTarget !== null;
   const deleteDisabled = busy !== null || deleteBlockedReason !== null;
 
   const discardHint = nothingSavedYet
     ? 'Nothing has been saved yet. You leave the page and what you typed is cleared.'
-    : discardTarget
-      ? `Undo what you changed and go back to ${discardTarget}. The JD stays in Job Descriptions.`
-      : 'Nothing has been saved for this JD yet, so there is no earlier version to go back to. Use Delete to remove it.';
+    : `Undo what you changed and go back to ${discardTarget}. The JD stays in Job Descriptions.`;
 
   return (
     <AppModal
@@ -86,21 +91,25 @@ export default function LeaveJDDialog({
       // Save as Draft is the primary action, so it is last: rightmost on desktop and
       // on top when the buttons stack on a phone.
       actions={[
-        {
-          label: 'Discard current changes',
-          variant: 'secondary',
-          onClick: onDiscard,
-          disabled: discardDisabled,
-          loading: busy === 'discard',
-        },
-        {
-          label: deleteLabel,
-          variant: 'destructive',
-          onClick: onDelete,
-          disabled: deleteDisabled,
-          loading: busy === 'delete',
-          title: deleteBlockedReason ?? undefined,
-        },
+        ...(canDiscard
+          ? [{
+              label: 'Discard current changes',
+              variant: 'secondary' as const,
+              onClick: onDiscard,
+              disabled: busy !== null,
+              loading: busy === 'discard',
+            }]
+          : []),
+        ...(hideDelete
+          ? []
+          : [{
+              label: deleteLabel,
+              variant: 'destructive' as const,
+              onClick: onDelete,
+              disabled: deleteDisabled,
+              loading: busy === 'delete',
+              title: deleteBlockedReason ?? undefined,
+            }]),
         {
           label: 'Save as Draft',
           variant: 'primary',
@@ -136,13 +145,15 @@ export default function LeaveJDDialog({
             <span className="font-semibold text-gray-900 dark:text-slate-100">Cancel</span> — stay on this page and keep working.
           </p>
         </li>
-        <li className={`flex gap-3 ${discardDisabled && busy === null ? 'opacity-60' : ''}`}>
-          <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-          <p className="text-gray-700 dark:text-slate-300">
-            <span className="font-semibold text-gray-900 dark:text-slate-100">Discard current changes</span> — {discardHint}
-          </p>
-        </li>
-        <li className={`flex gap-3 ${deleteBlockedReason ? 'opacity-60' : ''}`}>
+        {canDiscard && (
+          <li className="flex gap-3">
+            <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+            <p className="text-gray-700 dark:text-slate-300">
+              <span className="font-semibold text-gray-900 dark:text-slate-100">Discard current changes</span> — {discardHint}
+            </p>
+          </li>
+        )}
+        {!hideDelete && <li className={`flex gap-3 ${deleteBlockedReason ? 'opacity-60' : ''}`}>
           <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <p className="text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">{deleteLabel}</span> —{' '}
@@ -158,7 +169,7 @@ export default function LeaveJDDialog({
               </>
             ))}
           </p>
-        </li>
+        </li>}
       </ul>
     </AppModal>
   );

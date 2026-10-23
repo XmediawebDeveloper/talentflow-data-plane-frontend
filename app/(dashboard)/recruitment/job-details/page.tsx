@@ -11,6 +11,7 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
+import { draftVersionEditorUrl, openDraftVersionForEdit } from '@/lib/utils/jdDraftVersion';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -567,9 +568,24 @@ function JobDetailsContent() {
       return;
     }
 
-    // Not in use — open the creation flow, which loads this JD by id and
-    // pre-fills every stage from it.
-    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromAiInterview ? '&from=ai-interview' : ''}`);
+    // Not in use. A draft is edited directly; a PUBLISHED JD is edited through its
+    // draft version, never the live row - the editor saves at every step, so the
+    // live job used to change before Republish. The job's existing open draft is
+    // reused if there is one.
+    const fromQuery = fromAiInterview ? '&from=ai-interview' : '';
+    if (editJob.status === 'Draft') {
+      router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromQuery}`);
+      return;
+    }
+    try {
+      const draft = await openDraftVersionForEdit(editJob.id);
+      router.push(draftVersionEditorUrl(draft, fromQuery));
+    } catch (error) {
+      console.error('Failed to open a draft version for editing:', error);
+      toast.error('Could not open this JD for editing', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    }
   };
 
   /* Editing an in-use JD forks it into a NEW version — a fresh draft copy with
@@ -584,12 +600,19 @@ function JobDetailsContent() {
     try {
       const newJd = await jdService.createNewVersion(jobId);
       setEditBlock(null);
-      toast.success('New version created', {
-        description: `Version ${(newJd as { version_number?: number }).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
-      });
+      // The job already had an open draft version: that one is reopened, not a new copy.
+      if (newJd.reused_existing_draft) {
+        toast.success('Opened the existing draft version', {
+          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+        });
+      } else {
+        toast.success('New version created', {
+          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+        });
+      }
       // `new_version=1`: the editor names this "New Version" (reopening the
       // draft later, without it, reads "Edit New Version").
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create&new_version=1${fromAiInterview ? '&from=ai-interview' : ''}`);
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create${newJd.reused_existing_draft ? '' : '&new_version=1'}${fromAiInterview ? '&from=ai-interview' : ''}`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setCreatingVersion(false);

@@ -4,6 +4,27 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { announceBeingEdited, isStaging, markPendingThisVisit } from '@/lib/utils/aiInterviewEditSession';
+
+/** Another user is editing this config in the wizard right now (409 INTERVIEW_BEING_EDITED). */
+export class InterviewBeingEditedError extends Error {
+  constructor(public editorName: string | null, public since: string | null) {
+    super(`This interview is being edited by ${editorName || 'another user'}.`);
+    this.name = 'InterviewBeingEditedError';
+  }
+}
+
+/* A wizard write refused because someone else is editing: tell the step's lock
+   gate (so the user gets View only / Take over) and throw a typed error. Any other
+   error falls through to the caller's usual handling. */
+const rethrowIfBeingEdited = (id: string, error: unknown): void => {
+  const response = (error as { response?: { status?: number; data?: { detail?: { error?: string; editor_name?: string | null; since?: string | null } } } })?.response;
+  const detail = response?.data?.detail;
+  if (response?.status === 409 && detail?.error === 'INTERVIEW_BEING_EDITED') {
+    announceBeingEdited({ id, editorName: detail.editor_name ?? null, since: detail.since ?? null });
+    throw new InterviewBeingEditedError(detail.editor_name ?? null, detail.since ?? null);
+  }
+};
 
 export type AIInterviewHRQuestionStage = 'opening' | 'closing';
 
@@ -95,7 +116,18 @@ export interface AIInterviewUpdate {
   // Configure page sends false; the gpt-4o dedup runs at /generate-clusters.
   semantic_skill_check?: boolean;
   introduction_video_url?: string;
+  // Keep this save as PENDING edits on the config instead of changing it (the
+  // wizard editing an existing config — see lib/utils/aiInterviewEditSession).
+  // Normally set by `update` itself; pass false to force a direct write.
+  stage_edits?: boolean;
 }
+
+/* Keys of an update that are hints, not content: a payload made only of these
+   (the audit-only `{ save_and_exit: true }` checkpoint) or a status-only change
+   is never staged — status is not something pending edits can carry. */
+const NON_CONTENT_UPDATE_KEYS = new Set(['save_and_exit', 'semantic_skill_check', 'save_as_draft', 'status', 'stage_edits']);
+const hasContentFields = (data: object) =>
+  Object.entries(data).some(([k, v]) => v !== undefined && !NON_CONTENT_UPDATE_KEYS.has(k));
 
 export interface TopicSuggestionResponse {
   round_type: string;
@@ -314,6 +346,14 @@ export interface AIInterviewResponse {
   jd_stale?: boolean | null;
   jd_stale_reason?: string | null;
   jd_current_version?: number | null;
+  // Wizard edits kept beside the config, not yet applied (see stage_edits).
+  // On a published config they are "Unpublished changes": the live interview
+  // runs as published until Publish applies them.
+  has_pending_edits?: boolean;
+  pending_edits_updated_at?: string | null;
+  // Only from get(id, { withPending }): another user is editing it right now.
+  being_edited_by?: string | null;
+  being_edited_since?: string | null;
   created_by: string;
   created_by_name?: string;
   scheduled_at?: string;
@@ -510,11 +550,23 @@ export const aiInterviewService = {
   },
 
   /**
-   * Get single interview
+   * Get single interview. `withPending` overlays the config's pending wizard
+   * edits — the wizard's view of a config being edited. Without it (details
+   * page, invites, lists) the live config is returned.
    */
-  async get(id: string): Promise<AIInterviewResponse> {
+  async get(id: string, opts?: { withPending?: boolean }): Promise<AIInterviewResponse> {
     try {
-      const response = await api.get<AIInterviewResponse>(`/ai-interview/${id}`);
+      const response = await api.get<AIInterviewResponse>(
+        `/ai-interview/${id}`,
+        opts?.withPending ? { params: { with_pending: true } } : undefined,
+      );
+      if (opts?.withPending && response.data.being_edited_by) {
+        announceBeingEdited({
+          id,
+          editorName: response.data.being_edited_by,
+          since: response.data.being_edited_since ?? null,
+        });
+      }
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -539,9 +591,54 @@ export const aiInterviewService = {
    */
   async update(id: string, data: AIInterviewUpdate): Promise<AIInterviewResponse> {
     try {
-      const response = await api.put<AIInterviewResponse>(`/ai-interview/${id}`, data);
+      // While a wizard step is editing this EXISTING config, every content save
+      // is staged as pending edits rather than written into the config — one
+      // decision here instead of at each of the wizard's many save sites. An
+      // explicit `stage_edits` from the caller wins; hint-only payloads (the
+      // audit-only save_and_exit checkpoint) and status changes are never staged.
+      const stage = data.stage_edits ?? (isStaging(id) && hasContentFields(data));
+      const body = stage ? { ...data, stage_edits: true } : data;
+      const response = await api.put<AIInterviewResponse>(`/ai-interview/${id}`, body);
+      if (stage) markPendingThisVisit(id);
       return response.data;
     } catch (error) {
+      rethrowIfBeingEdited(id, error);
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Write the config's pending wizard edits onto it (Save as Draft on a draft
+   * config). Returns the updated config.
+   */
+  async applyPendingEdits(id: string): Promise<AIInterviewResponse> {
+    try {
+      const response = await api.post<AIInterviewResponse>(`/ai-interview/${id}/pending-edits/apply`);
+      return response.data;
+    } catch (error) {
+      rethrowIfBeingEdited(id, error);
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Drop the config's pending wizard edits (Discard). The config is unchanged.
+   */
+  /** "Being edited by X" -> Take over: become this config's editor (their pending edits are kept). */
+  async takeOverEditing(id: string): Promise<AIInterviewResponse> {
+    try {
+      const response = await api.post<AIInterviewResponse>(`/ai-interview/${id}/editing/take-over`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  async discardPendingEdits(id: string): Promise<void> {
+    try {
+      await api.delete(`/ai-interview/${id}/pending-edits`);
+    } catch (error) {
+      rethrowIfBeingEdited(id, error);
       throw new Error(handleApiError(error));
     }
   },
@@ -795,6 +892,7 @@ export const aiInterviewService = {
       const response = await api.post<AIInterviewResponse>(`/ai-interview/${id}/publish`);
       return response.data;
     } catch (error) {
+      rethrowIfBeingEdited(id, error);
       throw new Error(handleApiError(error));
     }
   },

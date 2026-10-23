@@ -39,6 +39,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
+import { clearFreshDraftVersion, isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -772,6 +773,9 @@ interface EditingJDData {
   job_id?: string;  // Human-readable code like "JD-076"
   current_version?: number;  // publish COUNT of this row - says "republished", not which version
   version_number?: number;   // LINEAGE version (v1, v2, ...) - what every vN badge shows
+  /** The editor's working copy (see jd-creation/page.tsx): which draft it belongs to. */
+  is_working_copy?: boolean;
+  working_copy_of?: string | null;
   title: string;
   description: string;
   status?: 'draft' | 'published' | 'archived' | 'disabled';
@@ -1872,6 +1876,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const ensureJDCreationUrl = (jdId: string, creationStage: Step) => {
     if (typeof window === 'undefined') return;
 
+    // Editing a draft through its working copy: the URL keeps naming the DRAFT, so a
+    // refresh reopens it (and resumes the copy) instead of addressing the copy.
+    if (editingCopyOf && jdId === editingId) jdId = editingCopyOf;
+
     const params = new URLSearchParams(window.location.search);
     const currentId = params.get('id');
     const currentStage = params.get('stage');
@@ -1973,6 +1981,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // below used to read that as "a draft opened from the list" - so the leave prompt's
   // Discard only reverted fields and the never-wanted draft stayed under Draft.
   const createdInSessionIdRef = useRef<string | null>(null);
+  // A draft version forked from a published JD for this visit (see below).
+  const freshForkIdRef = useRef<string | null>(null);
+  // A NEW JD's working copy created in this visit and not yet saved: it has no JD
+  // ID and is hidden from every list until Save as Draft / Publish commits it.
+  const [unsavedNewCopyId, setUnsavedNewCopyId] = useState<string | null>(null);
   /* What "Discard current changes" in the leave prompt goes back to: the server's
      copy of the JD at the last point the recruiter can return to - as opened (an
      existing JD), the last step save (a job created in this visit), or their last
@@ -1980,13 +1993,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const leaveCheckpointRef = useRef<{ jd: JDResponse; label: string } | null>(null);
   // The part of the checkpoint the leave prompt renders (refs cannot be read
   // during render under this eslint config).
-  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string; versionNumber: number } | null>(null);
+  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string; versionNumber: number; isFreshFork?: boolean } | null>(null);
   // Step-1 text as of that checkpoint; compared with the live text to tell
   // whether an existing JD has actually been edited.
   const checkpointContentKeyRef = useRef<string | null>(null);
   // Step 2 edits are written to the DB as they happen; this records that any
   // happened since the checkpoint.
   const editedSinceCheckpointRef = useRef(false);
+  // Render-side mirrors of the two above, for the Save as Draft button: Step-1
+  // text as of the checkpoint, and whether Step 2 was edited since.
+  const [checkpointContentKey, setCheckpointContentKey] = useState<string | null>(null);
+  const [step2EditedSinceCheckpoint, setStep2EditedSinceCheckpoint] = useState(false);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
@@ -2082,6 +2099,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // FIX-003: Computed values for editing state
   const isEditingDraft = effectiveEditingJD?.status === 'draft';
   const isEditingPublished = effectiveEditingJD?.status === 'published';
+  // Editing an existing draft through its working copy: that draft's id.
+  const editingCopyOf: string | null =
+    effectiveEditingJD?.is_working_copy && effectiveEditingJD.id === editingId
+      ? (effectiveEditingJD.working_copy_of ?? null)
+      : null;
+  // A new JD that has never been saved (its working copy, from this visit or
+  // reopened by a refresh): Discard leaves nothing behind and Delete has nothing to do.
+  const isUnsavedNewCopy = !!editingId && (
+    unsavedNewCopyId === editingId
+    || (effectiveEditingJD?.id === editingId && !!effectiveEditingJD?.is_working_copy && !effectiveEditingJD?.working_copy_of)
+  );
 
   // Set editingId when component mounts or editingJD changes
   useEffect(() => {
@@ -2858,6 +2886,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Helper: mark extracted data as modified AND reset formatted flag so AI reformatting triggers
   const markExtractedDataModified = () => {
     editedSinceCheckpointRef.current = true;
+    setStep2EditedSinceCheckpoint(true);
+    if (freshForkIdRef.current) clearFreshDraftVersion(freshForkIdRef.current);
     setExtractedDataModified(true);
     setHasFormattedForReview(false);
   };
@@ -3042,6 +3072,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1 });
     checkpointContentKeyRef.current = currentContentKeyRef.current;
     editedSinceCheckpointRef.current = false;
+    setCheckpointContentKey(currentContentKeyRef.current);
+    setStep2EditedSinceCheckpoint(false);
   };
   // A step save is a checkpoint only for a job created in this visit — it has
   // no "as opened" version to return to. An existing JD keeps the version the
@@ -3821,13 +3853,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           savedJd = await jdService.update(editingId, jdData);
         } else {
           // Create new draft
-          savedJd = await jdService.create(jdData);
+          savedJd = await jdService.create({ ...jdData, as_working_copy: true });
           if (discardedRef.current) {
             // Discarded while this create was in flight — remove it again.
             await jdService.delete(savedJd.id).catch(() => undefined);
             return;
           }
           createdInSessionIdRef.current = savedJd.id;
+          setUnsavedNewCopyId(savedJd.id);
           setEditingId(savedJd.id);
         }
 
@@ -3875,6 +3908,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         adoptLoadedKeyAsCheckpointRef.current = false;
         checkpointContentKeyRef.current = key;
       }
+    } else if (
+      freshForkIdRef.current
+      && checkpointContentKeyRef.current !== null
+      && key !== checkpointContentKeyRef.current
+    ) {
+      // Edited: the fork now holds work, so a later reopen must not drop it.
+      clearFreshDraftVersion(freshForkIdRef.current);
     }
   }, [jobTitle, aiPrompt, manualJD, generatedJD]);
 
@@ -3918,6 +3958,46 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     needsLeavePromptRef.current = needsLeavePrompt;
   });
 
+  /* A draft version forked from a published JD just for this visit (Edit on a
+     published JD - see lib/utils/jdDraftVersion.ts). Left untouched it is removed
+     again on leave, silently; once edited, Discard removes it and the published
+     version is what remains. Detected before the checkpoint effect below. */
+  useEffect(() => {
+    const id = effectiveEditingJD?.id;
+    if (id && effectiveEditingJD?.status === 'draft' && isFreshDraftVersion(id)) {
+      freshForkIdRef.current = id;
+    }
+  }, [effectiveEditingJD?.id, effectiveEditingJD?.status]);
+  const isUntouchedFreshFork = (): boolean =>
+    !!editingId
+    && freshForkIdRef.current === editingId
+    && !userSavedDraftRef.current
+    && !isPublished
+    && !discardedRef.current
+    && !needsLeavePrompt();
+  const isUntouchedFreshForkRef = useRef(isUntouchedFreshFork);
+  useEffect(() => {
+    isUntouchedFreshForkRef.current = isUntouchedFreshFork;
+  });
+  // Removes that untouched fork, then completes the navigation. A failed delete
+  // still navigates: the draft is reused the next time this JD is edited.
+  const dropUntouchedFork = async () => {
+    const id = freshForkIdRef.current;
+    if (!id) return;
+    discardedRef.current = true;
+    setHasUnsavedChanges(false);
+    try {
+      await jdService.delete(id);
+    } catch (error) {
+      console.error('[Leave] Could not remove the untouched draft version:', error);
+    }
+    clearFreshDraftVersion(id);
+  };
+  const dropUntouchedForkRef = useRef(dropUntouchedFork);
+  useEffect(() => {
+    dropUntouchedForkRef.current = dropUntouchedFork;
+  });
+
   // The "as opened" checkpoint for an existing JD: the server's full copy, so
   // Discard can put back every field (Step 1 text, Step 2 criteria, stage).
   useEffect(() => {
@@ -3927,9 +4007,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     jdService.get(id)
       .then(jd => {
         if (!cancelled && !leaveCheckpointRef.current) {
-          const label = 'the version you opened';
+          const label = freshForkIdRef.current === id
+            ? 'the published version; this new draft version is removed'
+            : 'the version you opened';
           leaveCheckpointRef.current = { jd, label };
-          setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1 });
+          setLeaveCheckpointMeta({
+            label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1,
+            isFreshFork: freshForkIdRef.current === id,
+          });
+          // The loaded text was adopted as the checkpoint text when it hydrated.
+          setCheckpointContentKey(checkpointContentKeyRef.current);
         }
       })
       .catch(error => console.error('[Leave] Could not load the JD checkpoint:', error));
@@ -3939,7 +4026,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Intercept navigation clicks (menu items, breadcrumbs, links) when leaving needs the prompt
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (!needsLeavePromptRef.current()) {
+      const needsPrompt = needsLeavePromptRef.current();
+      const dropFork = !needsPrompt && isUntouchedFreshForkRef.current();
+      if (!needsPrompt && !dropFork) {
         return;
       }
 
@@ -3954,6 +4043,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             // Prevent default navigation
             e.preventDefault();
             e.stopPropagation();
+
+            if (dropFork) {
+              void dropUntouchedForkRef.current().then(() => router.push(href));
+              return;
+            }
 
             // Store the target URL and show dialog
             setIsPendingBackNavigation(false);
@@ -4009,6 +4103,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setPendingNavigation(null);
         setIsPendingBackNavigation(true);
         setShowUnsavedDialog(true);
+      } else if (isUntouchedFreshForkRef.current()) {
+        // An untouched draft version made for this visit: remove it, then go.
+        void dropUntouchedForkRef.current().then(() => {
+          isProgrammaticNavigation = true;
+          window.history.back();
+        });
       } else {
         // Nothing to lose — let the user's Back press actually continue past
         // our trap entry to wherever they were really headed.
@@ -5315,9 +5415,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           savedJd = await jdService.update(editingId, jdData);
           console.log('[TalentFlow] JD updated with extract stage, id:', editingId);
         } else {
-          savedJd = await jdService.create(jdData);
+          savedJd = await jdService.create({ ...jdData, as_working_copy: true });
           jdId = savedJd.id;
           createdInSessionIdRef.current = savedJd.id;
+          setUnsavedNewCopyId(savedJd.id);
           setEditingId(savedJd.id);
           console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
         }
@@ -6675,9 +6776,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         savedJd = await jdService.update(editingId, jdData);
         console.log('[TalentFlow] JD updated with review stage, id:', editingId);
       } else {
-        savedJd = await jdService.create(jdData);
+        savedJd = await jdService.create({ ...jdData, as_working_copy: true });
         jdId = savedJd.id;
         createdInSessionIdRef.current = savedJd.id;
+        setUnsavedNewCopyId(savedJd.id);
         setEditingId(savedJd.id);
         console.log('[TalentFlow] JD created with review stage:', savedJd.id);
       }
@@ -7173,7 +7275,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // New JD or creating from published - create new
         console.log('[DEBUG] Creating new JD');
-        jdToPublish = await jdService.create(jdData);
+        jdToPublish = await jdService.create({ ...jdData, as_working_copy: true });
         console.log('[DEBUG] JD created successfully:', jdToPublish.id);
       }
 
@@ -7188,6 +7290,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setIsPublishing(false);
       setIsPublished(true);
+      if (freshForkIdRef.current) clearFreshDraftVersion(freshForkIdRef.current);
       setPublishedJdId(publishedJd.id);
       setPublishedJobCode(publishedJd.job_id || null);
       setPublishedVersion(publishedJd.current_version || 1);
@@ -7332,6 +7435,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  /* Save as Draft has nothing to do on an EXISTING JD (opened from the list)
+     that has not been changed since it was opened or last saved. A JD created in
+     this visit always has something to save. */
+  const nothingToSave = isPreExistingDraft
+    && checkpointContentKey !== null
+    && jdContentKey(jobTitle, aiPrompt, manualJD, generatedJD) === checkpointContentKey
+    && !step2EditedSinceCheckpoint;
+
   // What the leave prompt shows and allows.
   const leaveJobCode = leaveCheckpointMeta?.jobCode ?? effectiveEditingJD?.job_id ?? null;
   const leaveIsPublishedJD = (leaveCheckpointMeta?.status ?? effectiveEditingJD?.status) === 'published';
@@ -7376,7 +7487,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     discardedRef.current = true;
     try {
       const checkpoint = leaveCheckpointRef.current;
-      if (editingId && checkpoint) {
+      if (editingId && (editingCopyOf || isUnsavedNewCopy)) {
+        // Every edit went to the working copy, so discarding is deleting it: the
+        // draft (or, for a new JD, nothing at all) is exactly as it was.
+        await jdService.delete(editingId);
+      } else if (editingId && freshForkIdRef.current === editingId) {
+        // A draft version made for this visit: discarding it means removing it,
+        // which leaves the published version exactly as it was.
+        await jdService.delete(editingId);
+        clearFreshDraftVersion(editingId);
+      } else if (editingId && checkpoint) {
         await jdService.update(editingId, buildRestorePayload(checkpoint.jd));
       }
       finishLeave();
@@ -7400,7 +7520,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setLeaveBusy('delete');
     discardedRef.current = true;
     try {
-      await jdService.delete(editingId);
+      // Through a working copy, the JD to delete is the draft it belongs to; its
+      // copies are removed with it.
+      await jdService.delete(editingCopyOf ?? editingId);
       toast.info(`${leaveJobCode ?? 'The JD'} has been deleted`);
       finishLeave();
     } catch (error) {
@@ -7578,15 +7700,29 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // No editingId at all — genuinely a new JD.
         console.log('[DEBUG] Creating new draft (no editingId)');
-        savedJd = await jdService.create(jdData);
+        savedJd = await jdService.create({ ...jdData, as_working_copy: true });
         createdInSessionIdRef.current = savedJd.id;
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
+      }
+      // The editor works on a working copy; Save as Draft is what makes it real -
+      // a new JD becomes a draft (and gets its JD ID now), an existing draft gets
+      // the copy's content. Editing continues on the real JD from here.
+      if (savedJd.is_working_copy) {
+        savedJd = await jdService.commitWorkingCopy(savedJd.id);
+        setEditingId(savedJd.id);
+        setUnsavedNewCopyId(null);
       }
 
       setIsSavingDraft(false);
       setHasUnsavedChanges(false); // Clear unsaved changes after successful save
       userSavedDraftRef.current = true; // The user kept this draft — Discard must not delete it
+      // Saved on purpose: a forked draft version is now an ordinary draft, so
+      // Discard reverts it instead of removing it.
+      if (freshForkIdRef.current) {
+        clearFreshDraftVersion(freshForkIdRef.current);
+        freshForkIdRef.current = null;
+      }
       savedContentKeyRef.current = currentContentKeyRef.current;
       setLeaveCheckpoint(savedJd, 'your last Save as Draft');
 
@@ -11669,8 +11805,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <Button
                   variant="secondary"
                   onClick={() => handleSaveDraft()}
-                  disabled={isSavingDraft || isJDInUse}
-                  title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
+                  disabled={isSavingDraft || isJDInUse || nothingToSave}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : nothingToSave ? 'No changes to save' : ''}
                 >
                   {isSavingDraft ? (
                     <>
@@ -11772,8 +11908,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         versionNumber={leaveCheckpointMeta?.versionNumber ?? effectiveEditingJD?.version_number ?? 1}
         jobTitle={jobTitle.trim() || undefined}
         discardTarget={leaveCheckpointMeta?.label ?? null}
-        nothingSavedYet={!editingId}
+        nothingSavedYet={!editingId || isUnsavedNewCopy}
         deleteBlockedReason={leaveDeleteBlockedReason}
+        hideDelete={leaveCheckpointMeta?.isFreshFork === true || isUnsavedNewCopy}
         isPublishedJD={leaveIsPublishedJD}
         currentStepLabel={step === 'create' ? 'Step 1 (Create)' : step === 'extract' ? 'Step 2 (Extract)' : 'Step 3 (Review)'}
         busy={leaveBusy}
