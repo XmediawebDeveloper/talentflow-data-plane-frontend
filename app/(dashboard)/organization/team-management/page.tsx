@@ -641,7 +641,7 @@ export default function TeamManagementPage() {
                 })}
               </div>
 
-              <div className="p-4 sm:p-5">
+              <div className="p-3 sm:p-5">
             {activeTab === 'usage' ? (
               <TeamUsageAnalytics />
             ) : activeTab === 'analytics' ? (
@@ -784,7 +784,29 @@ export default function TeamManagementPage() {
                         <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto tf-table-shell">
+                      <>
+                      {/* Phones: one compact row per member. */}
+                      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+                        {sortedMembers.map((row) => (
+                          <li key={row.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                            <NameAvatar name={row.name} fallback={row.email} size="sm" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
+                              <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
+                              <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
+                                {row.teamName}
+                                {row.role && <span className="capitalize"> · {row.role.replace(/_/g, ' ').toLowerCase()}</span>}
+                              </p>
+                            </div>
+                            {row.isLead && (
+                              <span className="shrink-0 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                Lead
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="hidden overflow-x-auto tf-table-shell md:block">
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                             <tr className="text-left">
@@ -836,6 +858,7 @@ export default function TeamManagementPage() {
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
                   </section>
                 )}
