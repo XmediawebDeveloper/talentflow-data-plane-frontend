@@ -39,6 +39,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
+import { clearFreshDraftVersion, isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -772,6 +773,9 @@ interface EditingJDData {
   job_id?: string;  // Human-readable code like "JD-076"
   current_version?: number;  // publish COUNT of this row - says "republished", not which version
   version_number?: number;   // LINEAGE version (v1, v2, ...) - what every vN badge shows
+  /** The editor's working copy (see jd-creation/page.tsx): which draft it belongs to. */
+  is_working_copy?: boolean;
+  working_copy_of?: string | null;
   title: string;
   description: string;
   status?: 'draft' | 'published' | 'archived' | 'disabled';
@@ -1872,6 +1876,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const ensureJDCreationUrl = (jdId: string, creationStage: Step) => {
     if (typeof window === 'undefined') return;
 
+    // Editing a draft through its working copy: the URL keeps naming the DRAFT, so a
+    // refresh reopens it (and resumes the copy) instead of addressing the copy.
+    if (editingCopyOf && jdId === editingId) jdId = editingCopyOf;
+
     const params = new URLSearchParams(window.location.search);
     const currentId = params.get('id');
     const currentStage = params.get('stage');
@@ -1973,6 +1981,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // below used to read that as "a draft opened from the list" - so the leave prompt's
   // Discard only reverted fields and the never-wanted draft stayed under Draft.
   const createdInSessionIdRef = useRef<string | null>(null);
+  // A draft version forked from a published JD for this visit (see below).
+  const freshForkIdRef = useRef<string | null>(null);
+  // A NEW JD's working copy created in this visit and not yet saved: it has no JD
+  // ID and is hidden from every list until Save as Draft / Publish commits it.
+  const [unsavedNewCopyId, setUnsavedNewCopyId] = useState<string | null>(null);
   /* What "Discard current changes" in the leave prompt goes back to: the server's
      copy of the JD at the last point the recruiter can return to - as opened (an
      existing JD), the last step save (a job created in this visit), or their last
@@ -1980,13 +1993,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const leaveCheckpointRef = useRef<{ jd: JDResponse; label: string } | null>(null);
   // The part of the checkpoint the leave prompt renders (refs cannot be read
   // during render under this eslint config).
-  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string } | null>(null);
+  const [leaveCheckpointMeta, setLeaveCheckpointMeta] = useState<{ label: string; jobCode: string | null; status: string; versionNumber: number; isFreshFork?: boolean } | null>(null);
   // Step-1 text as of that checkpoint; compared with the live text to tell
   // whether an existing JD has actually been edited.
   const checkpointContentKeyRef = useRef<string | null>(null);
   // Step 2 edits are written to the DB as they happen; this records that any
   // happened since the checkpoint.
   const editedSinceCheckpointRef = useRef(false);
+  // Render-side mirrors of the two above, for the Save as Draft button: Step-1
+  // text as of the checkpoint, and whether Step 2 was edited since.
+  const [checkpointContentKey, setCheckpointContentKey] = useState<string | null>(null);
+  const [step2EditedSinceCheckpoint, setStep2EditedSinceCheckpoint] = useState(false);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
@@ -2082,6 +2099,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // FIX-003: Computed values for editing state
   const isEditingDraft = effectiveEditingJD?.status === 'draft';
   const isEditingPublished = effectiveEditingJD?.status === 'published';
+  // Editing an existing draft through its working copy: that draft's id.
+  const editingCopyOf: string | null =
+    effectiveEditingJD?.is_working_copy && effectiveEditingJD.id === editingId
+      ? (effectiveEditingJD.working_copy_of ?? null)
+      : null;
+  // A new JD that has never been saved (its working copy, from this visit or
+  // reopened by a refresh): Discard leaves nothing behind and Delete has nothing to do.
+  const isUnsavedNewCopy = !!editingId && (
+    unsavedNewCopyId === editingId
+    || (effectiveEditingJD?.id === editingId && !!effectiveEditingJD?.is_working_copy && !effectiveEditingJD?.working_copy_of)
+  );
 
   // Set editingId when component mounts or editingJD changes
   useEffect(() => {
@@ -2858,6 +2886,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Helper: mark extracted data as modified AND reset formatted flag so AI reformatting triggers
   const markExtractedDataModified = () => {
     editedSinceCheckpointRef.current = true;
+    setStep2EditedSinceCheckpoint(true);
+    if (freshForkIdRef.current) clearFreshDraftVersion(freshForkIdRef.current);
     setExtractedDataModified(true);
     setHasFormattedForReview(false);
   };
@@ -3032,16 +3062,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // URL to push and must instead unwind the history trap set up below.
   const [isPendingBackNavigation, setIsPendingBackNavigation] = useState(false);
   // Which leave-prompt action is in flight (its button shows the spinner).
-  const [leaveBusy, setLeaveBusy] = useState<'discard' | 'delete' | null>(null);
+  const [leaveBusy, setLeaveBusy] = useState<'save' | 'discard' | 'delete' | null>(null);
   // Set by the hydration effect when the loaded JD is one the recruiter opened,
   // so the change-tracking effect adopts the loaded text as the checkpoint text.
   const adoptLoadedKeyAsCheckpointRef = useRef(false);
 
   const setLeaveCheckpoint = (jd: JDResponse, label: string) => {
     leaveCheckpointRef.current = { jd, label };
-    setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status });
+    setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1 });
     checkpointContentKeyRef.current = currentContentKeyRef.current;
     editedSinceCheckpointRef.current = false;
+    setCheckpointContentKey(currentContentKeyRef.current);
+    setStep2EditedSinceCheckpoint(false);
   };
   // A step save is a checkpoint only for a job created in this visit — it has
   // no "as opened" version to return to. An existing JD keeps the version the
@@ -3821,13 +3853,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           savedJd = await jdService.update(editingId, jdData);
         } else {
           // Create new draft
-          savedJd = await jdService.create(jdData);
+          savedJd = await jdService.create({ ...jdData, as_working_copy: true });
           if (discardedRef.current) {
             // Discarded while this create was in flight — remove it again.
             await jdService.delete(savedJd.id).catch(() => undefined);
             return;
           }
           createdInSessionIdRef.current = savedJd.id;
+          setUnsavedNewCopyId(savedJd.id);
           setEditingId(savedJd.id);
         }
 
@@ -3875,6 +3908,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         adoptLoadedKeyAsCheckpointRef.current = false;
         checkpointContentKeyRef.current = key;
       }
+    } else if (
+      freshForkIdRef.current
+      && checkpointContentKeyRef.current !== null
+      && key !== checkpointContentKeyRef.current
+    ) {
+      // Edited: the fork now holds work, so a later reopen must not drop it.
+      clearFreshDraftVersion(freshForkIdRef.current);
     }
   }, [jobTitle, aiPrompt, manualJD, generatedJD]);
 
@@ -3918,6 +3958,46 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     needsLeavePromptRef.current = needsLeavePrompt;
   });
 
+  /* A draft version forked from a published JD just for this visit (Edit on a
+     published JD - see lib/utils/jdDraftVersion.ts). Left untouched it is removed
+     again on leave, silently; once edited, Discard removes it and the published
+     version is what remains. Detected before the checkpoint effect below. */
+  useEffect(() => {
+    const id = effectiveEditingJD?.id;
+    if (id && effectiveEditingJD?.status === 'draft' && isFreshDraftVersion(id)) {
+      freshForkIdRef.current = id;
+    }
+  }, [effectiveEditingJD?.id, effectiveEditingJD?.status]);
+  const isUntouchedFreshFork = (): boolean =>
+    !!editingId
+    && freshForkIdRef.current === editingId
+    && !userSavedDraftRef.current
+    && !isPublished
+    && !discardedRef.current
+    && !needsLeavePrompt();
+  const isUntouchedFreshForkRef = useRef(isUntouchedFreshFork);
+  useEffect(() => {
+    isUntouchedFreshForkRef.current = isUntouchedFreshFork;
+  });
+  // Removes that untouched fork, then completes the navigation. A failed delete
+  // still navigates: the draft is reused the next time this JD is edited.
+  const dropUntouchedFork = async () => {
+    const id = freshForkIdRef.current;
+    if (!id) return;
+    discardedRef.current = true;
+    setHasUnsavedChanges(false);
+    try {
+      await jdService.delete(id);
+    } catch (error) {
+      console.error('[Leave] Could not remove the untouched draft version:', error);
+    }
+    clearFreshDraftVersion(id);
+  };
+  const dropUntouchedForkRef = useRef(dropUntouchedFork);
+  useEffect(() => {
+    dropUntouchedForkRef.current = dropUntouchedFork;
+  });
+
   // The "as opened" checkpoint for an existing JD: the server's full copy, so
   // Discard can put back every field (Step 1 text, Step 2 criteria, stage).
   useEffect(() => {
@@ -3927,9 +4007,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     jdService.get(id)
       .then(jd => {
         if (!cancelled && !leaveCheckpointRef.current) {
-          const label = 'the version you opened';
+          const label = freshForkIdRef.current === id
+            ? 'the published version; this new draft version is removed'
+            : 'the version you opened';
           leaveCheckpointRef.current = { jd, label };
-          setLeaveCheckpointMeta({ label, jobCode: jd.job_id ?? null, status: jd.status });
+          setLeaveCheckpointMeta({
+            label, jobCode: jd.job_id ?? null, status: jd.status, versionNumber: jd.version_number ?? 1,
+            isFreshFork: freshForkIdRef.current === id,
+          });
+          // The loaded text was adopted as the checkpoint text when it hydrated.
+          setCheckpointContentKey(checkpointContentKeyRef.current);
         }
       })
       .catch(error => console.error('[Leave] Could not load the JD checkpoint:', error));
@@ -3939,7 +4026,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Intercept navigation clicks (menu items, breadcrumbs, links) when leaving needs the prompt
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (!needsLeavePromptRef.current()) {
+      const needsPrompt = needsLeavePromptRef.current();
+      const dropFork = !needsPrompt && isUntouchedFreshForkRef.current();
+      if (!needsPrompt && !dropFork) {
         return;
       }
 
@@ -3954,6 +4043,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             // Prevent default navigation
             e.preventDefault();
             e.stopPropagation();
+
+            if (dropFork) {
+              void dropUntouchedForkRef.current().then(() => router.push(href));
+              return;
+            }
 
             // Store the target URL and show dialog
             setIsPendingBackNavigation(false);
@@ -4009,6 +4103,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setPendingNavigation(null);
         setIsPendingBackNavigation(true);
         setShowUnsavedDialog(true);
+      } else if (isUntouchedFreshForkRef.current()) {
+        // An untouched draft version made for this visit: remove it, then go.
+        void dropUntouchedForkRef.current().then(() => {
+          isProgrammaticNavigation = true;
+          window.history.back();
+        });
       } else {
         // Nothing to lose — let the user's Back press actually continue past
         // our trap entry to wherever they were really headed.
@@ -5315,9 +5415,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           savedJd = await jdService.update(editingId, jdData);
           console.log('[TalentFlow] JD updated with extract stage, id:', editingId);
         } else {
-          savedJd = await jdService.create(jdData);
+          savedJd = await jdService.create({ ...jdData, as_working_copy: true });
           jdId = savedJd.id;
           createdInSessionIdRef.current = savedJd.id;
+          setUnsavedNewCopyId(savedJd.id);
           setEditingId(savedJd.id);
           console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
         }
@@ -6675,9 +6776,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         savedJd = await jdService.update(editingId, jdData);
         console.log('[TalentFlow] JD updated with review stage, id:', editingId);
       } else {
-        savedJd = await jdService.create(jdData);
+        savedJd = await jdService.create({ ...jdData, as_working_copy: true });
         jdId = savedJd.id;
         createdInSessionIdRef.current = savedJd.id;
+        setUnsavedNewCopyId(savedJd.id);
         setEditingId(savedJd.id);
         console.log('[TalentFlow] JD created with review stage:', savedJd.id);
       }
@@ -7173,7 +7275,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // New JD or creating from published - create new
         console.log('[DEBUG] Creating new JD');
-        jdToPublish = await jdService.create(jdData);
+        jdToPublish = await jdService.create({ ...jdData, as_working_copy: true });
         console.log('[DEBUG] JD created successfully:', jdToPublish.id);
       }
 
@@ -7188,6 +7290,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setIsPublishing(false);
       setIsPublished(true);
+      if (freshForkIdRef.current) clearFreshDraftVersion(freshForkIdRef.current);
       setPublishedJdId(publishedJd.id);
       setPublishedJobCode(publishedJd.job_id || null);
       setPublishedVersion(publishedJd.current_version || 1);
@@ -7332,6 +7435,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  /* Save as Draft has nothing to do on an EXISTING JD (opened from the list)
+     that has not been changed since it was opened or last saved. A JD created in
+     this visit always has something to save. */
+  const nothingToSave = isPreExistingDraft
+    && checkpointContentKey !== null
+    && jdContentKey(jobTitle, aiPrompt, manualJD, generatedJD) === checkpointContentKey
+    && !step2EditedSinceCheckpoint;
+
   // What the leave prompt shows and allows.
   const leaveJobCode = leaveCheckpointMeta?.jobCode ?? effectiveEditingJD?.job_id ?? null;
   const leaveIsPublishedJD = (leaveCheckpointMeta?.status ?? effectiveEditingJD?.status) === 'published';
@@ -7350,6 +7461,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setIsPendingBackNavigation(false);
   };
 
+  // Leave prompt → "Save as Draft". The same save as the page's own Save as Draft
+  // button (current step included, so the draft reopens where the recruiter left
+  // off), then leave. Stays on the page if the save fails or is refused (e.g. an
+  // empty job title), so nothing is lost by leaving.
+  const handleLeaveSave = async () => {
+    setLeaveBusy('save');
+    try {
+      const saved = await handleSaveDraft(false);
+      if (saved) finishLeave();
+    } finally {
+      setLeaveBusy(null);
+    }
+  };
+
   // Leave prompt → "Discard current changes". Puts the record back to the
   // checkpoint (as opened / last step save / last Save as Draft) — every field
   // in one write, since Step 1 autosaves and Step 2 writes each edit as it is
@@ -7362,7 +7487,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     discardedRef.current = true;
     try {
       const checkpoint = leaveCheckpointRef.current;
-      if (editingId && checkpoint) {
+      if (editingId && (editingCopyOf || isUnsavedNewCopy)) {
+        // Every edit went to the working copy, so discarding is deleting it: the
+        // draft (or, for a new JD, nothing at all) is exactly as it was.
+        await jdService.delete(editingId);
+      } else if (editingId && freshForkIdRef.current === editingId) {
+        // A draft version made for this visit: discarding it means removing it,
+        // which leaves the published version exactly as it was.
+        await jdService.delete(editingId);
+        clearFreshDraftVersion(editingId);
+      } else if (editingId && checkpoint) {
         await jdService.update(editingId, buildRestorePayload(checkpoint.jd));
       }
       finishLeave();
@@ -7386,7 +7520,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setLeaveBusy('delete');
     discardedRef.current = true;
     try {
-      await jdService.delete(editingId);
+      // Through a working copy, the JD to delete is the draft it belongs to; its
+      // copies are removed with it.
+      await jdService.delete(editingCopyOf ?? editingId);
       toast.info(`${leaveJobCode ?? 'The JD'} has been deleted`);
       finishLeave();
     } catch (error) {
@@ -7564,15 +7700,29 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // No editingId at all — genuinely a new JD.
         console.log('[DEBUG] Creating new draft (no editingId)');
-        savedJd = await jdService.create(jdData);
+        savedJd = await jdService.create({ ...jdData, as_working_copy: true });
         createdInSessionIdRef.current = savedJd.id;
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
+      }
+      // The editor works on a working copy; Save as Draft is what makes it real -
+      // a new JD becomes a draft (and gets its JD ID now), an existing draft gets
+      // the copy's content. Editing continues on the real JD from here.
+      if (savedJd.is_working_copy) {
+        savedJd = await jdService.commitWorkingCopy(savedJd.id);
+        setEditingId(savedJd.id);
+        setUnsavedNewCopyId(null);
       }
 
       setIsSavingDraft(false);
       setHasUnsavedChanges(false); // Clear unsaved changes after successful save
       userSavedDraftRef.current = true; // The user kept this draft — Discard must not delete it
+      // Saved on purpose: a forked draft version is now an ordinary draft, so
+      // Discard reverts it instead of removing it.
+      if (freshForkIdRef.current) {
+        clearFreshDraftVersion(freshForkIdRef.current);
+        freshForkIdRef.current = null;
+      }
       savedContentKeyRef.current = currentContentKeyRef.current;
       setLeaveCheckpoint(savedJd, 'your last Save as Draft');
 
@@ -8678,146 +8828,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* POSSIBLY MISSED. JD phrases that ended up in no list. Every other Step 2
-                  note hangs off an item that survived extraction; a requirement that did
-                  not survive had nothing to hang off, so it was the one loss the tree could
-                  never show - "server-side application development" simply was not there,
-                  and nothing said so. Shown first, because it is the only thing on this
-                  screen that reports something ABSENT rather than explaining something
-                  present. */}
-              {(() => {
-                // A phrase the recruiter has since ADDED is not missing any more - but
-                // the entry stays in the trail, so deleting that skill brings the flag
-                // back. Only "Dismiss" removes it for good.
-                const missed = (extractedData.mergeTrail || []).filter(
-                  e => e.source === 'possibly-missed'
-                    && !onScreenWordings.has(String(e.removed?.[0] || '').trim().toLowerCase()),
-                );
-                if (missed.length === 0) return null;
-                // One entry per JD line, holding every phrase that came from it.
-                const bySource = new Map<string, typeof missed>();
-                for (const e of missed) {
-                  const src = e.removed_sources?.[0] || '';
-                  bySource.set(src, [...(bySource.get(src) || []), e]);
-                }
-                const groups = [...bySource.entries()];
-                const shownGroups = showAllMissed ? groups : groups.slice(0, MISSED_SOURCE_PREVIEW);
-                return (
-                  <div className="mb-6 rounded-lg border border-warning-line bg-warning-subtle/60 p-3 sm:p-4">
-                    <div className="flex items-start gap-2 mb-2">
-                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
-                          Possibly missed from the JD ({missed.length})
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-slate-400">
-                          These phrases appear in the JD&apos;s requirements but are not in any list below. Add the ones that matter for this role.
-                        </p>
-                      </div>
-                    </div>
-                    {/* GROUPED BY THE JD LINE THEY CAME FROM.
-                        One bullet can yield several phrases, and a flat list repeated
-                        that same quotation under every one of them - five identical
-                        "From the JD: Experience in Defect Management, including..." lines
-                        in a row, each followed by three text links. The quotation is the
-                        longest thing on the row and the only thing they had in common, so
-                        it is now said once per source and the phrases sit under it as
-                        chips. */}
-                    <div className="space-y-3 pl-6">
-                      {shownGroups.map(([source, items]) => (
-                        <div key={source || items[0].removed[0]}>
-                          {source && (
-                            <p className="text-2xs text-gray-500 dark:text-slate-500 italic mb-1 break-words">
-                              From the JD: &ldquo;{source}&rdquo;
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-1.5">
-                            {items.map((e) => {
-                              const phrase = e.removed[0];
-                              const suggestNice = e.list === 'nice_to_have_skills';
-                              const primary: MissedTarget = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
-                              return (
-                                <span
-                                  key={phrase}
-                                  className="inline-flex items-center gap-1.5 rounded-full border border-warning-line bg-white dark:bg-slate-900 pl-2.5 pr-1 py-1"
-                                >
-                                  <span className="text-sm text-gray-800 dark:text-slate-200">
-                                    {sentenceCaseForList(phrase, 'must_have_skills')}
-                                  </span>
-                                  {!isRegenerating && (
-                                    <>
-                                      {/* ONE menu, all four lists. Two buttons could only
-                                          reach the two skills lists, and these phrases are
-                                          as often requirement sentences as skill names -
-                                          "Team Player: Ability to work collaboratively
-                                          within a team environment" belongs in Additional
-                                          Requirements, and there was no way to put it
-                                          there without retyping it. */}
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <button
-                                            type="button"
-                                            aria-label={`Add "${phrase}" to a list`}
-                                            title="Choose where this belongs"
-                                            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-2xs font-medium text-brand-blue hover:bg-brand-blue/10"
-                                          >
-                                            <Plus className="w-3 h-3" />
-                                            Add
-                                            <ChevronDown className="w-3 h-3" />
-                                          </button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="start" className="w-64">
-                                          {MISSED_TARGETS.map(t => (
-                                            <DropdownMenuItem
-                                              key={t.category}
-                                              onClick={() => handleResolvePossiblyMissed(phrase, t.category)}
-                                              className="text-xs"
-                                            >
-                                              <span className={MENU_ITEM_SCALE_CLASS}>{t.label}</span>
-                                              {/* The JD said where it read this - under a
-                                                  "preferred" heading or not - so the
-                                                  likely list is marked rather than
-                                                  chosen for the recruiter. */}
-                                              {t.category === primary && (
-                                                <span className="ml-auto pl-2 text-2xs text-gray-400">suggested</span>
-                                              )}
-                                            </DropdownMenuItem>
-                                          ))}
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResolvePossiblyMissed(phrase, null)}
-                                        aria-label="Dismiss"
-                                        title="Not needed for this role"
-                                        className="rounded-full p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </>
-                                  )}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {groups.length > MISSED_SOURCE_PREVIEW && (
-                      <button
-                        type="button"
-                        onClick={() => setShowAllMissed(v => !v)}
-                        className="ml-6 mt-2 text-2xs font-medium text-brand-blue hover:underline"
-                      >
-                        {showAllMissed
-                          ? 'Show fewer'
-                          : `Show all ${groups.length} JD lines`}
-                      </button>
-                    )}
-                  </div>
-                );
-              })()}
-
               {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Column 1: Must-Have Skills */}
@@ -9168,6 +9178,146 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 </div>
               </div>
+
+              {/* POSSIBLY MISSED. JD phrases that ended up in no list. Every other Step 2
+                  note hangs off an item that survived extraction; a requirement that did
+                  not survive had nothing to hang off, so it was the one loss the tree could
+                  never show - "server-side application development" simply was not there,
+                  and nothing said so. Sits directly under the four lists (MHS, NHS, MHAR,
+                  NHAR) - its Add menu files a phrase into one of them, so it reads as
+                  their follow-up. */}
+              {(() => {
+                // A phrase the recruiter has since ADDED is not missing any more - but
+                // the entry stays in the trail, so deleting that skill brings the flag
+                // back. Only "Dismiss" removes it for good.
+                const missed = (extractedData.mergeTrail || []).filter(
+                  e => e.source === 'possibly-missed'
+                    && !onScreenWordings.has(String(e.removed?.[0] || '').trim().toLowerCase()),
+                );
+                if (missed.length === 0) return null;
+                // One entry per JD line, holding every phrase that came from it.
+                const bySource = new Map<string, typeof missed>();
+                for (const e of missed) {
+                  const src = e.removed_sources?.[0] || '';
+                  bySource.set(src, [...(bySource.get(src) || []), e]);
+                }
+                const groups = [...bySource.entries()];
+                const shownGroups = showAllMissed ? groups : groups.slice(0, MISSED_SOURCE_PREVIEW);
+                return (
+                  <div className="mb-6 rounded-lg border border-warning-line bg-warning-subtle/60 p-3 sm:p-4">
+                    <div className="flex items-start gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                          Possibly missed from the JD ({missed.length})
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400">
+                          These phrases appear in the JD&apos;s requirements but are not in any list above. Add the ones that matter for this role.
+                        </p>
+                      </div>
+                    </div>
+                    {/* GROUPED BY THE JD LINE THEY CAME FROM.
+                        One bullet can yield several phrases, and a flat list repeated
+                        that same quotation under every one of them - five identical
+                        "From the JD: Experience in Defect Management, including..." lines
+                        in a row, each followed by three text links. The quotation is the
+                        longest thing on the row and the only thing they had in common, so
+                        it is now said once per source and the phrases sit under it as
+                        chips. */}
+                    <div className="space-y-3 pl-6">
+                      {shownGroups.map(([source, items]) => (
+                        <div key={source || items[0].removed[0]}>
+                          {source && (
+                            <p className="text-2xs text-gray-500 dark:text-slate-500 italic mb-1 break-words">
+                              From the JD: &ldquo;{source}&rdquo;
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {items.map((e) => {
+                              const phrase = e.removed[0];
+                              const suggestNice = e.list === 'nice_to_have_skills';
+                              const primary: MissedTarget = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
+                              return (
+                                <span
+                                  key={phrase}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-warning-line bg-white dark:bg-slate-900 pl-2.5 pr-1 py-1"
+                                >
+                                  <span className="text-sm text-gray-800 dark:text-slate-200">
+                                    {sentenceCaseForList(phrase, 'must_have_skills')}
+                                  </span>
+                                  {!isRegenerating && (
+                                    <>
+                                      {/* ONE menu, all four lists. Two buttons could only
+                                          reach the two skills lists, and these phrases are
+                                          as often requirement sentences as skill names -
+                                          "Team Player: Ability to work collaboratively
+                                          within a team environment" belongs in Additional
+                                          Requirements, and there was no way to put it
+                                          there without retyping it. */}
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button
+                                            type="button"
+                                            aria-label={`Add "${phrase}" to a list`}
+                                            title="Choose where this belongs"
+                                            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-2xs font-medium text-brand-blue hover:bg-brand-blue/10"
+                                          >
+                                            <Plus className="w-3 h-3" />
+                                            Add
+                                            <ChevronDown className="w-3 h-3" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-64">
+                                          {MISSED_TARGETS.map(t => (
+                                            <DropdownMenuItem
+                                              key={t.category}
+                                              onClick={() => handleResolvePossiblyMissed(phrase, t.category)}
+                                              className="text-xs"
+                                            >
+                                              <span className={MENU_ITEM_SCALE_CLASS}>{t.label}</span>
+                                              {/* The JD said where it read this - under a
+                                                  "preferred" heading or not - so the
+                                                  likely list is marked rather than
+                                                  chosen for the recruiter. */}
+                                              {t.category === primary && (
+                                                <span className="ml-auto pl-2 text-2xs text-gray-400">suggested</span>
+                                              )}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResolvePossiblyMissed(phrase, null)}
+                                        aria-label="Dismiss"
+                                        title="Not needed for this role"
+                                        className="rounded-full p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </>
+                                  )}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {groups.length > MISSED_SOURCE_PREVIEW && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllMissed(v => !v)}
+                        className="ml-6 mt-2 text-2xs font-medium text-brand-blue hover:underline"
+                      >
+                        {showAllMissed
+                          ? 'Show fewer'
+                          : `Show all ${groups.length} JD lines`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
             </div>
 
@@ -11655,8 +11805,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <Button
                   variant="secondary"
                   onClick={() => handleSaveDraft()}
-                  disabled={isSavingDraft || isJDInUse}
-                  title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
+                  disabled={isSavingDraft || isJDInUse || nothingToSave}
+                  title={isJDInUse ? 'This JD is in use and cannot be modified' : nothingToSave ? 'No changes to save' : ''}
                 >
                   {isSavingDraft ? (
                     <>
@@ -11755,12 +11905,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       <LeaveJDDialog
         open={showUnsavedDialog}
         jobCode={leaveJobCode}
+        versionNumber={leaveCheckpointMeta?.versionNumber ?? effectiveEditingJD?.version_number ?? 1}
         jobTitle={jobTitle.trim() || undefined}
         discardTarget={leaveCheckpointMeta?.label ?? null}
-        nothingSavedYet={!editingId}
+        nothingSavedYet={!editingId || isUnsavedNewCopy}
         deleteBlockedReason={leaveDeleteBlockedReason}
+        hideDelete={leaveCheckpointMeta?.isFreshFork === true || isUnsavedNewCopy}
+        isPublishedJD={leaveIsPublishedJD}
+        currentStepLabel={step === 'create' ? 'Step 1 (Create)' : step === 'extract' ? 'Step 2 (Extract)' : 'Step 3 (Review)'}
         busy={leaveBusy}
         onCancel={handleCancelDialog}
+        onSave={handleLeaveSave}
         onDiscard={handleLeaveDiscard}
         onDelete={handleLeaveDelete}
       />

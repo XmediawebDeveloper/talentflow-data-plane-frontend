@@ -109,13 +109,13 @@ const hasAnyActionSelected = (selectedCodes: Set<string>, category: CustomPermis
 };
 
 const fieldClassName =
-  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm max-sm:text-[13px] text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
 // Same field, in its invalid state — a full replacement rather than extra classes
 // appended to `fieldClassName`, so the red border/ring can't lose a Tailwind
 // specificity tie against the gray/blue ones it replaces.
 const fieldErrorClassName =
-  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm max-sm:text-[13px] text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
 const getErrorStatus = (error: unknown): number | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
@@ -457,6 +457,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         <AppModal
           open
           size="lg"
+          mobileSheet
           zIndexClass="z-50"
           onCancel={handleClose}
           cancelDisabled={isSaving}
@@ -464,12 +465,12 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           title="Edit Role"
           subtitle={role?.name}
           headerExtra={role?.is_system ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-2xs font-medium text-white ring-1 ring-white/25">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white ring-1 ring-white/25">
               <Lock className="h-3 w-3" /> System role
             </span>
           ) : undefined}
           footerStart={hasUnsaved ? (
-            <span className="hidden sm:inline-flex items-center gap-1.5 text-2xs sm:text-xs font-medium text-brand-orange">
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-brand-orange">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand-orange" />
               Unsaved changes
             </span>
@@ -489,7 +490,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
             <div className="space-y-4 sm:space-y-5">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Name</label>
+                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Role Name</label>
                   <Input
                     value={role.name}
                     onChange={(e) => setRole({ ...role, name: e.target.value.toUpperCase() })}
@@ -500,13 +501,13 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   {showNameError && <span className="mt-1.5 block text-xs font-medium text-destructive">{nameError}</span>}
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Role Code</label>
+                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Role Code</label>
                   <Input value={role.code} disabled />
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Description</label>
+                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>
                   <Input
                     value={role.description || ''}
                     onChange={(e) => setRole({ ...role, description: e.target.value })}
@@ -514,11 +515,11 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1.5">Copy permissions from</label>
+                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Copy permissions from</label>
                   <select
                     value={role.parent_role_id || ''}
                     onChange={(e) => handleParentRoleChange(e.target.value)}
-                    className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/40 focus:ring-2 focus:ring-brand-blue/20"
+                    className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/40 focus:ring-2 focus:ring-brand-blue/20"
                   >
                     <option value="">None</option>
                     {roles.filter((r) => r.id !== role.id).map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
@@ -594,7 +595,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         {!embedded && (
           <button
             onClick={handleClose}
-            className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-brand-blue"
+            className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm max-sm:text-[13px] font-medium text-gray-600 transition-colors hover:bg-white hover:text-brand-blue"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Role Management
@@ -608,7 +609,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           actions={
             <div className="flex flex-col items-start gap-2 sm:items-end">
               {role.is_system && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/10 px-2.5 py-1 text-xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                   <Lock className="h-3 w-3" />
                   System role
                 </span>
@@ -616,11 +617,11 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
                 <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
                   <div className="text-xs text-gray-500">Assigned users</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{role.user_count || 0}</div>
+                  <div className="mt-1 text-xl max-sm:text-lg font-semibold text-gray-900">{role.user_count || 0}</div>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
                   <div className="text-xs text-gray-500">Selected permissions</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
+                  <div className="mt-1 text-xl max-sm:text-lg font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
                 </div>
               </div>
             </div>
@@ -630,14 +631,14 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
-              <h2 className="text-lg font-semibold text-gray-900">Role Details</h2>
-              <p className="text-sm text-gray-500">Adjust metadata, inheritance, and permissions without leaving the current workflow.</p>
+              <h2 className="text-base max-sm:text-sm font-semibold text-gray-900">Role Details</h2>
+              <p className="text-sm max-sm:text-[13px] text-gray-500">Adjust metadata, inheritance, and permissions without leaving the current workflow.</p>
             </div>
 
             <div className="space-y-8 p-5 sm:p-6">
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Role Name</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Role Name</span>
                   <input
                     type="text"
                     value={role.name}
@@ -653,13 +654,13 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Role Code</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Role Code</span>
                   <input type="text" value={role.code} className={fieldClassName} disabled />
                 </label>
               </div>
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-700">Description</span>
+                <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Description</span>
                 <textarea
                   value={role.description || ''}
                   onChange={(e) => setRole({ ...role, description: e.target.value })}
@@ -672,7 +673,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               <div className="grid gap-5 md:grid-cols-2">
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Copy permissions from</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Copy permissions from</span>
                   <select
                     value={role.parent_role_id || ''}
                     onChange={(e) => handleParentRoleChange(e.target.value)}
@@ -693,8 +694,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
               <div>
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Permissions</h3>
-                  <p className="text-sm text-gray-500">Update the role’s access surface and review the selected scopes before saving.</p>
+                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">Permissions</h3>
+                  <p className="text-sm max-sm:text-[13px] text-gray-500">Update the role’s access surface and review the selected scopes before saving.</p>
                 </div>
                 {renderPermissionCategories()}
               </div>
@@ -726,36 +727,36 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                 </span>
                 <div>
-                  <h3 className="text-base font-semibold text-gray-900">Role Snapshot</h3>
-                  <p className="mt-1 text-sm text-gray-500">A compact view of the current role configuration.</p>
+                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">Role Snapshot</h3>
+                  <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">A compact view of the current role configuration.</p>
                 </div>
               </div>
 
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Role Name</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{role.name}</div>
+                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">{role.name}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Role Code</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{role.code}</div>
+                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">{role.code}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">
+                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">
                     {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Selected Permissions</div>
-                  <div className="mt-1 text-sm font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
+                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
                 </div>
               </div>
             </section>
 
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-              <h3 className="text-base font-semibold text-gray-900">Guidance</h3>
-              <div className="mt-4 space-y-3 text-sm text-gray-600">
+              <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">Guidance</h3>
+              <div className="mt-4 space-y-3 text-sm max-sm:text-[13px] text-gray-600">
                 <div className="rounded-xl bg-brand-blue/[0.04] px-4 py-3 ring-1 ring-brand-blue/10">
                   System roles can still be reviewed and tuned, but key identity fields stay protected.
                 </div>

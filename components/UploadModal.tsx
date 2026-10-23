@@ -1267,8 +1267,8 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                     <div className="hidden sm:flex flex-shrink-0 w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg items-center justify-center">
                       <FolderPlus className="w-5 h-5 text-brand-blue" />
                     </div>
-                    <div className="grid flex-1 min-w-0 grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2">
-                      <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                    <div className="grid flex-1 min-w-0 grid-cols-[minmax(0,1fr)_auto_auto] sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2">
+                      <label className="col-span-3 sm:col-span-1 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">
                         New Folder Name
                       </label>
                         <input

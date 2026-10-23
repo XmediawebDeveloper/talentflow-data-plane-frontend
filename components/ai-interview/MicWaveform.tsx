@@ -133,7 +133,7 @@ function MicWaveformBase({
   return (
     <canvas
       ref={canvasRef}
-      style={{ width, height }}
+      style={{ width, height, maxWidth: '100%' }}
       className={className}
       aria-hidden="true"
     />

@@ -12,6 +12,7 @@ import SuccessAnimation from '@/components/ui/success-animation';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { isValidEmailFormat } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import readXlsxFile from 'read-excel-file/browser';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
@@ -695,8 +696,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   /* Add: a complete entry row joins the candidate list; a fresh empty row
      takes its place when it was the last one. */
+  /* A typed name with anything but letters and spaces. Database rows are
+     exempt: their name comes read-only from the resume, so the recruiter
+     could not correct it here. */
+  const hasInvalidName = (c: CandidateEmail) =>
+    c.source !== 'database' && !!c.name.trim() && !isValidCandidateName(c.name);
   const canAddEntry = (c: CandidateEmail) =>
-    !!c.name.trim() && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
+    !!c.name.trim() && !hasInvalidName(c) && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
   const addEntry = (id: string) => {
     setCandidates((prev) => {
       const next = prev.map((c) => (c.id === id ? { ...c, added: true } : c));
@@ -844,6 +850,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       toast.error('Please fill in candidate name and email first');
       return;
     }
+    if (hasInvalidName(candidate)) {
+      toast.error(NAME_FORMAT_ERROR);
+      return;
+    }
     if (!isValidEmail(candidate.email)) {
       toast.error('Please enter a valid email address');
       return;
@@ -950,6 +960,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
       if (candidatesWithData.length === 0) {
         toast.warning('Please add at least one candidate with name and email');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate all names
+      const invalidNames = candidatesWithData.filter(hasInvalidName);
+      if (invalidNames.length > 0) {
+        toast.error(`Invalid name(s): ${invalidNames.map(c => c.name.trim()).join(', ')}. ${NAME_FORMAT_ERROR}`);
         setIsSubmitting(false);
         return;
       }
@@ -1173,13 +1191,14 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   //     is incomplete, has an invalid email, or duplicates another row. A
   //     fully empty row is ignored, not an error.
   const hasAtLeastOneValid = sendCandidates.some(
-    (c) => c.name.trim() && c.email.trim() && isValidEmail(c.email),
+    (c) => c.name.trim() && !hasInvalidName(c) && c.email.trim() && isValidEmail(c.email),
   );
   const hasBlockingRowError = sendCandidates.some((c) => {
     const inUse = c.name.trim() || c.email.trim();
     if (!inUse) return false;
     return (
       !c.name.trim() ||
+      hasInvalidName(c) ||
       !c.email.trim() ||
       !isValidEmail(c.email) ||
       sendCandidates.some((o) => o.id !== c.id && o.email.trim().toLowerCase() === c.email.trim().toLowerCase())
@@ -1665,10 +1684,18 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full h-10 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40 focus:border-transparent ${
-                                candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
+                              aria-invalid={hasInvalidName(candidate) ? 'true' : undefined}
+                              className={`w-full h-10 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset ${
+                                candidate.source === 'database'
+                                  ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
+                                  : hasInvalidName(candidate)
+                                    ? 'border-destructive-line focus:ring-destructive-line'
+                                    : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                               }`}
                             />
+                            {hasInvalidName(candidate) && (
+                              <p className="text-xs text-destructive mt-1">{NAME_FORMAT_ERROR}</p>
+                            )}
                           </div>
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>

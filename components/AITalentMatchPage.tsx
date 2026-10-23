@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -50,6 +50,7 @@ import { JobOpeningPrimaryItems } from '@/components/jobs/JobOpeningSummary';
 import type { Job as SharedJob } from '@/lib/types/types';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
+import NameAvatar from '@/components/ui/name-avatar';
 import ListPagination from './ListPagination';
 import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
@@ -80,6 +81,8 @@ import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay
 import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -719,8 +722,33 @@ export default function AITalentMatchPage({
     // so the roll-up waits on the slower of the two rather than their sum.
     const scoredIdsRequest = loadAllScoredResumeIds();
     try {
+      // Every uncached session in ONE batch request (chunks of 200) — one
+      // GET /sessions/{id} per session was ~100 parallel requests that queued
+      // behind the browser's connection limit and stalled the whole page.
+      const uncached = matchHistory.filter(item => !historyCandidatesById[item.id] && item.totalMatches > 0);
+      const batched = new Map<string, MatchedCandidateWithVersions[]>();
+      if (uncached.length > 0) {
+        try {
+          const ids = uncached.map(item => item.id);
+          const chunks: string[][] = [];
+          for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+          const maps = await Promise.all(chunks.map(chunk => aiMatchService.getSessionsBatch(chunk)));
+          for (const map of maps) {
+            for (const [id, { candidates }] of map) batched.set(id, candidates as MatchedCandidateWithVersions[]);
+          }
+          if (batched.size > 0) {
+            setHistoryCandidatesById(prev => ({ ...prev, ...Object.fromEntries(batched) }));
+          }
+        } catch (error) {
+          // Older backend without the batch route: fall back to per-session below.
+          console.warn('[AITalentMatch] Session batch failed, falling back to per-session fetch:', error);
+        }
+      }
       const perJob = await Promise.all(
-        matchHistory.map(async (item) => ({ item, candidates: await loadHistoryCandidates(item, { silent }) }))
+        matchHistory.map(async (item) => ({
+          item,
+          candidates: batched.get(item.id) ?? await loadHistoryCandidates(item, { silent }),
+        }))
       );
 
       const byKey = new Map<string, CandidateMatchRow>();
@@ -4122,65 +4150,45 @@ export default function AITalentMatchPage({
         {/* The candidate roll-up is an in-page view on this same route, so the
             trail stays at the module level — no extra step is added. */}
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />
-        {/* Header */}
-        <div className="mb-5">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-            {onBack && (
-              <button
-                onClick={onBack}
-                className="p-2 hover:bg-white/80 rounded-lg transition-colors flex items-center justify-center shadow-sm border border-gray-200 dark:border-slate-700 self-start"
-                aria-label="Back to Dashboard" title="Back to Dashboard"
+        {/* Header — shared PageHeader (User Management uniform) */}
+        <PageHeader
+          icon={<History className="h-5 w-5" />}
+          title="AI Talent Match - Matched Jobs"
+          description="Review jobs with AI-matched candidates and their results"
+          actions={
+            <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+              {onBack && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onBack}
+                  className="px-2"
+                  aria-label="Back to Dashboard" title="Back to Dashboard"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canRunAiMatch) {
+                      return;
+                  }
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setSelectedCandidates([]);
+                  router.push('/recruitment/ai-talent-match', { scroll: false });
+                }}
+                aria-disabled={!canRunAiMatch}
+                title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
+                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
+                icon={<Sparkles className="w-4 h-4" />}
               >
-                <ArrowLeft className="w-4 h-4 text-gray-700 dark:text-slate-300" />
-              </button>
-            )}
-            <div className="h-9 w-9 bg-brand-blue rounded-lg flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-              <History className="w-4 h-4 text-white" />
+                Run AI Match
+              </Button>
             </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 truncate">AI Talent Match - Matched Jobs</h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">Review jobs with AI-matched candidates and their results</p>
-            </div>
-            
-            {/* Units Display - Commented out (static data)
-            {availableUnits !== null && (
-              <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 border-2 border-gray-300">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold text-white">{availableUnits.toLocaleString()}</span>
-                      <span className="text-xs text-gray-100">units</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            */}
-            
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (!canRunAiMatch) {
-                  return;
-                }
-                setViewMode('new');
-                setSelectedJob('');
-                setSelectedCandidates([]);
-                router.push('/recruitment/ai-talent-match', { scroll: false });
-              }}
-              aria-disabled={!canRunAiMatch}
-              title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
-              className={`w-full sm:w-auto ${!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Run AI Match
-            </Button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Stats Cards */}
         {/* Default 4-column grid (same as /recruitment/job-openings) keeps the
@@ -5463,9 +5471,7 @@ export default function AITalentMatchPage({
                         selectionActive={selectedAllResumeKeys.size > 0}
                       />
                       <div className="flex items-start gap-2.5">
-                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
-                          {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                        </div>
+                        <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
                           <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || '—'}</p>
@@ -5608,9 +5614,7 @@ export default function AITalentMatchPage({
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-3">
-                              <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium">
-                                {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </div>
+                              <NameAvatar name={row.name} fallback={row.email} size="md" />
                               <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                                 {row.name || 'Unknown'}
                               </span>
@@ -6082,12 +6086,11 @@ export default function AITalentMatchPage({
         </div>
 
         {/* History List */}
-        {bandHistory.length > 0 ? (
-          <>
-            {/* List: one job per row. Grid: cards two / three across; an
-                opened card spans the full row so its candidates have room. */}
-            <div className={jobListDisplayMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-stretch' : 'space-y-3'}>
-            {pageHistory.map((item) => {
+        {bandHistory.length > 0 ? (() => {
+          /* One page of jobs computed once, then rendered as cards (below xl,
+             and in Grid mode) or the User-Management-uniform table (List at xl+).
+             Each item returns both its card and its table row. */
+          const rowNodes = pageHistory.map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
               // Version history is cached/keyed by the human JD-xxx code, not
               // this row's id — every republished version of the same job
@@ -6291,11 +6294,12 @@ export default function AITalentMatchPage({
                     </p>
                   ) : (
                     <>
-                      {jobListDisplayMode === 'grid' ? (
-                        /* Grid: the page's List / Grid toggle reaches the opened
-                           job too — one card per candidate, the table row's
-                           content. A scored card opens / closes its score below
-                           it (spanning the row), as the table row does. */
+                      {(() => {
+                        /* Candidate cards — one per candidate (the table row's
+                           content). Shown in Grid mode, and ALWAYS below xl: the
+                           list table needs horizontal scrolling that cramps on
+                           phones/tablets, so the table only renders at xl+. */
+                        const candCards = (
                         <div className="space-y-2">
                           <button
                             type="button"
@@ -6392,7 +6396,8 @@ export default function AITalentMatchPage({
                             })}
                           </div>
                         </div>
-                      ) : (
+                        );
+                        const candTable = (
                       <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                         {/* The rows scroll inside this box; the header row stays put. */}
                         <div className="max-h-[360px] overflow-auto">
@@ -6510,7 +6515,14 @@ export default function AITalentMatchPage({
                           </table>
                         </div>
                       </div>
-                      )}
+                        );
+                        return (
+                          <>
+                            <div className="xl:hidden">{candCards}</div>
+                            <div className="hidden xl:block">{jobListDisplayMode === 'grid' ? candCards : candTable}</div>
+                          </>
+                        );
+                      })()}
                       <ListPagination
                         compact
                         currentPage={candidateJobsPageOf(pagingKey).page}
@@ -6525,7 +6537,7 @@ export default function AITalentMatchPage({
                 </div>
               ) : null;
 
-              return (
+              return { key: item.id, card: (
                 <div
                   key={item.id}
                   /* No lift on hover: the card grows when opened inline, and
@@ -6667,7 +6679,10 @@ export default function AITalentMatchPage({
                       </div>
                     </div>
 
-                    <div className="flex items-start justify-end gap-6 flex-shrink-0 w-full sm:w-auto">
+                    {/* Below sm: rating stack + actions stack vertically (full
+                        width) so the justify-end row can't overflow the card's
+                        left edge on a phone; sm+ keeps the side-by-side layout. */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto">
                       {/* Rating 10 / 9 – 7 / Below 7, one below another — the
                           Job Descriptions cards' Applicants / Assessed /
                           Interviewed stack, in the rating colours. Under a
@@ -6818,8 +6833,140 @@ export default function AITalentMatchPage({
                     </div>
                   )}
                 </div>
-              );
-            })}
+              ), row: (
+                /* List mode (xl+) — User-Management-uniform table row + an
+                   expandable full-width row holding this job's candidates. */
+                <Fragment key={item.id}>
+                  <tr
+                    className={`transition-colors ${hasMatches ? 'cursor-pointer' : ''} ${isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : isJobExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : 'hover:bg-brand-blue/5'}`}
+                    onClick={() => { if (hasMatches) toggleRow(); }}
+                    aria-expanded={hasMatches ? isJobExpanded : undefined}
+                  >
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      {hasMatches ? (
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleSelectJob(jobKey); }} aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false} aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded">
+                          {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
+                        </button>
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-300 dark:text-slate-600" />
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      {jobData?.jobId ? <JobIdBadge className="inline-flex h-7 items-center">{jobData.jobId}</JobIdBadge> : <span className="text-xs text-gray-400 dark:text-slate-500">—</span>}
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); openResults(); }} className="text-sm font-semibold text-gray-900 dark:text-slate-50 hover:text-brand-blue transition-colors truncate max-w-[14rem] text-left" title={item.jobTitle}>
+                          {item.jobTitle}
+                        </button>
+                        {jobData?.currentVersion && (
+                          <span className="inline-flex h-6 items-center px-2 rounded-full text-2xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />v{jobData.currentVersion}
+                          </span>
+                        )}
+                        {jobData && (() => {
+                          const raw = jobData.status || 'published';
+                          const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), jobData.publishCount);
+                          if (label === 'Published' || label === 'Republished') return null;
+                          const tone = getStatusConfig(label);
+                          return (
+                            <span className={`inline-flex h-6 items-center px-2 rounded-full text-2xs ${tone.bg} ${tone.text} border ${tone.border} gap-1.5 flex-shrink-0`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />{label}
+                            </span>
+                          );
+                        })()}
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }} className="h-6 w-6 p-0 flex-shrink-0" aria-label="Match History" title="Match History">
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <span className="text-sm text-gray-600 dark:text-slate-400">{item.matchedByName || 'System'}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}
+                      </div>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{item.totalMatches}</span>
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      {!hasMatches ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" />No match</span>
+                      ) : !loaded ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap"><FileText className="w-3.5 h-3.5" />{item.totalMatches}</span>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {([
+                            { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                            { id: 'partial' as const, label: 'Rating 9–7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                            { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                          ]).map(({ id, label, count, Icon, cls }) => {
+                            const muted = !!candidateRatingBand && id !== candidateRatingBand;
+                            return (
+                              <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={label}>
+                                <Icon className="w-3.5 h-3.5" /><span className="tabular-nums">{count}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openResults(); }} aria-label="View Details" title="View Details" className="h-8 w-8 p-0">
+                          <FileText className="w-4 h-4" />
+                        </Button>
+                        {hasMatches && (
+                          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8 p-0">
+                            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {hasMatches && isJobExpanded && (
+                    <tr className="bg-gray-50/60 dark:bg-slate-800/20">
+                      <td colSpan={8} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">{inlineCandidatesPanel}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              ) };
+            });
+          return (
+            <>
+            {/* Below xl: rich cards (the 8-column table would need horizontal
+                scrolling). xl and up: honor the List / Grid toggle. */}
+            <div className="xl:hidden space-y-3">
+              {rowNodes.map(n => n.card)}
+            </div>
+            <div className="hidden xl:block">
+              {jobListDisplayMode === 'grid' ? (
+                <div className="grid grid-cols-2 2xl:grid-cols-3 gap-3 items-stretch">
+                  {rowNodes.map(n => n.card)}
+                </div>
+              ) : (
+                <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                      <tr>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Job</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matched By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matched</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matches</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Rating</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                      {rowNodes.map(n => n.row)}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             <ListPagination
               currentPage={historyCurrentPage}
@@ -6829,50 +6976,35 @@ export default function AITalentMatchPage({
               onItemsPerPageChange={setHistoryItemsPerPage}
               itemLabel="jobs"
             />
-          </>
-        ) : matchHistory.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                <History className="w-5 h-5 text-brand-blue" />
-              </div>
-              <h3 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 mb-2">No Matching History Yet</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-                Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit.
-              </p>
-              <Button
-                variant="primary"
-                onClick={() => {
+            </>
+          );
+        })() : matchHistory.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <EmptyState
+              icon={History}
+              title="No Matching History Yet"
+              description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
+              action={{
+                label: 'Run AI Match Now',
+                onClick: () => {
                   if (!canRunAiMatch) {
                     return;
                   }
                   setViewMode('new');
                   setSelectedJob('');
                   router.push('/recruitment/ai-talent-match', { scroll: false });
-                }}
-                aria-disabled={!canRunAiMatch}
-                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
-                title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
-              >
-                <Sparkles className="w-4 h-4" />
-                Run AI Match Now
-              </Button>
-            </div>
+                },
+              }}
+            />
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                <Search className="w-5 h-5 text-brand-blue" />
-              </div>
-              <h3 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 mb-2">No Results Found</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
-                No matched jobs match your current filters. Try adjusting your search criteria.
-              </p>
-              <Button variant="secondary" size="md" onClick={clearHistoryFilters} icon={<X className="w-4 h-4" />}>
-                Clear All Filters
-              </Button>
-            </div>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <EmptyState
+              icon={Search}
+              title="No Results Found"
+              description="No matched jobs match your current filters. Try adjusting your search criteria."
+              action={{ label: 'Clear All Filters', onClick: clearHistoryFilters }}
+            />
           </div>
         )}
         </div>
@@ -7138,7 +7270,7 @@ export default function AITalentMatchPage({
                           boundary out past them; the matching negative margin
                           cancels the padding's effect on layout, so the row's
                           rendered position is unchanged. */}
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:overflow-x-auto py-1 -my-1">
+                      <div className="flex flex-col lg:flex-row items-stretch lg:items-end gap-2 lg:overflow-x-auto py-1 -my-1">
                         <div className="flex-1 min-w-[11rem]">
                           <label className={filterLabelClass}>Search</label>
                           <div className="relative">
@@ -7932,14 +8064,6 @@ export default function AITalentMatchPage({
                 setFilterExperienceMax('');
               }}
               className="mb-0"
-              countBadge={
-                <ListCountBadge
-                  filtered={filteredCandidates.length}
-                  total={matchedCandidates.length}
-                  noun="candidate"
-                  selected={selectedCandidates.length}
-                />
-              }
               filterPanel={
                 <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4">
                   <div className="flex flex-wrap gap-4">
@@ -8018,129 +8142,150 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
               }
-              /* Customize Columns right after More Filters — list view only
-                 (the grid has no columns), hidden on the narrowest screens
-                 like Resume Scoring's. */
-              afterFiltersActions={resultsDisplayMode === 'list' ? (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setShowResultsColumnModal(true)}
-                  icon={<SlidersHorizontal className="w-4 h-4" />}
-                  className="hidden sm:flex whitespace-nowrap"
-                >
-                  <span className="hidden md:inline">Customize Columns</span>
-                  <span className="md:hidden">Columns</span>
-                </Button>
-              ) : undefined}
             >
-              {/* With a selection, Score / Invite lead the actions, set apart
-                  from the filter controls by a divider. */}
-              {selectedCandidates.length > 0 && (
-                <>
-                  <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
-                  <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => {
-                        if (!canRunScoring) {
-                          return;
-                        }
-                        // Review first: the candidates, their versions and
-                        // the job, in the shared Score Resume dialog.
-                        void handleSubmitToScoring();
-                      }}
-                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                      aria-disabled={!canRunScoring}
-                      title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
-                      icon={<ClipboardList className="w-3.5 h-3.5" />}
-                      className={`whitespace-nowrap ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      Score ({selectedCandidates.length})
-                    </Button>
-                  {/* "Invite" replaces the old standalone Assessment button —
-                      a dropdown of the two invite destinations, so a bulk
-                      AI Interview invite has the same entry point the row
-                      menu already offers per candidate. */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />} className="whitespace-nowrap">
-                        Invite ({selectedCandidates.length})
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                      {(() => {
-                        /* The job on screen — an invite for a job with no AI
-                           Assessment / AI Interview yet is greyed, with
-                           "＋ Create …" under it (create → back → invite). */
-                        const resultsSessionId = selectedHistoryItem?.id ?? historyItemForSelectedJob?.id ?? '';
-                        const rows = matchedCandidates
-                          .filter(c => selectedCandidates.includes(c.id))
-                          .map(c => toInviteRow(resultsSessionId, selectedJob, c));
-                        const target = [inviteTargetJobOf(selectedJob, resultsJobTitle)];
-                        const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
-                          setCreateInviteTarget({ kind, job, rows, view: 'results' });
-                        return (
-                          <>
-                            {renderInviteTargetItems({
-                              kind: 'assessment',
-                              target: resolveInviteTargetState('assessment', target, () => true),
-                              label: 'Create / Send Assessment',
-                              itemClass: actionsMenuItemClass,
-                              allowed: canInviteAssessmentFromMatch,
-                              deniedReason: ASSESSMENT_INVITE_DENIED,
-                              onInvite: (e) => {
-                                if (!canInviteAssessmentFromMatch) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                openInviteForRows('assessment', selectedJob, rows);
-                              },
-                              onCreate: create('assessment'),
-                            })}
-                            {renderInviteTargetItems({
-                              kind: 'interview',
-                              target: resolveInviteTargetState('interview', target, () => true),
-                              label: 'Create / Send AI Interview',
-                              itemClass: actionsMenuItemClass,
-                              allowed: canInviteAIInterviewFromMatch,
-                              deniedReason: AI_INTERVIEW_INVITE_DENIED,
-                              onInvite: (e) => {
-                                if (!canInviteAIInterviewFromMatch) {
-                                  e.preventDefault();
-                                  return;
-                                }
-                                openInviteForRows('interview', selectedJob, rows);
-                              },
-                              onCreate: create('interview'),
-                            })}
-                          </>
-                        );
-                      })()}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  if (!canExport) {
-                    return;
-                  }
-                  if (candidatesToExport.length === 0) {
-                    toast.error('No candidates to export');
-                    return;
-                  }
-                  setShowCandidateExportModal(true);
-                }}
-                aria-disabled={!canExport}
-                title={!canExport ? 'You do not have permission to export' : undefined}
-                icon={<FileDown className="w-4 h-4" />}
-                className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                Export
-              </Button>
+              {/* One Actions dropdown (matching Resume Scoring's bulk bar):
+                  Score, Export and Invite live inside it — shown only once
+                  candidates are ticked — instead of three separate buttons. */}
+              {selectedCandidates.length > 0 && (() => {
+                const resultsSessionId = selectedHistoryItem?.id ?? historyItemForSelectedJob?.id ?? '';
+                const rows = matchedCandidates
+                  .filter(c => selectedCandidates.includes(c.id))
+                  .map(c => toInviteRow(resultsSessionId, selectedJob, c));
+                const target = [inviteTargetJobOf(selectedJob, resultsJobTitle)];
+                const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
+                  setCreateInviteTarget({ kind, job, rows, view: 'results' });
+                const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
+                // Whether this job already has an AI Assessment / AI Interview
+                // set up: true → only Send applies, false → only Create applies,
+                // undefined (still loading) → neither is gated on it.
+                const asmtConfigured = inviteTargets.hasAssessment(selectedJob);
+                const intvConfigured = inviteTargets.hasAIInterview(selectedJob);
+                return (
+                  <>
+                    <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                          aria-label={`Actions for ${selectedCandidates.length} selected`}
+                        >
+                          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                          </span>
+                          Actions ({selectedCandidates.length})
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-60 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                        {/* Light grey header strip: how many the actions run on. */}
+                        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                          {selectedCandidates.length} selected
+                        </div>
+                        {/* Score — the shared Score Resume dialog for the ticked candidates. */}
+                        <DropdownMenuItem
+                          className={`${actionsMenuItemClass} ${(!canRunScoring || unitsShort) ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                          aria-disabled={!canRunScoring || undefined}
+                          disabled={canRunScoring && unitsShort}
+                          title={!canRunScoring ? 'You do not have permission to score resumes' : unitsShort ? 'Insufficient units for this selection' : undefined}
+                          onSelect={(e) => {
+                            if (!canRunScoring) { e.preventDefault(); return; }
+                            void handleSubmitToScoring();
+                          }}
+                        >
+                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
+                        </DropdownMenuItem>
+                        {/* Export — the ticked candidates. */}
+                        <DropdownMenuItem
+                          className={`${actionsMenuItemClass} ${!canExport ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                          aria-disabled={!canExport || undefined}
+                          title={!canExport ? 'You do not have permission to export' : undefined}
+                          onSelect={(e) => {
+                            if (!canExport) { e.preventDefault(); return; }
+                            if (candidatesToExport.length === 0) { toast.error('No candidates to export'); return; }
+                            setShowCandidateExportModal(true);
+                          }}
+                        >
+                          <FileDown className="w-4 h-4 text-menu-icon-download" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                        {/* Assessment — Create and Send as separate items. The one
+                            that doesn't apply to this job (already set up → can't
+                            Create; not set up → nothing to Send) is disabled. */}
+                        {(() => {
+                          const createDisabled = !canInviteAssessmentFromMatch || asmtConfigured === true;
+                          const sendDisabled = !canInviteAssessmentFromMatch || asmtConfigured === false;
+                          return (
+                            <>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={createDisabled || undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : asmtConfigured === true ? 'This job already has an assessment' : undefined}
+                                onSelect={(e) => {
+                                  if (createDisabled) { e.preventDefault(); return; }
+                                  create('assessment')(target[0]);
+                                }}
+                              >
+                                <Plus className="w-4 h-4 text-menu-icon-view" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create Assessment</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={sendDisabled || undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : asmtConfigured === false ? 'No assessment set up for this job yet' : undefined}
+                                onSelect={(e) => {
+                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  openInviteForRows('assessment', selectedJob, rows);
+                                }}
+                              >
+                                <ClipboardList className="w-4 h-4 text-menu-icon-view" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Send Assessment</span>
+                              </DropdownMenuItem>
+                            </>
+                          );
+                        })()}
+                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                        {/* AI Interview — Create and Send as separate items, same rule. */}
+                        {(() => {
+                          const createDisabled = !canInviteAIInterviewFromMatch || intvConfigured === true;
+                          const sendDisabled = !canInviteAIInterviewFromMatch || intvConfigured === false;
+                          return (
+                            <>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={createDisabled || undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : intvConfigured === true ? 'This job already has an AI interview' : undefined}
+                                onSelect={(e) => {
+                                  if (createDisabled) { e.preventDefault(); return; }
+                                  create('interview')(target[0]);
+                                }}
+                              >
+                                <Plus className="w-4 h-4 text-menu-icon-ai" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create AI Interview</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={sendDisabled || undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : intvConfigured === false ? 'No AI interview set up for this job yet' : undefined}
+                                onSelect={(e) => {
+                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  openInviteForRows('interview', selectedJob, rows);
+                                }}
+                              >
+                                <Video className="w-4 h-4 text-menu-icon-ai" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Send AI Interview</span>
+                              </DropdownMenuItem>
+                            </>
+                          );
+                        })()}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </>
+                );
+              })()}
               <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} />
             </ListToolbar>
 
@@ -8326,9 +8471,7 @@ export default function AITalentMatchPage({
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-sm text-brand-blue font-medium flex-shrink-0">
-                          {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                        </div>
+                        <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                         <div>
                           <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name || 'Unknown'}</div>
                         </div>
@@ -8527,9 +8670,7 @@ export default function AITalentMatchPage({
                         aria-label={`Select ${candidate.name || 'candidate'}`}
                         className="mt-3 rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
                       />
-                      <div className="w-11 h-11 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-sm text-brand-blue font-semibold flex-shrink-0">
-                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
+                      <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                       <div className="min-w-0 flex-1 pt-0.5">
                         <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={candidate.name || 'Unknown'}>
                           {candidate.name || 'Unknown'}
@@ -8669,9 +8810,7 @@ export default function AITalentMatchPage({
                         onClick={(e) => e.stopPropagation()}
                         className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
                       />
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-xs text-brand-blue font-medium flex-shrink-0">
-                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                      </div>
+                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
                         <div className="text-xs text-gray-500 dark:text-slate-500 truncate">

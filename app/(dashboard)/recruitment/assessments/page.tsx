@@ -9,6 +9,7 @@ import { mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
 import { Job } from '@/lib/types/types';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 export default function AssessmentsRoute() {
   const searchParams = useSearchParams();
@@ -38,7 +39,12 @@ export default function AssessmentsRoute() {
       : tabParam === 'draft' ? ('draft' as const)
         // Total Jobs — where a saved draft lands (with `?focus=`).
         : tabParam === 'jobs' ? ('jobs' as const)
-          : undefined;
+          /* The cross-assessment Candidate Results / Invitation Status tabs —
+             where a candidate's Result Details returns to (its "Assessments"
+             crumb and Back). */
+          : tabParam === 'completed-candidates' ? ('completed-candidates' as const)
+            : tabParam === 'invitation-status' ? ('invitation-status' as const)
+              : undefined;
 
   // Capture create-flow params on first mount so they survive the URL strip
   // below. Without this, the loading spinner blocks <Assessments> from mounting
@@ -55,6 +61,8 @@ export default function AssessmentsRoute() {
      during render, which is what `react-hooks/refs` objects to in the three
      lines above. */
   const [initialListTab] = useState(listTabFromUrl);
+  // Same once-initialised capture, for the render-time loading check below.
+  const [opensOnCreate] = useState(autoCreate);
   /* `?focus=<assessment id>` (a draft just saved from the create route): the
      list opens on that assessment's job row. Captured like `initialListTab`,
      before the strip below clears it; only honoured with a named tab. */
@@ -92,10 +100,7 @@ export default function AssessmentsRoute() {
         // version missing from the list lowers that maximum, which is what marks a
         // superseded version "Latest".
         const baseParams = { source: 'my-jds' as const };
-        const probe = await jdService.list({ ...baseParams, page_size: 1 });
-        const response = probe.total > probe.items.length
-          ? await jdService.list({ ...baseParams, page_size: probe.total })
-          : probe;
+        const response = await fetchAllRows((page_size, page) => jdService.list({ ...baseParams, page_size, page }));
         const realJobs: Job[] = (response.items || []).map((jd: any) => ({
           id: jd.id,
           job_id: jd.job_id,
@@ -135,7 +140,11 @@ export default function AssessmentsRoute() {
     fetchJobs();
   }, []);
 
-  if (isLoading) {
+  // Only the auto-opened Create view needs the job list before it can render.
+  // The list view fetches its own data (stats, assessments, lineages) and
+  // takes `jobs` as a supplement, so mounting it now lets those requests run
+  // alongside the JD fetch instead of queueing behind it.
+  if (isLoading && opensOnCreate) {
     // Mirrors the real page's shell (white rounded-2xl card, breadcrumb,
     // header, 5-card stats row, then list rows) instead of the old bare
     // gray-background skeleton, which popped into a completely different

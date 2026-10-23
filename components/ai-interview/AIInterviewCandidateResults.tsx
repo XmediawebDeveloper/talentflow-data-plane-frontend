@@ -1,23 +1,23 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Fragment, useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TimelineStamps from '@/components/ui/timeline-stamps';
+import NameAvatar from '@/components/ui/name-avatar';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
   SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare,
+  Square, CheckSquare, ChevronDown,
 } from 'lucide-react';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
-import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -88,6 +88,9 @@ const CANDIDATE_COLUMNS = [
   { id: 'interviewVersion', label: 'Interview Version' },
 ] as const;
 type CandidateColumnId = (typeof CANDIDATE_COLUMNS)[number]['id'];
+/* The six columns a list row shows; every other enabled column opens in the
+   row's expanded panel (the Resume Scoring list's expand pattern). */
+const PRIMARY_CANDIDATE_COLUMNS: CandidateColumnId[] = ['candidate', 'jobTitle', 'status', 'score', 'result', 'proctoring'];
 
 /** A session plus the interview it belongs to — rows here span configs. */
 type CandidateSessionRow = AIInterviewResponse & {
@@ -389,6 +392,18 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   const [showColumnModal, setShowColumnModal] = useState(false);
   const enabledColumns = columns.filter((c) => c.enabled);
   const col = (id: CandidateColumnId) => columns.some((c) => c.id === id && c.enabled);
+  /* List view: an enabled column is either in the row or in its expanded panel. */
+  const showInRow = (id: CandidateColumnId) => col(id) && PRIMARY_CANDIDATE_COLUMNS.includes(id);
+  const rowColumns = CANDIDATE_COLUMNS.filter((c) => showInRow(c.id));
+  const detailColumns = CANDIDATE_COLUMNS.filter((c) => col(c.id) && !PRIMARY_CANDIDATE_COLUMNS.includes(c.id));
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (key: string) =>
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   // Row selection for Export — rows span configs, so key by config + session.
   const rowKey = (row: CandidateSessionRow) => `${row._config_id}-${row.id}`;
@@ -681,13 +696,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
             </div>
           </div>
         }
-        countBadge={
-          <ListCountBadge
-            filtered={filteredRows.length}
-            total={rows.length}
-            noun="result"
-          />
-        }
       >
         <Button
           variant="secondary"
@@ -754,9 +762,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       selectionActive={selectedKeys.size > 0}
                     />
                     <div className="flex items-start gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
-                        {(row.candidate_name || 'U')[0].toUpperCase()}
-                      </div>
+                      <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
                           {row.candidate_name || 'Unknown'}
@@ -903,29 +909,180 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         )}
                       </button>
                     </th>
-                    {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
-                    {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
-                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
-                    {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
-                    {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
-                    {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
-                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
-                    {col('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
-                    {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
-                    {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
-                    {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
+                    {showInRow('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
+                    {showInRow('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
+                    {showInRow('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
+                    {showInRow('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
+                    {showInRow('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
+                    {showInRow('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
+                    {showInRow('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
+                    {showInRow('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
+                    {showInRow('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
+                    {showInRow('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
+                    {showInRow('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
+                    {showInRow('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {pageRows.map((row) => {
                     const risk = getProctoringRisk(row);
+                    /* Each column's cell, rendered in the row or — for the
+                       columns the row leaves out — in its expanded panel. */
+                    const cells: Record<CandidateColumnId, { className: string; content: ReactNode }> = {
+                      candidate: {
+                        className: 'px-4 py-3',
+                        content: (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="sm" />
+                              {/* Email under the name, as on Track Invites,
+                                  rather than a column of its own. */}
+                              <div className="min-w-0 max-w-[220px]">
+                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={row.candidate_name || 'Unknown'}>
+                                  {row.candidate_name || 'Unknown'}
+                                </p>
+                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={row.candidate_email || undefined}>
+                                  {row.candidate_email || '—'}
+                                </p>
+                              </div>
+                            </div>
+                          </>
+                        ),
+                      },
+                      timeline: {
+                        className: 'px-4 py-3 align-top whitespace-nowrap text-gray-600 dark:text-slate-400',
+                        content: (
+                          <>
+                            {/* The Track Invites timeline (Invited, System Check,
+                                Started, Completed) plus this table's Duration. */}
+                            <InviteTimelineLines inv={row} duration={formatDuration(row)} />
+                          </>
+                        ),
+                      },
+                      status: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                              {row.status === 'in_progress' && (
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                  LIVE
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        ),
+                      },
+                      score: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            {mhsScore(row) != null ? (
+                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                                {mhsScore(row)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </>
+                        ),
+                      },
+                      result: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
+                          </>
+                        ),
+                      },
+                      proctoring: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            {(row.status === 'completed' || row.status === 'terminated') ? (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
+                                {risk.level}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </>
+                        ),
+                      },
+                      inviteSource: {
+                        className: 'px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300',
+                        content: (
+                          <>
+                            {inviteSourceLabel(row)
+                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
+                              : <span className="text-gray-400">—</span>}
+                          </>
+                        ),
+                      },
+                      cid: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            {row.candidate_cid ? (
+                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                                {row.candidate_cid}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </>
+                        ),
+                      },
+                      jobId: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            {row._job_id ? (
+                              <JobIdBadge>{row._job_id}</JobIdBadge>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </>
+                        ),
+                      },
+                      jobTitle: {
+                        className: 'px-4 py-3',
+                        content: (
+                          <>
+                            <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
+                              {row._config_title}
+                            </span>
+                          </>
+                        ),
+                      },
+                      jobVersion: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            <VersionPill kind="job" version={row._job_version} />
+                          </>
+                        ),
+                      },
+                      interviewVersion: {
+                        className: 'px-4 py-3 whitespace-nowrap',
+                        content: (
+                          <>
+                            <VersionPill kind="interview" version={row._interview_version} />
+                          </>
+                        ),
+                      },
+                    };
+                    const key = rowKey(row);
+                    const isExpanded = expandedKeys.has(key);
                     return (
+                      <Fragment key={key}>
                       <tr
-                        key={`${row._config_id}-${row.id}`}
-                        onClick={() => openSession(row)}
-                        className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
+                        onClick={() => toggleExpanded(key)}
+                        aria-expanded={isExpanded}
+                        className={`transition-colors cursor-pointer ${isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : 'hover:bg-brand-blue/5'}`}
                       >
 <td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                           <button
@@ -941,120 +1098,48 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             )}
                           </button>
                         </td>
-                        {col('candidate') && (
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
-                                {(row.candidate_name || 'U')[0].toUpperCase()}
-                              </div>
-                              {/* Email under the name, as on Track Invites,
-                                  rather than a column of its own. */}
-                              <div className="min-w-0 max-w-[220px]">
-                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={row.candidate_name || 'Unknown'}>
-                                  {row.candidate_name || 'Unknown'}
-                                </p>
-                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={row.candidate_email || undefined}>
-                                  {row.candidate_email || '—'}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                        )}
-                        {col('timeline') && (
-                          <td className="px-4 py-3 align-top whitespace-nowrap text-gray-600 dark:text-slate-400">
-                            {/* The Track Invites timeline (Invited, System Check,
-                                Started, Completed) plus this table's Duration. */}
-                            <InviteTimelineLines inv={row} duration={formatDuration(row)} />
-                          </td>
-                        )}
-                        {col('status') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
-                              {row.status === 'in_progress' && (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                  LIVE
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                        {col('score') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {mhsScore(row) != null ? (
-                              <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
-                                {mhsScore(row)}%
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
+                        {rowColumns.map((c) => (
+                          <td key={c.id} className={cells[c.id].className}>{cells[c.id].content}</td>
+                        ))}
+                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* The Resume Scoring list's expand control. */}
+                            {detailColumns.length > 0 && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => toggleExpanded(key)}
+                                aria-expanded={isExpanded}
+                                aria-label={isExpanded ? 'Hide details' : 'Show details'}
+                                title={isExpanded ? 'Hide details' : 'Show details'}
+                                className="h-8 w-8 p-0"
+                              >
+                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                              </Button>
                             )}
-                          </td>
-                        )}
-                        {col('result') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
-                          </td>
-                        )}
-                        {col('proctoring') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {(row.status === 'completed' || row.status === 'terminated') ? (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
-                                {risk.level}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('inviteSource') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                            {inviteSourceLabel(row)
-                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
-                              : <span className="text-gray-400">—</span>}
-                          </td>
-                        )}
-                        {col('cid') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {row.candidate_cid ? (
-                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                                {row.candidate_cid}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('jobId') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {row._job_id ? (
-                              <JobIdBadge>{row._job_id}</JobIdBadge>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                        )}
-                        {col('jobTitle') && (
-                          <td className="px-4 py-3">
-                            <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
-                              {row._config_title}
-                            </span>
-                          </td>
-                        )}
-                        {col('jobVersion') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <VersionPill kind="job" version={row._job_version} />
-                          </td>
-                        )}
-                        {col('interviewVersion') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            <VersionPill kind="interview" version={row._interview_version} />
-                          </td>
-                        )}
-                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
-                          <ResultRowActions session={row} onView={() => openSession(row)} />
+                            <ResultRowActions session={row} onView={() => openSession(row)} />
+                          </div>
                         </td>
                       </tr>
+                      {/* The columns the row leaves out, as the Resume Scoring
+                          list's expanded full-width row. */}
+                      {isExpanded && detailColumns.length > 0 && (
+                        <tr className="bg-gray-50/60 dark:bg-slate-800/20">
+                          <td colSpan={rowColumns.length + 2} className="px-4 lg:px-6 pt-3 pb-4">
+                            <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-3">
+                              {detailColumns.map((c) => (
+                                <div key={c.id} className="min-w-0">
+                                  <dt className="text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                                    {c.label}
+                                  </dt>
+                                  <dd className="text-sm min-w-0 text-gray-600 dark:text-slate-400">{cells[c.id].content}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

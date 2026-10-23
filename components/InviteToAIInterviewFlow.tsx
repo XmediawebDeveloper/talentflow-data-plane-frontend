@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, CheckCircle, Loader2, Mail, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import JobInterviewVersionPicker, { latestActiveInterviewConfig } from '@/components/ai-interview/JobInterviewVersionPicker';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -127,17 +127,7 @@ export default function InviteToAIInterviewFlow({
     setHasLoaded(true);
     setIsLoading(true);
     (async () => {
-      const live: AIInterviewResponse[] = [];
-      for (let page = 1; ; page += 1) {
-        const batch = await aiInterviewService.listConfigs({ page, page_size: 100, compact: true });
-        const items = batch.items || [];
-        live.push(...items);
-        if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
-      }
-      const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-      const archived = archivedProbe.total > archivedProbe.items.length
-        ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-        : archivedProbe.items;
+      const { live, archived } = await aiInterviewService.listAllConfigsSplit();
       const seen = new Set<string>();
       const all = [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
       // The job version's mapping, resolved with the list so the cards and
@@ -196,6 +186,10 @@ export default function InviteToAIInterviewFlow({
 
   const proceedToShare = () => {
     if (pickedCount === 0) return;
+    if (pickedConfigs.some((c) => isJdDisabled(c.jd_status))) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (noPresetCandidates) {
       startSharing([]);
       return;

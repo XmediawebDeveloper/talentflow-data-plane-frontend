@@ -1,17 +1,10 @@
 'use client';
 
-import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
-import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
 import {
   Users,
   UserCheck,
   Plus,
   BarChart3,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
   TrendingUp,
   History,
 } from 'lucide-react';
@@ -25,7 +18,8 @@ import userService, { ApiUser } from '@/lib/services/userService';
 import {
   TeamStatsCards,
   TeamCard,
-  TeamCardSkeleton,
+  TeamManagementSkeleton,
+  TeamListTable,
   TeamFormModal,
   TeamDetailsModal,
   DeleteConfirmDialog,
@@ -39,17 +33,32 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { useAuth } from '@/components/providers/AuthProvider';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
+import ListToolbar from '@/components/ui/list-toolbar';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
+import ListCountBadge from '@/components/ui/list-count-badge';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import FadeIn from '@/components/ui/fade-in';
+import ListPagination from '@/components/ListPagination';
+import NameAvatar from '@/components/ui/name-avatar';
+import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
+import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 
-const ITEMS_PER_PAGE = 6;
+// Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
+const TEAM_PAGE_SIZES = [6, 12, 24, 48];
 
-const EMPTY_TEAM_STATS = {
-  total_teams: 0,
-  total_members: 0,
-  avg_members_per_team: 0,
-};
+type TeamSort = TeamListSortKey;
+// Each key's natural direction (what its dropdown option means): names A–Z,
+// everything else largest / newest first. `sortDir` holds the true direction.
+const naturalTeamSortDir = (key: TeamSort): SortDir => (key === 'name' ? 'asc' : 'desc');
+const TEAM_SORTS: { value: TeamSort; label: string }[] = [
+  { value: 'name', label: 'Name (A–Z)' },
+  { value: 'newest', label: 'Newest first' },
+  { value: 'members', label: 'Most members' },
+  { value: 'jobs', label: 'Most active jobs' },
+  { value: 'resumes', label: 'Most resumes' },
+];
+
 
 const getErrorDetail = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
@@ -60,8 +69,6 @@ const getErrorDetail = (error: unknown): string | undefined => {
 };
 
 export default function TeamManagementPage() {
-  // Org tab bar pins just below the sticky breadcrumb (measured height).
-  const [orgCrumbRef, orgCrumbHeight] = useBreadcrumbOffset();
   const router = useRouter();
   const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -75,8 +82,9 @@ export default function TeamManagementPage() {
   const [availableUsers, setAvailableUsers] = useState<ApiUser[]>([]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showViewDetailsModal, setShowViewDetailsModal] = useState(false);
+  // One Team popup for view + edit (+ delete): null = closed.
+  const [teamModal, setTeamModal] = useState<'view' | 'edit' | null>(null);
+  const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
 
@@ -88,38 +96,64 @@ export default function TeamManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeamLead, setFilterTeamLead] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [teamsGoToPage, setTeamsGoToPage] = useState('1');
+  const [itemsPerPage, setItemsPerPage] = useState(12);
   // Drill-in pattern: 'cards' shows only the 3 stat tiles; clicking one expands
   // into a focused list view. Each card maps to its own listView so the panel
   // reflects what was clicked. Mirrors /recruitment/job-openings and
   // /organization/role-management.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  const [listView, setListView] = useState<'teams-all' | 'members' | 'teams-by-size'>('teams-all');
-  const openListView = (card: 'total' | 'members' | 'avg') => {
-    setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : 'teams-by-size');
+  // Opens on the first card (Total Teams) already drilled in.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
+  const [listView, setListView] = useState<'teams-all' | 'members' | 'teams-by-jobs'>('teams-all');
+  const [sortBy, setSortBy] = useState<TeamSort>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  // Dropdown / card drill-in: pick a key in its natural direction.
+  const applyTeamSort = (key: TeamSort) => {
+    setSortBy(key);
+    setSortDir(naturalTeamSortDir(key));
+  };
+  // List-table header click: the sorted column flips, a new one opens in its natural direction.
+  const handleHeaderSort = (key: TeamSort) => {
+    if (key === sortBy) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else applyTeamSort(key);
+    setCurrentPage(1);
+  };
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('grid');
+  const openListView = (card: 'total' | 'members' | 'jobs') => {
+    setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : 'teams-by-jobs');
+    // The Active Jobs card lands on the busiest teams first.
+    if (card === 'jobs') applyTeamSort('jobs');
     setPageView('list');
   };
 
   // Persist scroll + view state so returning to this page lands where the user
   // left off. Re-detect the scroll container when the tab or two-step view flips
   // (height changes drastically between the cards overview and the list).
-  const rootRef = useScrollRestoration<HTMLElement>('org-team-management', !isLoading, [pageView, activeTab]);
+  const rootRef = useScrollRestoration<HTMLDivElement>('org-team-management', !isLoading, [pageView, activeTab]);
   // currentPage is intentionally not persisted: the existing
   // `setCurrentPage(1)` effect on [searchQuery, filterTeamLead] resets it on
   // mount, so a restored page would be immediately clobbered.
   useListStatePersistence(
     'org-team-management',
-    { activeTab, pageView, listView, searchQuery, filterTeamLead },
+    { activeTab, pageView, listView, searchQuery, filterTeamLead, sortBy, sortDir, displayMode, itemsPerPage },
     (s) => {
       if (s.activeTab === 'teams' || s.activeTab === 'usage' || s.activeTab === 'analytics' || s.activeTab === 'history') {
         setActiveTab(s.activeTab as typeof activeTab);
       }
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
-      if (s.listView === 'teams-all' || s.listView === 'members' || s.listView === 'teams-by-size') {
+      // A 'cards' value saved before the list became the default is ignored.
+      if (s.pageView === 'list') setPageView(s.pageView);
+      if (s.listView === 'teams-all' || s.listView === 'members' || s.listView === 'teams-by-jobs') {
         setListView(s.listView as typeof listView);
       }
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.filterTeamLead === 'string') setFilterTeamLead(s.filterTeamLead);
+      if (TEAM_SORTS.some((o) => o.value === s.sortBy)) {
+        const key = s.sortBy as TeamSort;
+        setSortBy(key);
+        // Snapshots saved before sortDir existed fall back to the key's natural direction.
+        setSortDir(s.sortDir === 'asc' || s.sortDir === 'desc' ? s.sortDir : naturalTeamSortDir(key));
+      }
+      if (s.displayMode === 'grid' || s.displayMode === 'list') setDisplayMode(s.displayMode);
+      if (typeof s.itemsPerPage === 'number' && TEAM_PAGE_SIZES.includes(s.itemsPerPage)) setItemsPerPage(s.itemsPerPage);
     },
   );
 
@@ -188,32 +222,45 @@ export default function TeamManagementPage() {
       result = result.filter((team) => team.team_lead?.id === filterTeamLead);
     }
 
-    // Avg Members/Team view sorts by size descending so the heaviest teams come first.
-    if (listView === 'teams-by-size') {
-      result = [...result].sort((a, b) => (b.member_count || 0) - (a.member_count || 0));
-    }
+    const byName = (a: Team, b: Team) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    const sorters: Record<TeamSort, (a: Team, b: Team) => number> = {
+      name: byName,
+      newest: (a, b) => (b.created_at || '').localeCompare(a.created_at || ''),
+      members: (a, b) => (b.member_count || 0) - (a.member_count || 0) || byName(a, b),
+      jobs: (a, b) => (b.active_jobs_count || 0) - (a.active_jobs_count || 0) || byName(a, b),
+      resumes: (a, b) => (b.resumes_count || 0) - (a.resumes_count || 0) || byName(a, b),
+    };
+    // sortDir opposite to the key's natural direction reverses the sorter.
+    const sign = sortDir === naturalTeamSortDir(sortBy) ? 1 : -1;
+    return [...result].sort((a, b) => sign * sorters[sortBy](a, b));
+  }, [teams, searchQuery, filterTeamLead, sortBy, sortDir]);
 
-    return result;
-  }, [teams, searchQuery, filterTeamLead, listView]);
+  const activeJobsTotal = useMemo(
+    () => teams.reduce((sum, team) => sum + (team.active_jobs_count || 0), 0),
+    [teams],
+  );
 
-  const totalPages = Math.ceil(filteredTeams.length / ITEMS_PER_PAGE);
   const paginatedTeams = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTeams.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredTeams, currentPage]);
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredTeams.slice(start, start + itemsPerPage);
+  }, [filteredTeams, currentPage, itemsPerPage]);
 
-  useEffect(() => {
-    setTeamsGoToPage(String(currentPage));
-  }, [currentPage]);
+  const teamsPagination = (attached: boolean) => (
+    <ListPagination
+      attached={attached}
+      currentPage={currentPage}
+      itemsPerPage={itemsPerPage}
+      totalItems={filteredTeams.length}
+      onPageChange={setCurrentPage}
+      onItemsPerPageChange={(size) => {
+        setItemsPerPage(size);
+        setCurrentPage(1);
+      }}
+      pageSizeOptions={TEAM_PAGE_SIZES}
+      itemLabel="teams"
+    />
+  );
 
-  const commitTeamsGoToPage = () => {
-    const page = Math.round(Number(teamsGoToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    } else {
-      setTeamsGoToPage(String(currentPage));
-    }
-  };
 
   // Team Members view: flatten members across all teams, tag each with their team.
   // Search filters by member name/email or the team they belong to.
@@ -224,7 +271,6 @@ export default function TeamManagementPage() {
         memberId: m.id,
         name: m.name,
         email: m.email,
-        initials: m.initials,
         avatar_url: m.avatar_url,
         role: m.role,
         teamId: team.id,
@@ -242,9 +288,28 @@ export default function TeamManagementPage() {
     );
   }, [teams, searchQuery]);
 
+  const memberSort = useTableSort<'name' | 'team' | 'role' | 'lead'>({ descFirst: ['lead'] });
+  const sortedMembers = useMemo(
+    () =>
+      sortRows(flattenedMembers, memberSort.sortKey, memberSort.sortDir, {
+        name: (r) => r.name,
+        team: (r) => r.teamName,
+        role: (r) => r.role,
+        lead: (r) => r.isLead,
+      }),
+    [flattenedMembers, memberSort.sortKey, memberSort.sortDir],
+  );
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterTeamLead]);
+  }, [searchQuery, filterTeamLead, sortBy]);
+
+  // Two teams with the same name are indistinguishable in every picker and
+  // report, so names must be unique (case-insensitive).
+  const isDuplicateTeamName = (name: string, excludeId?: string) => {
+    const normalized = name.trim().toLowerCase();
+    return teams.some((team) => team.id !== excludeId && team.name.trim().toLowerCase() === normalized);
+  };
 
   const teamLeads = useMemo(() => {
     return teams
@@ -286,11 +351,11 @@ export default function TeamManagementPage() {
   // Inner view tabs — single source of truth so the mobile pill row and the
   // desktop underline row stay identical (labels, icons, permission gating).
   type InnerTabKey = 'teams' | 'usage' | 'analytics' | 'history';
-  const innerTabs: { key: InnerTabKey; label: string; icon: typeof Users; enabled: boolean; denyMsg?: string }[] = [
-    { key: 'teams', label: 'Teams', icon: Users, enabled: true },
-    { key: 'usage', label: 'Team Usage', icon: BarChart3, enabled: canViewUsageTab, denyMsg: 'You do not have permission to view team usage' },
-    { key: 'analytics', label: 'Analytics', icon: TrendingUp, enabled: canViewAnalyticsTab, denyMsg: 'You do not have permission to view team analytics' },
-    ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', icon: History, enabled: true }] : []),
+  const innerTabs: { key: InnerTabKey; label: string; short: string; icon: typeof Users; enabled: boolean; denyMsg?: string }[] = [
+    { key: 'teams', label: 'Teams', short: 'Teams', icon: Users, enabled: true },
+    { key: 'usage', label: 'Team Usage', short: 'Usage', icon: BarChart3, enabled: canViewUsageTab, denyMsg: 'You do not have permission to view team usage' },
+    { key: 'analytics', label: 'Analytics', short: 'Analytics', icon: TrendingUp, enabled: canViewAnalyticsTab, denyMsg: 'You do not have permission to view team analytics' },
+    ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', short: 'History', icon: History, enabled: true }] : []),
   ];
   const selectInnerTab = (t: { key: InnerTabKey; enabled: boolean; denyMsg?: string }) => {
     // Locked tab: greyed with a hover tooltip; click is a no-op.
@@ -314,6 +379,11 @@ export default function TeamManagementPage() {
 
     if (data.name.length < 2) {
       toast.error('Team name must be at least 2 characters');
+      return;
+    }
+
+    if (isDuplicateTeamName(data.name)) {
+      toast.error(`A team named "${data.name.trim()}" already exists`);
       return;
     }
 
@@ -346,21 +416,40 @@ export default function TeamManagementPage() {
     try {
       const team = await teamService.getTeam(teamId);
       setSelectedTeam(team);
-      setShowViewDetailsModal(true);
+      setTeamModal('view');
     } catch {
       toast.error('Failed to load team details');
     }
   };
 
+  // "Add members" on a card: open the popup straight in edit mode.
   const handleManageTeam = async (teamId: string) => {
+    if (!canEditTeams) return;
     try {
       const team = await teamService.getTeam(teamId);
       setSelectedTeam(team);
       await fetchAvailableUsers();
-      setShowEditModal(true);
+      setTeamModal('edit');
     } catch {
       toast.error('Failed to load team data');
     }
+  };
+
+  // Edit button inside the popup: load the user list, then flip to the form.
+  const handleStartEdit = async () => {
+    if (!canEditTeams) return;
+    setIsPreparingEdit(true);
+    try {
+      await fetchAvailableUsers();
+      setTeamModal('edit');
+    } finally {
+      setIsPreparingEdit(false);
+    }
+  };
+
+  const closeTeamModal = () => {
+    setTeamModal(null);
+    setSelectedTeam(null);
   };
 
   const handleUpdateTeam = async (data: TeamFormData) => {
@@ -376,6 +465,11 @@ export default function TeamManagementPage() {
       return;
     }
 
+    if (isDuplicateTeamName(data.name, selectedTeam.id)) {
+      toast.error(`A team named "${data.name.trim()}" already exists`);
+      return;
+    }
+
     setIsUpdating(true);
     try {
       await teamService.updateTeam(selectedTeam.id, {
@@ -386,9 +480,10 @@ export default function TeamManagementPage() {
       });
 
       toast.success('Team updated successfully');
-      setShowEditModal(false);
-      setSelectedTeam(null);
-      await refreshData();
+      // Back to the details view, showing the saved team.
+      const [updatedTeam] = await Promise.all([teamService.getTeam(selectedTeam.id), refreshData()]);
+      setSelectedTeam(updatedTeam);
+      setTeamModal('view');
     } catch (error: unknown) {
       console.error('Error updating team:', error);
       toast.error(getErrorDetail(error) || 'Failed to update team');
@@ -397,9 +492,17 @@ export default function TeamManagementPage() {
     }
   };
 
+  // The Team popup stays in state (just hidden) while the confirm is up, so
+  // cancelling the delete lands back where the user was.
   const handleOpenDeleteDialog = () => {
-    setShowEditModal(false);
+    if (!canDeleteTeams) return;
     setShowDeleteDialog(true);
+  };
+
+  const teamActionProps = {
+    onViewDetails: handleViewDetails,
+    onManageTeam: handleManageTeam,
+    canManage: canEditTeams,
   };
 
   const handleDeleteTeam = async () => {
@@ -410,7 +513,7 @@ export default function TeamManagementPage() {
       await teamService.deleteTeam(selectedTeam.id);
       toast.success('Team deleted successfully');
       setShowDeleteDialog(false);
-      setSelectedTeam(null);
+      closeTeamModal();
       await refreshData();
     } catch (error: unknown) {
       console.error('Error deleting team:', error);
@@ -421,107 +524,96 @@ export default function TeamManagementPage() {
   };
 
   if (isLoading) {
-    return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-            <div className="w-full">
-              <div className="mb-5">
-                <div className="mb-3 h-9 w-64 animate-pulse rounded bg-gray-100 dark:bg-slate-800" />
-                <div className="h-5 w-72 animate-pulse rounded bg-gray-100 dark:bg-slate-800" />
-              </div>
-
-              <TeamStatsCards stats={EMPTY_TEAM_STATS} isLoading={true} />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {[1, 2, 3, 4].map((index) => (
-                  <TeamCardSkeleton key={index} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <TeamManagementSkeleton />;
   }
 
   return (
     <FeatureGate feature="teams">
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb barRef={orgCrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
-          <OrganizationTabs stickyTop={orgCrumbHeight} />
-          <div className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
+      {/* Card, breadcrumb, organization tabs and the tab panel come from
+          app/(dashboard)/organization/layout.tsx — this renders the panel's content. */}
+      <div ref={rootRef}>
             <PageHeader
               icon={<Users className="h-5 w-5" />}
               title="Team Management"
-              description="Organize departments, assign leads, and monitor team usage with the same polished dashboard language used across the platform."
+              description="Group users into teams, assign leads, and track each team's hiring activity."
               actions={
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="grid grid-cols-2 gap-2 sm:min-w-[240px]">
-                    <div className="flex h-10 items-center justify-between gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">Teams</span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{stats.total_teams}</span>
-                    </div>
-                    <div className="flex h-10 items-center justify-between gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">Members</span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{stats.total_members}</span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      if (!canCreateTeams) return;
-                      handleOpenCreateModal();
-                    }}
-                    aria-disabled={!canCreateTeams}
-                    title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
-                    className={!canCreateTeams ? 'opacity-60 cursor-not-allowed' : ''}
-                    icon={<Plus className="h-4 w-4" />}
-                  >
-                    Create Team
-                  </Button>
-                </div>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (!canCreateTeams) return;
+                    handleOpenCreateModal();
+                  }}
+                  aria-disabled={!canCreateTeams}
+                  title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
+                  className={!canCreateTeams ? 'opacity-60 cursor-not-allowed' : ''}
+                  icon={<Plus className="h-4 w-4" />}
+                >
+                  Create Team
+                </Button>
               }
             />
 
             <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-              {/* Mobile / tablet (<lg): scrollable pills with an always-visible
-                  scrollbar — matches the current-plan / OrganizationTabs reference. */}
-              <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-3 lg:hidden">
-                <ScrollableTabs ariaLabel="Team management views">
-                  {innerTabs.map((t) => {
-                    const Icon = t.icon;
-                    const active = activeTab === t.key;
-                    return (
-                      <button
-                        key={t.key}
-                        role="tab"
-                        aria-selected={active}
-                        aria-disabled={!t.enabled}
-                        title={!t.enabled ? t.denyMsg : ''}
-                        onClick={() => selectInnerTab(t)}
-                        className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                          !t.enabled
-                            ? 'cursor-not-allowed border-gray-200 bg-white text-gray-300 opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-600'
-                            : active
-                              ? 'border-brand-blue bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                              : 'border-gray-200 bg-white text-gray-600 hover:border-brand-blue/30 hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </ScrollableTabs>
+              {/* Mobile / tablet (<lg): one segmented control — the sliding
+                  white-tile toggle used across the app (same as the organization
+                  tabs above). Equal cells on a fixed grid, so it never scrolls;
+                  short labels on phones, icons from sm up. */}
+              <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-2.5 lg:hidden">
+                {(() => {
+                  const activeIndex = innerTabs.findIndex((t) => t.key === activeTab);
+                  return (
+                    <div
+                      role="tablist"
+                      aria-label="Team management views"
+                      className="relative grid h-9 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10"
+                      style={{ gridTemplateColumns: `repeat(${innerTabs.length}, minmax(0, 1fr))` }}
+                    >
+                      {activeIndex >= 0 && (
+                        <span
+                          aria-hidden
+                          style={{
+                            width: `calc((100% - 0.5rem) / ${innerTabs.length})`,
+                            transform: `translateX(${activeIndex * 100}%)`,
+                          }}
+                          className="absolute bottom-1 left-1 top-1 rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
+                        />
+                      )}
+                      {innerTabs.map((t) => {
+                        const Icon = t.icon;
+                        const active = activeTab === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            type="button"
+                            role="tab"
+                            aria-selected={active}
+                            aria-disabled={!t.enabled}
+                            title={!t.enabled ? t.denyMsg : t.label}
+                            onClick={() => selectInnerTab(t)}
+                            className={`relative z-10 inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-1 text-xs font-medium transition-colors duration-300 sm:text-sm ${
+                              !t.enabled
+                                ? 'cursor-not-allowed text-gray-300 opacity-60 dark:text-slate-600'
+                                : active
+                                  ? 'text-brand-blue'
+                                  : 'text-gray-600 hover:text-brand-blue dark:text-slate-400'
+                            }`}
+                          >
+                            <Icon className="hidden h-4 w-4 shrink-0 sm:block" />
+                            <span className="truncate sm:hidden">{t.short}</span>
+                            <span className="hidden truncate sm:inline">{t.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Desktop (lg+): underline tabs */}
               <div
                 role="tablist"
                 aria-label="Team management views"
-                className="hidden overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
+                className="hidden overflow-x-auto scrollbar-hide tf-hide-native-scrollbar border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
               >
                 {innerTabs.map((t) => {
                   const Icon = t.icon;
@@ -549,7 +641,7 @@ export default function TeamManagementPage() {
                 })}
               </div>
 
-              <div className="p-4 sm:p-5">
+              <div className="p-3 sm:p-5">
             {activeTab === 'usage' ? (
               <TeamUsageAnalytics />
             ) : activeTab === 'analytics' ? (
@@ -558,68 +650,9 @@ export default function TeamManagementPage() {
               <TeamHistory />
             ) : (
               <>
-                {pageView === 'list' && (
-                <div className="mb-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                    <div className="lg:flex-[7] flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-                        <Users className="w-5 h-5 text-brand-blue" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
-                          {listView === 'members'
-                            ? 'Team Members'
-                            : listView === 'teams-by-size'
-                              ? 'Teams by Size'
-                              : 'Team Organization'}
-                        </h3>
-                        <p className="mt-0.5 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-                          {listView === 'members'
-                            ? 'Every user assigned to a team, along with the team they belong to and whether they lead it.'
-                            : listView === 'teams-by-size'
-                              ? `Teams sorted by member count. Organization average is ${stats.avg_members_per_team.toFixed(1)} members per team.`
-                              : 'Teams help organize users by department, project, or function. Assign team leads to manage workflows and track performance metrics like active jobs and resume counts.'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {teams.length > 0 && (
-                      <div className="lg:flex-[3] w-full flex flex-col gap-3">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                          <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
-                            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                          />
-                        </div>
-                        {listView !== 'members' && teamLeads.length > 0 && (
-                          <div className="relative">
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            <select
-                              value={filterTeamLead}
-                              onChange={(e) => setFilterTeamLead(e.target.value)}
-                              className="w-full appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-3 pl-10 pr-8 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                            >
-                              <option value="">All Team Leads</option>
-                              {teamLeads.map((lead) => (
-                                <option key={lead.id} value={lead.id}>
-                                  {lead.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                )}
-
                 <TeamStatsCards
                   stats={stats}
+                  activeJobs={activeJobsTotal}
                   onCardClick={openListView}
                   activeCard={
                     pageView === 'list'
@@ -627,7 +660,7 @@ export default function TeamManagementPage() {
                         ? 'total'
                         : listView === 'members'
                           ? 'members'
-                          : 'avg'
+                          : 'jobs'
                       : null
                   }
                 />
@@ -635,45 +668,108 @@ export default function TeamManagementPage() {
                 {pageView === 'list' && (
                 <>
 
-                {listView !== 'members' && (
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  {paginatedTeams.map((team) => (
-                    <TeamCard
-                      key={team.id}
-                      team={team}
-                      canManage={canEditTeams}
-                      onViewDetails={handleViewDetails}
-                      onManageTeam={handleManageTeam}
-                    />
-                  ))}
+                {/* One toolbar row: search, lead filter, sort, count, grid/list. */}
+                {teams.length > 0 && (
+                  <ListToolbar
+                    className="mb-4"
+                    // rounded-lg (8px) +10%
+                    searchInputClassName="rounded-[8.8px]"
+                    searchValue={searchQuery}
+                    onSearchChange={setSearchQuery}
+                    searchPlaceholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
+                    filtersApplied={listView !== 'members' && !!filterTeamLead}
+                    onClearFilters={() => {
+                      setSearchQuery('');
+                      setFilterTeamLead('');
+                    }}
+                    countBadge={
+                      listView === 'members' ? (
+                        <ListCountBadge filtered={flattenedMembers.length} total={stats.total_members} noun="member" />
+                      ) : (
+                        <ListCountBadge filtered={filteredTeams.length} total={teams.length} noun="team" />
+                      )
+                    }
+                    trailing={
+                      listView !== 'members' ? (
+                        <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />
+                      ) : undefined
+                    }
+                  >
+                    {listView !== 'members' && teamLeads.length > 0 && (
+                      <ToolbarFilterSelect value={filterTeamLead} onChange={setFilterTeamLead} ariaLabel="Filter by team lead">
+                        <option value="">All team leads</option>
+                        {teamLeads.map((lead) => (
+                          <option key={lead.id} value={lead.id}>
+                            {lead.name}
+                          </option>
+                        ))}
+                      </ToolbarFilterSelect>
+                    )}
+                    {listView !== 'members' && (
+                      <ToolbarFilterSelect value={sortBy} onChange={(v) => applyTeamSort(v as TeamSort)} ariaLabel="Sort teams">
+                        {TEAM_SORTS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </ToolbarFilterSelect>
+                    )}
+                    {/* Clear sort: shown only away from the default order (Teams: Name A–Z;
+                        Members: unsorted). */}
+                    {listView !== 'members' ? (
+                      <ClearSortChip
+                        sort={{ sortKey: sortBy, sortDir }}
+                        labels={{ name: 'Team', newest: 'Created', members: 'Members', jobs: 'Active Jobs', resumes: 'Resumes' }}
+                        isDefault={sortBy === 'name' && sortDir === 'asc'}
+                        onClear={() => { applyTeamSort('name'); setCurrentPage(1); }}
+                      />
+                    ) : (
+                      <ClearSortChip
+                        sort={memberSort}
+                        labels={{ name: 'Member', team: 'Team', role: 'Role', lead: 'Lead' }}
+                        onClear={() => memberSort.clearSort?.()}
+                      />
+                    )}
+                  </ListToolbar>
+                )}
 
-                  {teams.length === 0 && (
+                {listView !== 'members' && (
+                  teams.length === 0 ? (
                     <EmptyState
                       isTenantAdmin={isTenantAdmin}
                       canCreateTeams={canCreateTeams}
                       onCreateTeam={handleOpenCreateModal}
                     />
-                  )}
-
-                  {teams.length > 0 && filteredTeams.length === 0 && (
-                    <div className="col-span-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                        <Search className="h-6 w-6 text-brand-blue" />
-                      </div>
-                      <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-slate-50">No teams found</h3>
-                      <p className="text-gray-600 dark:text-slate-400">Try adjusting your search or filter criteria.</p>
-                      <button
-                        onClick={() => {
-                          setSearchQuery('');
-                          setFilterTeamLead('');
-                        }}
-                        className="mt-4 inline-flex items-center rounded-full bg-brand-blue/[0.06] px-4 py-2 text-sm font-medium text-brand-blue ring-1 ring-brand-blue/10 hover:bg-brand-blue/[0.1]"
-                      >
-                        Clear filters
-                      </button>
+                  ) : filteredTeams.length === 0 ? (
+                    <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                      <ListEmptyState icon={Users} isNarrowed query={searchQuery} entityLabel="team" emptyTitle="No teams yet" />
                     </div>
-                  )}
-                </div>
+                  ) : displayMode === 'list' ? (
+                    <FadeIn key={`list-${currentPage}`} duration={0.35} distance={8}>
+                      {/* Pagination is the table card's footer, as on the Users page. */}
+                      <TeamListTable
+                        teams={paginatedTeams}
+                        {...teamActionProps}
+                        footer={teamsPagination(true)}
+                        sortKey={sortBy}
+                        sortDir={sortDir}
+                        onSort={handleHeaderSort}
+                      />
+                    </FadeIn>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        {paginatedTeams.map((team, index) => (
+                          // Short stagger on first paint / page change; capped so a full page settles fast.
+                          <FadeIn key={team.id} delay={Math.min(index, 8) * 0.04} duration={0.4} distance={10} className="h-full">
+                            <TeamCard team={team} {...teamActionProps} />
+                          </FadeIn>
+                        ))}
+                      </div>
+                      {/* No table card to attach to in the grid — standalone bar. */}
+                      {teamsPagination(false)}
+                    </>
+                  )
                 )}
 
                 {/* Team Members view — flat list of every assigned member across all teams. */}
@@ -684,36 +780,64 @@ export default function TeamManagementPage() {
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                           <UserCheck className="h-6 w-6 text-brand-blue" />
                         </div>
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
+                        <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
+                        <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto tf-table-shell">
+                      <>
+                      {/* Phones: one compact row per member. */}
+                      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+                        {sortedMembers.map((row) => (
+                          <li key={row.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                            <NameAvatar name={row.name} fallback={row.email} size="sm" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
+                              <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
+                              <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
+                                {row.teamName}
+                                {row.role && <span className="capitalize"> · {row.role.replace(/_/g, ' ').toLowerCase()}</span>}
+                              </p>
+                            </div>
+                            {row.isLead && (
+                              <span className="shrink-0 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                Lead
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="hidden overflow-x-auto tf-table-shell md:block">
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                             <tr className="text-left">
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Member</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Team</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Role</th>
-                              <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Lead</th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'name')}>
+                                <SortableHeader label="Member" column="name" sort={memberSort} />
+                              </th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'team')}>
+                                <SortableHeader label="Team" column="team" sort={memberSort} />
+                              </th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'role')}>
+                                <SortableHeader label="Role" column="role" sort={memberSort} />
+                              </th>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500 text-right" aria-sort={ariaSort(memberSort, 'lead')}>
+                                <SortableHeader label="Lead" column="lead" sort={memberSort} align="right" />
+                              </th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                            {flattenedMembers.map((row) => (
+                            {sortedMembers.map((row) => (
                               <tr key={row.id} className="transition-colors hover:bg-brand-blue/[0.04]">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 text-sm font-semibold text-brand-blue">
-                                      {row.initials || row.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-                                    </span>
+                                    <NameAvatar name={row.name} fallback={row.email} size="md" />
                                     <div className="min-w-0">
-                                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
+                                      <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
                                       <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{row.teamName}</td>
-                                <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
+                                <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{row.teamName}</td>
+                                <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
                                   {row.role ? (
                                     <span className="capitalize">{row.role.replace(/_/g, ' ').toLowerCase()}</span>
                                   ) : (
@@ -734,66 +858,17 @@ export default function TeamManagementPage() {
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
                   </section>
                 )}
 
-                {listView !== 'members' && totalPages > 1 && (
-                  <div className="mt-8 flex flex-col gap-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm text-gray-600 dark:text-slate-400">
-                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
-                    </p>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={teamsGoToPage}
-                          onChange={(e) => setTeamsGoToPage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                              commitTeamsGoToPage();
-                            }
-                          }}
-                          onBlur={commitTeamsGoToPage}
-                          aria-label="Go to page"
-                          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                        />
-                      </div>
-                      <button
-                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                        disabled={currentPage === 1}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Previous page" title="Previous page"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                        <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                        disabled={currentPage === totalPages}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Next page" title="Next page"
-                      >
-                        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
                 </>
                 )}
               </>
             )}
               </div>
             </div>
-          </div>
-        </div>
-        </div>
 
         <TeamFormModal
           key={`create-${showCreateModal ? 'open' : 'closed'}`}
@@ -805,13 +880,26 @@ export default function TeamManagementPage() {
           isSubmitting={isCreating}
         />
 
+        {/* The Team popup — details and edit form are two faces of one popup
+            (same size), swapped in place. Hidden while the delete confirm is up. */}
+        <TeamDetailsModal
+          isOpen={teamModal === 'view' && !showDeleteDialog}
+          onClose={closeTeamModal}
+          team={selectedTeam}
+          userRole={currentUser?.role}
+          onEdit={handleStartEdit}
+          canEdit={canEditTeams}
+          isPreparingEdit={isPreparingEdit}
+          onDelete={handleOpenDeleteDialog}
+          canDelete={canDeleteTeams}
+        />
+
         <TeamFormModal
-          key={`edit-${selectedTeam?.id || 'none'}-${showEditModal ? 'open' : 'closed'}`}
-          isOpen={showEditModal}
-          onClose={() => {
-            setShowEditModal(false);
-            setSelectedTeam(null);
-          }}
+          key={`edit-${selectedTeam?.id || 'none'}-${teamModal === 'edit' ? 'open' : 'closed'}`}
+          isOpen={teamModal === 'edit' && !showDeleteDialog}
+          // Back returns to the details view rather than closing the popup.
+          onClose={() => setTeamModal('view')}
+          cancelLabel="Back"
           onSubmit={handleUpdateTeam}
           mode="edit"
           initialData={
@@ -831,27 +919,15 @@ export default function TeamManagementPage() {
           isDeleting={isDeleting}
         />
 
-        <TeamDetailsModal
-          isOpen={showViewDetailsModal}
-          onClose={() => {
-            setShowViewDetailsModal(false);
-            setSelectedTeam(null);
-          }}
-          team={selectedTeam}
-          userRole={currentUser?.role}
-        />
-
         <DeleteConfirmDialog
           open={showDeleteDialog}
-          onOpenChange={(open) => {
-            setShowDeleteDialog(open);
-            if (!open) setSelectedTeam(null);
-          }}
+          // Cancelling re-shows the Team popup underneath.
+          onOpenChange={setShowDeleteDialog}
           teamName={selectedTeam?.name || ''}
           onConfirm={handleDeleteTeam}
           isDeleting={isDeleting}
         />
-      </main>
+      </div>
     </FeatureGate>
   );
 }

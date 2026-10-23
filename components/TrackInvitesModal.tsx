@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban } from 'lucide-react';
+import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -30,14 +30,18 @@ import {
   InvitationActionButtons,
   ViewFullHistoryLink,
   InvitationHistoryDialog,
+  RevokeInvitationDialog,
+  EditInvitationModal,
 } from '@/components/AssessmentInviteActions';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
+import NameAvatar from '@/components/ui/name-avatar';
 
-/* This popup is deliberately READ-ONLY beyond Resend/Copy Link, matching the
-   AI Interview module's Job-Details tracker: Edit (name+email, revoked-only)
-   and Revoke live only on the main Assessments page's Track Invites popup.
-   Fixing a bad address (Edit Email / Change Email) moved there too — this
-   surface is for tracking, not correcting invitations. */
+/* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
+   still unopened) and Edit (name + email, revoked-only, then Save & Send) when
+   the host allows changes - the same set, rules and dialogs as the Assessments
+   page's Track Invites popup and the AI Interview tracker on this page. Fixing
+   a bad address of a failed/bounced invite (Edit Email / Change Email) still
+   lives only on the Assessments page. */
 
 interface TrackInvitesModalProps {
   isOpen: boolean;
@@ -52,6 +56,15 @@ interface TrackInvitesModalProps {
    *  Details renders the detail view inline). Falls back to navigating to the
    *  standalone results-details route when not supplied. */
   onViewResult?: (invitation: any) => void;
+  /** Footer "Invite More" - the host closes this tracker and opens its own
+   *  invite flow. Left out, the button is not shown. */
+  onInviteMore?: () => void;
+  /** Revoke / Edit are offered only when true (permission + live JD). Resend
+   *  and Copy Link are unaffected. */
+  canModifyInvites?: boolean;
+  /** Called after a revoke / edit changed invitations, once this popup's own
+   *  rows are reloaded - so the host's counts refresh at once. */
+  onChanged?: () => void | Promise<void>;
 }
 
 
@@ -78,7 +91,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, canModifyInvites = false, onChanged }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -121,6 +134,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   const [page, setPage] = useState(1);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [historyTarget, setHistoryTarget] = useState<any | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<any | null>(null);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -231,6 +246,24 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     } finally {
       setResendingId(null);
     }
+  };
+
+  // A revoke / edit changed the rows: reload this list, then tell the host.
+  const handleInvitesChanged = async () => {
+    await loadInvitations(true);
+    await onChanged?.();
+  };
+
+  const rowActionOptions = {
+    onResend: handleResendInvitation,
+    resendingId,
+    ...(canModifyInvites
+      ? {
+          onEdit: (inv: any) => setEditTarget(inv),
+          onRevoke: (inv: any) => setRevokeTarget(inv),
+          revokingId: revokeTarget?.id,
+        }
+      : {}),
   };
 
   const filtersActive = hasActiveInviteFilters(filters) || !!(assessmentVersionFilter || sourceFilter || resultFilter);
@@ -466,20 +499,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               {/* Mobile Card View */}
               <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
                 {visibleInvitations.map((invitation: any) => {
-                  const initials = invitation.candidate_name
-                    ?.split(' ')
-                    .map((n: string) => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2) || '??';
-
                   return (
                     <div key={invitation.id} className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-2.5">
                       {/* Candidate row */}
                       <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                        <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-2xs flex-shrink-0">
-                          {initials}
-                        </div>
+                        <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="xs" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">{invitation.candidate_name}</p>
                           <p className="text-2xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
@@ -559,10 +583,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           )}
                         </div>
                         <InvitationActionButtons
-                          actions={buildInvitationRowActions(invitation, {
-                            onResend: handleResendInvitation,
-                            resendingId,
-                          })}
+                          actions={buildInvitationRowActions(invitation, rowActionOptions)}
                         />
                       </div>
                     </div>
@@ -600,13 +621,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                     {visibleInvitations.map((invitation: any) => {
-                      const initials = invitation.candidate_name
-                        ?.split(' ')
-                        .map((n: string) => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .slice(0, 2) || '??';
-
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
@@ -616,9 +630,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           </td>
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-2 lg:gap-3">
-                              <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs lg:text-sm flex-shrink-0">
-                                {initials}
-                              </div>
+                              <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                               {/* Capped rather than free: with auto layout a single
                                   long email would otherwise set the column width. */}
                               <div className="min-w-0 max-w-[220px]">
@@ -731,8 +743,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col">
                             <InvitationActionsMenu
                               actions={buildInvitationRowActions(invitation, {
-                                onResend: handleResendInvitation,
-                                resendingId,
+                                ...rowActionOptions,
                                 onViewResult: openResult,
                               })}
                             />
@@ -789,16 +800,30 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 </button>
               </>
             )}
-            <button
-              onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-            >
-              Close
-            </button>
+            <Button variant="secondary" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            {onInviteMore && (
+              <Button variant="primary" size="sm" onClick={onInviteMore} icon={<Send className="w-3.5 h-3.5" />}>
+                Invite More
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
+      <RevokeInvitationDialog
+        target={revokeTarget}
+        onClose={() => setRevokeTarget(null)}
+        getAssessmentId={(inv) => inv.assessment_id}
+        onRevoked={handleInvitesChanged}
+      />
+      <EditInvitationModal
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        getAssessmentId={(inv) => inv.assessment_id}
+        onSaved={handleInvitesChanged}
+      />
       <InvitationHistoryDialog
         target={historyTarget}
         onClose={() => setHistoryTarget(null)}

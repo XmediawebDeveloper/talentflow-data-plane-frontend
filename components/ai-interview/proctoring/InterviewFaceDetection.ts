@@ -13,7 +13,7 @@
  *   - Emits events via callback (caller routes to InterviewEventBus)
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import { createGazeEstimator, type GazeEstimator } from "@/lib/proctoring/gazeEstimator";
 
 interface UseInterviewFaceDetectionConfig {
@@ -381,7 +381,14 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
         if (enableGazeTracking && faceMeshRef.current && timestamp - lastGazeTime >= gazeCheckIntervalMs()) {
           lastGazeTime = timestamp;
-          try { await faceMeshRef.current.send({ image: video }); } catch {}
+          // FaceMesh (the heavier graph) is pointless while the detector sees
+          // no face — onResults discards the reading then anyway (gaze is only
+          // judged with a face present), so skip the inference entirely.
+          if (lastRawFaceCountRef.current >= 1 && lastFaceStateRef.current) {
+            try { await faceMeshRef.current.send({ image: video }); } catch {}
+          } else {
+            gazeAwayCountRef.current = 0; // same reset onResults does for "no face"
+          }
         }
         warmedUpRef.current = true;
 
@@ -412,12 +419,15 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
     };
   }, [active, enableGazeTracking]);
 
-  return {
+  // Memoised: every member is a ref or a stable callback. A fresh object per
+  // render rebuilt InterviewUI's handleVideoReady (and re-ran Webcam's effect)
+  // on every render.
+  return useMemo(() => ({
     // Refs — read .current, no re-renders
     isFaceDetectedRef,
     faceCountRef,
     isGazeOnScreenRef,
     warmedUpRef,
     setVideoElement,
-  };
+  }), [setVideoElement]);
 }

@@ -75,7 +75,7 @@ const JOBS_EXPORT_HEADERS = [
   // other silently shifts every following column.
   'Salary', 'Location', 'Job Level',
   'Posted Date', 'Created Date', 'Last Updated', 'Created By',
-  'Applicants'
+  'Scored'
 ];
 
 interface JobsListingProps {
@@ -113,6 +113,12 @@ interface JobsListingProps {
    * until the panel was reopened. See JobVersionHistoryPanel.statusOverrides.
    */
   versionStatusOverrides?: Record<string, string>;
+  /**
+   * Version ids the host has successfully deleted since the lineage was
+   * fetched. Dropped from the View Versions table so a deleted version
+   * disappears at once instead of lingering until a page refresh.
+   */
+  deletedVersionIds?: Set<string>;
   onPublishJob?: (job: Job) => void;
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
@@ -187,7 +193,7 @@ const StatVersionsPlaceholder = () => (
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
+export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -1328,24 +1334,39 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     </>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Actions + Clear — their own full-width row BELOW the Select All
+                button (not inline beside it), matching the Resume Scoring toolbar.
+                `basis-full order-last` drops this group onto its own line at the
+                bottom of the wrap-row. */}
+            {sortedJobs.length > 0 && selectedJobs.size > 0 && (
+              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
 
                 {/* Actions Dropdown — shown whenever at least one job is selected. */}
                 {selectedJobs.size > 0 && (
                   <div className="relative" ref={bulkActionsRef}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="rounded-full"
+                      aria-label={`Actions for ${selectedJobs.size} selected`}
+                      className={`relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm animate-in fade-in zoom-in-95 duration-300 ${showBulkActions ? 'bg-gray-200' : ''}`}
                     >
-                      Actions
+                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                      </span>
+                      Actions ({selectedJobs.size})
                       <ChevronDown className="w-4 h-4" />
-                    </Button>
+                    </button>
 
                     {showBulkActions && (
-                      // Right-aligned + width clamped to the viewport so the menu
-                      // never runs off the right edge on narrow/mobile screens.
-                      <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      // Left-aligned: Actions now sits at the left of its own
+                      // row, so the menu opens rightward (left-0) and width is
+                      // clamped to the viewport, keeping it on-screen on every
+                      // size instead of running off the left edge.
+                      <div className="absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                         {showDisableAction && renderBulkStatusItem({
                           label: 'Disable Selected',
                           icon: Ban,
@@ -1429,6 +1450,20 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     )}
                   </div>
                 )}
+
+                {/* Clear — a standalone button beside Actions, matching the
+                    Resume Scoring selection toolbar. */}
+                {selectedJobs.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    title="Clear the selection"
+                    className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear
+                  </button>
+                )}
               </div>
             )}
 
@@ -1493,7 +1528,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
-                      <option value="applicants">Applicants</option>
+                      <option value="applicants">Scored</option>
                       <option value="assessed">Assessed</option>
                       <option value="interviewed">Interviewed</option>
                       <option value="title">Job Title</option>
@@ -1526,6 +1561,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             <div className="space-y-3">
               {currentJobs.map(job => {
                 const versionKey = job.job_id || job.id;
+                /* The cached lineage minus versions deleted since it was fetched. */
+                const liveLineage = deletedVersionIds?.size
+                  ? versionLineage.lineages[versionKey]?.filter((v) => !deletedVersionIds.has(v.id))
+                  : versionLineage.lineages[versionKey];
                 /* A Draft only opens in the JD editor, so without Edit permission
                    the card and its View icon are greyed and do nothing (RBAC:
                    tooltip only) — the user stays on this list. */
@@ -1635,7 +1674,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         {applicantsCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-info-subtle text-info-strong">
                             <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
-                            {applicantsCount} {applicantsCount === 1 ? 'Applicant' : 'Applicants'}
+                            {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
@@ -1662,7 +1701,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           they read as one straight line. */}
                       <div className="flex basis-full items-center gap-2">
                       <div className="contents">
-                      <div className="order-last ml-auto flex flex-nowrap items-center gap-2">
+                      {/* From lg (laptop / desktop) View Versions moves beside
+                          Edit and takes over the ml-auto that pushes the pair
+                          right; below lg the footer is unchanged. */}
+                      <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
                         {/* Edit Button - icon only. Shown on every row except
                             Archived/Disabled ones — those are already retired,
                             so there is nothing on them to edit in place.
@@ -1744,7 +1786,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
                                 >
                                   <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
                                 </button>
                               )}
                               {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
@@ -1914,7 +1956,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                               toggleVersions(versionKey, job.id);
                             }}
                             aria-expanded={versionsExpanded}
-                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 ${
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 lg:order-[9998] lg:ml-auto ${
                               versionsExpanded
                                 ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
                                 : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'
@@ -1949,8 +1991,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           job={job}
                           versions={
                             statusFilter === 'all'
-                              ? versionLineage.lineages[versionKey]
-                              : versionLineage.lineages[versionKey]?.filter(
+                              ? liveLineage
+                              : liveLineage?.filter(
                                   /* The cached lineage can be older than the status tab
                                      being viewed — e.g. this version was archived just now,
                                      but the lineage fetched before that still says
@@ -1995,7 +2037,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                 {versionJob.status.toLowerCase() !== 'draft' && (
                                   <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)} className={viewVersionsMenuItemClass}>
                                     <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
+                                    <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Quick Actions — same gates as the latest-version menu */}

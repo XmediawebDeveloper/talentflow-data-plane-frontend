@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 // Shared with the assessment results page — one duration probe for all four recordings.
 import { VideoWithDuration, type VideoMarker } from '@/components/recording/RecordingPlayer';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import {
   Clock, MessageSquare, ThumbsUp, ThumbsDown,
@@ -13,13 +14,17 @@ import {
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
-  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode,
+  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase,
 } from 'lucide-react';
+import { jdService, type JDResponse } from '@/lib/services/jdService';
+import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts';
 import { Button } from '@/components/ui/button';
+import NameAvatar from '@/components/ui/name-avatar';
 import { tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
@@ -39,7 +44,7 @@ import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -95,7 +100,7 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-const TAB_KEYS = ['overview', 'eval', 'evaluation', 'eval_report', 'eval_dashboard', 'sentiment', 'qa', 'recording', 'transcript', 'coverage', 'violations', 'skill_breakdown', 'question_analysis', 'example_scenarios', 'verification'] as const;
+const TAB_KEYS = ['overview', 'eval', 'evaluation', 'eval_report', 'eval_dashboard', 'sentiment', 'qa', 'recording', 'transcript', 'coverage', 'violations', 'skill_breakdown', 'question_analysis', 'example_scenarios', 'verification', 'viewjd'] as const;
 type TabKey = typeof TAB_KEYS[number];
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
@@ -649,10 +654,31 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
   // liveSession must be declared before any useEffect that references it in its
   // dependency array, because dependency arrays are evaluated immediately during render.
+  const router = useRouter();
   const [liveSession, setLiveSession] = useState(interview);
   const [liveWsConnected, setLiveWsConnected] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   useEffect(() => { setLiveSession(interview); }, [interview]);
+
+  /* View JD — the interview's job description, fetched the first time the
+     button is opened and kept for this candidate (the AI Interview Details
+     page's View JD tab does the same). */
+  const resultJdId = interview.jd_id || liveSession.jd_id || '';
+  const [resultJd, setResultJd] = useState<JDResponse | null>(null);
+  // Keyed by JD id, so a failure for one job never shows against another.
+  const [resultJdFailure, setResultJdFailure] = useState<{ jdId: string; message: string } | null>(null);
+  const resultJdLoaded = !!resultJd && resultJd.id === resultJdId;
+  const resultJdError = resultJdFailure?.jdId === resultJdId ? resultJdFailure.message : null;
+  useEffect(() => {
+    if (activeTab !== 'viewjd' || !resultJdId || resultJdLoaded || resultJdError) return;
+    let cancelled = false;
+    jdService.getById(resultJdId)
+      .then((jd) => { if (!cancelled) setResultJd(jd); })
+      .catch((error: any) => {
+        if (!cancelled) setResultJdFailure({ jdId: resultJdId, message: error?.message || 'Failed to load job description' });
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, resultJdId, resultJdLoaded, resultJdError]);
   /* The candidate's CID for the header tagline. The invite LIST endpoints
      inject `candidate_cid`; the single-session GET this page loads often
      doesn't — so when it's missing, find this session in its interview's
@@ -1157,16 +1183,32 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     if (detail && typeof detail === 'object') { try { return JSON.stringify(detail); } catch { /* fall through */ } }
     return err?.message || 'Evaluation request failed';
   };
+  // The endpoint declines while the interview's own live evaluation is still
+  // running (stub carries evaluation_in_progress_since) — the 5s poll picks up
+  // that result. If it never lands, re-arm after 60s so the stub still gets
+  // re-evaluated once the server's in-progress window has passed.
+  const [autoReevalTick, setAutoReevalTick] = useState(0);
   useEffect(() => {
     if (!isCompleted || !evalIncomplete || wasTerminated || noAnswersRecorded) return;
     if (_autoReevalFiredRef.current === liveSession.id) return;
     _autoReevalFiredRef.current = liveSession.id;
     setEvalTriggerError(null);
+    let rearm: ReturnType<typeof setTimeout> | undefined;
     aiInterviewService.triggerEvaluation(liveSession.id)
       .then(() => aiInterviewService.get(liveSession.id))
-      .then(updated => setLiveSession(updated))
+      .then(updated => {
+        setLiveSession(updated);
+        if ((updated as any)?.ai_evaluation?.evaluation_in_progress_since
+            && (updated as any)?.ai_evaluation?.evaluation_incomplete) {
+          rearm = setTimeout(() => {
+            _autoReevalFiredRef.current = null;
+            setAutoReevalTick(t => t + 1);
+          }, 60000);
+        }
+      })
       .catch((err: any) => { setEvalTriggerError(describeEvalError(err)); /* poll fallback keeps trying; stub remains re-evaluable */ });
-  }, [isCompleted, evalIncomplete, wasTerminated, noAnswersRecorded, liveSession.id]);
+    return () => { if (rearm) clearTimeout(rearm); };
+  }, [isCompleted, evalIncomplete, wasTerminated, noAnswersRecorded, liveSession.id, autoReevalTick]);
 
   // ── Recruiter "Re-Evaluate" (SAFE, ONE-TIME) ──────────────────────────────
   // Fallback for an interview whose candidate reached the END but whose result is
@@ -1178,8 +1220,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // background this banner does NOT show at all — `evaluationPending` renders the
   // "Generating results" spinner instead (see the partial-banner gate below).
   const [reEvaluating, setReEvaluating] = useState(false);
+  // A disabled JD's results stay viewable, but re-evaluating is an action.
+  const jdDisabled = isJdDisabled(liveSession.jd_status);
   const handleReEvaluate = async () => {
     if (reEvaluating) return;
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     setReEvaluating(true);
     const _t = toast.loading('Re-evaluating the interview — this can take a minute…');
     try {
@@ -1189,7 +1237,9 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       toast.success('Interview re-evaluated. The full results are now available.', { id: _t });
     } catch (err: any) {
       const status = err?.response?.status;
-      const detail = err?.response?.data?.detail;
+      const rawDetail = err?.response?.data?.detail;
+      // A disabled-JD refusal arrives as {error, message}, not a string.
+      const detail = typeof rawDetail === 'string' ? rawDetail : rawDetail?.message;
       const msg =
         status === 409 ? (detail || 'This interview has already been re-evaluated.')
         : status === 400 ? (detail || 'Re-evaluation is only available once the candidate reached the end of the interview.')
@@ -1741,7 +1791,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         Please wait while the AI analyzes responses and verifies the results.
         The page will refresh automatically when ready.
       </p>
-      <div className="mt-6 flex items-start justify-center">
+      <div className="mt-6 flex items-start justify-center max-w-full overflow-x-auto">
         {EVAL_STAGES.map((label, i) => {
           const done = i < evalStage;
           const current = i === evalStage;
@@ -1946,6 +1996,38 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     }
   };
 
+  /* The job link in the header. Inside that job's own Job Details page it
+     closes this view (the job is already the page underneath). Elsewhere it
+     opens Job Details carrying this result, so that page's trail reads
+     AI Interviews › <interview> › <candidate> › job instead of resetting to
+     Job Descriptions. */
+  const openJobFromResult = (jdId: string) => {
+    const here = new URL(window.location.href);
+    if (here.pathname.startsWith('/recruitment/job-details') && here.searchParams.get('id') === jdId) {
+      onBack();
+      return;
+    }
+    const params = new URLSearchParams({ id: jdId });
+    if (here.pathname.startsWith('/recruitment/ai-interviews/')) {
+      params.set('from', 'ai-interview-result');
+      /* Mirror this page's own trail: opened from the AI Interviews list's
+         Candidate Results / Invitation Status tab it has no interview crumb
+         (Dashboard › AI Interviews › <candidate>), so none is sent — only
+         which tab "AI Interviews" returns to. Otherwise the interview the
+         candidate sat sits between the list and the candidate. */
+      const resultOrigin = here.searchParams.get('from');
+      if (resultOrigin === 'candidate-results' || resultOrigin === 'invitation-status') {
+        params.set('result_origin', resultOrigin);
+      } else {
+        const configId = interview.config_id || liveSession.config_id;
+        if (configId) params.set('interview_id', configId);
+        params.set('interview_title', interview.position || (interview as any).jd_title || '');
+      }
+      params.set('candidate_name', interview.candidate_name || '');
+      params.set('return_to', `${here.pathname}${here.search}`);
+    }
+    router.push(`/recruitment/job-details?${params.toString()}`);
+  };
   const candidateBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
     onNavigateToList
@@ -2010,10 +2092,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     sm+: absolute, 144px wide, inset 10px from the banner's
                     left / top / bottom border with all four corners rounded —
                     the banner's height still comes from its content. */}
-                <div className="w-16 h-16 rounded-xl ring-1 ring-brand-blue/15 sm:absolute sm:top-2.5 sm:bottom-2.5 sm:left-2.5 sm:w-36 sm:h-auto sm:rounded-lg shadow-sm overflow-hidden bg-brand-blue/10 flex items-center justify-center shrink-0">
+                <div className={`w-16 h-16 rounded-xl ring-1 ring-brand-blue/15 sm:absolute sm:top-2.5 sm:bottom-2.5 sm:left-2.5 sm:w-36 sm:h-auto sm:rounded-lg shadow-sm overflow-hidden flex items-center justify-center shrink-0 ${
+                  // No photo: a plain slot, so the tinted NameAvatar isn't a tint-on-tint badge.
+                  identityPhotoUrl ? 'bg-brand-blue/10' : 'bg-white dark:bg-slate-900'
+                }`}>
                   {identityPhotoUrl
                     ? <img src={identityPhotoUrl} alt={interview.candidate_name || 'Candidate'} className="w-full h-full object-cover object-top" />
-                    : <span className="text-2xl sm:text-3xl font-bold text-brand-blue">{(interview.candidate_name || 'U')[0].toUpperCase()}</span>}
+                    : <NameAvatar name={interview.candidate_name} fallback={interview.candidate_email} size="xl" />}
                 </div>
                 <div className="min-w-0">
                 <div className="mb-2">
@@ -2067,6 +2152,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <Link
                           key="job"
                           href={`/recruitment/job-details?id=${encodeURIComponent(jdId)}`}
+                          onClick={(e) => {
+                            if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                            e.preventDefault();
+                            openJobFromResult(jdId);
+                          }}
                           title="Open this job"
                           className="group inline-flex items-center gap-1 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
                         >
@@ -2289,8 +2379,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 size="sm"
                 type="button"
                 onClick={handleReEvaluate}
-                disabled={reEvaluating}
-                title="The candidate answered all questions — re-run the full evaluation. This can be done only once."
+                disabled={reEvaluating || jdDisabled}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : 'The candidate answered all questions — re-run the full evaluation. This can be done only once.'}
                 className="shrink-0"
               >
                 {reEvaluating ? 'Re-Evaluating…' : 'Re-Evaluate'}
@@ -2436,6 +2526,23 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     </button>
                   );
                 })}
+                {/* View JD — below the result tabs, set off by a rule on the
+                    desktop rail; one more pill on tablet / mobile. Opens the
+                    interview's job description in the content pane. */}
+                <div aria-hidden="true" className="hidden lg:block my-1 h-px bg-gray-100 dark:bg-slate-700/60" />
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('viewjd')}
+                  aria-current={activeTab === 'viewjd' ? 'page' : undefined}
+                  className={`${tabPill(activeTab === 'viewjd')} whitespace-nowrap lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:whitespace-normal lg:shadow-none ${
+                    activeTab === 'viewjd'
+                      ? 'lg:bg-brand-blue/5 lg:text-brand-blue lg:font-medium lg:ring-1 lg:ring-brand-blue/20'
+                      : 'lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue'
+                  }`}
+                >
+                  <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4"><Briefcase className="w-4 h-4" /></span>
+                  <span className="leading-snug lg:min-w-0 lg:flex-1">View JD</span>
+                </button>
               </div>
             </nav>
           </div>
@@ -2444,8 +2551,37 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
             box instead of stretching the grid column. */}
         <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="p-6">
-            {/* Evaluation pending spinner — shown for ALL tabs while batch eval runs */}
-            {evaluationPending && renderEvaluationSpinner()}
+            {/* Evaluation pending spinner — shown for ALL tabs while batch eval
+                runs, except View JD, which does not depend on the evaluation. */}
+            {evaluationPending && activeTab !== 'viewjd' && renderEvaluationSpinner()}
+
+            {/* View JD — the linked job description, read-only, with the same
+                components (and so the same reading) as the AI Interview
+                Details page's View JD tab. */}
+            {activeTab === 'viewjd' && (
+              <div className="space-y-4 sm:space-y-5">
+                {!resultJdId ? (
+                  <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No linked job description found</p>
+                  </div>
+                ) : resultJdError ? (
+                  <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <AlertTriangle className="w-8 h-8 text-destructive mx-auto mb-2" />
+                    <p className="text-sm text-destructive">{resultJdError}</p>
+                  </div>
+                ) : !resultJdLoaded || !resultJd ? (
+                  <div className="px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    <JDIdentityHeader jd={resultJd} versionNumber={interview.jd_version ?? undefined} />
+                    <JDOverviewSections jd={resultJd} />
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Overview Tab — candidate profile + performance summary (new design) */}
             {!evaluationPending && activeTab === 'overview' && (() => {
@@ -3202,14 +3338,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   const pct = Math.min(100, Math.max(0, (s.score / 10) * 100));
                                   return (
                                     <div key={i} className="bg-slate-50 rounded-lg p-3">
-                                      <div className="flex items-center justify-between mb-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                          <span className="text-sm font-medium text-gray-900">{s.skill}</span>
+                                      <div className="flex flex-wrap items-center justify-between gap-y-1 mb-1.5">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-sm font-medium text-gray-900 truncate">{s.skill}</span>
                                           {s.priority > 0 && (
-                                            <span className="text-2xs text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200">P{s.priority}</span>
+                                            <span className="text-2xs text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200 flex-shrink-0">P{s.priority}</span>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-4 text-xs">
+                                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
                                           <div><span className="text-gray-500">Score</span> <span className="font-semibold text-gray-900">{formatScore1(s.score)}</span></div>
                                           <div><span className="text-gray-500">Weight</span> <span className="font-semibold text-gray-900">{w}</span></div>
                                           <div><span className="text-gray-500">Contribution</span> <span className="font-semibold text-gray-900">{formatScore1(contribution)}</span></div>
@@ -3229,7 +3365,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {skillsForQ.length > 0 && !isSkipped && totalW > 0 && (
                             <div className="bg-brand-blue/5 ring-1 ring-dashed ring-brand-blue/30 rounded-lg p-3">
                               <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
-                              <div className="font-mono text-xs text-gray-700 space-y-0.5">
+                              <div className="font-mono text-xs text-gray-700 space-y-0.5 break-words">
                                 <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
                                 <div>= ({skillsForQ.map(s => `${formatScore1(s.score)}×${priorityWeight(s.priority)}`).join(' + ')}) / {totalW} = {formatScore1(finalScore)}</div>
                               </div>
@@ -3487,8 +3623,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     return (
                       <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <ShieldAlert className="w-4 h-4 text-brand-blue" />
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
+                            <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
                             <button
                               type="button"
@@ -4139,8 +4275,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 return (
                   <div className="w-full">
                     {/* Header with view toggle */}
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
                             B
@@ -4149,9 +4285,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-brand-cyan ring-1 ring-white/20 shadow-sm shadow-brand-cyan/15 flex items-center justify-center text-white font-semibold text-2xs">
-                            {candidateName[0].toUpperCase()}
-                          </div>
+                          <NameAvatar name={candidateName} size="sm" />
                           <span className="text-xs text-gray-500">{candidateName}</span>
                         </div>
                       </div>
@@ -4212,11 +4346,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               key={idx}
                               className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-brand-teal/30' : 'border-brand-cyan/30'}` : ''}`}
                             >
-                              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm ${
-                                isAssistant ? 'bg-brand-blue text-white shadow-brand-blue/20' : 'bg-brand-cyan text-white shadow-brand-cyan/15'
-                              }`}>
-                                {isAssistant ? 'B' : candidateName[0].toUpperCase()}
-                              </div>
+                              {isAssistant ? (
+                                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ring-1 ring-white/20 shadow-sm bg-brand-blue text-white shadow-brand-blue/20">
+                                  B
+                                </div>
+                              ) : (
+                                <NameAvatar name={candidateName} size="sm" className="mt-0.5" />
+                              )}
 
                               <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
                                 {(label || language) && (

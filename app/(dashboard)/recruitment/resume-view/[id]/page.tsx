@@ -235,6 +235,7 @@ import CandidateActivityCard from '@/components/resumes/CandidateActivityCard';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
+import NameAvatar from '@/components/ui/name-avatar';
 import {
   INTERNAL_DB_PERMISSIONS,
   MY_RESUMES_PERMISSIONS,
@@ -351,18 +352,20 @@ export default function ResumeViewPage() {
       : storedTitle || fallback;
 
   /* My Resumes and the Shared Database are tabs of one Resume Database page:
-     Resume Database › <the tab the resume was opened from>. The two crumbs go
-     to different places — the page, then that tab (`?tab=`) — instead of both
-     to the tab. A pool the user cannot see is never named, and a resume not
-     opened from a pool (search, an upload, a scoring screen) gets the page
-     alone rather than a guessed tab. */
+     Resume Database › <the tab the resume was opened from>. Both crumbs open
+     that tab (`?tab=`): the page without one lands on My Resumes, which sent a
+     Shared Database user to the wrong pool. A pool the user cannot see is never
+     named or linked, and a resume not opened from a pool (search, an upload, a
+     scoring screen) gets the page alone rather than a guessed tab. */
   const canSeePool = (pool: ResumeTab) =>
     isTenantAdmin ||
     (pool === 'my-resumes' ? MY_RESUMES_PERMISSIONS : INTERNAL_DB_PERMISSIONS).some((k) => hasPermission(k));
   const resumeDatabaseCrumb = { label: 'Resume Database', href: '/recruitment/resume-database' };
   const sourceCrumbs =
     crumbPool ? [
-      resumeDatabaseCrumb,
+      canSeePool(crumbPool)
+        ? { ...resumeDatabaseCrumb, href: resumeDatabaseTabHref(crumbPool) }
+        : resumeDatabaseCrumb,
       ...(canSeePool(crumbPool)
         ? [{ label: RESUME_TAB_LABEL[crumbPool], href: resumeDatabaseTabHref(crumbPool) }]
         : []),
@@ -1472,13 +1475,6 @@ Best regards`);
             const email = asText(resume.email);
             const phone = asText(resume.phone);
 
-            const initials = name
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase() ?? '')
-              .join('') || '?';
-
             const facts = [
               { icon: MapPin, text: asText(resume.location) },
               { icon: Briefcase, text: asText(resume.experience) },
@@ -1495,18 +1491,19 @@ Best regards`);
               <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-5 sm:p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
                 {/* Identity row */}
                 <div className="flex items-start gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-brand-blue text-white flex items-center justify-center text-lg font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
-                    {initials}
-                  </div>
+                  <NameAvatar name={asText(resume.name)} fallback={email} size="xl" />
 
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
+                    {/* Below sm the Source / View chips drop under the name so the
+                        name keeps the full row width instead of collapsing to a
+                        sliver on a phone; sm+ keeps them beside the name. */}
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                       <div className="min-w-0">
-                        <h2 className="text-2xl font-bold text-gray-900 tracking-tight truncate">
+                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight break-words sm:truncate">
                           {name}
                         </h2>
                         {title && (
-                          <p className="text-base text-gray-600 truncate">{title}</p>
+                          <p className="text-sm sm:text-base text-gray-600 break-words sm:truncate">{title}</p>
                         )}
                       </div>
 
@@ -2234,12 +2231,12 @@ Best regards`);
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <div className="flex items-center gap-2 gap-y-2 mb-6 flex-wrap">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
                   <History className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Version History</h3>
-                <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
+                <h3 className="text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
+                <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
                 {resume.versions.length > 1 && (
@@ -2279,8 +2276,8 @@ Best regards`);
                           : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02]'
                       }`}>
                         <div className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 flex-1">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
                               {/* Compare checkbox */}
                               {resume.versions.length > 1 && (
                                 <label className="flex items-center cursor-pointer flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -2311,22 +2308,22 @@ Best regards`);
                                   )}
                                 </div>
                                 <div className="text-xs text-gray-500 mb-1 truncate">{version.name}</div>
-                                <div className="flex items-center gap-3 text-xs text-gray-600">
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-600">
+                                  <span className="flex items-center gap-1 whitespace-nowrap">
+                                    <Clock className="w-3 h-3 shrink-0" />
                                     {formatIST(version.uploadDate)}
                                   </span>
-                                  <span>•</span>
-                                  <span>{version.size}</span>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1">
-                                    <User className="w-3 h-3" />
-                                    {version.uploadedBy}
+                                  <span className="text-gray-300">•</span>
+                                  <span className="whitespace-nowrap">{version.size}</span>
+                                  <span className="text-gray-300">•</span>
+                                  <span className="flex items-center gap-1 whitespace-nowrap min-w-0">
+                                    <User className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{version.uploadedBy}</span>
                                   </span>
                                 </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                               {/* View Changes - opens popup comparing to previous version */}
                               {previousVersion && (
                                 <button

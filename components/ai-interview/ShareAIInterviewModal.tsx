@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -18,6 +18,7 @@ import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
 import { isValidEmailFormat } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ListPagination from '@/components/ListPagination';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
@@ -115,6 +116,8 @@ const ROUND_LABELS: Record<string, string> = {
 export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, onInvitesChanged, embedded = false, initialCandidates, interviewVersion: interviewVersionProp, onBack, inPopupStep = false, footerTarget = null, jobVersion }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
+  // A disabled job's interview can't be shared until the job is enabled again.
+  const jdDisabled = isJdDisabled(config?.jd_status);
 
   /* Interview version for the header. A config stores no number of its own —
      it is this config's place among its job version's configs, which only
@@ -515,8 +518,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   /* Add: a complete entry row joins the candidate list; a fresh empty row
      takes its place when it was the last one. */
+  /* A typed name with anything but letters and spaces. Database rows are
+     exempt: their name comes read-only from the resume, so the recruiter
+     could not correct it here. */
+  const hasInvalidName = (c: CandidateEmail) =>
+    c.source !== 'database' && !!c.name.trim() && !isValidCandidateName(c.name);
   const canAddEntry = (c: CandidateEmail) =>
-    !!c.name.trim() && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
+    !!c.name.trim() && !hasInvalidName(c) && isValidEmail(c.email) && !isDuplicateEmail(c.id, c.email);
   const addEntry = (id: string) => {
     setCandidates((prev) => {
       const next = prev.map((c) => (c.id === id ? { ...c, added: true } : c));
@@ -754,11 +762,19 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   );
 
   const handleCopyLinkForCandidate = async (candidateId: string) => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     const candidate = candidates.find(c => c.id === candidateId);
     if (!candidate) return;
 
     if (!candidate.name.trim() || !candidate.email.trim()) {
       toast.error('Please fill in candidate name and email first');
+      return;
+    }
+    if (hasInvalidName(candidate)) {
+      toast.error(NAME_FORMAT_ERROR);
       return;
     }
     if (!isValidEmail(candidate.email)) {
@@ -820,6 +836,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const sendCandidates = pendingDbSelection ? mergeSelectedResumes() : candidates;
 
   const handleSend = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     setIsSubmitting(true);
     try {
       // Fold the ticked resumes into the list so it matches what was sent.
@@ -840,6 +860,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
       if (candidatesWithData.length === 0) {
         toast.warning('Please add at least one candidate with name and email');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Validate all names
+      const invalidNames = candidatesWithData.filter(hasInvalidName);
+      if (invalidNames.length > 0) {
+        toast.error(`Invalid name(s): ${invalidNames.map((c) => c.name.trim()).join(', ')}. ${NAME_FORMAT_ERROR}`);
         setIsSubmitting(false);
         return;
       }
@@ -1005,19 +1033,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   //     in the list" / invalid email), so the button now disables whenever any
   //     of those are visible instead of letting the recruiter click Send.
   const hasAtLeastOneValid = sendCandidates.some(
-    (c) => c.name.trim() && c.email.trim() && isValidEmail(c.email),
+    (c) => c.name.trim() && !hasInvalidName(c) && c.email.trim() && isValidEmail(c.email),
   );
   const hasBlockingRowError = sendCandidates.some((c) => {
     const inUse = c.name.trim() || c.email.trim();
     if (!inUse) return false; // fully-empty row is ignored, not an error
     return (
       !c.name.trim() ||
+      hasInvalidName(c) ||
       !c.email.trim() ||
       !isValidEmail(c.email) ||
       sendCandidates.some((o) => o.id !== c.id && o.email.trim().toLowerCase() === c.email.trim().toLowerCase())
     );
   });
-  const isValid = hasAtLeastOneValid && !hasBlockingRowError;
+  const isValid = hasAtLeastOneValid && !hasBlockingRowError && !jdDisabled;
 
   // Success screen
   if (showSuccess) {
@@ -1404,7 +1433,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           </span>
                         );
                       })()}
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         {/* Full Name and Email Address are equal-width columns; Copy Link / Add
                             sit beside the grid, so they don't squeeze either input. */}
                         <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1416,10 +1445,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full h-10 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue/40 focus:border-transparent ${
-                                candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
+                              aria-invalid={hasInvalidName(candidate) ? 'true' : undefined}
+                              className={`w-full h-10 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-inset ${
+                                candidate.source === 'database'
+                                  ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
+                                  : hasInvalidName(candidate)
+                                    ? 'border-destructive-line focus:ring-destructive-line'
+                                    : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                               }`}
                             />
+                            {hasInvalidName(candidate) && (
+                              <p className="text-xs text-destructive mt-1">{NAME_FORMAT_ERROR}</p>
+                            )}
                           </div>
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
@@ -1654,7 +1691,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             {inputMode === 'database' && (
               <div className="border-2 border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
+                <div className="flex overflow-x-auto border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
                   {/* RBAC: both source tabs are always listed; one the user
                       cannot open is greyed with a tooltip (never hidden). */}
                   {(() => {
@@ -1936,7 +1973,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               type="button"
               onClick={() => setShowEmailPreview(v => !v)}
               aria-expanded={showEmailPreview}
-              className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
+              className="w-full flex flex-wrap items-center justify-between gap-y-2 gap-3 px-4 sm:px-6 py-4 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-brand-blue" />
@@ -1958,13 +1995,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             {/* Actual Email Template Preview */}
             <div className="bg-white rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden max-w-xl mx-auto">
               {/* Brand Header */}
-              <div className="bg-brand-blue px-8 py-8 text-center">
+              <div className="bg-brand-blue px-5 sm:px-8 py-8 text-center">
                 <h1 className="text-white text-2xl font-bold mb-2">AI Interview Invitation</h1>
                 <p className="text-white/80 text-sm">TalentFlow</p>
               </div>
 
               {/* Email Body */}
-              <div className="p-8">
+              <div className="p-5 sm:p-8">
                 {/* Greeting and Message */}
                 <div className="mb-6 text-gray-700 text-base leading-relaxed whitespace-pre-line">
                   {customMessage
@@ -2009,7 +2046,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               </div>
 
               {/* Footer */}
-              <div className="bg-gray-50 px-8 py-6 text-center border-t border-gray-200">
+              <div className="bg-gray-50 px-5 sm:px-8 py-6 text-center border-t border-gray-200">
                 <p className="text-gray-500 text-xs mb-2">© 2026 TalentFlow. All rights reserved.</p>
                 <p className="text-gray-400 text-xs">If you did not expect this email, please ignore it.</p>
               </div>
@@ -2023,7 +2060,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   );
   const footerContent = (
     <>
-          <div className="text-sm text-gray-600 dark:text-slate-400">
+          <div className="text-sm text-gray-600 dark:text-slate-400 min-w-0">
             {(() => {
               const validRows = sendCandidates.filter((c) => c.name.trim() && c.email.trim());
               const validCount = validRows.length;
@@ -2042,7 +2079,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               );
             })()}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0 w-full sm:w-auto justify-end">
             {onBack && (
               <Button variant="secondary" onClick={onBack} disabled={isSubmitting} icon={<ArrowLeft className="w-4 h-4" />}>
                 Back
@@ -2051,6 +2088,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <Button
               variant="primary"
               onClick={handleSend}
+              title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
             >
               {isSubmitting ? (
@@ -2166,7 +2204,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         </div>
 
         {contentBlock}
-        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           {footerContent}
         </div>
       </div>

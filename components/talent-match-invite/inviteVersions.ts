@@ -17,7 +17,7 @@
  * of it (the clone keeps the AI-xxx ID and takes the next V-number).
  */
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
 import { getLocallyRevokedAssessmentIds, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import {
@@ -187,17 +187,7 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
  *  AI interviews" hands the shared AIInterviewPicker, which lists the active
  *  ones and needs the rest to number versions and group jobs. */
 export async function loadAllInterviewConfigs(): Promise<AIInterviewResponse[]> {
-  const live: AIInterviewResponse[] = [];
-  for (let page = 1; ; page += 1) {
-    const batch = await aiInterviewService.listConfigs({ page, page_size: 100, compact: true });
-    const items = batch.items || [];
-    live.push(...items);
-    if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
-  }
-  const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-  const archived = archivedProbe.total > archivedProbe.items.length
-    ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-    : archivedProbe.items;
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
   const seen = new Set<string>();
   return [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
 }
@@ -232,7 +222,7 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
         config: c,
         mapped: !!live && c.id === live.id,
         jdId: c.jd_id as string,
-        sendable: status === 'active',
+        sendable: status === 'active' && !isJdDisabled(c.jd_status),
       };
     })
     .sort(byVersionDesc);
@@ -364,6 +354,7 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
   return {
     action: 'publish',
     label: 'Publish',
+    disabledReason: v.kind === 'interview' && isJdDisabled(v.config?.jd_status) ? JD_DISABLED_ACTION_MESSAGE : undefined,
     confirm: {
       title: `Publish v${v.version}?`,
       message: `${v.name} v${v.version} becomes Active and can be sent to candidates.`,
@@ -391,6 +382,14 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
  * (only once sent), Archive. Any other status: View, Duplicate, Archive.
  */
 export function versionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
+  const items = baseVersionActions(v, versions, perms);
+  /* A disabled job's interviews stay viewable; every other action waits
+     until the job is enabled again. */
+  if (v.kind !== 'interview' || !isJdDisabled(v.config?.jd_status)) return items;
+  return items.map((item) => (item.action === 'view' ? item : { ...item, disabledReason: JD_DISABLED_ACTION_MESSAGE }));
+}
+
+function baseVersionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
   const noUpdate = 'You do not have permission to edit';
 
   if (v.kind === 'assessment') {
@@ -564,6 +563,9 @@ export interface InviteCandidate {
   rating?: number;
   resumeId?: string;
   source?: InviteCandidateSource;
+  /** This job's resume score (Job Details' Create / Send): the latest score
+   *  and match status, or 'unscored'. Omitted = no score chip. */
+  score?: { percent: number; matchStatus: string } | 'unscored';
 }
 
 export type DeliveryMethod = 'email' | 'link';

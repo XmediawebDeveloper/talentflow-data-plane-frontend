@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera, Play, Users, Cpu, Code, Video, Menu, Download, ArrowUpRight, Timer } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
+import { Fragment, useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
@@ -34,6 +34,7 @@ import {
   getDisplaySectionPercentage,
 } from '@/lib/utils/assessmentResultScoring';
 import { exportAssessmentReportPDF } from '@/lib/reports/assessmentReportPdf';
+import NameAvatar from '@/components/ui/name-avatar';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -194,6 +195,30 @@ export default function CandidateResultDetails({
   onCandidateLoaded,
 }: CandidateResultDetailsProps) {
   const router = useRouter();
+  /* The job, from this result — the header's job link and the View JD
+     header alike. Inside that job's own Job Details page it closes this view
+     (the job is already the page underneath). Elsewhere it opens Job Details
+     carrying this result, so that page's trail continues this one: opened
+     from the Assessments list's Candidate Results / Invitation Status tab the
+     trail has no assessment crumb, so none is sent — only that tab. */
+  const openJobFromResult = (jdRowId: string, candidateName: string) => {
+    const here = new URL(window.location.href);
+    if (here.pathname.startsWith('/recruitment/job-details') && here.searchParams.get('id') === jdRowId) {
+      onBack();
+      return;
+    }
+    const params = new URLSearchParams({ id: jdRowId, from: 'assessment-result' });
+    const resultOrigin = here.searchParams.get('from');
+    if (resultOrigin === 'candidate-results' || resultOrigin === 'invitation-status') {
+      params.set('result_origin', resultOrigin);
+    } else {
+      params.set('assessment_id', assessmentId);
+      params.set('assessment_title', assessmentTitle || '');
+    }
+    params.set('candidate_name', candidateName);
+    params.set('return_to', `${here.pathname}${here.search}`);
+    router.push(`/recruitment/job-details?${params.toString()}`);
+  };
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -289,7 +314,7 @@ export default function CandidateResultDetails({
   // Performance scores, which exist before scoring finishes; the insights card
   // itself still waits for scoring.
   const insightsTab: CandidateDetailTab = { id: 'candidate-insights', label: 'AI-Generated Candidate Insights', icon: Award };
-  const viewJdTab: CandidateDetailTab | null = assessmentMeta ? { id: 'jd-summary', label: 'View JD', icon: FileText } : null;
+  const viewJdTab: CandidateDetailTab | null = assessmentMeta ? { id: 'jd-summary', label: 'View JD', icon: Briefcase } : null;
   const formatRoundTabLabel = (roundType: string) =>
     `${roundType.toLowerCase() === 'hr' ? 'HR' : roundType.charAt(0).toUpperCase() + roundType.slice(1)} Round`;
   // Rounds come from the candidate's own result, so a Coding Round appears only
@@ -337,8 +362,10 @@ export default function CandidateResultDetails({
     ...roundTab('technical'),
     ...roundTab('coding'),
     ...otherRoundTabs,
-    ...(viewJdTab ? [viewJdTab] : []),
     ...recordingTabs,
+    // Below Violations, set off by a rule on the desktop rail — the AI
+    // Interview result page's View JD placement.
+    ...(viewJdTab ? [viewJdTab] : []),
   ];
   // Falls back while the selected tab is still unavailable, e.g. the JD
   // snapshot request hasn't returned yet on first paint.
@@ -1136,9 +1163,7 @@ export default function CandidateResultDetails({
         <div className="rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl ring-1 ring-brand-blue/15 bg-brand-blue/10 shadow-sm flex items-center justify-center text-brand-blue text-xl sm:text-2xl font-bold flex-shrink-0">
-                {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
-              </div>
+              <NameAvatar name={candidateData?.name} fallback={candidateData?.email} size="xl" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
                   <h1 className="min-w-0 text-lg sm:text-xl text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
@@ -1159,16 +1184,11 @@ export default function CandidateResultDetails({
                 {(() => {
                   const cid = candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`;
                   const email = candidateData?.email;
-                  const jobName = [jdId, jdTitle].filter(Boolean).join(' - ');
+                  // The job title alone, as the AI Interview result header
+                  // shows it — no JD ID or version labels.
+                  const jobName = jdTitle || jdId;
                   const jdRowId: string | undefined = assessmentMeta?.jd_id;
-                  const jobLabel = (
-                    <>
-                      {jobName}
-                      {jdVersion != null && (
-                        <span className="px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue text-2xs font-semibold">V{jdVersion}</span>
-                      )}
-                    </>
-                  );
+                  const jobLabel = <>{jobName}</>;
                   const parts: React.ReactNode[] = [];
                   if (cid) parts.push(<span key="cid">{cid}</span>);
                   if (email) parts.push(<span key="email" className="truncate" title={email}>{email}</span>);
@@ -1176,6 +1196,11 @@ export default function CandidateResultDetails({
                     <Link
                       key="job"
                       href={`/recruitment/job-details?id=${encodeURIComponent(jdRowId)}`}
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        e.preventDefault();
+                        openJobFromResult(jdRowId, detailedResult?.candidate_name || candidateDisplayId || '');
+                      }}
                       title="Open this job"
                       className="group inline-flex items-center gap-1.5 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
                     >
@@ -1428,11 +1453,14 @@ export default function CandidateResultDetails({
           <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
-              {detailTabs.map(tab => {
+              {detailTabs.map((tab, tabIndex) => {
                 const isActive = currentDetailTab === tab.id;
                 return (
+                  <Fragment key={tab.id}>
+                  {tab.id === 'jd-summary' && tabIndex > 0 && (
+                    <div aria-hidden="true" className="hidden lg:block my-1 h-px bg-gray-100 dark:bg-slate-700/60" />
+                  )}
                   <button
-                    key={tab.id}
                     onClick={() => handleDetailTabClick(tab)}
                     aria-current={isActive ? 'page' : undefined}
                     className={`${
@@ -1471,6 +1499,7 @@ export default function CandidateResultDetails({
                       </span>
                     )}
                   </button>
+                  </Fragment>
                 );
               })}
             </div>
@@ -1572,15 +1601,7 @@ export default function CandidateResultDetails({
                       jd={jdData}
                       versionNumber={jdVersion ?? undefined}
                       onOpen={breadcrumbItems && breadcrumbItems.length > 0 ? undefined : () => {
-                        const params = new URLSearchParams({
-                          id: jdData.id,
-                          from: 'assessment-result',
-                          assessment_id: assessmentId,
-                          assessment_title: assessmentTitle || '',
-                          candidate_name: detailedResult?.candidate_name || candidateDisplayId || '',
-                          return_to: `${window.location.pathname}${window.location.search}`,
-                        });
-                        router.push(`/recruitment/job-details?${params.toString()}`);
+                        openJobFromResult(jdData.id, detailedResult?.candidate_name || candidateDisplayId || '');
                       }}
                     />
                     <JDOverviewSections jd={jdData} />

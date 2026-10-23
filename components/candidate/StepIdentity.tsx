@@ -1193,7 +1193,7 @@ export default function StepIdentity({
                   const shotTaken = phase !== 'photo_ready';
                   const captured = phase === 'captured';
                   return (
-                    <div className="px-3 sm:px-4 py-4 flex-1 flex flex-col min-[380px]:flex-row items-stretch gap-4 min-[380px]:gap-2">
+                    <div className="px-3 sm:px-4 py-4 flex-1 flex flex-col min-[480px]:flex-row items-stretch gap-4 min-[480px]:gap-2">
                       <HowItWorksCard
                         num={1}
                         done={shotTaken}
@@ -1202,7 +1202,7 @@ export default function StepIdentity({
                       >
                         <Image src="/images/identity/how-it-works-1.png" alt="Candidate holding their glasses, ready to take them off" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
                       </HowItWorksCard>
-                      <div className="hidden min-[380px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
+                      <div className="hidden min-[480px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
                         <ArrowRight className="w-4 h-4 text-brand-blue" />
                       </div>
                       <HowItWorksCard
@@ -1213,7 +1213,7 @@ export default function StepIdentity({
                       >
                         <Image src="/images/identity/how-it-works-2.png" alt="Candidate without glasses, face centred in the frame" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
                       </HowItWorksCard>
-                      <div className="hidden min-[380px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
+                      <div className="hidden min-[480px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
                         <ArrowRight className="w-4 h-4 text-brand-blue" />
                       </div>
                       <HowItWorksCard

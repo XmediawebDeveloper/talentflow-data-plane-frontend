@@ -172,7 +172,7 @@ export function usePermissionChangeDialog() {
       actions={actions}
     >
       {opts && (
-        <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
+        <div className="space-y-3 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
           <div>{opts.summary}</div>
           {detailCount > 0 && (
             <p className="text-xs text-gray-500 dark:text-slate-400">
@@ -191,7 +191,7 @@ export function usePermissionChangeDialog() {
                 });
                 return (
                   <div key={g.heading} className="space-y-2.5">
-                    <p className="text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
                       {g.heading} <span className="text-gray-400 dark:text-slate-600">· {g.codes.length}</span>
                     </p>
                     {Array.from(bySection.entries()).map(([section, codes]) => (
@@ -211,7 +211,7 @@ export function usePermissionChangeDialog() {
                                 <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${permissionBadgeClass(permissionActionOf(code))}`}>
                                   <span className="text-xs font-semibold uppercase">{label[0] || 'P'}</span>
                                 </span>
-                                <p className="min-w-0 break-words text-sm font-semibold leading-snug text-gray-900 dark:text-slate-50">{label}</p>
+                                <p className="min-w-0 break-words text-sm max-sm:text-[13px] font-semibold leading-snug text-gray-900 dark:text-slate-50">{label}</p>
                               </div>
                             );
                           })}

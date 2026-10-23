@@ -11,6 +11,7 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
+import { draftVersionEditorUrl, openDraftVersionForEdit } from '@/lib/utils/jdDraftVersion';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -178,14 +179,63 @@ function JobDetailsContent() {
      <candidate> › this job. `return_to` is only honoured as a path inside the
      Assessments module, so the link cannot be pointed anywhere else. */
   const fromAssessmentResult = searchParams.get('from') === 'assessment-result';
+  /* The Assessments list tab that result was opened from (Candidate Results /
+     Invitation Status): that trail has no assessment crumb, and its
+     "AI Assessments" crumb returns to the tab. */
+  const assessmentResultOriginTab = (() => {
+    const origin = searchParams.get('result_origin');
+    return origin === 'candidate-results' ? 'completed-candidates'
+      : origin === 'invitation-status' ? 'invitation-status'
+        : '';
+  })();
   /* Opened from an assessment's own details page (its Go to JD link): the
      trail is Assessments › <assessment> › this job. */
   const fromAssessmentDetails = searchParams.get('from') === 'assessment-details';
+  /* That assessment page's own query (list / tab / origin), so the trail's
+     assessment crumb returns to the same view. Only those keys are kept. */
+  const assessmentQuery = (() => {
+    const raw = new URLSearchParams(searchParams.get('assessment_query') || '');
+    const kept = new URLSearchParams();
+    for (const key of ['list', 'tab', 'from']) {
+      const value = raw.get(key);
+      if (value) kept.set(key, value);
+    }
+    const s = kept.toString();
+    return s ? `?${s}` : '';
+  })();
   /* Opened from an AI interview's own details page (its Go to JD link): the
      trail is AI Interviews › <interview> › this job. */
   const fromAiInterviewDetails = searchParams.get('from') === 'ai-interview-details';
+  /* Opened from a candidate's AI interview result (its header job link):
+     the trail continues that page's own — AI Interviews › <interview> ›
+     <candidate> › this job. `return_to` is only honoured as a path inside the
+     AI Interviews module, as `assessment-result` does for Assessments. */
+  const fromAiInterviewResult = searchParams.get('from') === 'ai-interview-result';
+  /* The AI Interviews tab the result was opened from (Candidate Results /
+     Invitation Status) — that trail has no interview crumb, and its
+     "AI Interviews" crumb returns to the tab. */
+  const aiResultOriginTab = (() => {
+    const origin = searchParams.get('result_origin');
+    return origin === 'candidate-results' || origin === 'invitation-status' ? origin : '';
+  })();
+  const aiResultReturnTo = (() => {
+    const to = searchParams.get('return_to') || '';
+    return to.startsWith('/recruitment/ai-interviews/') && !to.startsWith('//') && !to.includes('://') ? to : '';
+  })();
   const interviewId = searchParams.get('interview_id') || '';
   const interviewTitle = searchParams.get('interview_title') || '';
+  /* The interview page's own query (its list / tab / origin), so the trail's
+     interview crumb returns to the same view. Only those keys are kept. */
+  const interviewQuery = (() => {
+    const raw = new URLSearchParams(searchParams.get('interview_query') || '');
+    const kept = new URLSearchParams();
+    for (const key of ['list', 'from', 'detailTab']) {
+      const value = raw.get(key);
+      if (value) kept.set(key, value);
+    }
+    const s = kept.toString();
+    return s ? `?${s}` : '';
+  })();
   const resultAssessmentId = searchParams.get('assessment_id') || '';
   const resultAssessmentTitle = searchParams.get('assessment_title') || '';
   const resultCandidateName = searchParams.get('candidate_name') || '';
@@ -518,9 +568,24 @@ function JobDetailsContent() {
       return;
     }
 
-    // Not in use — open the creation flow, which loads this JD by id and
-    // pre-fills every stage from it.
-    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromAiInterview ? '&from=ai-interview' : ''}`);
+    // Not in use. A draft is edited directly; a PUBLISHED JD is edited through its
+    // draft version, never the live row - the editor saves at every step, so the
+    // live job used to change before Republish. The job's existing open draft is
+    // reused if there is one.
+    const fromQuery = fromAiInterview ? '&from=ai-interview' : '';
+    if (editJob.status === 'Draft') {
+      router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromQuery}`);
+      return;
+    }
+    try {
+      const draft = await openDraftVersionForEdit(editJob.id);
+      router.push(draftVersionEditorUrl(draft, fromQuery));
+    } catch (error) {
+      console.error('Failed to open a draft version for editing:', error);
+      toast.error('Could not open this JD for editing', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    }
   };
 
   /* Editing an in-use JD forks it into a NEW version — a fresh draft copy with
@@ -535,12 +600,19 @@ function JobDetailsContent() {
     try {
       const newJd = await jdService.createNewVersion(jobId);
       setEditBlock(null);
-      toast.success('New version created', {
-        description: `Version ${(newJd as { version_number?: number }).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
-      });
+      // The job already had an open draft version: that one is reopened, not a new copy.
+      if (newJd.reused_existing_draft) {
+        toast.success('Opened the existing draft version', {
+          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+        });
+      } else {
+        toast.success('New version created', {
+          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+        });
+      }
       // `new_version=1`: the editor names this "New Version" (reopening the
       // draft later, without it, reads "Edit New Version").
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create&new_version=1${fromAiInterview ? '&from=ai-interview' : ''}`);
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create${newJd.reused_existing_draft ? '' : '&new_version=1'}${fromAiInterview ? '&from=ai-interview' : ''}`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setCreatingVersion(false);
@@ -692,8 +764,11 @@ function JobDetailsContent() {
   const breadcrumbItems = fromAssessmentResult
     ? [
         { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Assessments', href: '/recruitment/assessments' },
-        ...(resultAssessmentId
+        {
+          label: 'AI Assessments',
+          href: assessmentResultOriginTab ? `/recruitment/assessments?tab=${assessmentResultOriginTab}` : '/recruitment/assessments',
+        },
+        ...(resultAssessmentId && !assessmentResultOriginTab
           ? [{
               label: resultAssessmentTitle || 'Assessment',
               href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}/results`,
@@ -707,12 +782,30 @@ function JobDetailsContent() {
     : fromAssessmentDetails
     ? [
         { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Assessments', href: '/recruitment/assessments' },
+        { label: 'AI Assessments', href: '/recruitment/assessments' },
         ...(resultAssessmentId
           ? [{
               label: resultAssessmentTitle || 'Assessment',
-              href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}`,
+              href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}${assessmentQuery}`,
             }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAiInterviewResult
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        {
+          label: 'AI Interviews',
+          href: aiResultOriginTab ? `/recruitment/ai-interviews?tab=${aiResultOriginTab}` : '/recruitment/ai-interviews',
+        },
+        ...(interviewId && !aiResultOriginTab
+          ? [{
+              label: interviewTitle || 'Interview Details',
+              href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}?detailTab=results`,
+            }]
+          : []),
+        ...(aiResultReturnTo
+          ? [{ label: resultCandidateName || 'Candidate Results', href: aiResultReturnTo }]
           : []),
         { label: job.title || 'Job Details' },
       ]
@@ -723,7 +816,7 @@ function JobDetailsContent() {
         ...(interviewId
           ? [{
               label: interviewTitle || 'Interview Details',
-              href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}`,
+              href: `/recruitment/ai-interviews/${encodeURIComponent(interviewId)}${interviewQuery}`,
             }]
           : []),
         { label: job.title || 'Job Details' },
@@ -742,7 +835,7 @@ function JobDetailsContent() {
          it returns to this JD's configure step rather than to the picker. */
       [
         { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Assessments', href: '/recruitment/assessments' },
+        { label: 'AI Assessments', href: '/recruitment/assessments' },
         { label: 'Select Job Description', href: '/recruitment/assessments/create?step=select-jd' },
         ...(jobId
           ? [{

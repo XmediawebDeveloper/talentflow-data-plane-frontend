@@ -106,7 +106,7 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
               <div>
-                <h3 className={`text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
+                <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
                 <p className="text-xs text-gray-500 dark:text-slate-500">
                   {showAll
                     ? `${grantedCount} of ${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`
@@ -138,7 +138,7 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
                       >
                         <span className="text-xs font-semibold uppercase">{item.label[0] || 'P'}</span>
                       </span>
-                      <p className={`min-w-0 text-sm font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>
+                      <p className={`min-w-0 text-sm max-sm:text-[13px] font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>
                         {item.label}
                       </p>
                     </div>

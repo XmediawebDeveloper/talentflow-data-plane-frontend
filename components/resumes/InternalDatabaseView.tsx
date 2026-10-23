@@ -45,6 +45,7 @@ import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 interface SearchFilters {
   skills?: string[];
@@ -226,15 +227,10 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       const params = buildSearchParams();
       // Probe with the smallest possible window to learn the true total,
       // then issue one full-size request so the UI shows every record.
-      const [probe, folderResponse] = await Promise.all([
-        resumeService.list({ ...params, page_size: 1 }),
+      const [resumeResponse, folderResponse] = await Promise.all([
+        fetchAllRows((page_size, page) => resumeService.list({ ...params, page_size, page })),
         folderService.list().catch(() => []),
       ]);
-      if (isStale()) return;
-      const resumeResponse =
-        probe.total > probe.items.length
-          ? await resumeService.list({ ...params, page_size: probe.total })
-          : probe;
       if (isStale()) return;
 
       // Convert API Resume to component Resume type
@@ -516,10 +512,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // Fetch jobs for Apply to Job modal
   const fetchJobs = async () => {
     try {
-      const probe = await jdService.list({ page_size: 1, source: 'my-jds' });
-      const response = probe.total > probe.items.length
-        ? await jdService.list({ page_size: probe.total, source: 'my-jds' })
-        : probe;
+      const response = await fetchAllRows((page_size, page) => jdService.list({ page_size, page, source: 'my-jds' }));
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,
@@ -1168,7 +1161,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
         {/* Pagination */}
         {calculatedTotalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+          <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <div className="text-sm text-gray-600 dark:text-slate-400">
               Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
@@ -1432,11 +1425,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               </div>
 
               {/* Content */}
-              <div className="p-6 flex items-center gap-4 border-b border-gray-200">
-                <div className="w-16 h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
+              <div className="p-4 sm:p-6 flex items-center gap-4 border-b border-gray-200">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
                   <Users className="w-7 h-7 text-brand-blue" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
                     <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>

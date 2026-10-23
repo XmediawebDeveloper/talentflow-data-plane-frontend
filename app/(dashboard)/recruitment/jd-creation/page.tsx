@@ -6,8 +6,11 @@ import { ArrowLeft, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'l
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
-import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
+import { jdService, JDResponse, JDAccessCheckResponse, JDBeingEditedError } from '@/lib/services/jdService';
+import AppModal from '@/components/ui/app-modal';
 import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
+import { isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
+import { toast } from '@/components/ui/enhanced-toast';
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
@@ -446,6 +449,11 @@ function JDCreationContent() {
   const [loading, setLoading] = useState(true); // Start with loading true for access check
   const [accessCheck, setAccessCheck] = useState<JDAccessCheckResponse | null>(null);
   const [accessError, setAccessError] = useState<{ code: string; message: string } | null>(null);
+  /* "Being edited by X": another user changed their working copy of this draft in
+     the last 30 minutes. View only opens the JD's page; Take over saves THEIR
+     unsaved edits onto the draft first, then opens a fresh copy here. */
+  const [beingEdited, setBeingEdited] = useState<{ jdId: string; editorName: string | null; since: string | null } | null>(null);
+  const [takingOver, setTakingOver] = useState(false);
   const [isJDInUse, setIsJDInUse] = useState(false);
   const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
   /* The job title is the job's identity across its versions. A new version has
@@ -483,7 +491,35 @@ function JDCreationContent() {
         // Access granted - now fetch JD if editing
         if (jdId) {
           try {
-            const jd = await jdService.get(jdId);
+            let jd = await jdService.get(jdId);
+            /* A DRAFT is edited through the editor's working copy: every save while
+               editing goes to the copy, and the draft changes only on Save as Draft
+               or Publish. Discard then simply deletes the copy. Not for a draft
+               version forked for this visit (it is throwaway itself), nor for a row
+               that already is a copy (a new JD's, reopened by refresh). */
+            if (jd.status === 'draft' && !jd.is_working_copy && !isFreshDraftVersion(jd.id)) {
+              try {
+                const copy = await jdService.startWorkingCopy(jd.id);
+                if (copy.resumed_working_copy) {
+                  const when = copy.working_copy_updated_at
+                    ? new Date(copy.working_copy_updated_at).toLocaleString()
+                    : 'your last visit';
+                  toast.info({
+                    title: 'Unsaved changes restored',
+                    description: `You have unsaved changes from ${when}. Save as Draft to keep them, or Discard to drop them.`,
+                  });
+                }
+                jd = copy;
+              } catch (copyError) {
+                if (copyError instanceof JDBeingEditedError) {
+                  setBeingEdited({ jdId: jd.id, editorName: copyError.editorName, since: copyError.since });
+                  setLoading(false);
+                  return;
+                }
+                // Fall back to editing the draft itself rather than blocking the page.
+                console.error('[TalentFlow] Could not open a working copy:', copyError);
+              }
+            }
             console.log('[TalentFlow] Loaded JD from database:', {
               id: jd.id,
               title: jd.title,
@@ -692,7 +728,7 @@ function JDCreationContent() {
     : fromAssessment
       ? [
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Assessments', href: '/recruitment/assessments' },
+          { label: 'AI Assessments', href: '/recruitment/assessments' },
           { label: 'Create AI Assessment', href: ASSESSMENT_CREATE_HREF },
           ...jdLeafCrumbs,
         ]
@@ -807,6 +843,9 @@ function JDCreationContent() {
       // The LINEAGE version (v1, v2, ...) the Review header shows. current_version
       // above is the row's publish count - a new version's own row starts it at 1.
       version_number: editingJD.version_number,
+      // The editor's working copy: which draft it belongs to (null for a new JD).
+      is_working_copy: editingJD.is_working_copy,
+      working_copy_of: editingJD.working_copy_of ?? null,
       locations: editingJD.locations?.map(loc => ({
         city: loc.city || '',
         radius_km: loc.radius_km,
@@ -820,6 +859,54 @@ function JDCreationContent() {
   }
 
   // Show error screen if access is blocked
+  if (beingEdited) {
+    const since = beingEdited.since ? new Date(beingEdited.since).toLocaleString() : null;
+    const handleTakeOver = async () => {
+      setTakingOver(true);
+      try {
+        const copy = await jdService.startWorkingCopy(beingEdited.jdId, true);
+        setEditingJD(copy);
+        setBeingEdited(null);
+      } catch (error) {
+        console.error('[TalentFlow] Take over failed:', error);
+        toast.error({
+          title: 'Could not take over this JD',
+          description: error instanceof Error ? error.message : 'Please try again.',
+        });
+      } finally {
+        setTakingOver(false);
+      }
+    };
+    return (
+      <>
+        <JDCreationSkeleton stage={stageFromUrl || 'create'} />
+        <AppModal
+          open
+          size="sm"
+          title="Being edited by someone else"
+          subtitle={beingEdited.editorName ?? 'Another user'}
+          icon={<AlertTriangle />}
+          cancelLabel="View only"
+          onCancel={() => router.push(`/recruitment/job-details?id=${beingEdited.jdId}`)}
+          cancelDisabled={takingOver}
+          actions={[{ label: 'Take over', onClick: handleTakeOver, loading: takingOver, disabled: takingOver }]}
+        >
+          <p className="text-sm text-gray-700 dark:text-slate-300">
+            <span className="font-semibold">{beingEdited.editorName ?? 'Another user'}</span> is editing this job
+            description{since ? ` (last change ${since})` : ''}.
+          </p>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-slate-400">
+            <li><span className="font-semibold">View only</span> — open the JD without editing it.</li>
+            <li>
+              <span className="font-semibold">Take over</span> — their unsaved changes are saved to the draft first,
+              then you continue editing from there. They will not be able to save further changes.
+            </li>
+          </ul>
+        </AppModal>
+      </>
+    );
+  }
+
   if (accessError) {
     return (
       <AccessBlockedError

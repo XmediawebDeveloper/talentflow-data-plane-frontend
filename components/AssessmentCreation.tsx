@@ -46,6 +46,7 @@ import {
 } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
+import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked } from '@/lib/utils/assessmentJobLock';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -426,11 +427,14 @@ const fetchAllJdVersions = async () => {
  * Enabled only where both say yes; otherwise the button stays put and the
  * reason becomes its tooltip.
  */
-const addButtonState = (versionNumber: number | undefined, published: boolean, created: boolean) => {
+const addButtonState = (versionNumber: number | undefined, published: boolean, created: boolean, status?: string) => {
   if (!published) {
     return {
       enabled: false,
-      label: `v${versionNumber ?? 1} is not published — an assessment can only be created against a published or republished version`,
+      /* Archived / Disabled: the one message Create and Duplicate share. */
+      label: isJobVersionLocked(status)
+        ? ASSESSMENT_JOB_LOCK_MESSAGE
+        : `v${versionNumber ?? 1} is not published — an assessment can only be created against a published or republished version`,
     };
   }
   if (created) {
@@ -591,16 +595,19 @@ const EMPTY_HR_QUESTION_FORM: HRQuestionFormState = {
   time_minutes: 3,
 };
 
-function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'experience_max'>): { min: number; max: number } {
+function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'experience_max'>): { min: number; max: number | null } {
   if (job.experience_min != null || job.experience_max != null) {
     return {
       min: Number(job.experience_min ?? 0),
-      max: Number(job.experience_max ?? 0),
+      // A JD stating only a minimum ("2+ years") has no max - leave it `null`
+      // rather than falling back to 0, which produced a "2-0 years" range
+      // that ends before it starts (see app/utils/experience_label.py).
+      max: job.experience_max != null ? Number(job.experience_max) : null,
     };
   }
 
   const raw = String(job.experience || '').trim().toLowerCase();
-  if (!raw) return { min: 0, max: 0 };
+  if (!raw) return { min: 0, max: null };
 
   const rangeMatch = raw.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
   if (rangeMatch) {
@@ -613,7 +620,7 @@ function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'ex
   const plusMatch = raw.match(/(\d+(?:\.\d+)?)\s*\+/);
   if (plusMatch) {
     const min = Number(plusMatch[1]);
-    return { min, max: min };
+    return { min, max: null };
   }
 
   const singleMatch = raw.match(/(\d+(?:\.\d+)?)/);
@@ -622,7 +629,7 @@ function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'ex
     return { min: value, max: value };
   }
 
-  return { min: 0, max: 0 };
+  return { min: 0, max: null };
 }
 
 const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreationProps>(function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId, readOnly = false }, ref) {
@@ -709,6 +716,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       return next;
     });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  /* The job version a link pre-selected is Archived / Disabled: it is not
+     selected, the picker shows instead, with the message. */
+  const [preselectedJobLocked, setPreselectedJobLocked] = useState(false);
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
   /**
@@ -1039,7 +1049,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       // navigate to the route it is already on — nothing happened, and the
       // crumb looked broken. `onBack` closes the inline view, and on the
       // standalone /assessments/create route it navigates back for real.
-      { label: 'Assessments', onClick: handleLeaveAttempt },
+      { label: 'AI Assessments', onClick: handleLeaveAttempt },
       ...buildStepCrumbs(),
     ];
   };
@@ -1050,7 +1060,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
     const skillCount = job.skills?.length || 0;
     const { min: expMin, max: expMax } = getExperienceRange(job);
-    const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
+    const avgExp = expMax != null ? (expMin + expMax) / 2 : expMin;
 
     // Determine experience level
     let expLevel: 'entry' | 'junior' | 'mid' | 'senior' | 'expert' = 'mid';
@@ -1662,6 +1672,18 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
     const job = jobsForSelection.find(j => j.id === jdIdToSelect);
     if (!job) {
+      return;
+    }
+
+    /* A new assessment cannot be built on an Archived / Disabled job version,
+       even by link — the picker's own rule. Edit keeps its existing rules. */
+    if (!editAssessmentId && isJobVersionLocked(job.status)) {
+      if (!preselectedJobLocked) {
+        setPreselectedJobLocked(true);
+        toast.error(ASSESSMENT_JOB_LOCK_MESSAGE);
+        // Back to the picker (clears ?step=configure&jd_id), never Configure.
+        setStep('select-jd');
+      }
       return;
     }
 
@@ -3344,6 +3366,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     !!preselectedJdId &&
     !selectedJob &&
     !isEditMode &&
+    !preselectedJobLocked &&
     (!hasLoadedAssessmentEligibility || isLoadingJobs || preselectedJobResolvable);
 
   /* EDIT: the saved configuration comes before any fallback default.
@@ -3670,7 +3693,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                      thing to read on a card. Then names the way through, which
                      is the same one in every case: the published version this
                      job still has is a row in its own View Versions. */
-                  const latestUnpublishedReason = `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
+                  const latestUnpublishedReason = isJobVersionLocked(job.status)
+                    ? ASSESSMENT_JOB_LOCK_MESSAGE
+                    : `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
                   /* The card's Add acts on the version the card shows, so it
                      answers the same published-only rule its version rows do —
                      stated here rather than assumed from the list being
@@ -3681,6 +3706,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     job.versionNumber,
                     isSelectableVersion(job),
                     latestHasAssessment,
+                    job.status,
                   );
 
                   return (
@@ -3765,6 +3791,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                 ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                                 : job}
                               metaSingleLine
+                              /* Coloured like the Job Openings badges; applicants read "scored". */
+                              coloredCountBadges
+                              applicantsLabel="scored"
                               /* The picker's tick: some version of this job is the pick. */
                               trailingBadges={lineageSelected ? (
                                 <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
@@ -3943,6 +3972,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           loading={jdLineage.isLoading(versionKey) || !!loadingLineageAssessments[versionKey]}
                           versionDetails={jdLineage.versionDetails}
                           versionApplicants={jdLineage.versionApplicants}
+                          applicantsLabel="Scored"
                           openInNewTab
                           staticRows
                           /* The role name is plain text here. This table is a
@@ -3999,7 +4029,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               return `v${versionJob.versionNumber ?? 1} already has an assessment`;
                             }
                             if (!isSelectableVersion(versionJob)) {
-                              return `v${versionJob.versionNumber ?? 1} is ${String(versionJob.status || 'not published').toLowerCase()} — an assessment can only be created against a published or republished version`;
+                              return isJobVersionLocked(versionJob.status)
+                                ? ASSESSMENT_JOB_LOCK_MESSAGE
+                                : `v${versionJob.versionNumber ?? 1} is ${String(versionJob.status || 'not published').toLowerCase()} — an assessment can only be created against a published or republished version`;
                             }
                             return null;
                           }}
@@ -4073,6 +4105,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               versionJob.versionNumber,
                               isSelectableVersion(versionJob),
                               versionHasAssessment(versionKey, versionJob.id),
+                              versionJob.status,
                             );
                             return (
                               <>
@@ -5055,7 +5088,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                */}
               {selectedJob && (() => {
                 const { min: expMin, max: expMax } = getExperienceRange(selectedJob);
-                const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
+                const avgExp = expMax != null ? (expMin + expMax) / 2 : expMin;
                 /* Read straight off the selected JD, so the card re-derives
                    whenever the recruiter picks a different one - there is no
                    copy of these lists held anywhere in this component. */
@@ -5065,7 +5098,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 if (avgExp > 10) level = 'Expert';
                 else if (avgExp > 7) level = 'Senior';
                 else if (avgExp > 4) level = 'Mid';
-                else if (avgExp > 2) level = 'Junior';
+                // Inclusive: a JD asking "2+ years" names 2 as the minimum, so
+                // 2 itself must land in Junior, not fall through to Entry.
+                else if (avgExp >= 2) level = 'Junior';
                 /* The JD's own page, the same target the breadcrumb's Job
                    Details crumb and the existing-assessment fallback use, so
                    "View JD" opens what every other route to this JD opens. */
@@ -5099,7 +5134,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 }
                 facts.push({
                   label: 'Experience',
-                  value: `${expMin}-${expMax} yrs (${level})`,
+                  value: expMax != null ? `${expMin}-${expMax} yrs (${level})` : `${expMin}+ yrs (${level})`,
                   Icon: Briefcase,
                   tile: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',
                   iconColor: 'text-brand-blue',

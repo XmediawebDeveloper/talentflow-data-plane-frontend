@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, Video, MoreVertical, Eye, Pencil,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
-  Square, CheckSquare,
+  Square, CheckSquare, ChevronDown,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -17,18 +17,22 @@ import {
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
-import ListCountBadge from '@/components/ui/list-count-badge';
+import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
-import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
+import type { JDLineageVersion } from '@/lib/services/jdService';
+import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
+import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -176,22 +180,57 @@ export function VersionPill({ kind, version }: { kind: 'job' | 'interview'; vers
   );
 }
 
-function CreatedBy({ name }: { name: string }) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || '?';
+/* Marks a job whose JD is disabled: its interviews stay listed and viewable,
+   but every action on them is off until the JD is enabled again. */
+export function JobDisabledBadge() {
+  return (
+    <span
+      title={JD_DISABLED_ACTION_MESSAGE}
+      className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 text-gray-600 bg-gray-100 ring-gray-200 dark:text-slate-300 dark:bg-slate-800 dark:ring-slate-700"
+    >
+      Job Disabled
+    </span>
+  );
+}
 
+/** Which job badge (if any) to show beside a job name: the JD's own Disabled /
+ *  Archived status, unless another version of the same job is still Published
+ *  or Republished — one closed version does not speak for a live job.
+ *  `versions` undefined (not loaded yet) falls back to the JD's own status. */
+export function jobLockBadgeFor(
+  jdStatus: string | null | undefined,
+  versions: JDLineageVersion[] | undefined,
+): 'disabled' | 'archived' | null {
+  const own = isJdDisabled(jdStatus)
+    ? 'disabled'
+    : String(jdStatus || '').toLowerCase() === 'archived'
+      ? 'archived'
+      : null;
+  if (!own || !versions?.length) return own;
+  const anyLive = versions.some((v) => {
+    const label = jobVersionDisplayStatus(v.status, v.current_version);
+    return label === 'Published' || label === 'Republished';
+  });
+  return anyLive ? null : own;
+}
+
+/* Marks a job whose JD is archived — same shape as JobDisabledBadge, in the
+   Archived status pill's colours. */
+export function JobArchivedBadge() {
+  return (
+    <span
+      title={JD_ARCHIVED_ACTION_MESSAGE}
+      className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20"
+    >
+      Job Archived
+    </span>
+  );
+}
+
+function CreatedBy({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-2 min-w-0">
-      <span
-        aria-hidden="true"
-        className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-2xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
-      >
-        {initials}
-      </span>
+      <NameAvatar name={name} size="xs" title="" />
       <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
         {name}
       </span>
@@ -240,6 +279,10 @@ const COLUMNS: ColumnDef[] = [
   { key: 'createdAt', label: 'Created On' },
   { key: 'createdBy', label: 'Created By', hideBelow: 'lg' },
 ];
+
+/* With `expandableRows`, the six columns the row shows; the rest open in the
+   row's expanded panel (the Resume Scoring list's expand pattern). */
+const PRIMARY_COLUMN_KEYS: SortKey[] = ['jobId', 'jobName', 'jobVersion', 'interviewVersion', 'status', 'invitations'];
 
 const HIDE_CLASS: Record<string, string> = {
   sm: 'hidden sm:table-cell',
@@ -290,6 +333,12 @@ export interface AllInterviewsTableProps {
    */
   refreshSignal?: number;
   /**
+   * Shows only PRIMARY_COLUMN_KEYS; a row click (or its chevron) expands the
+   * row to show the remaining columns, instead of opening the interview.
+   * View Details stays in the row's ⋮ menu.
+   */
+  expandableRows?: boolean;
+  /**
    * Locks the table to one status — the Active/Draft/Archived tabs'
    * "Ungrouped" view, each showing only its own status rather than every
    * version whatever its state. The Status filter (redundant once the whole
@@ -306,7 +355,7 @@ export interface AllInterviewsTableProps {
   renderRowActions?: (config: AIInterviewResponse) => React.ReactNode;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -346,21 +395,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      archived configs (AIInterview.tsx loads them separately for the same
      reason), and "All Interviews" means every version regardless of status. */
   const fetchAll = useCallback(async (): Promise<InterviewRow[]> => {
-    const live: AIInterviewResponse[] = [];
-    let apiPage = 1;
-    for (;;) {
-      const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-      const items = batch.items || [];
-      live.push(...items);
-      const total = batch.total ?? live.length;
-      if (items.length < 100 || live.length >= total) break;
-      apiPage += 1;
-    }
-
-    const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-    const archived = archivedProbe.total > archivedProbe.items.length
-      ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-      : archivedProbe.items;
+    const { live, archived } = await aiInterviewService.listAllConfigsSplit();
 
     const seen = new Set<string>();
     const merged: AIInterviewResponse[] = [];
@@ -530,7 +565,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   /* Row click: an editable DRAFT reopens its editor at the step it was left
      on; everything else opens its details page as before. */
   const openRow = (row: InterviewRow) => {
-    if (row.rawStatus === 'draft' && row.jdId && canUpdateAIInterviews) {
+    if (row.rawStatus === 'draft' && row.jdId && canUpdateAIInterviews && !isJdDisabled(row.config.jd_status)) {
       void resolveAIInterviewDraftResumeHref(row.id, row.jdId).then((href) => router.push(href));
       return;
     }
@@ -540,6 +575,18 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  /* Every version's status for the rows on this page whose job reads Disabled
+     or Archived — the job badge is judged on the whole job (jobLockBadgeFor). */
+  const jdLineage = useJobVersionLineage();
+  const { ensureFilterLineages } = jdLineage;
+  useEffect(() => {
+    ensureFilterLineages(
+      pageRows
+        .filter((row) => row.jdId && (isJdDisabled(row.config.jd_status) || String(row.config.jd_status || '').toLowerCase() === 'archived'))
+        .map((row) => ({ key: row.jdId!, jobId: row.jdId! })),
+    );
+  }, [pageRows, ensureFilterLineages]);
 
   // Row selection — the CheckSquare / Square column the Candidate Results tab
   // opens with. Selection survives paging; it is pruned to the rows that
@@ -706,7 +753,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      button checks. It routes to the JD-selection config builder — AI
      interviews have no `create?edit=` route the way Assessments does. */
   const rowActions = (row: InterviewRow) => {
-    const actions: { key: string; label: string; icon: typeof Eye; run: () => void; disabled?: boolean }[] = [
+    const actions: { key: string; label: string; icon: typeof Eye; run: () => void; disabled?: boolean; reason?: string }[] = [
       {
         key: 'view', label: 'View', icon: Eye,
         run: () => router.push(detailsHref(row.id)),
@@ -715,16 +762,124 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     // Draft-only and jdId are business conditions (stay a real hide); the
     // permission itself must not remove the item — visible but disabled.
     if (row.rawStatus === 'draft' && row.jdId) {
+      const jdLocked = isJdDisabled(row.config.jd_status);
       actions.push({
         key: 'edit', label: 'Edit', icon: Pencil,
-        run: () => { void resolveAIInterviewDraftResumeHref(row.id, row.jdId!).then((href) => router.push(href)); },
-        disabled: !canUpdateAIInterviews,
+        run: () => {
+          if (jdLocked) return;
+          void resolveAIInterviewDraftResumeHref(row.id, row.jdId!).then((href) => router.push(href));
+        },
+        disabled: !canUpdateAIInterviews || jdLocked,
+        reason: jdLocked ? JD_DISABLED_ACTION_MESSAGE : 'You do not have permission to edit AI interviews',
       });
     }
     return actions;
   };
 
-  const columnCount = COLUMNS.length + 2; // + Select + Actions
+  /* Expandable rows: which rows are open, and which columns the row itself
+     shows — the rest render in its expanded panel through `cellContent`. */
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (id: string) =>
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const shownColumns = expandableRows ? COLUMNS.filter((c) => PRIMARY_COLUMN_KEYS.includes(c.key)) : COLUMNS;
+  const detailColumns = expandableRows ? COLUMNS.filter((c) => !PRIMARY_COLUMN_KEYS.includes(c.key)) : [];
+
+  const CELL_CLASS: Record<SortKey, string> = {
+    jobId: 'px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col-left',
+    jobName: 'px-3 py-2.5 align-middle max-w-[10rem] sm:max-w-[16rem]',
+    jobVersion: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    interviewVersion: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    status: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    rounds: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    invitations: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    completed: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    createdAt: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    createdBy: `px-3 py-2.5 align-middle max-w-[12rem] ${HIDE_CLASS.lg}`,
+  };
+
+  const cellContent = (row: InterviewRow, key: SortKey) => {
+    switch (key) {
+      case 'jobId':
+        return row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>;
+      case 'jobName':
+        return (
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span
+              className="block truncate font-medium text-gray-900 dark:text-slate-50"
+              title={row.jobName}
+            >
+              {row.jobName}
+            </span>
+            {(() => {
+              const lockBadge = jobLockBadgeFor(row.config.jd_status, row.jdId ? jdLineage.filterLineages[row.jdId] : undefined);
+              return lockBadge === 'disabled' ? <JobDisabledBadge />
+                : lockBadge === 'archived' ? <JobArchivedBadge /> : null;
+            })()}
+          </div>
+        );
+      case 'jobVersion':
+        return <VersionPill kind="job" version={row.jobVersion} />;
+      case 'interviewVersion':
+        return <VersionPill kind="interview" version={row.interviewVersion} />;
+      case 'status':
+        return (
+          <>
+            <StatusBadge status={row.status} />
+            {/* Live, with saved edits waiting for Publish. */}
+            {hasUnpublishedChanges(row.config) && <UnpublishedChangesChip className="ml-1.5 align-middle" />}
+          </>
+        );
+      case 'rounds':
+        return row.rounds.length > 0 ? (
+          <div className="flex items-center gap-1.5 flex-nowrap">
+            {row.rounds.map((type, index) => (
+              <span
+                key={`${type}-${index}`}
+                title={ROUND_LABELS[type] || type}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+              >
+                {ROUND_SHORT_LABELS[type] || ROUND_LABELS[type] || type}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        );
+      case 'invitations':
+        return (
+          <>
+            <span className="tabular-nums text-gray-900 dark:text-slate-100">
+              {row.invitations.toLocaleString()}
+            </span>
+            <span className="text-xs text-gray-400 ml-1">sent</span>
+          </>
+        );
+      case 'completed':
+        return (
+          <>
+            <span className="tabular-nums text-gray-900 dark:text-slate-100">
+              {row.completed.toLocaleString()}
+            </span>
+            <span className="text-xs text-gray-400 ml-1">completed</span>
+          </>
+        );
+      case 'createdAt':
+        return (
+          <span className="text-gray-600 dark:text-slate-400 tabular-nums">
+            {formatISTStamp(row.createdAt)}
+          </span>
+        );
+      case 'createdBy':
+        return <CreatedBy name={row.createdBy} />;
+    }
+  };
+
+  const columnCount = shownColumns.length + 2; // + Select + Actions
   /* Whether the table has data rows to lay out — and so whether its header
      belongs on screen at all.
      With none, the header is the only thing left forcing a width: its cells are
@@ -738,8 +893,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   const toolbar = (
     <>
 
-      {/* ── Search & filter toolbar ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+      {/* ── Search & filter toolbar ── Portalled into the page's toolbar
+          card, it takes no card of its own — Total Jobs' toolbar sits in that
+          slot bare, so a second border here drew a box inside the box. */}
+      <div className={toolbarSlot ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4'}>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <div className="relative flex-1 min-w-0">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -783,16 +940,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
               </span>
             )}
           </button>
-
-          {/* Count badge after More Filters — the Assessments page's: rows
-              left after search + filters, of all rows, or the ticked count. */}
-          <ListCountBadge
-            filtered={sorted.length}
-            total={rows.length}
-            noun="interview"
-            selected={selectedIds.size}
-            className="flex-shrink-0 text-center"
-          />
         </div>
 
         {filtersOpen && (
@@ -918,7 +1065,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                     )}
                   </button>
                 </th>
-                {COLUMNS.map((col) => {
+                {shownColumns.map((col) => {
                   const isSorted = sortKey === col.key;
                   const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
                   return (
@@ -966,7 +1113,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                     <td className="pl-3 pr-0 py-3 w-10">
                       <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                     </td>
-                    {COLUMNS.map((col) => (
+                    {shownColumns.map((col) => (
                       <td
                         key={col.key}
                         className={`px-3 py-3 ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''} ${col.key === 'jobId' ? 'tf-sticky-col-left' : ''}`}
@@ -1029,16 +1176,19 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
 
               {!isLoading &&
                 !error &&
-                pageRows.map((row) => (
+                pageRows.map((row) => {
+                  const isExpanded = expandableRows && expandedIds.has(row.id);
+                  return (
+                  <Fragment key={row.id}>
                   <tr
-                    key={row.id}
                     ref={(el) => {
                       if (el) rowRefs.current.set(row.id, el);
                       else rowRefs.current.delete(row.id);
                     }}
-                    onClick={() => openRow(row)}
+                    onClick={() => (expandableRows ? toggleExpanded(row.id) : openRow(row))}
+                    aria-expanded={expandableRows ? isExpanded : undefined}
                     className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors duration-700 hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${
-                      flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
+                      flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : ''
                     }`}
                   >
                     <td className="pl-3 pr-0 py-2.5 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
@@ -1057,83 +1207,33 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                     </td>
 
                     {/* Job ID stays pinned on the left while the table scrolls sideways. */}
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col-left">
-                      {row.jobId ? (
-                        <JobIdBadge>{row.jobId}</JobIdBadge>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle max-w-[16rem]">
-                      <span
-                        className="block truncate font-medium text-gray-900 dark:text-slate-50"
-                        title={row.jobName}
-                      >
-                        {row.jobName}
-                      </span>
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      <VersionPill kind="job" version={row.jobVersion} />
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      <VersionPill kind="interview" version={row.interviewVersion} />
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      <StatusBadge status={row.status} />
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      {row.rounds.length > 0 ? (
-                        <div className="flex items-center gap-1.5 flex-nowrap">
-                          {row.rounds.map((type, index) => (
-                            <span
-                              key={`${type}-${index}`}
-                              title={ROUND_LABELS[type] || type}
-                              className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
-                            >
-                              {ROUND_SHORT_LABELS[type] || ROUND_LABELS[type] || type}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      <span className="tabular-nums text-gray-900 dark:text-slate-100">
-                        {row.invitations.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-400 ml-1">sent</span>
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      <span className="tabular-nums text-gray-900 dark:text-slate-100">
-                        {row.completed.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-400 ml-1">completed</span>
-                    </td>
-
-                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                      <span className="text-gray-600 dark:text-slate-400 tabular-nums">
-                        {formatISTStamp(row.createdAt)}
-                      </span>
-                    </td>
-
-                    <td className={`px-3 py-2.5 align-middle max-w-[12rem] ${HIDE_CLASS.lg}`}>
-                      <CreatedBy name={row.createdBy} />
-                    </td>
+                    {shownColumns.map((col) => (
+                      <td key={col.key} className={CELL_CLASS[col.key]}>
+                        {cellContent(row, col.key)}
+                      </td>
+                    ))}
 
                     <td
                       className="px-3 py-2.5 align-middle text-right tf-sticky-col"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <div className="flex items-center justify-end gap-1">
+                      {/* The Resume Scoring list's expand control. */}
+                      {expandableRows && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => toggleExpanded(row.id)}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? 'Hide details' : 'Show details'}
+                          title={isExpanded ? 'Hide details' : 'Show details'}
+                          className="h-8 w-8 p-0"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        </Button>
+                      )}
                       {renderRowActions ? (
-                        <div className="flex justify-end">{renderRowActions(row.config)}</div>
+                        renderRowActions(row.config)
                       ) : (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1147,7 +1247,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
-                          {rowActions(row).map(({ key, label, icon: Icon, run, disabled }) => (
+                          {rowActions(row).map(({ key, label, icon: Icon, run, disabled, reason }) => (
                             /* aria-disabled, not Radix `disabled`: its pointer-events:none
                                swallowed the permission tooltip. Locked = no-op click. */
                             <DropdownMenuItem
@@ -1155,7 +1255,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                               onClick={disabled ? undefined : run}
                               onSelect={disabled ? (e) => e.preventDefault() : undefined}
                               aria-disabled={disabled || undefined}
-                              title={disabled ? 'You do not have permission to edit AI interviews' : undefined}
+                              title={disabled ? reason : undefined}
                               className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS} ${disabled ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
                             >
                               <Icon className="w-4 h-4" />
@@ -1165,9 +1265,30 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                         </DropdownMenuContent>
                       </DropdownMenu>
                       )}
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  {/* The columns the row leaves out, as the Resume Scoring
+                      list's expanded full-width row. */}
+                  {isExpanded && (
+                    <tr className="bg-gray-50/60 dark:bg-slate-800/20 border-b border-gray-100 dark:border-slate-700/60 last:border-b-0">
+                      <td colSpan={columnCount} className="px-3 sm:px-4 lg:px-6 pt-3 pb-4">
+                        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                          {detailColumns.map((col) => (
+                            <div key={col.key} className="min-w-0">
+                              <dt className="text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1">
+                                {col.label}
+                              </dt>
+                              <dd className="text-sm min-w-0">{cellContent(row, col.key)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
+                  );
+                })}
             </tbody>
           </table>
         </div>

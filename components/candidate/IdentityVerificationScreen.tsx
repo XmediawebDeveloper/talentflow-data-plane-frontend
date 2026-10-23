@@ -75,14 +75,14 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
 
   return (
     <div className="min-h-[100dvh] bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8">
         {/* Lock Icon */}
         <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <Shield className="w-10 h-10 text-blue-600" />
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl font-bold text-gray-900 mb-3 text-center">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3 text-center">
           Identity Verification
         </h1>
 

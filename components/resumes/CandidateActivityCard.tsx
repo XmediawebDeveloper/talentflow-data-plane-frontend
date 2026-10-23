@@ -109,12 +109,12 @@ const PassFail = ({ passed }: { passed: boolean | null | undefined }) =>
    Headings and values are centred. On a phone the cells simply wrap under the
    title. Grid classes are written out in full so Tailwind picks them up. */
 const COLUMNS: Record<TabKey, { heads: string[]; grid: string }> = {
-  scores: { heads: ['Score out of 10', 'Match'], grid: 'sm:grid-cols-[minmax(0,1fr)_8rem_9rem_7rem]' },
-  talent_matches: { heads: ['Rating', 'Scored Status'], grid: 'sm:grid-cols-[minmax(0,1fr)_6rem_9rem_7rem]' },
-  assessments: { heads: ['Tech %', 'Coding %', 'Result', 'Status'], grid: 'sm:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem_8.5rem_7rem]' },
-  interviews: { heads: ['Match Score', 'Result', 'Status'], grid: 'sm:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_8.5rem_7rem]' },
+  scores: { heads: ['Score out of 10', 'Match'], grid: 'md:grid-cols-[minmax(0,1fr)_8rem_9rem_7rem]' },
+  talent_matches: { heads: ['Rating', 'Scored Status'], grid: 'md:grid-cols-[minmax(0,1fr)_6rem_9rem_7rem]' },
+  assessments: { heads: ['Tech %', 'Coding %', 'Result', 'Status'], grid: 'md:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem_8.5rem_7rem]' },
+  interviews: { heads: ['Match Score', 'Result', 'Status'], grid: 'md:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_8.5rem_7rem]' },
 };
-const gridFor = (tab: TabKey) => `sm:grid ${COLUMNS[tab].grid} sm:items-center sm:gap-x-3`;
+const gridFor = (tab: TabKey) => `md:grid ${COLUMNS[tab].grid} md:items-center md:gap-x-3`;
 
 const NoValue = () => <span className="text-sm text-gray-400">—</span>;
 
@@ -154,11 +154,11 @@ function Row({
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-900">{title}</div>
         <div className="mt-0.5 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 sm:contents">
+      <div className="flex flex-wrap items-center gap-2 md:contents">
         {cells.map((cell, i) => (
-          <div key={i} className="sm:flex sm:justify-center sm:text-center">{cell ?? <NoValue />}</div>
+          <div key={i} className="md:flex md:justify-center md:text-center">{cell ?? <NoValue />}</div>
         ))}
-        <div className="sm:flex sm:justify-center">
+        <div className="md:flex md:justify-center">
           {onOpen && (
             <button
               onClick={onOpen}
@@ -405,14 +405,14 @@ export default function CandidateActivityCard({
   };
 
   return (
-    <div ref={cardRef} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+    <div ref={cardRef} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+      <div className="flex items-center gap-2 gap-y-1 mb-4 flex-wrap">
+        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
           <Activity className="w-4 h-4 text-brand-blue" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Candidate Activity</h3>
+        <h3 className="text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Candidate Activity</h3>
         {!loading && data && (
-          <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
+          <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
             {total} record{total !== 1 ? 's' : ''}
           </span>
         )}

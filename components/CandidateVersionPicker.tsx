@@ -6,6 +6,7 @@ import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import NameAvatar from '@/components/ui/name-avatar';
 import type { VersionChoice } from './SelectedCandidatesPanel';
 
 interface ResumeVersionRow {
@@ -59,7 +60,6 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
   }, [resume.id]);
 
   const name = resume.name || 'Candidate';
-  const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const total = versions?.length ?? 0;
 
   return (
@@ -72,9 +72,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
       <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         {/* Candidate */}
         <div className="flex items-center gap-3 p-3 border-b border-gray-100 dark:border-slate-800">
-          <div className="w-9 h-9 flex-shrink-0 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-xs font-semibold text-brand-blue">
-            {initials}
-          </div>
+          <NameAvatar name={resume.name} fallback={resume.email || resume.candidate_email} size="md" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{name}</p>
             <p className="text-xs text-gray-500 dark:text-slate-400">

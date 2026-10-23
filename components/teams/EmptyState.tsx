@@ -19,8 +19,8 @@ export default function EmptyState({
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
         <Users className="h-8 w-8 text-brand-blue" />
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No teams yet</h3>
-      <p className="mb-6 max-w-md mx-auto text-sm text-gray-600 dark:text-slate-400">
+      <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">No teams yet</h3>
+      <p className="mb-6 max-w-md mx-auto text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
         {isTenantAdmin
           ? 'Create your first team to start organizing your recruitment workflow'
           : 'No teams have been created yet. Contact your administrator to create teams.'}

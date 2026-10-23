@@ -156,6 +156,7 @@ export function createFaceIdentityWorker(options: {
       const blob = new Blob([WORKER_SOURCE], { type: 'application/javascript' });
       const url = URL.createObjectURL(blob);
       worker = new Worker(url);
+      URL.revokeObjectURL(url); // script already bound to the worker
       const initTimer = setTimeout(() => {
         console.warn('[FACE-IDENTITY-WORKER] init timed out (60 s)');
         resolve(false);

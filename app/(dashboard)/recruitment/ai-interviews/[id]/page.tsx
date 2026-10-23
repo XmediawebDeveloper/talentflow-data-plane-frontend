@@ -9,6 +9,7 @@ import { aiInterviewLineageKey, isPublishedConfig, newestFirst, orderAIInterview
 import { isAIInterviewJobPagerList, parseAIInterviewPagerList, readAIInterviewPagerOrder } from '@/lib/utils/aiInterviewPagerList';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 // Neutral-gray skeleton mirroring the AI Interview details view: breadcrumb,
 // header bar (icon + title + subtitle + action buttons), a tab bar, then the
@@ -106,16 +107,22 @@ function AIInterviewDetailsContent() {
      sessionStorage; without it (another browser tab, cleared storage) the
      unfiltered list is rebuilt from the API. Absent: every interview. */
   const pagerList = parseAIInterviewPagerList(searchParams.get('list'));
-  const pagerQuery = pagerList ? `?list=${pagerList}` : '';
+  /* Prev / Next keep the list being walked AND where the page was opened
+     from, so a visit anchored to Job Details keeps that trail. */
+  const pagerQuery = (() => {
+    const q = new URLSearchParams();
+    if (pagerList) q.set('list', pagerList);
+    if (fromJobDetails) q.set('from', 'job-details');
+    const s = q.toString();
+    return s ? `?${s}` : '';
+  })();
   const [allIds, setAllIds] = useState<string[]>([]);
   const [jobStopById, setJobStopById] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchAll = async (status?: string) => {
-      const probe = await aiInterviewService.listConfigs({ page_size: 1, page: 1, compact: true, ...(status ? { status } : {}) });
-      return probe.total > probe.items.length
-        ? (await aiInterviewService.listConfigs({ page_size: probe.total, page: 1, compact: true, ...(status ? { status } : {}) })).items
-        : probe.items;
+      return (await fetchAllRows((page_size, page) =>
+        aiInterviewService.listConfigs({ page_size, page, compact: true, ...(status ? { status } : {}) }))).items;
     };
     /* What a list holds, unfiltered: Total Jobs / All Interviews span every
        status (archived too, as the AI Interviews page loads them); the others
@@ -296,6 +303,7 @@ function AIInterviewDetailsContent() {
       draftLocked={isDraftLocked}
       breadcrumbItems={breadcrumbItems}
       initialTab={initialTab}
+      originQuery={fromJobDetails ? '?from=job-details' : ''}
     />
   );
 }

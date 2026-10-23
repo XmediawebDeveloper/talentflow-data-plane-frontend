@@ -5,6 +5,7 @@ import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, Chevron
 import type { IconComponent } from '@/lib/types/icon';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST } from '@/lib/utils/dateUtils';
+import NameAvatar from '@/components/ui/name-avatar';
 
 const PAGE_SIZE = 10;
 
@@ -18,16 +19,6 @@ const EVENT_CONFIG: Record<string, { label: string; icon: IconComponent; color: 
 
 function formatDate(iso: string) {
   return formatIST(iso);
-}
-
-function getInitials(name?: string) {
-  if (!name) return '?';
-  return name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 }
 
 export default function TeamHistory() {
@@ -79,26 +70,26 @@ export default function TeamHistory() {
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-start lg:justify-between">
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-3 sm:gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-            <History className="w-5 h-5 text-brand-blue" />
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <History className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Teams History</h2>
-            <p className="text-sm text-gray-600 dark:text-slate-400">
+            <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Teams History</h2>
+            <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
               {loading ? 'Loading activities...' : `${total} ${total === 1 ? 'activity' : 'activities'} recorded`}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-sm:-mx-3 max-sm:flex-nowrap max-sm:gap-1.5 max-sm:overflow-x-auto max-sm:px-3 scrollbar-hide tf-hide-native-scrollbar">
           {(['ALL', 'TEAM_CREATED', 'TEAM_UPDATED', 'TEAM_DELETED', 'MEMBER_ADDED', 'MEMBER_REMOVED'] as const).map((entryFilter) => (
             <button
               key={entryFilter}
               onClick={() => handleFilterChange(entryFilter)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+              className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs font-medium transition-all ${
                 filter === entryFilter
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
                   : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
@@ -117,11 +108,11 @@ export default function TeamHistory() {
       ) : items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 py-16 text-center text-gray-400 dark:text-slate-500">
           <Clock className="mx-auto mb-3 h-10 w-10 opacity-40" />
-          <p className="text-sm">No activity recorded yet</p>
+          <p className="text-sm max-sm:text-[13px]">No activity recorded yet</p>
         </div>
       ) : (
         <>
-          <div className="space-y-3">
+          <div className="space-y-2 sm:space-y-3">
             {items.map((entry) => {
               const config = EVENT_CONFIG[entry.event_type] ?? {
                 label: entry.event_type,
@@ -134,19 +125,19 @@ export default function TeamHistory() {
               return (
                 <div
                   key={entry.id}
-                  className="flex flex-wrap items-start gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-colors hover:border-brand-blue/30"
+                  className="flex items-start gap-3 sm:flex-wrap sm:gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-colors hover:border-brand-blue/30"
                 >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${config.bg}`}>
+                  <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl ${config.bg}`}>
                     <Icon className={`h-4 w-4 ${config.color}`} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-2xs font-medium ${config.bg} ${config.color}`}>
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className={`rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-2xs sm:text-xs font-medium ${config.bg} ${config.color}`}>
                         {config.label}
                       </span>
-                      <span className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{entry.team_name}</span>
+                      <span className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{entry.team_name}</span>
                     </div>
-                    <div className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+                    <div className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                       {entry.event_type === 'MEMBER_ADDED' && (
                         <span>
                           <span className="font-medium">{entry.target_user_name || 'Unknown'}</span> was added
@@ -187,12 +178,11 @@ export default function TeamHistory() {
                         </span>
                       )}
                     </div>
+                    <p className="mt-1 text-2xs text-gray-400 dark:text-slate-500 sm:hidden">{formatDate(entry.event_at)}</p>
                   </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1">
+                  <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
                     {entry.actor_name && (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue text-xs font-semibold text-white">
-                        {getInitials(entry.actor_name)}
-                      </div>
+                      <NameAvatar name={entry.actor_name} size="sm" />
                     )}
                     <span className="whitespace-nowrap text-xs text-gray-400 dark:text-slate-500">{formatDate(entry.event_at)}</span>
                   </div>
@@ -202,14 +192,14 @@ export default function TeamHistory() {
           </div>
 
           {totalPages > 1 && (
-            <div className="mt-6 flex flex-col gap-4 border-t border-gray-100 dark:border-slate-700/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-gray-500 dark:text-slate-400">
+            <div className="mt-4 sm:mt-6 flex flex-col gap-3 sm:gap-4 border-t border-gray-100 dark:border-slate-700/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">
                 Showing <span className="font-medium">{from}-{to}</span> of <span className="font-medium">{total}</span>{' '}
                 {filter !== 'ALL' ? `${EVENT_CONFIG[filter]?.label ?? filter} ` : ''}activities
               </p>
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 max-sm:justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -224,7 +214,7 @@ export default function TeamHistory() {
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50"
+                    className="w-14 h-8 sm:h-9 px-2 text-sm max-sm:text-[13px] text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50"
                   />
                 </div>
                 <button
@@ -235,7 +225,7 @@ export default function TeamHistory() {
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-                <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
+                <span className="text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                 </span>
                 <button
@@ -251,7 +241,7 @@ export default function TeamHistory() {
           )}
 
           {totalPages <= 1 && total > 0 && (
-            <p className="mt-4 border-t border-gray-100 dark:border-slate-700/60 pt-4 text-sm text-gray-500 dark:text-slate-400">
+            <p className="mt-4 border-t border-gray-100 dark:border-slate-700/60 pt-4 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
               Showing all <span className="font-medium">{total}</span> {filter !== 'ALL' ? `${EVENT_CONFIG[filter]?.label ?? filter} ` : ''}activities
             </p>
           )}

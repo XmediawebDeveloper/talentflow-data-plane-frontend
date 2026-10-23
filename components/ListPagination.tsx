@@ -39,6 +39,18 @@ interface ListPaginationProps {
    * existing list keeps hiding it on short lists.
    */
   alwaysShow?: boolean;
+  /**
+   * Render as the table card's footer strip (top divider, no card of its own)
+   * instead of a separate card below the table. Place it INSIDE the table's
+   * bordered wrapper, after the table. Off by default.
+   */
+  attached?: boolean;
+  /**
+   * Phones (below sm): one row — a short "1–10 of 24" on the left, ‹ page/total ›
+   * on the right. "Show N per page" and "Go to" are hidden there. From sm up
+   * the bar is unchanged. Off by default.
+   */
+  minimalOnMobile?: boolean;
 }
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
@@ -83,6 +95,8 @@ export default function ListPagination({
   compact = false,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   alwaysShow = false,
+  attached = false,
+  minimalOnMobile = false,
 }: ListPaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -107,7 +121,11 @@ export default function ListPagination({
 
   /* One place per dimension, so the two builds can't drift: shell padding,
      label type scale, the select, and the go-to/step controls. */
-  const shellClass = compact ? 'p-2' : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
+  const shellClass = compact
+    ? 'p-2'
+    : attached
+      ? 'rounded-b-xl border-t border-gray-200 bg-gray-50/60 px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-800/40'
+      : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
   const labelClass = compact ? 'text-xs' : 'text-sm';
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
   const selectClass = compact
@@ -141,9 +159,9 @@ export default function ListPagination({
 
   return (
     <div className={shellClass}>
-      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${compact ? 'gap-2' : 'gap-3'}`}>
+      <div className={`flex ${minimalOnMobile ? 'flex-row items-center justify-between' : 'flex-col sm:flex-row sm:items-center sm:justify-between'} ${compact ? 'gap-2' : 'gap-3'}`}>
         <div className={`flex flex-wrap items-center ${groupGapClass}`}>
-          <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+          <div className={`${minimalOnMobile ? 'hidden sm:flex' : 'flex'} items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
             <span className={`${labelClass} text-gray-600`}>Show:</span>
             <select
               value={itemsPerPage}
@@ -162,15 +180,21 @@ export default function ListPagination({
 
           <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
-          <span className={`${compact ? 'text-xs' : 'text-xs sm:text-sm'} text-gray-600`}>
+          {minimalOnMobile && (
+            <span className="text-xs text-gray-600 sm:hidden">
+              <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
+              <span className="font-medium text-gray-900">{totalItems}</span>
+            </span>
+          )}
+          <span className={`${minimalOnMobile ? 'hidden sm:inline' : ''} ${compact ? 'text-xs' : 'text-xs sm:text-sm'} text-gray-600`}>
             Showing <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
             <span className="font-medium text-gray-900">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
             <span className="font-medium text-gray-900">{totalItems}</span> {itemLabel}
           </span>
         </div>
 
-        <div className={`flex items-center justify-center sm:justify-end ${compact ? 'gap-1.5' : 'gap-2'}`}>
-          <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
+        <div className={`flex items-center ${minimalOnMobile ? 'justify-end' : 'justify-center sm:justify-end'} ${compact ? 'gap-1.5' : 'gap-2'}`}>
+          <div className={`${minimalOnMobile ? 'hidden sm:flex' : 'flex'} items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
             <span className={`${labelClass} text-gray-600 whitespace-nowrap`}>Go to</span>
             <input
               type="number"

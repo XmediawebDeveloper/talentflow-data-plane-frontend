@@ -1,5 +1,6 @@
 'use client';
 
+import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -362,7 +363,8 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
        JD has no industry, so the line never loses its first fact. */
     { label: asLabel(assessmentInfo.jd_industry_type) || assessmentInfo.jd_department?.trim() || null, Icon: Building2 },
     { label: experience, Icon: Award },
-    { label: assessmentInfo.jd_location?.trim() || null, Icon: MapPin },
+    /* One entry per state, as "State: City, City" - every saved location, not just the first city. */
+    ...formatLocationGroups(assessmentInfo.jd_locations, assessmentInfo.jd_location).map((label) => ({ label, Icon: MapPin })),
   ].filter(present);
   /* The pills: the rest of the role, then this assessment's own facts. */
   /* In three groups, split by a small divider: the role (type, mode,
@@ -431,7 +433,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                     </div>
                     {/* No card: a thin rule on its left (desktop) sets it apart,
                         then an initials avatar, the name and the email. */}
-                    <div className="flex items-center gap-2.5 min-w-0 self-start sm:self-center sm:max-w-[45%] sm:border-l sm:border-gray-200 sm:pl-4 sm:py-0.5">
+                    <div className="flex items-center gap-2.5 min-w-0 self-start sm:self-center sm:shrink-0 sm:max-w-[45%] sm:border-l sm:border-gray-200 sm:pl-4 sm:py-0.5">
                       <span
                         aria-hidden
                         className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue text-xs font-semibold shrink-0"
@@ -442,7 +444,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         <p className="text-sm font-semibold text-gray-900 truncate" title={assessmentInfo.candidate_name}>
                           {assessmentInfo.candidate_name}
                         </p>
-                        <p className="text-xs text-gray-500 truncate" title={assessmentInfo.candidate_email}>
+                        <p className="text-xs text-gray-500 break-all" title={assessmentInfo.candidate_email}>
                           {assessmentInfo.candidate_email}
                         </p>
                       </div>

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { parseIST } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 interface ScoredResumeData {
   id: string;
@@ -417,13 +418,16 @@ export default function ResumeScoringRoute() {
     // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
     setHistoryLoading(true);
     try {
-      // Probe for total then pull all scored resumes in a single request.
+      // A cheap probe for the stat cards, and the full table in parallel.
       // The probe alone already carries the four stat-card numbers (GET
       // /scoring/all computes excellent_count/partial_count/no_match_count
       // via three COUNT queries on every call, page_size:1 included) — set
       // them the moment it lands instead of waiting on the full-table fetch
       // below, which exists only to build the "View by Job"/"View by
       // Candidates" list bodies, not to answer these counts.
+      // The full table is requested alongside the probe, not after it.
+      const fullRequest = fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page_size, page }));
+      fullRequest.catch(() => { /* surfaced by the await below */ });
       const probe = await scoringService.getAllScoredResumes({ page_size: 1, page: 1 });
       if (isStale()) return;
       setScoreCounts({
@@ -432,9 +436,7 @@ export default function ResumeScoringRoute() {
         partial: probe.partial_count || 0,
         none: probe.no_match_count || 0,
       });
-      const firstPage = probe.total > (probe.items || []).length
-        ? await scoringService.getAllScoredResumes({ page_size: probe.total, page: 1 })
-        : probe;
+      const firstPage = await fullRequest;
       if (isStale()) return;
       const allItems = firstPage.items || [];
 
@@ -625,10 +627,7 @@ export default function ResumeScoringRoute() {
     const isStale = () => seq !== jdScoresSeqRef.current.get(jdId);
     try {
       // Probe for total then pull every score for this JD in one request
-      const probe = await scoringService.getJDScoredResumes(jdId, { page_size: 1, page: 1 });
-      const firstPage = probe.total > (probe.items || []).length
-        ? await scoringService.getJDScoredResumes(jdId, { page_size: probe.total, page: 1 })
-        : probe;
+      const firstPage = await fetchAllRows((page_size, page) => scoringService.getJDScoredResumes(jdId, { page_size, page }));
       if (isStale()) return;
       const allItems = [...(firstPage.items || [])];
       // /scoring/jd/{id} returns newest-first — capture the most recent score's
@@ -744,17 +743,8 @@ export default function ResumeScoringRoute() {
       const jdParams = { status: 'published' as const, source: 'my-jds' as const };
       const resumeParams = { include_archived: true };
       const [jdResponse, resumeResponse, folderResponse] = await Promise.all([
-        jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
-          probe.total > probe.items.length
-            ? jdService.list({ ...jdParams, page_size: probe.total })
-            : probe
-        ),
-        resumeService.list({ ...resumeParams, page_size: 1 })
-          .then((probe) =>
-            probe.total > probe.items.length
-              ? resumeService.list({ ...resumeParams, page_size: probe.total })
-              : probe
-          )
+        fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
+        fetchAllRows((page_size, page) => resumeService.list({ ...resumeParams, page_size, page }))
           .catch(() => ({ items: [] })),
         folderService.list().catch(() => []),
       ]);
@@ -845,10 +835,7 @@ export default function ResumeScoringRoute() {
   // Refresh only resumes (lightweight, no loading state)
   const refreshResumes = async () => {
     try {
-      const probe = await resumeService.list({ page_size: 1, include_archived: true });
-      const resumeResponse = probe.total > probe.items.length
-        ? await resumeService.list({ page_size: probe.total, include_archived: true })
-        : probe;
+      const resumeResponse = await fetchAllRows((page_size, page) => resumeService.list({ page_size, page, include_archived: true }));
       const convertedResumes: Resume[] = resumeResponse.items.map((r: any) => ({
         id: r.id,
         name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',

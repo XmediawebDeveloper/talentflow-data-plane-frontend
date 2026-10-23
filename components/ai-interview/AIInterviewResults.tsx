@@ -17,6 +17,7 @@ import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_L
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
+import NameAvatar from '@/components/ui/name-avatar';
 import { DateField } from '@/components/ui/date-field';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { tabPill } from '@/components/ui/filter-pills';
@@ -29,7 +30,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
-  Play, Video, MoreVertical, ClipboardList,
+  Play, Video, MoreVertical, ClipboardList, X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -82,6 +83,9 @@ interface AIInterviewResultsProps {
    *  by the page, so the Job Version column and filter are left out while
    *  Interview Version stays. */
   hideJobVersion?: boolean;
+  /** The interview's job is disabled: results stay viewable, but the bulk
+   *  Revoke / Resend actions are withheld until the job is enabled again. */
+  readOnly?: boolean;
   /** How a candidate's name is SHOWN in the table rows and cards (Job Details:
    *  first name capitalised). Display only — search, sort, filters and exports
    *  keep the name as it is; other hosts leave it unset. */
@@ -117,6 +121,13 @@ interface AIInterviewResultsProps {
   jobVersion?: number;
   interviewVersion?: number;
   /**
+   * Opened from a job row's Result on the AI Interviews list: every interview
+   * version of that job, each with its job / interview version — the same
+   * scope the row's Track popup covers. The list, cards and export merge all
+   * of them, and each row shows its own versions. Unset for one interview.
+   */
+  jobScope?: ResultsJobScopeEntry[] | null;
+  /**
    * When provided (embedded in Job Details), the search / More Filters toolbar
    * portals into this node — the tab-navigation card's toolbar slot — with its
    * own card chrome dropped, so the controls read as the tab card's second row.
@@ -133,6 +144,12 @@ interface AIInterviewResultsProps {
    *  whenever a load lands, so the tab badge shows the number the table lists. */
   onTotalItemsChange?: (total: number) => void;
 }
+
+/** One interview version of a job-wide results list. */
+export type ResultsJobScopeEntry = { configId: string; jobVersion: number; interviewVersion: number };
+
+/* A job-wide list's rows are stamped with the version they came from. */
+type ScopedSession = AIInterviewResponse & { _config_id?: string; _jd_version?: number; _interview_version?: number };
 
 /* Toggleable table columns (Actions always shows). Same Customize Columns
  * modal the resume scoring All Resumes tab uses. */
@@ -279,7 +296,8 @@ const SCORE_INPUT_CLASS = 'w-full min-w-0 h-9 px-3 text-sm text-black dark:text-
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
+  const scoped = !!jobScope && jobScope.length > 0;
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -315,6 +333,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const interviewVersion = interviewVersionProp ?? resolvedInterviewVersion;
 
   useEffect(() => {
+    // A job-wide list reads each row's versions off the row itself.
+    if (scoped) return;
     if (jobVersionProp !== undefined && interviewVersionProp !== undefined) return;
     let cancelled = false;
     (async () => {
@@ -329,20 +349,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         // Same "fetch every config, bucket by jd_id, sort oldest first" the
         // All Interviews table and the interview details page's own
         // sibling lookup use — there is no list-by-jd_id endpoint.
-        const live: AIInterviewResponse[] = [];
-        let apiPage = 1;
-        for (;;) {
-          const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-          const items = batch.items || [];
-          live.push(...items);
-          const total = batch.total ?? live.length;
-          if (items.length < 100 || live.length >= total) break;
-          apiPage += 1;
-        }
-        const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-        const archived = archivedProbe.total > archivedProbe.items.length
-          ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-          : archivedProbe.items;
+        const { live, archived } = await aiInterviewService.listAllConfigsSplit();
         if (cancelled) return;
         const siblings = [...live, ...archived].filter((c) => c.jd_id === own.jd_id);
         const sorted = siblings.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
@@ -353,7 +360,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       }
     })();
     return () => { cancelled = true; };
-  }, [configId, jobVersionProp, interviewVersionProp]);
+  }, [configId, jobVersionProp, interviewVersionProp, scoped]);
 
   const [showFilters, setShowFilters] = useState(false);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
@@ -422,7 +429,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     if (isPhoneWidth()) setDisplayMode('grid');
   }, []);
   useListStatePersistence(
-    `ai-interview-results:${configId}`,
+    scoped ? `ai-interview-results:job:${configId}` : `ai-interview-results:${configId}`,
     { currentPage, query: search.query, filters: search.filters, displayMode },
     (s) => {
       if (typeof s.query === 'string' && s.query) search.setQuery(s.query);
@@ -456,7 +463,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      fetched set, so it forces the client-paged path even when the server could
      otherwise page this list itself (a specific status, no other filter). */
   const sortActive = !(sortField === 'date' && sortDirection === 'desc');
-  const needsClientFilter = !!(sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '' || statusFilter === 'all' || sortActive);
+  /* A job-wide list merges several interviews' rows, so it is always paged here. */
+  const needsClientFilter = !!(scoped || sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '' || statusFilter === 'all' || sortActive);
   const matchesClientFilters = useCallback((s: AIInterviewResponse) => {
     if (statusFilter === 'all' && !RESULT_STATUSES.has(String(s.status))) return false;
     if (sourceFilter && (s as any).invite_source !== sourceFilter) return false;
@@ -506,6 +514,43 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     compact: true,
   }), [search.appliedQuery, statusFilter, dateFrom, dateTo, currentPage, needsClientFilter]);
 
+  /* The interviews this list reads: the job's versions that pass the Job
+     Version / Interview Version filters, or null for a single interview. */
+  const scopeTargets = useMemo(() => (scoped
+    ? jobScope!.filter((entry) =>
+      (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter)
+      && (!interviewVersionFilter || String(entry.interviewVersion) === interviewVersionFilter))
+    : null), [scoped, jobScope, jobVersionFilter, interviewVersionFilter]);
+
+  /* One list call — for a job-wide list, the same call against every interview
+     in scope, rows stamped with their versions and the counts summed, as the
+     job row's Track popup does. */
+  const fetchInvitations = useCallback(async (params: typeof requestParams): Promise<AIInterviewInvitationListResponse> => {
+    if (!scopeTargets) return aiInterviewService.getConfigInvitations(configId, params);
+    const lists = await Promise.all(scopeTargets.map((entry) =>
+      aiInterviewService.getConfigInvitations(entry.configId, params).then((res) => ({
+        ...res,
+        items: (res.items || []).map((s): ScopedSession => ({
+          ...s,
+          _config_id: entry.configId,
+          _jd_version: entry.jobVersion,
+          _interview_version: entry.interviewVersion,
+        })),
+      }))));
+    const sum = (pick: (res: AIInterviewInvitationListResponse) => number | undefined) =>
+      lists.reduce((acc, res) => acc + (pick(res) || 0), 0);
+    return {
+      ...(lists[0] ?? {}),
+      items: lists.flatMap((res) => res.items),
+      total: sum((res) => res.total),
+      completed: sum((res) => res.completed),
+      in_progress: sum((res) => res.in_progress),
+      terminated: sum((res) => res.terminated),
+      cancelled: sum((res) => res.cancelled),
+      total_pages: 1,
+    } as AIInterviewInvitationListResponse;
+  }, [scopeTargets, configId]);
+
   /* The rows, total and page count to show for one list response: the
      server's own page as it is, or — with a Source filter — this page of the
      rows from that source, so the pagination and counts describe what is
@@ -535,12 +580,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       // scoped by the same search/date params so the cards stay in step with
       // an active search rather than always reading the whole config.
       const [result, expiredProbe, revokedProbe, invitedProbe, allProbe]: [AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse] = await Promise.all([
-        aiInterviewService.getConfigInvitations(configId, requestParams),
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
+        fetchInvitations(requestParams),
+        fetchInvitations({ ...requestParams, status: 'expired', page: 1, page_size: 1 }),
+        fetchInvitations({ ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
+        fetchInvitations({ ...requestParams, status: 'invited', page: 1, page_size: 1 }),
         // Every invite, whatever its status — decides "nobody invited yet".
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: undefined, page: 1, page_size: 1 }),
+        fetchInvitations({ ...requestParams, status: undefined, page: 1, page_size: 1 }),
       ]);
       if (isStale()) return;
       const shown = pageBySource(result);
@@ -571,7 +616,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
     }
-  }, [configId, requestParams, pageBySource, currentPage]);
+  }, [fetchInvitations, requestParams, pageBySource, currentPage]);
 
   useEffect(() => {
     loadSessions();
@@ -586,12 +631,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       // they only check it, so a load started after this poll wins.
       const seq = loadSeqRef.current;
       Promise.all([
-        aiInterviewService.getConfigInvitations(configId, requestParams),
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
+        fetchInvitations(requestParams),
+        fetchInvitations({ ...requestParams, status: 'expired', page: 1, page_size: 1 }),
+        fetchInvitations({ ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
+        fetchInvitations({ ...requestParams, status: 'invited', page: 1, page_size: 1 }),
         // Every invite, whatever its status — decides "nobody invited yet".
-        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: undefined, page: 1, page_size: 1 }),
+        fetchInvitations({ ...requestParams, status: undefined, page: 1, page_size: 1 }),
       ])
         .then(([r, expiredProbe, revokedProbe, invitedProbe, allProbe]) => {
           if (seq !== loadSeqRef.current) return;
@@ -614,15 +659,27 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [sessions, configId, requestParams, pageBySource]);
+  }, [sessions, fetchInvitations, requestParams, pageBySource]);
 
   // The hook's `onChange` returns to page 1 whenever the query or a filter moves.
   // Job/interview version are properties of this config, not of each row, so
   // the version filters narrow client-side against the resolved versions.
-  const versionMatches =
+  // A job-wide list already narrowed which interviews it read (scopeTargets).
+  const versionMatches = scoped || (
     (!jobVersionFilter || !!toolbarPortal || String(jobVersion) === jobVersionFilter) &&
-    (!interviewVersionFilter || String(interviewVersion) === interviewVersionFilter);
+    (!interviewVersionFilter || String(interviewVersion) === interviewVersionFilter));
   const paginatedSessions = versionMatches ? sessions : [];
+  /* A row's versions: its own on a job-wide list, else this interview's. */
+  const rowJobVersion = (s: AIInterviewResponse) => (s as ScopedSession)._jd_version ?? jobVersion;
+  const rowInterviewVersion = (s: AIInterviewResponse) => (s as ScopedSession)._interview_version ?? interviewVersion;
+  /* The Job Version / Interview Version filter choices: every version in a
+     job-wide list, else this interview's single one. */
+  const versionChoices = (pick: (entry: ResultsJobScopeEntry) => number, own: number | undefined) =>
+    scoped
+      ? Array.from(new Set(jobScope!.map(pick))).sort((a, b) => a - b)
+      : own != null ? [own] : [];
+  const jobVersionChoices = versionChoices((entry) => entry.jobVersion, jobVersion);
+  const interviewVersionChoices = versionChoices((entry) => entry.interviewVersion, interviewVersion);
 
   // No candidate has been invited to this interview yet. The search box, status
   // dropdown and More Filters would all be narrowing nothing, so the whole bar
@@ -703,8 +760,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       switch (c.id) {
         case 'cid': return [session.candidate_cid || ''];
         case 'candidate': return [session.candidate_name || '', session.candidate_email || ''];
-        case 'jobVersion': return [jobVersion != null ? `V${jobVersion}` : ''];
-        case 'interviewVersion': return [interviewVersion != null ? `V${interviewVersion}` : ''];
+        case 'jobVersion': { const v = rowJobVersion(session); return [v != null ? `V${v}` : '']; }
+        case 'interviewVersion': { const v = rowInterviewVersion(session); return [v != null ? `V${v}` : '']; }
         case 'inviteSource': return [inviteSourceLabel(session) || ''];
         case 'status': return [getStatusLabel(session.status) + (isAutoCompleted(session) ? ' (Auto)' : '')];
         case 'score': { const score = displayInviteScore(session); return [score != null ? `${score}%` : '']; }
@@ -725,6 +782,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const collectExportRows = async (): Promise<AIInterviewResponse[]> => {
     if (selected.size > 0) return Array.from(selected.values());
     if (!versionMatches) return [];
+    if (scopeTargets) {
+      const res = await fetchInvitations({ ...requestParams, page: 1, page_size: SOURCE_FETCH_LIMIT });
+      return sortSessions(res.items.filter(matchesClientFilters));
+    }
     const all: AIInterviewResponse[] = [];
     for (let page = 1; ; page += 1) {
       const res = await aiInterviewService.getConfigInvitations(configId, { ...requestParams, page, page_size: 100 });
@@ -781,7 +842,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      can go to. Shown wherever the cards are, since they decide which applies.
      Ticked rows that do not qualify are left out and the button's count says
      how many will actually be acted on. */
-  const showInviteActions = showStats ?? !embedded;
+  const showInviteActions = (showStats ?? !embedded) && !readOnly;
   const selectedSessions = Array.from(selected.values());
   const revocableSelected = showInviteActions && statusFilter === 'invited'
     ? selectedSessions.filter(isRevocableInvite) : [];
@@ -871,11 +932,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     }
     // Persist the currently-visible session order so the details view can offer
     // Previous/Next navigation between candidates (mirrors AssessmentResults).
+    // A job-wide list spans interviews: each entry carries its own, and the
+    // details page's Back returns to this job-wide list.
     try {
-      const navList = paginatedSessions.map((s) => ({ id: s.id }));
+      const navList = paginatedSessions.map((s) => ({ id: s.id, configId: (s as ScopedSession)._config_id }));
       sessionStorage.setItem('aiInterviewResultNavList', JSON.stringify(navList));
     } catch { /* ignore storage failures */ }
-    router.push(`/recruitment/ai-interviews/${configId}/results/details?session_id=${session.id}`);
+    const ownConfigId = (session as ScopedSession)._config_id ?? configId;
+    router.push(`/recruitment/ai-interviews/${ownConfigId}/results/details?session_id=${session.id}`
+      + (scoped ? `&from=job-results&root=${encodeURIComponent(configId)}` : ''));
   };
 
   /* Embedded in the Job Details "AI Interview Result" tab (toolbar portals into
@@ -899,7 +964,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   repeated the title underneath is gone. */}
               <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold text-gray-900 tracking-tight">
                 {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
-                <span>{jdTitle || configTitle || 'AI Interview'}</span>
+                <span className="min-w-0 break-words">{jdTitle || configTitle || 'AI Interview'}</span>
                 {/* One version's results: the table has no version columns, so
                     the title names the version — "App development - V1
                     Interview Version - V1", the Track popup's header. */}
@@ -1005,16 +1070,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               {selected.size > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="rounded-full sm:h-9"
+                    <button
+                      type="button"
+                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                       aria-label={`Actions for ${selected.size} selected`}
                     >
+                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                      </span>
                       {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                      Actions
+                      Actions ({selected.size})
                       <ChevronDown className="w-4 h-4" />
-                    </Button>
+                    </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                     <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1112,6 +1180,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     })()}
                   </DropdownMenuContent>
                 </DropdownMenu>
+              )}
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Map())}
+                  title="Clear the selection"
+                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
               )}
             </>
           ) : undefined}
@@ -1269,7 +1348,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               </div>
             </div>
             {!portaled && (
-              <div className="flex-[1.4] min-w-0 basis-[320px]">
+              <div className="flex-[1.4] min-w-0 basis-full sm:basis-[320px]">
                 <label className={filterLabelClass}>Completion Date</label>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <DateField
@@ -1300,7 +1379,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All job versions</option>
-                {jobVersion != null && <option value={String(jobVersion)}>V{jobVersion}</option>}
+                {jobVersionChoices.map((v) => <option key={v} value={String(v)}>V{v}</option>)}
               </select>
             </div>
             )}
@@ -1313,7 +1392,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
               >
                 <option value="">All interview versions</option>
-                {interviewVersion != null && <option value={String(interviewVersion)}>V{interviewVersion}</option>}
+                {interviewVersionChoices.map((v) => <option key={v} value={String(v)}>V{v}</option>)}
               </select>
             </div>
             </>
@@ -1393,7 +1472,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   <SearchableSelect
                     value={search.filters.jobVersion}
                     onChange={(v) => search.setFilter('jobVersion', v)}
-                    options={jobVersion != null ? [{ value: String(jobVersion), label: `V${jobVersion}` }] : []}
+                    options={jobVersionChoices.map((v) => ({ value: String(v), label: `V${v}` }))}
                     allLabel="All job versions"
                     placeholder="All job versions"
                     searchPlaceholder="Search version..."
@@ -1407,7 +1486,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   <SearchableSelect
                     value={search.filters.interviewVersion}
                     onChange={(v) => search.setFilter('interviewVersion', v)}
-                    options={interviewVersion != null ? [{ value: String(interviewVersion), label: `V${interviewVersion}` }] : []}
+                    options={interviewVersionChoices.map((v) => ({ value: String(v), label: `V${v}` }))}
                     allLabel="All interview versions"
                     placeholder="All interview versions"
                     searchPlaceholder="Search version..."
@@ -1458,18 +1537,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               onClear={() => setSelected(new Map())}
             />
             {selected.size > 0 && (
+              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="rounded-full whitespace-nowrap"
+                  <button
+                    type="button"
+                    className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                     aria-label={`Actions for ${selected.size} selected`}
                   >
+                    <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                      <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                    </span>
                     {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    Actions
+                    Actions ({selected.size})
                     <ChevronDown className="w-4 h-4" />
-                  </Button>
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
                   <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
@@ -1509,6 +1592,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Map())}
+                  title="Clear the selection"
+                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                >
+                  <X className="w-4 h-4" />
+                  Clear
+                </button>
+              </div>
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
@@ -1592,9 +1685,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       selectionActive={selected.size > 0}
                     />
                     <div className="flex items-start gap-2.5">
-                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
-                        {(session.candidate_name || 'U')[0].toUpperCase()}
-                      </div>
+                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}
@@ -1610,15 +1701,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       )}
                     </div>
 
-                    {((col('inviteSource') && inviteSourceLabel(session)) || (col('interviewVersion') && interviewVersion != null)) && (
+                    {((col('inviteSource') && inviteSourceLabel(session)) || (col('interviewVersion') && rowInterviewVersion(session) != null)) && (
                       <div className="flex items-center justify-between gap-2 text-xs text-gray-600">
                         {col('inviteSource') && inviteSourceLabel(session) ? (
                           <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
                         ) : <span />}
-                        {col('interviewVersion') && interviewVersion != null && (
+                        {col('interviewVersion') && rowInterviewVersion(session) != null && (
                           <span className="inline-flex items-center gap-1 shrink-0">
                             Interview
-                            <VersionPill kind="interview" version={interviewVersion} />
+                            <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
                           </span>
                         )}
                       </div>
@@ -1786,9 +1877,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               </div>
                             ) : (
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
-                                {(session.candidate_name || 'U')[0].toUpperCase()}
-                              </div>
+                              <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
@@ -1904,12 +1993,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                         {col('jobVersion') && !portaled && (
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {jobVersion != null ? <VersionPill kind="job" version={jobVersion} /> : <span className="text-gray-400">—</span>}
+                            {rowJobVersion(session) != null ? <VersionPill kind="job" version={rowJobVersion(session)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         {col('interviewVersion') && (
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
+                            {rowInterviewVersion(session) != null ? <VersionPill kind="interview" version={rowInterviewVersion(session)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col" onClick={portaled ? (e) => e.stopPropagation() : undefined}>
@@ -2026,7 +2115,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                 </span>
                               ) : <span className="text-gray-400">—</span>
                             ) : (
-                              jobVersion != null ? <VersionPill kind="job" version={jobVersion} /> : <span className="text-gray-400">—</span>
+                              rowJobVersion(session) != null ? <VersionPill kind="job" version={rowJobVersion(session)!} /> : <span className="text-gray-400">—</span>
                             ),
                           }))}
                         />
@@ -2057,7 +2146,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates
               </span>
-              <div className="flex items-center justify-center sm:justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                   <input

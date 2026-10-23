@@ -77,9 +77,9 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
           <span className="text-xs font-semibold uppercase">{letter}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
+          <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
             {label}
-            {isMandatory && <span className="text-2xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>}
+            {isMandatory && <span className="text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>}
             {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
           </div>
         </div>
@@ -103,18 +103,18 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
               <div className="flex items-center gap-3">
                 <GroupCheckbox state={state} label={category.name} />
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{category.name}</h4>
+                  <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{category.name}</h4>
                   <p className="text-xs text-gray-500 dark:text-slate-500">
                     {allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}
                   </p>
                 </div>
                 {category.isMenuToggle && selectedCount > 0 && (
-                  <span className="text-2xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
+                  <span className="text-xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
                     Menu
                   </span>
                 )}
               </div>
-              <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
             </div>
 
             {(category.viewCode || category.actions?.length) && (
@@ -140,7 +140,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
                       <GroupCheckbox size="sm" state={groupCheckState(isGroupFullyOn(subCodes, selected), subSelected)} label={sub.name} />
                       <span className="text-xs font-semibold text-gray-800 dark:text-slate-200">{sub.name}</span>
                     </div>
-                    <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{subSelected} selected</span>
+                    <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{subSelected} selected</span>
                   </div>
                   <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
                     {sub.viewCode && renderTile(sub.viewCode, `View ${sub.name}`)}

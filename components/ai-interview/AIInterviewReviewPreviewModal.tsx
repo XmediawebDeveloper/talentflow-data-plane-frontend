@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
+import { useJdLocations } from '@/hooks/useJdLocations';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { distributeSkillsLocally } from '@/lib/utils/questionDistribution';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -235,12 +236,14 @@ export default function AIInterviewReviewPreviewModal({
   }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
   const sttOption = getSttModelOption(sttModel);
+  const jdLocations = useJdLocations(interview?.jd_id);
   const jdAsJob: Job = {
     id: interview?.jd_id ?? configId ?? '',
     job_id: interview?.jd_short_id,
     title: interview?.jd_title ?? position,
     status: 'Published',
     location: interview?.jd_location ?? '',
+    locations: jdLocations ?? undefined,
     daysActive: 0,
     requiredMatch: 0,
     industry_type: interview?.jd_industry_type,
@@ -366,8 +369,8 @@ export default function AIInterviewReviewPreviewModal({
                             <Clock className="w-4 h-4 text-brand-blue" />
                             <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-100 tracking-tight">Time Allocation</h4>
                           </div>
-                          <div className="overflow-hidden rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]">
-                            <table className="w-full text-sm">
+                          <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]">
+                            <table className="w-full min-w-[360px] text-sm">
                               <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800 text-left">
                                   <th className="px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Round</th>
@@ -617,7 +620,7 @@ export default function AIInterviewReviewPreviewModal({
                         {interview.jd_location && (
                           <div className="px-3 py-2 flex items-center justify-between gap-2">
                             <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Location</span>
-                            <SummaryLocation value={interview.jd_location} />
+                            <SummaryLocation value={interview.jd_location} locations={jdLocations} />
                           </div>
                         )}
                         {interview.jd_version != null && (

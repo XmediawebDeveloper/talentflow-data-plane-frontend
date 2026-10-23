@@ -27,7 +27,7 @@
  * to run under it as-is.
  */
 import assert from 'assert';
-import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '../email';
+import { isValidEmailFormat, suggestEmailDomain, EMAIL_FORMAT_ERROR } from '../email';
 
 type Case = [string | null | undefined, boolean, string];
 
@@ -58,6 +58,26 @@ const CASES: Case[] = [
   [' user@example.com', false, 'leading whitespace'],
   ['user@example.com ', false, 'trailing whitespace'],
   ['user@exa_mple.com', false, "invalid domain character '_'"],
+  // Well-formed but a misspelt mail provider — not a real address.
+  ['naveengovindhan1@gmail.om', false, 'gmail.om — the reported bug (.om is a real TLD)'],
+  ['user@gmail.co', false, 'gmail.co'],
+  ['user@gmail.con', false, 'gmail.con'],
+  ['user@gmial.com', false, 'gmial.com'],
+  ['user@gamil.com', false, 'gamil.com (swapped letters)'],
+  ['user@hotmal.com', false, 'hotmal.com'],
+  ['user@yahoo.om', false, 'yahoo.om'],
+  ['user@outlok.com', false, 'outlok.com'],
+  ['user@icloud.cm', false, 'icloud.cm'],
+  // Real domains that sit next to a provider must still pass.
+  ['user@gmail.com', true, 'gmail.com'],
+  ['user@email.com', true, 'email.com (one letter from gmail.com, but real)'],
+  ['user@mail.com', true, 'mail.com'],
+  ['user@yahoo.co.id', true, 'yahoo.co.id (one letter from yahoo.co.in, but real)'],
+  ['user@yahoo.fr', true, 'yahoo.fr country domain'],
+  ['user@hotmail.de', true, 'hotmail.de country domain'],
+  ['user@company.om', true, 'a real .om business domain'],
+  ['user@me.com', true, 'me.com'],
+  ['user@scopexapps.com', true, 'ordinary company domain'],
   ['', false, 'empty string'],
   [null, false, 'null'],
   [undefined, false, 'undefined'],
@@ -74,5 +94,7 @@ for (const [email, expected, reason] of CASES) {
 assert.strictEqual(failures, 0, `${failures} of ${CASES.length} email format cases failed`);
 
 assert.strictEqual(EMAIL_FORMAT_ERROR, 'Please enter a valid email address.');
+assert.strictEqual(suggestEmailDomain('gmail.om'), 'gmail.com');
+assert.strictEqual(suggestEmailDomain('example.com'), null);
 
 console.log(`email.test.ts: all ${CASES.length} cases passed`);

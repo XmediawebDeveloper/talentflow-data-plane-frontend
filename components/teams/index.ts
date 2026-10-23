@@ -1,5 +1,7 @@
 export { default as TeamStatsCards } from './TeamStatsCards';
 export { default as TeamCard, TeamCardSkeleton } from './TeamCard';
+export { default as TeamListTable } from './TeamListTable';
+export { default as TeamManagementSkeleton } from './TeamManagementSkeleton';
 export { default as MemberSelector } from './MemberSelector';
 export { default as DeleteConfirmDialog } from './DeleteConfirmDialog';
 export { default as TeamFormModal } from './TeamFormModal';

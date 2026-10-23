@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { PublishedJD } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
@@ -22,6 +23,7 @@ import { jdService } from '@/lib/services';
 import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import { Skeleton } from '@/components/ui/skeleton';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
@@ -83,9 +85,7 @@ export default function AIInterviewJDSelection() {
     const jdParams = { source: 'my-jds' as const };
     Promise.allSettled([
       aiInterviewService.getPublishedJDs(),
-      jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
-        probe.total > probe.items.length ? jdService.list({ ...jdParams, page_size: probe.total }) : probe,
-      ),
+      fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
     ]).then(([published, full]) => {
       if (cancelled) return;
       if (published.status === 'fulfilled') {
@@ -132,11 +132,13 @@ export default function AIInterviewJDSelection() {
      version reads as free, and a press would carry a taken one into Configure. */
   const addReady = eligibilityLoaded && loadError !== 'eligibility';
 
-  const toJob = (jd: PublishedJD): Job => fullJobsById.get(jd.id) ?? publishedJdToJob(jd);
+  const toJob = (jd: PublishedJD): Job => fullJobsById.get(jd.id)
+    ?? (isJdDisabled(jd.status) ? { ...publishedJdToJob(jd), status: 'Disabled' } : publishedJdToJob(jd));
+  const isJobDisabled = (job: Pick<Job, 'status'>) => isJdDisabled(String(job.status || ''));
 
   // Versions with a published AI interview config never reach the list — a JD
-  // can't be configured twice.
-  const selectableJds = jds.filter(jd => jd.has_published_config !== true);
+  // can't be configured twice. Disabled JDs are listed separately, read-only.
+  const selectableJds = jds.filter(jd => jd.has_published_config !== true && !isJdDisabled(jd.status));
 
   /* ONE CARD PER JOB, on the Assessments picker's own rule and through its
      own helper, so the two lists cannot drift: each job is listed on its
@@ -144,11 +146,19 @@ export default function AIInterviewJDSelection() {
      interview yet — draft config or published. A job with no such version
      gets no card; its versions, taken ones included, are still in Job
      Openings and in View Versions. Newest job first. */
-  const availableJobs = sortJobs(
-    buildAssessmentJobList(selectableJds.map(toJob), version => versionHasInterview(version.id)),
-    'date',
-    'desc',
-  );
+  const buildableJobs = buildAssessmentJobList(selectableJds.map(toJob), version => versionHasInterview(version.id));
+  /* Disabled jobs stay visible exactly as before they were disabled, one card
+     per job (its newest disabled version), but nothing can be created against
+     them until the job is enabled again. */
+  const buildableLineages = new Set(buildableJobs.map(lineageKey));
+  const disabledJobs = new Map<string, Job>();
+  for (const job of jds.filter(jd => isJdDisabled(jd.status)).map(toJob)) {
+    const key = lineageKey(job);
+    if (buildableLineages.has(key)) continue;
+    const prev = disabledJobs.get(key);
+    if (!prev || (job.versionNumber ?? 1) > (prev.versionNumber ?? 1)) disabledJobs.set(key, job);
+  }
+  const availableJobs = sortJobs([...buildableJobs, ...disabledJobs.values()], 'date', 'desc');
   // True when published versions exist but every one already has an AI
   // interview — the empty state then says so instead of "create a JD first".
   const allConfigured = jds.length > 0 && availableJobs.length === 0;
@@ -163,6 +173,10 @@ export default function AIInterviewJDSelection() {
   const jdPickOnThisPage = !!jdPick && pagedJobs.some(job => lineageKey(job) === jdPick.lineage);
 
   const handleCreateForVersion = (jdId: string) => {
+    if (isJdDisabled(jds.find(jd => jd.id === jdId)?.status)) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${jdId}`);
   };
 
@@ -223,7 +237,7 @@ export default function AIInterviewJDSelection() {
                 </div>
                 <JobEligibilityNote
                   className="mt-3"
-                  description="Only Published (or Republished) job versions without an AI interview are listed. Archived, Disabled, Draft and already-configured jobs are hidden — use View Versions to see a job's full history."
+                  description="Published (or Republished) job versions without an AI interview can be selected. Disabled jobs are shown read-only until enabled again. Archived, Draft and already-configured jobs are hidden — use View Versions to see a job's full history."
                 />
               </div>
 
@@ -294,7 +308,7 @@ export default function AIInterviewJDSelection() {
                         Select a Job Opening
                         {lineageJobs.length > 0 && (
                           <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
-                            &mdash; {lineageJobs.length} available
+                            &mdash; {lineageJobs.filter(job => !isJobDisabled(job)).length} available
                           </span>
                         )}
                       </span>
@@ -338,16 +352,19 @@ export default function AIInterviewJDSelection() {
                         ? `v${jdPick!.job.versionNumber ?? 1} of "${jdPick!.job.title}" is selected — clear it to choose a version here`
                         : undefined;
                       const latestHasInterview = versionHasInterview(job.id);
+                      const jobDisabled = isJobDisabled(job);
                       const latestSelectableStatus = isSelectableVersion(job);
-                      const latestSelectable = !latestHasInterview && !blockedByOtherPick && latestSelectableStatus;
+                      const latestSelectable = !latestHasInterview && !blockedByOtherPick && latestSelectableStatus && !jobDisabled;
                       const latestUnpublishedReason = `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
                       /* The card's + builds against this job's picked version
                          when one is ticked, otherwise the latest. */
                       const cardTarget = lineageSelected ? jdPick!.job : job;
                       const cardAddEnabled = canCreateAIInterviews && addReady && !blockedByOtherPick
-                        && isSelectableVersion(cardTarget) && !versionHasInterview(cardTarget.id);
+                        && isSelectableVersion(cardTarget) && !versionHasInterview(cardTarget.id) && !isJobDisabled(cardTarget);
                       const cardAddLabel = !canCreateAIInterviews
                         ? 'You do not have permission to create AI interviews'
+                        : isJobDisabled(cardTarget)
+                          ? JD_DISABLED_ACTION_MESSAGE
                         : blockedByOtherPick
                           ? otherPickReason!
                           : versionHasInterview(cardTarget.id)
@@ -362,6 +379,8 @@ export default function AIInterviewJDSelection() {
                           title={
                             blockedByOtherPick
                               ? otherPickReason
+                              : jobDisabled
+                                ? `${JD_DISABLED_ACTION_MESSAGE} View Versions still shows this job's version history.`
                               : !latestSelectableStatus
                                 ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
                                 : 'View Versions opens this job’s version history — every version of this job, and the one to build the AI interview against.'
@@ -381,6 +400,8 @@ export default function AIInterviewJDSelection() {
                               title={
                                 blockedByOtherPick
                                   ? otherPickReason
+                                  : jobDisabled
+                                    ? JD_DISABLED_ACTION_MESSAGE
                                   : latestHasInterview
                                     ? `v${job.versionNumber ?? 1} already has an AI interview — open View Versions to build against another version`
                                     : !latestSelectableStatus
@@ -410,8 +431,18 @@ export default function AIInterviewJDSelection() {
                                     ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                                     : job}
                                   metaSingleLine
+                                  /* Coloured like the Job Openings badges; applicants read "scored". */
+                                  coloredCountBadges
+                                  applicantsLabel="scored"
                                   trailingBadges={lineageSelected ? (
                                     <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                                  ) : jobDisabled ? (
+                                    <span
+                                      className="inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-300 whitespace-nowrap"
+                                      title={JD_DISABLED_ACTION_MESSAGE}
+                                    >
+                                      Disabled
+                                    </span>
                                   ) : null}
                                 />
                               </div>
@@ -486,6 +517,7 @@ export default function AIInterviewJDSelection() {
                               loading={jdLineage.isLoading(versionKey)}
                               versionDetails={jdLineage.versionDetails}
                               versionApplicants={jdLineage.versionApplicants}
+                              applicantsLabel="Scored"
                               openInNewTab
                               staticRows
                               plainTitle
@@ -495,6 +527,7 @@ export default function AIInterviewJDSelection() {
                               radioGroupName={`${JD_RADIO_GROUP}-${versionKey}`}
                               selectHint={(versionJob) => `Select v${versionJob.versionNumber ?? 1}`}
                               versionSelectionState={(versionJob) => {
+                                if (isJobDisabled(versionJob)) return JD_DISABLED_ACTION_MESSAGE;
                                 if (versionHasInterview(versionJob.id)) {
                                   return `v${versionJob.versionNumber ?? 1} already has an AI interview`;
                                 }
@@ -518,9 +551,12 @@ export default function AIInterviewJDSelection() {
                                 const enabled = canCreateAIInterviews
                                   && addReady
                                   && isSelectableVersion(versionJob)
+                                  && !isJobDisabled(versionJob)
                                   && !versionHasInterview(versionJob.id);
                                 const label = !canCreateAIInterviews
                                   ? 'You do not have permission to create AI interviews'
+                                  : isJobDisabled(versionJob)
+                                    ? JD_DISABLED_ACTION_MESSAGE
                                   : versionHasInterview(versionJob.id)
                                     ? `v${versionJob.versionNumber ?? 1} already has an AI interview`
                                     : !isSelectableVersion(versionJob)

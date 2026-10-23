@@ -322,7 +322,7 @@ function ToolbarFilterSelect<T extends string>({
   const isActive = value !== 'all';
 
   return (
-    <label className="relative min-w-[180px] flex-1 sm:flex-none">
+    <label className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
       <span className="sr-only">{label}</span>
       <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
         {icon}
@@ -5031,13 +5031,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </h4>
                   <div className="space-y-2">
                     {duplicateScoringWarning.existingScores.map((score, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-white rounded-lg p-3 border border-red-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                      <div key={idx} className="flex items-center justify-between gap-3 bg-white rounded-lg p-3 border border-red-200">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
                             <X className="w-4 h-4 text-red-600" />
                           </div>
-                          <div>
-                            <div className="font-medium text-gray-900">{score.candidate_name}</div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-gray-900 truncate">{score.candidate_name}</div>
                             {score.scored_at && (
                               <div className="text-xs text-gray-500">
                                 Scored on {formatDateTimeIST(score.scored_at)}
@@ -5045,7 +5045,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             )}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           <div className="text-sm font-semibold text-gray-900">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
                           <div className="text-xs text-gray-500 capitalize">{score.match_status}</div>
                         </div>
@@ -6616,11 +6616,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             </p>
                             <ul className="mt-2 space-y-1">
                               {deleteFolderConfirm.subfolderDetails.map((sf) => (
-                                <li key={sf.id} className="flex items-center gap-2 text-sm text-red-700">
+                                <li key={sf.id} className="flex items-center gap-2 text-sm text-red-700 min-w-0">
                                   <Folder className="w-3.5 h-3.5 flex-shrink-0" />
-                                  <span className="font-medium">{sf.name}</span>
+                                  <span className="font-medium truncate">{sf.name}</span>
                                   {sf.resume_count > 0 && (
-                                    <span className="text-red-500 text-xs">({sf.resume_count} resume{sf.resume_count !== 1 ? 's' : ''})</span>
+                                    <span className="text-red-500 text-xs flex-shrink-0">({sf.resume_count} resume{sf.resume_count !== 1 ? 's' : ''})</span>
                                   )}
                                 </li>
                               ))}
@@ -6669,10 +6669,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
                                         className="w-4 h-4 text-brand-blue"
                                       />
-                                      <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                          <FolderOpen className="w-4 h-4 text-gray-600" />
-                                          <span className="text-sm font-medium text-gray-900">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <FolderOpen className="w-4 h-4 text-gray-600 flex-shrink-0" />
+                                          <span className="text-sm font-medium text-gray-900 truncate">
                                             Move to {parentIsRoot ? 'My Resumes (root)' : deleteFolderConfirm.parentFolderName}
                                           </span>
                                         </div>

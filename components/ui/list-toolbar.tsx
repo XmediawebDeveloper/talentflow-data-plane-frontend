@@ -106,6 +106,10 @@ export interface ListToolbarProps {
    *  to give it a fixed width instead of filling the row. */
   searchClassName?: string;
 
+  /** Extra classes for the search <input> itself (merged last) — e.g. a
+   *  page-specific corner radius. */
+  searchInputClassName?: string;
+
   /**
    * Lay the row out by the TOOLBAR's own width (a container query) instead of
    * the viewport's. For a toolbar with many controls inside a narrower column
@@ -184,6 +188,7 @@ export default function ListToolbar({
   countBadge,
   filterPanel,
   searchClassName,
+  searchInputClassName,
   fitToContainer = false,
   containerBreakpoint = '5xl',
   controlsFollowSearch = false,
@@ -271,7 +276,7 @@ export default function ListToolbar({
         filterPanel ? undefined : className
       )}
     >
-      {beforeSearch && <div className="flex items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
+      {beforeSearch && <div className="flex flex-wrap items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
       <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
@@ -282,7 +287,10 @@ export default function ListToolbar({
           // Shared input chrome — the same h-9 / gray-200 border / rounded-lg /
           // brand-blue focus + hover that SearchableSelect and DateField use, so
           // search, dropdowns and date fields read as one filter component.
-          className="w-full h-9 pl-9 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+          className={cn(
+            'w-full h-9 pl-9 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue',
+            searchInputClassName,
+          )}
         />
       </div>
 

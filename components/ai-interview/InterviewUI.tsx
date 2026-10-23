@@ -24,10 +24,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
-import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
-import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
-import { VisemeTimeline } from "./avatar3d/text-to-viseme";
+import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowDown, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
 import { detectDeviceCapability, type DeviceCapability } from "@/lib/utils/deviceCapability";
@@ -316,7 +313,9 @@ const RECORDING_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 // timeslices plus slack.
 const RECORDING_STALL_CHECK_MS = 12_000;
 const RECORDING_STALL_RECHECK_MS = 6_000;
-const REVEAL_DEBUG = true;
+// Per-tick reveal tracing (console.debug every 200 ms while Bina speaks).
+// Off in shipped builds; flip locally when tuning caption sync.
+const REVEAL_DEBUG = false;
 // The text reveal is anchored to audio playback so caption ≈ voice. But tracking
 // the audio position EXACTLY makes the text always trail the word you already
 // hear ("voice comes before text"). We reveal this many ms AHEAD of the audio
@@ -351,6 +350,16 @@ const PHASE_A_MAX_FRACTION = 0.94;
 // under-estimating makes them outrun Bina (and the reveal is monotonic, so an
 // over-reveal cannot be walked back within a turn).
 const TALKING_HEAD_BUFFER_MS = 1500;
+// Longest we hold the "Bina is speaking" UI and the caption after a turn's
+// first PCM chunk while waiting for TalkingHead's audible-start signal. Normal
+// onset is well under 1 s; this only bounds a missing signal.
+const BINA_AUDIBLE_SAFETY_MS = 3500;
+// Within this distance of the bottom the chat still counts as "at the
+// bottom" — a small accidental scroll must not stop the auto-scroll.
+const CHAT_STICK_THRESHOLD_PX = 120;
+// Cap on mic chunks kept per answer for the client voice check (~4096
+// samples each → ≈ 5-11 s of audio, evenly spread across the answer).
+const VOICE_VERIF_MAX_CHUNKS = 128;
 // Delay between chunk arrival and audible output for the path TalkingHeadAvatar
 // actually took this turn — MEASURED, see TalkingHeadAvatar.streamStart's
 // `onAudioStart`. Non-numeric only before the session's first measurement.
@@ -447,7 +456,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
     return (
       <div className="flex gap-2 flex-row-reverse">
         <YouAvatar photoUrl={candidatePhotoUrl} />
-        <div className="max-w-[80%]">
+        <div className="max-w-[80%] min-w-0">
           <div className="flex items-center justify-end gap-2 mb-0.5">
             <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400">Your Response</span>
             {msg.responseTimeSeconds != null && (
@@ -464,7 +473,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
             )}
           </div>
           <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
-            <p className="text-sm leading-relaxed">{msg.content}</p>
+            <p className="text-sm leading-relaxed break-words">{msg.content}</p>
           </div>
           {msg.timestamp && (
             <p className="text-2xs text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
@@ -481,14 +490,14 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
         alt="Bina"
         className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
       />
-      <div className="max-w-[80%]">
+      <div className="max-w-[80%] min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
         <div className="px-3 py-2 bg-violet-50 dark:bg-violet-500/10 text-violet-900 dark:text-violet-300 rounded-2xl rounded-tl-sm border border-violet-200 dark:border-violet-500/30 shadow-sm">
           {/* pre-line: keeps the committed opening warm-up (role summary +
               AII16 tips) laid out the same way it streamed. */}
-          <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">{msg.content}</p>
         </div>
         {msg.timestamp && (
           <p className="text-2xs text-gray-400 mt-0.5">{msg.timestamp}</p>
@@ -521,7 +530,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
         alt="Bina"
         className="w-6 h-6 rounded-full object-cover shrink-0 shadow-sm mt-0.5"
       />
-      <div className="max-w-[80%]">
+      <div className="max-w-[80%] min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
           <span className="text-2xs font-semibold text-purple-600 dark:text-purple-400">BINA</span>
         </div>
@@ -534,7 +543,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
           {/* pre-line: Bina's opening warm-up carries the AII16 tips as
               newline-separated lines. Questions have no newlines, so this is a
               no-op for every other turn. */}
-          <p className="text-sm leading-relaxed whitespace-pre-line">{text}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">{text}</p>
         </div>
       </div>
     </div>
@@ -696,6 +705,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // guard). Shows a terminal overlay and stops auto-reconnect.
   const [concurrentBlocked, setConcurrentBlocked] = useState(false);
   const concurrentBlockedRef = useRef(false);
+  // A 4409 on an AUTO-RECONNECT (this page already had a live interview) is
+  // usually the server still seeing our own dropped socket — retry a few times
+  // (2s, 3s, 5s) before showing the overlay. A first open never retries.
+  const interviewStartedRef = useRef(false);
+  const concurrentRetryRef = useRef(0);
   // Next-Q debounce: set true the moment the candidate clicks Next Q (so the
   // button disables immediately and rapid double-clicks can't send multiple
   // skip_question messages). Cleared when the backend sends the next question's
@@ -1111,6 +1125,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // instead of giving up (which forced the candidate to manually refresh).
   const preStartRetryRef = useRef(0);
   const PRE_START_MAX_RETRIES = 15;
+  const CONCURRENT_RECONNECT_DELAYS = [2000, 3000, 5000]; // ~10s, then the overlay
   const isUnmountedRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
 
@@ -1371,8 +1386,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // drag state — all in refs so dragging never triggers re-render
   const _dbgDragRef = useRef({ dragging: false, ox: 0, oy: 0 });
 
-  // Poll browser stats every 500ms
+  // Poll browser stats every 500ms — ONLY for the dev overlay. Ungated, this
+  // re-rendered the whole (~12k-line) interview component twice a second for
+  // every candidate, though nothing outside the overlay reads debugStats.
   useEffect(() => {
+    if (!devMonitorEnabled) return;
     const id = setInterval(() => {
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
       const now = Date.now();
@@ -1402,7 +1420,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }, 500);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [devMonitorEnabled]);
 
   // Poll server system stats every 2s — only when the dev monitor is enabled,
   // so candidate sessions never hit the (DEBUG-gated) endpoint or log a 404.
@@ -1654,49 +1672,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // Avatar state controller
   const avatarState = useAvatarState();
-  const avatar3dSenderRef = useRef<ReturnType<typeof createAvatar3DSender> | null>(null);
-
-  // BroadcastChannel sender for 3D avatar (created once, cleaned up on unmount)
-  useEffect(() => {
-    avatar3dSenderRef.current = createAvatar3DSender();
-    return () => {
-      avatar3dSenderRef.current?.destroy();
-      avatar3dSenderRef.current = null;
-    };
-  }, []);
-
-  // Push avatar state to 3D scene at ~30fps (uses refs, zero React re-renders)
-  const avatarStateRef = useRef(avatarState.currentState);
-  avatarStateRef.current = avatarState.currentState;
-  const visemeTimelineRef = useRef<VisemeTimeline>(new VisemeTimeline());
-  const playbackStartTimeRef = useRef(0);
-
-  useEffect(() => {
-    let lastSend = 0;
-    const INTERVAL = 1000 / 30;
-    let raf: number;
-
-    const tick = () => {
-      const now = performance.now();
-      if (now - lastSend >= INTERVAL && avatar3dSenderRef.current) {
-        const timeline = visemeTimelineRef.current;
-        const elapsed = (now - playbackStartTimeRef.current) / 1000;
-        const isSpeaking = isPlayingRef.current && timeline.length > 0;
-
-        avatar3dSenderRef.current.send({
-          avatarState: avatarStateRef.current,
-          mouthOpenness: isSpeaking ? timeline.getMouthOpennessAtTime(elapsed) : 0,
-          visemeWeights: isSpeaking ? timeline.getWeightsAtTime(elapsed) : DEFAULT_VISEME_WEIGHTS,
-          timestamp: now,
-        });
-        lastSend = now;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  // (Removed: a 60 Hz requestAnimationFrame loop that posted avatar state
+  // 30×/s to a BroadcastChannel for a separate 3D scene that is never
+  // mounted — pure main-thread + GC cost for every candidate.)
 
   // Hand raise detection — DISABLED (2026-10-17). It ran MediaPipe Hands on
   // the main thread at 10 fps for the whole interview, yet nothing shows the
@@ -2346,6 +2324,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       return true;
     };
 
+    let lastMicDiag = '';
     const check = async (trigger: string) => {
       try {
         // Same recording-stream-first, webcam-stream-fallback order as
@@ -2361,12 +2340,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         const missing = swapped ? true : await origMissingFromList();
         if (cancelled) return;
         const lost = swapped || missing;
-        // Full diagnostic snapshot on every check — poll tick AND devicechange
-        // event — so a real disconnect test's mic.log shows exactly what the
-        // detection logic saw at each moment, instead of only the moments it
-        // decided to act.
-        console.log('[INTERVIEW-DEBUG][MIC-DIAG]', JSON.stringify({
-          trigger,
+        // Full diagnostic snapshot on every devicechange event, and on a poll
+        // tick whenever ANYTHING in it changed — so a disconnect test's log
+        // still shows exactly what the detection logic saw at each transition.
+        // An unchanged poll tick is skipped: logging (and shipping to the
+        // backend) an identical line every 500 ms was ~1,500 lines per 9 min.
+        const diag = JSON.stringify({
           originalDeviceId: interviewMicDeviceIdRef.current ?? null,
           currentLiveTrackDeviceId: liveTrack?.getSettings?.().deviceId ?? null,
           trackReadyState: anyTrack?.readyState ?? 'no-track',
@@ -2377,7 +2356,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           missing,
           lost,
           audioDeviceLostState: audioDeviceLostRef.current,
-        }));
+        });
+        if (trigger !== 'poll' || diag !== lastMicDiag) {
+          lastMicDiag = diag;
+          console.log('[INTERVIEW-DEBUG][MIC-DIAG]', `{"trigger":${JSON.stringify(trigger)},${diag.slice(1)}`);
+        }
         if (lost && !audioDeviceLostRef.current) {
           if (!swapped) {
             // Device-list signal can flicker → re-confirm briefly. Kept short
@@ -2787,6 +2770,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const waited = performance.now() - startedAt;
       if ((odWarm && fdWarm) || waited >= PREPARE_MAX_WAIT_MS) {
         clearInterval(iv);
+        // Don't let a detector that missed the warm-up window finish loading
+        // (and run a multi-second GPU frame) on top of Bina's intro.
+        if (!odWarm) objectDetection.abandonIfNotWarm(waited);
         console.log(
           `[INTERVIEW-DEBUG] Preparing done in ${Math.round(waited)} ms ` +
           `(objectDetection=${odWarm ? 'ready' : 'still loading'}, faceDetection=${fdWarm ? 'ready' : 'still loading'})`,
@@ -3220,6 +3206,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // addModule() on subsequent calls and go straight to new AudioWorkletNode().
   const pcmWorkletRegisteredRef = useRef(false);
   const voiceVerifBufferRef = useRef<Float32Array[]>([]);
+  const voiceVerifStrideRef = useRef({ stride: 1, seen: 0 });
   const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
   const isPlayingRef = useRef(false);
   // Scheduled playback — gapless audio via Web Audio API clock
@@ -3447,6 +3434,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Scroll container for the chat — used to pin the view to the bottom
   // (WhatsApp-style) so the newest question/response is always visible.
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  // Wraps every chat bubble — its size is what the auto-scroll observes.
+  const chatContentRef = useRef<HTMLDivElement>(null);
+  // Follow the newest content. Cleared only by the candidate's own scroll.
+  const chatStickRef = useRef(true);
+  const [chatUnpinned, setChatUnpinned] = useState(false);
+  // Last wheel/touch/pointer/key input on the chat. A scroll event shortly
+  // after one is the candidate's; any other (our own pin, a padding clamp)
+  // must not stop the auto-scroll.
+  const chatUserInputAtRef = useRef(0);
+  const [chatScrolling, setChatScrolling] = useState(false);
+  const chatScrollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinChatToBottom = useCallback((force = false) => {
+    if (force) { chatStickRef.current = true; setChatUnpinned(false); }
+    const el = chatScrollRef.current;
+    if (!el || !chatStickRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+  const noteChatUserInput = useCallback(() => {
+    chatUserInputAtRef.current = performance.now();
+  }, []);
+  const handleChatScroll = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el || performance.now() - chatUserInputAtRef.current > 1000) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < CHAT_STICK_THRESHOLD_PX;
+    chatStickRef.current = nearBottom;
+    setChatUnpinned(!nearBottom);
+    // Darken the scrollbar while the candidate is scrolling.
+    setChatScrolling(true);
+    if (chatScrollingTimerRef.current) clearTimeout(chatScrollingTimerRef.current);
+    chatScrollingTimerRef.current = setTimeout(() => setChatScrolling(false), 1200);
+  }, []);
+  useEffect(() => () => {
+    if (chatScrollingTimerRef.current) clearTimeout(chatScrollingTimerRef.current);
+  }, []);
   const isAiSpeakingRef = useRef(false);
   // True while Bina is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
   const isSilencePromptRef = useRef(false);
@@ -3479,6 +3500,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Prevents TalkingHead from receiving streamStart with an empty buffer (causes early
   // onAudioEnd on Q1 when AudioContext is cold or TalkingHead is still initialising).
   const pendingStreamStartRef = useRef<(() => void) | null>(null);
+  // This turn's end-of-playback callback, kept after streamStart consumes
+  // pendingStreamStartRef so a worklet re-armed after a mid-sentence TTS stall
+  // still runs it (countdown → mic). Cleared once it has run.
+  const playbackEndedCbRef = useRef<(() => void) | null>(null);
   // Set true when TalkingHead's worklet fires onAudioEnd BEFORE backend audio_end —
   // i.e. its internal buffer drained during a streaming hiccup. New PCM chunks
   // arriving after this point would go to a stopped worklet and be silently lost
@@ -3494,6 +3519,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // current Bina turn was received. Used by the token-reveal system to
   // compute audio progress (once audio_end fires).
   const firstPcmAtMsRef = useRef<number | null>(null);
+  // True once Bina's voice is ACTUALLY audible for the current turn
+  // (TalkingHeadAvatar `onAudible`). `isAiSpeaking` flips as soon as the
+  // backend announces a turn — on the intro that was ~10 s before any audio
+  // (a stalled TTS request), so the candidate saw "Bina is speaking" with
+  // silence. `isAiSpeaking` still gates the mic/timers; this only gates what
+  // the candidate SEES (speaking banner/pill/glow) and the caption reveal.
+  const [binaAudible, setBinaAudible] = useState(false);
+  // First time in this session Bina became audible — ends the centred
+  // "Preparing your interview…" loading card.
+  const [binaHasSpoken, setBinaHasSpoken] = useState(false);
+  const binaAudibleRef = useRef(false);
+  const binaAudibleSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markBinaAudible = useCallback(() => {
+    if (binaAudibleSafetyRef.current) { clearTimeout(binaAudibleSafetyRef.current); binaAudibleSafetyRef.current = null; }
+    if (binaAudibleRef.current) return;
+    binaAudibleRef.current = true;
+    setBinaAudible(true);
+    setBinaHasSpoken(true);
+  }, []);
+  // Backstop: audio is in flight but no audible signal arrived (e.g. the
+  // worklet failed and its chunks were dropped) — don't hold the UI forever.
+  const armBinaAudibleSafety = useCallback(() => {
+    if (binaAudibleRef.current || binaAudibleSafetyRef.current) return;
+    binaAudibleSafetyRef.current = setTimeout(() => {
+      binaAudibleSafetyRef.current = null;
+      if (!binaAudibleRef.current) {
+        console.warn(`[INTERVIEW-DEBUG] no audible-start signal ${BINA_AUDIBLE_SAFETY_MS}ms after first chunk — showing Bina as speaking anyway`);
+        markBinaAudible();
+      }
+    }, BINA_AUDIBLE_SAFETY_MS);
+  }, [markBinaAudible]);
+  // A new Bina turn has been announced; nothing of it is audible yet.
+  const resetBinaAudible = useCallback(() => {
+    if (binaAudibleSafetyRef.current) { clearTimeout(binaAudibleSafetyRef.current); binaAudibleSafetyRef.current = null; }
+    binaAudibleRef.current = false;
+    setBinaAudible(false);
+    // Announced while audio is already playing → no new onset will come.
+    if (isPlayingRef.current) armBinaAudibleSafety();
+  }, [armBinaAudibleSafety]);
+  useEffect(() => () => {
+    if (binaAudibleSafetyRef.current) clearTimeout(binaAudibleSafetyRef.current);
+  }, []);
   // Wall-clock timestamp of the LAST PCM chunk received for the current
   // Bina turn. Updated on every queueAudio call. This is the right anchor
   // for "when does playback actually end on the speakers":
@@ -4654,6 +4721,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     revealTimerRef.current = setInterval(() => {
       const fullText = tokenBufferRef.current;
       if (fullText.length === 0) return;
+      // Captions never lead an inaudible voice: hold until TalkingHead reports
+      // the voice started (bounded by BINA_AUDIBLE_SAFETY_MS). The math below
+      // then catches up to the REVEAL_LEAD_MS lead on the very next tick.
+      if (!binaAudibleRef.current) return;
       const firstPcmAt = firstPcmAtMsRef.current;
       let target = revealedCharsRef.current;
 
@@ -5150,11 +5221,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
       avatarState.onAiStartSpeaking();
+      armBinaAudibleSafety();
       if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
         startRevealingTokens();
       }
     }
-  }, [avatarState, startRevealingTokens]);
+  }, [avatarState, startRevealingTokens, armBinaAudibleSafety]);
 
   // Cut Bina off IMMEDIATELY — audio, lip-sync state and on-screen text.
   //
@@ -5233,6 +5305,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Turn-scoped playback state — re-armed by the next turn's own
     // speaking_started, so clearing it here cannot leak into the next turn.
     pendingStreamStartRef.current = null;
+    playbackEndedCbRef.current = null;
     pendingBuffersRef.current = 0;
     audioEndReceivedRef.current = false;
     if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
@@ -5301,11 +5374,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // WebSocket handlers
   const handleMessage = useCallback((data: InterviewSocketMessage) => {
     const timestamp = new Date().toISOString();
-    console.log(`[WS ${timestamp}] Event: ${data.type}`, data);
+    // Per-event trace with the payload — except the high-frequency ones
+    // (one per LLM token / keepalive), whose payload objects the console
+    // would otherwise retain for the whole interview.
+    if (data.type !== "llm_token" && data.type !== "pong") {
+      console.log(`[WS ${timestamp}] Event: ${data.type}`, data);
+    }
 
     switch (data.type) {
       case "pong":
-        console.log(`[WS ${timestamp}] Keepalive pong received`);
         // Keepalive only — network strength comes from the HTTP probe.
         break;
       case "concurrent_session_blocked":
@@ -5313,6 +5390,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // Stop everything and show a terminal message — do NOT reconnect (the
         // server will just block again). The close (code 4409) follows this.
         console.warn(`[WS ${timestamp}] Concurrent session blocked by server`);
+        if (interviewStartedRef.current && concurrentRetryRef.current < CONCURRENT_RECONNECT_DELAYS.length) {
+          // Our own reconnect — the 4409 close branch retries; no overlay yet.
+          setStatus("Connection lost — reconnecting...");
+          break;
+        }
         // NOTE: do NOT set isClosingRef here — the onclose handler treats
         // isClosing as a NORMAL completion ("Interview completed"). The 4409
         // close branch + concurrentBlockedRef already suppress auto-reconnect.
@@ -5326,6 +5408,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         console.log(`[WS ${timestamp}] Viseme timeline received (deprecated)`);
         break;
       case "connected":
+        interviewStartedRef.current = true;
+        concurrentRetryRef.current = 0;
         console.log(`[WS ${timestamp}] Connected: session_id=${data.session_id}, total_questions=${data.total_questions}, duration_minutes=${data.duration_minutes}, remaining_seconds=${data.remaining_seconds}`);
           setBackendLiveTranscriptEnabled(Boolean(data.live_transcript_enabled));
         {
@@ -5470,6 +5554,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         revealedCharsRef.current = 0;
         isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
+        resetBinaAudible();
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
@@ -5492,6 +5577,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         revealedCharsRef.current = 0;
         isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
+        resetBinaAudible();
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
@@ -5529,6 +5615,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         setCurrentAiText("");
         isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
+        resetBinaAudible();
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
@@ -5940,7 +6027,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         break;
       case "llm_token":
-        console.log(`[WS ${timestamp}] LLM token: token_length=${data.token?.length}, buffer_length=${tokenBufferRef.current.length}`);
         tokenBufferRef.current += data.token;
         // Feed updated text for word-level phoneme lip sync
         talkingHeadRef.current?.setText(tokenBufferRef.current);
@@ -6110,6 +6196,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         isPlayingRef.current = false;
         pendingBuffersRef.current = 0;
         nextPlayTimeRef.current = 0;
+        // New turn announced — not audible until TalkingHead says so.
+        resetBinaAudible();
         // Only reset the no-response retry counter for genuine NEW turns
         // (Bina asking a new question, ack, follow-up). During silence-nudge
         // flows (isSilencePromptRef = true) the backend is driving the
@@ -6209,6 +6297,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             talkingHeadEndedEarlyRef.current = true;
             return;
           }
+          // Runs once per turn (a later re-armed worklet must not finalize again).
+          playbackEndedCbRef.current = null;
           // Clear safety-net fallback — normal path fired, no fallback needed
           if (audioEndFallbackRef.current) {
             clearTimeout(audioEndFallbackRef.current);
@@ -6304,6 +6394,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           const _finalizeSafetyMs = Math.max(4000, currentTurnAudioMsRef.current + 2500);
           whenTrackedPlaybackEnds(finalizePlayback, _finalizeSafetyMs);
         };
+        playbackEndedCbRef.current = pendingStreamStartRef.current;
         break;
       case "silent_discard":
         // If the candidate clicked End mid-answer but the answer was discarded
@@ -6509,11 +6600,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // Point 4: clarification ends when Bina stops speaking
             setIsClarification(false);
             isClarificationRef.current = false;
-            setStatus("Your turn - speak now...");
+            // A real question turn still gets its 3-2-1 (armed by
+            // question_timer_started), same as the primary path.
+            playbackEndedCbRef.current = null;
+            const _runGetReady = getReadyArmedRef.current;
+            getReadyArmedRef.current = false;
+            setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
               startRecordingTimerRef.current = null;
-              startRecordingInternalRef.current();
+              const _openMic = () => {
+                setStatus("Your turn - speak now...");
+                if (wsRef.current?.readyState === WebSocket.OPEN
+                    && !isAiSpeakingRef.current
+                    && !isRecordingRef.current) {
+                  startRecordingInternalRef.current();
+                }
+              };
+              if (_runGetReady) runPreTurnCountdownRef.current(_openMic);
+              else startRecordingInternalRef.current();
             }, 800);
           }
         }, _fallbackDelayMs);
@@ -7272,6 +7377,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     isNewFlexibleMode,
     questionNumber,
     questionTimerExpired,
+    resetBinaAudible,
     saveAiMessage,
     sendPlaybackComplete,
     showSilenceBanner,
@@ -7835,6 +7941,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       console.log(`[Recording ${timestamp}] startRecordingInternal blocked — interview paused for a device disconnect`);
       return;
     }
+    // Interview is ending (End pressed / farewell) — a late countdown or
+    // playback-ended callback must never reopen the mic.
+    if (isClosingRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked — interview is closing`);
+      return;
+    }
     // Use refs — NOT state values — because this function is called from stale
     // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
     if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) {
@@ -8140,7 +8252,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           !isAiSpeakingRef.current &&
           Date.now() >= playbackEchoGuardUntilRef.current
         ) {
-          voiceVerifBufferRef.current.push(new Float32Array(input));
+          // Bounded, evenly-spread reservoir: the MFCC check samples only 20
+          // frames spread across the answer, so keeping every chunk of a 2-min
+          // answer (~11 MB/min at 48 kHz, plus a full-size concat at turn end)
+          // was pure memory. When full, drop every other chunk and halve the
+          // keep-rate — coverage of the whole answer is preserved.
+          const vb = voiceVerifBufferRef.current;
+          if (vb.length === 0) voiceVerifStrideRef.current = { stride: 1, seen: 0 };
+          const st = voiceVerifStrideRef.current;
+          if (st.seen++ % st.stride === 0) {
+            vb.push(new Float32Array(input));
+            if (vb.length > VOICE_VERIF_MAX_CHUNKS) {
+              voiceVerifBufferRef.current = vb.filter((_, i) => i % 2 === 0);
+              st.stride *= 2;
+            }
+          }
         }
 
         // Compute average absolute amplitude (RAW, pre-gain)
@@ -8695,6 +8821,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         processorRef.current = processor;
         console.log('[InterviewUI] ScriptProcessor active (AudioWorklet not available)');
       }
+      // The mic setup above awaits (getUserMedia, worklet). If the turn was
+      // ended meanwhile — End pressed (abortRecordingForSkip / stopRecording
+      // cleared isRecordingRef), the interview is closing, or Bina started
+      // speaking (the farewell) — do NOT open the turn. Committing here anyway
+      // left a stale "recording…" bubble under Bina's thank-you message.
+      if (!isRecordingRef.current || isClosingRef.current || isAiSpeakingRef.current) {
+        console.log(`[Recording ${timestamp}] turn ended during mic setup — not opening it`);
+        isRecordingRef.current = false;
+        teardownRecordingMedia(false);
+        return;
+      }
       setIsRecording(true);
       startPendingQuestionTimer("candidate_turn_open");
       // Capture pipeline (mic + worklet) is now live — show the "Your turn"
@@ -9111,6 +9248,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       setStatus("Bina is joining your interview...");
       isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
+      // Holding the mic for Bina's first line — but she is NOT audible yet, so
+      // the UI shows "getting ready", not "Bina is speaking".
+      binaAudibleRef.current = false;
+      setBinaAudible(false);
       reconnectAttemptsRef.current = 0;
       preStartRetryRef.current = 0; // connected → reset the pre-start race counter
       // A dropped/reconnected WS is exactly when an environment-verification
@@ -9199,6 +9340,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // it, or grace-period reaper fired). Retrying hits the same wall.
         setStatus("Interview has ended. " + (event.reason || ""));
         uploadRecording().catch(() => {});
+      } else if (
+        event.code === 4409 && !concurrentBlockedRef.current && interviewStartedRef.current
+        && concurrentRetryRef.current < CONCURRENT_RECONNECT_DELAYS.length
+        && !isUnmountedRef.current && !isClosingRef.current
+      ) {
+        // Blocked on an auto-reconnect: the server may still see our own dropped
+        // socket as live. The backend now lets the same browser take over, so
+        // this is only a safety net — a few quick retries, then the overlay.
+        const delay = CONCURRENT_RECONNECT_DELAYS[concurrentRetryRef.current];
+        concurrentRetryRef.current++;
+        console.warn(`[INTERVIEW-DEBUG] 4409 on reconnect — retry ${concurrentRetryRef.current}/${CONCURRENT_RECONNECT_DELAYS.length} in ${delay}ms`);
+        setStatus(`Connection lost — reconnecting in ${Math.round(delay / 1000)}s...`);
+        setTimeout(() => {
+          if (!isUnmountedRef.current && !isClosingRef.current) connectRef.current();
+        }, delay);
       } else if (event.code === 4409 || concurrentBlockedRef.current) {
         // Single-active-session guard: this link is already open/active in
         // another window/device. TERMINAL — never auto-reconnect (it would just
@@ -9251,7 +9407,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // playback back, so handing chunks to TalkingHead would have Bina
         // talking out loud behind the blocking overlay.
         if (isMediaPausedRef.current && !binaFrozenRef.current) return;
-        console.log(`[WS ${new Date().toISOString()}] Audio chunk received: size=${event.data.byteLength} bytes`);
         // CRITICAL: call our bookkeeping (queueAudio + trackPlaybackChunk)
         // BEFORE streamAudio. TalkingHead's streamAudio transfers/detaches the
         // ArrayBuffer internally (postMessage to an AudioWorklet), so any
@@ -9279,6 +9434,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           talkingHeadEndedEarlyRef.current = false;
           talkingHeadRef.current?.streamStart(24000, () => {
             console.log("[TalkingHead] re-armed playback-ended callback fired");
+            // Same end-of-turn work as the first streamStart (audio_end gate,
+            // countdown, mic). Without it a mid-sentence TTS stall left the turn
+            // to the safety net, which opened the mic with no 3-2-1.
+            playbackEndedCbRef.current?.();
           });
         }
         // TalkingHead handles audio playback (gain:1) AND lip sync natively.
@@ -9474,35 +9633,43 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     };
   }, [teardownRecordingMedia]);
 
-  // Auto-scroll — WhatsApp-style: ALWAYS pin the view to the true bottom so the
-  // newest question / response / recording bubble is visible. We set scrollTop =
-  // scrollHeight directly (instant, no smooth animation) rather than
-  // scrollIntoView, for two reasons:
-  //   1) instant = no stacked scroll animations → no flicker (the earlier
-  //      smooth-scroll-on-every-change caused the "jumps to page end" jitter),
-  //   2) scrollHeight accounts for the reserved bottom padding (pb-52) that
-  //      keeps the last message clear of the floating banner — so the newest
-  //      content lands ABOVE the banner instead of hidden behind it.
-  // Layout-affecting states (banners, isRecording, isAiSpeaking, isProcessing)
-  // are dependencies too: when the banner appears the padding grows, and we
-  // must re-pin so the last message isn't left tucked behind the banner (the
-  // bug in image copy 2 where Q3 + the recording bubble were cut off).
+  // Auto-scroll — keep the view pinned to the true bottom so the newest
+  // question / response / recording bubble is visible. scrollTop =
+  // scrollHeight directly (instant: no stacked smooth-scroll animations, and
+  // scrollHeight includes the pb-52 banner clearance so the newest content
+  // lands ABOVE the floating banner).
+  //
+  // Driven by a ResizeObserver on the chat content + scroll box, NOT a list
+  // of state dependencies. The old dependency list missed layout changes
+  // (the "Are you done?" popup's padding, the HR Yes/No buttons, banner
+  // variants, photos finishing loading…), each leaving the view a little
+  // above the bottom — invisible early on, but once the chat is long enough
+  // to scroll (~Q5) the candidate had to scroll manually. Observing the real
+  // size catches every cause.
+  //
+  // Following pauses only when the CANDIDATE scrolls away from the bottom
+  // (to re-read something) and resumes when they scroll back down, press
+  // "Latest", or a new question starts.
   useEffect(() => {
     const el = chatScrollRef.current;
-    if (!el) return;
-    // rAF so the scroll runs after the DOM has laid out the new content/padding.
-    const raf = requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight;
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [
-    messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing,
-    isRecording, isAiSpeaking, isProcessing, questionNumber, isClosing,
-    showNowSpeakBanner, showSilenceBanner, questionTimerExpired,
-    // Re-pin to the bottom when a countdown overlay appears/disappears (it toggles
-    // the reserved bottom padding via bannerVisible).
-    preTurnCountdown, midSilenceCountdown,
-  ]);
+    const content = chatContentRef.current;
+    if (!el || !content) return;
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; pinChatToBottom(); });
+    };
+    const ro = new ResizeObserver(schedule);
+    ro.observe(el);        // its content box shrinks when the banner padding grows
+    ro.observe(content);   // every bubble / reveal / image / button change
+    schedule();
+    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [isConnected, pinChatToBottom]);
+
+  // A new question always brings the view back to the live conversation.
+  useEffect(() => {
+    pinChatToBottom(true);
+  }, [questionNumber, pinChatToBottom]);
 
   // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
   useEffect(() => {
@@ -10152,6 +10319,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // wrapper (see {turnBanner} below) as an absolute, chat-centred element — so
   // it sits in the middle of the chat window and never overlaps the candidate
   // video. Gradient + frosted-glass styling; exactly one state shows.
+  // What the candidate SEES as "Bina is speaking": her turn AND her voice is
+  // actually playing (see binaAudible). Mic/timer logic keeps using isAiSpeaking.
+  const binaSpeakingVisible = isAiSpeaking && binaAudible;
   const turnBanner = (() => {
     // The big pre-turn "get ready" countdown owns the screen — suppress the small
     // banner while it runs so we don't show two "getting ready" messages at once.
@@ -10163,10 +10333,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // banner exactly like any other free-form question.
     if (structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) return null;
     let variant: 'starting' | 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
-    if (!preparingDone && !isConnected) variant = 'starting';   // pre-interview warm-up
+    // Pre-interview warm-up AND the wait for Bina's first word: one loading
+    // card from "Preparing" until her voice is actually audible (it used to
+    // end at connect, leaving a confusing gap before she spoke).
+    if (!binaHasSpoken && !isClosing && !isRecording) variant = 'starting';
     else if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
-    else if (isAiSpeaking) variant = 'hold';                 // ONLY while actually speaking
+    else if (isAiSpeaking) variant = binaAudible ? 'hold' : 'prepare'; // 'hold' ONLY while her voice is audible
     else if (showNowSpeakBanner && candidatePlaybackEnded) variant = 'turn';
     else if (isProcessing || isCandidateTranscriptProcessing || (isConnected && !isClosing && questionNumber !== null)) variant = 'prepare';
     if (!variant) return null;
@@ -10200,9 +10373,37 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       silence: { grad: 'from-amber-700 to-amber-700', ring: 'ring-amber-300/50 dark:ring-amber-500/30',   glow: 'shadow-amber-700/30',   title: 'Are you still there?',         subtitle: 'Take your time — Bina will move on if there’s no response.', icon: micIcon, dismissible: true },
     }[variant];
 
+    // Preparing → Bina's first word: a centred loading card (not the small
+    // bottom banner), with an indeterminate bar so it clearly reads as loading.
+    if (variant === 'starting') {
+      return (
+        <div className="absolute inset-0 z-30 flex items-center justify-center px-4 pointer-events-none animate-in fade-in duration-300">
+          <style>{`@keyframes tfPrepBar {0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}`}</style>
+          <div className={`relative w-full max-w-sm flex flex-col items-center text-center gap-3 px-6 pt-6 pb-5 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} overflow-hidden`}>
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
+            <div className="relative w-14 h-14">
+              <div className="absolute inset-0 rounded-full border-4 border-white/25" />
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-white animate-spin" />
+            </div>
+            <div className="relative">
+              <p className="text-white font-bold tracking-tight drop-shadow-sm" style={{ fontSize: 17 }}>Preparing your interview…</p>
+              <p className="mt-1 text-white/85 text-xs leading-snug">
+                {isConnected
+                  ? 'Bina is joining — she will start speaking in a moment.'
+                  : 'Loading everything so the interview runs smoothly — just a few seconds.'}
+              </p>
+            </div>
+            <div className="relative w-full h-1.5 rounded-full bg-white/25 overflow-hidden">
+              <div className="absolute inset-y-0 left-0 w-2/5 rounded-full bg-white/90" style={{ animation: 'tfPrepBar 1.4s ease-in-out infinite' }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="absolute inset-x-0 bottom-4 z-30 flex justify-center px-4 pointer-events-none animate-in fade-in slide-in-from-bottom-3 duration-300">
-        <div className={`pointer-events-auto relative flex items-center gap-3 pl-3 pr-4 py-3 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-[260px] max-w-[94%] overflow-hidden`}>
+        <div className={`pointer-events-auto relative flex items-center gap-3 pl-3 pr-4 py-3 rounded-2xl bg-gradient-to-br ${cfg.grad} ring-1 ${cfg.ring} shadow-2xl ${cfg.glow} backdrop-blur-md min-w-0 sm:min-w-[260px] max-w-[94%] overflow-hidden`}>
           {/* top sheen for a glassy, modern finish */}
           <div className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent" />
           {/* icon in a frosted circle with a soft pulse ring */}
@@ -10248,7 +10449,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
       {concurrentBlocked && (
         <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-400 text-5xl mb-4">🔒</div>
             <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
             <p className="text-gray-300 mb-6 text-sm leading-relaxed">
@@ -10315,7 +10516,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl">
             <div className="text-amber-500 text-5xl mb-4">👤</div>
             <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
             <p className="text-gray-400 mb-4">
@@ -10357,7 +10558,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Microphone issue popup ── */}
       {showMicPopup && (
         <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-6 sm:p-8 max-w-[95vw] sm:max-w-md max-h-[90dvh] overflow-y-auto text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
             <p className="text-gray-400 mb-3">We couldn&apos;t detect any audio. Is your microphone working?</p>
@@ -10367,7 +10568,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 Try setting it to &quot;Standard&quot; in brave://settings/shields, then refresh.
               </p>
             )}
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center">
               <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
               <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
             </div>
@@ -10543,6 +10744,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 avatarUrl="/models/rpm-recruiter.glb"
                 onReady={() => { setAvatarReady(true); setAvatar3DLoaded(true); }}
                 onFallback={() => { setAvatarFailed(true); setAvatar3DCantRun(true); }}
+                onAudible={markBinaAudible}
                 className="w-full h-full rounded-none"
                 // Low-tier devices: skip the 3D avatar entirely (no GLB/Three.js/
                 // render loop) — voice still plays via TalkingHead's Web Audio
@@ -10561,9 +10763,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <div className="relative flex flex-col items-center">
                   <div
                     className={`relative w-44 h-44 rounded-full overflow-hidden border-4 transition-colors duration-300 ${
-                      isAiSpeaking ? 'border-purple-400/70' : 'border-white/20'
+                      binaSpeakingVisible ? 'border-purple-400/70' : 'border-white/20'
                     }`}
-                    style={isAiSpeaking ? { boxShadow: '0 0 40px 6px rgba(147,51,234,0.35)' } : undefined}
+                    style={binaSpeakingVisible ? { boxShadow: '0 0 40px 6px rgba(147,51,234,0.35)' } : undefined}
                   >
                     <Image
                       src={lindaAvatarSrc}
@@ -10580,7 +10782,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   </div>
                   <div className="mt-4 text-white/90 text-lg font-semibold">Bina</div>
                   <div className="mt-1 flex items-center gap-2 text-xs text-white/60">
-                    {isAiSpeaking ? (
+                    {binaSpeakingVisible ? (
                       <>
                         <span className="flex gap-0.5 items-end h-3">
                           <span className="w-1 bg-purple-400 animate-pulse" style={{ height: '40%' }} />
@@ -10598,7 +10800,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             )}
 
             {/* Speaking glow */}
-            {isAiSpeaking && (
+            {binaSpeakingVisible && (
               <div
                 className="absolute inset-0 pointer-events-none"
                 style={{ background: 'radial-gradient(ellipse at center, rgba(147,51,234,0.10) 0%, transparent 70%)' }}
@@ -10627,13 +10829,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* Solid, darker fills + white text so the label stays readable
                   over Bina's white shirt and the navy background alike. */}
               <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-md transition-colors duration-300 ${
-                isAiSpeaking ? 'bg-purple-600/90 border-purple-400/50' :
+                binaSpeakingVisible ? 'bg-purple-600/90 border-purple-400/50' :
                 isRecording  ? (isMuted ? 'bg-red-600/90 border-red-400/50' : 'bg-emerald-600/90 border-emerald-400/50') :
                                'bg-amber-700/90 border-amber-400/50'
               }`}>
                 <div className="w-1.5 h-1.5 rounded-full animate-pulse bg-white" />
                 <span className="text-2xs font-semibold text-white">
-                  {isAiSpeaking ? (isClarification ? 'Clarifying...' : 'Speaking...') : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
+                  {isAiSpeaking ? (!binaAudible ? 'Getting ready...' : isClarification ? 'Clarifying...' : 'Speaking...') : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
                 </span>
               </div>
             </div>
@@ -10945,7 +11147,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           <div className="relative flex-1 flex flex-col min-h-0">
           <div
             ref={chatScrollRef}
-            className={`flex-1 overflow-y-auto px-3 pt-3 space-y-2 bg-gray-50 ${
+            onScroll={handleChatScroll}
+            onWheel={noteChatUserInput}
+            onTouchMove={noteChatUserInput}
+            onPointerDown={noteChatUserInput}
+            onKeyDown={noteChatUserInput}
+            className={`flex-1 overflow-y-auto px-3 pt-3 bg-gray-50 ${
               // Reserve bottom clearance EXACTLY when the turn banner is on
               // screen (bannerVisible = turnBanner !== null). Tying the padding
               // to the same value that renders the banner guarantees they never
@@ -10954,7 +11161,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               // message + loading bubble render BEHIND the banner.
               bannerVisible ? 'pb-52' : 'pb-4'
             }`}
-            style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--raw-d1d5db) transparent' }}
+            // The old light-gray thumb was near-invisible on the gray-50 chat;
+            // slate here, darker still while the candidate is scrolling.
+            style={{
+              scrollbarWidth: 'thin',
+              scrollbarColor: chatScrolling
+                ? 'rgba(71, 85, 105, 0.85) transparent'
+                : 'rgba(148, 163, 184, 0.7) transparent',
+            }}
           >
             {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing && (
               <div className="flex items-center justify-center h-full">
@@ -10965,6 +11179,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Each row extracted to <MessageRowMemo> so parent renders
                 (token reveal, timer ticks, WS handlers) don't reconcile
                 prior bubbles. React.memo + stable msg refs skip them. */}
+            <div ref={chatContentRef} className="space-y-2">
             {messages.map(msg => (
               <MessageRowMemo key={msg.id} msg={msg} candidatePhotoUrl={candidatePhotoUrl} />
             ))}
@@ -11058,7 +11273,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               !(structuredHrPrompt && structuredHrPrompt.questionNumber === questionNumber && structuredHrPrompt.answerType === 'yes_no' && !hrExplainMore) && (
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
-                <div className="max-w-[80%]">
+                <div className="max-w-[80%] min-w-0">
                   <span className="text-2xs font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-900 dark:text-emerald-300 rounded-2xl rounded-tr-sm border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
                     {(isRecording || currentTranscript) ? (
@@ -11116,7 +11331,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         </button>
                         {(() => {
                           const isLastQuestion = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
-                          const nextDisabled = isLastQuestion || nextSkipInFlight;
+                          // Last question: there is no "next", so the slot becomes a
+                          // red End that opens the same End confirmation as the
+                          // header End button (which keeps the answer being spoken).
+                          if (isLastQuestion) {
+                            return (
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') e.preventDefault();
+                                }}
+                                onClick={(e) => {
+                                  e.currentTarget.blur();
+                                  setShowEndConfirm(true);
+                                }}
+                                disabled={!isConnected || isClosing}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-red-600 hover:bg-red-700 border-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                <LogOut className="w-3.5 h-3.5" />
+                                End
+                              </button>
+                            );
+                          }
+                          const nextDisabled = nextSkipInFlight;
                           return (
                             <button
                               type="button"
@@ -11161,7 +11399,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                                   : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
                               }`}
                             >
-                              {isLastQuestion ? 'Last Question' : nextSkipInFlight ? 'Moving on…' : 'Next'}
+                              {nextSkipInFlight ? 'Moving on…' : 'Next'}
                               <SkipForward className="w-3.5 h-3.5" />
                             </button>
                           );
@@ -11198,7 +11436,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             )}
 
             <div ref={messagesEndRef} />
+            </div>
           </div>
+            {/* Shown only while the candidate has scrolled up to re-read —
+                one tap returns to the live conversation and resumes following. */}
+            {chatUnpinned && (
+              <button
+                type="button"
+                onClick={() => pinChatToBottom(true)}
+                className={`absolute right-4 z-[31] inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-800/90 text-white text-xs font-semibold shadow-lg ring-1 ring-white/10 hover:bg-slate-900 transition-colors ${
+                  bannerVisible ? 'bottom-[13.5rem]' : 'bottom-4'
+                }`}
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+                Latest
+              </button>
+            )}
             {/* Bottom fade mask — dissolves any chat content into the chat
                 background (--surface: gray-50 in light, the dark surface in dark
                 mode — so no light band shows) before it reaches the floating turn banner,
@@ -11297,7 +11550,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 candidate can simply keep talking and the popup disappears (AC3).
                 Ending the turn is always an explicit choice — Submit (finalize
                 this answer, AC4) or Next (AC5). */}
-            {midSilenceConfirm && (
+            {midSilenceConfirm && (() => {
+              const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+              return (
               <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
                 <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-sky-100 dark:ring-slate-700 shadow-2xl px-5 pt-5 pb-4 text-center">
                   <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 dark:bg-sky-500/15 flex items-center justify-center">
@@ -11306,9 +11561,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   <p className="text-lg font-bold text-gray-900 dark:text-white mb-2">Are you done with your response?</p>
                   <p className="text-sm text-slate-600 dark:text-slate-300 leading-snug mb-4">
                     If you are not done, please speak up to continue your response.
-                    If you have completed your answer, click Submit to move to the next question.
+                    {isLastQ
+                      ? ' This is the last question — if you have completed your answer, click End to finish the interview.'
+                      : ' If you have completed your answer, click Submit to move to the next question.'}
                   </p>
                   <div className="flex items-center justify-center gap-3">
+                    {isLastQ ? (
+                      // Last question: same End confirmation as the header End
+                      // button (it keeps the answer being spoken).
+                      <button
+                        type="button"
+                        onClick={() => setShowEndConfirm(true)}
+                        disabled={!isConnected || isClosing}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        End
+                      </button>
+                    ) : (
                     <button
                       type="button"
                       onClick={handleSubmitResponse}
@@ -11316,7 +11586,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     >
                       Submit
                     </button>
-                    {!(questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) && (
+                    )}
+                    {!isLastQ && (
                       <button
                         type="button"
                         onClick={() => handleNextQuestion()}
@@ -11329,7 +11600,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   <p className="mt-3 text-2xs text-slate-500 dark:text-slate-400">Still recording — just keep speaking to continue.</p>
                 </div>
               </div>
-            )}
+              );
+            })()}
             {/* Turn banner — centred within the CHAT panel (never overlaps the
                 video), sitting above the fade mask. All chat content stays above
                 it via the reserved bottom padding. */}

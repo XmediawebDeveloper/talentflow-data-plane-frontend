@@ -1,8 +1,9 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
+import { useJobActionLock } from '@/components/jobs/JobActionLock';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
@@ -370,6 +371,9 @@ interface ScoredResumesTableProps {
    *  handler above is still provided (guarded internally) so the button
    *  is never removed from the DOM. */
   scoreResumesDisabled?: boolean;
+  /** Tooltip on those disabled Score buttons (e.g. "JD is archived").
+   *  Omitted = the permission message. */
+  scoreResumesDisabledReason?: string;
   /**
    * Opens the host's "Send AI Interview via Email" flow for one candidate —
    * the AI Interview entry in each row's Invite menu. Omitted where the host
@@ -499,7 +503,7 @@ export interface InviteTargetJob {
  *  - 'ready'   — yes (or unknown: never gate on a lookup that hasn't answered)
  *  - 'missing' — one job, and it has none yet → offer to create it
  *  - 'multi'   — the candidates span several jobs and the invite needs one
- *                (assessment always; interview only when one lacks it)
+ *                (both assessment and interview target a single job)
  */
 export type InviteTargetState =
   | { state: 'ready' }
@@ -512,11 +516,11 @@ export function resolveInviteTargetState(
   configured: (jdId: string) => boolean | undefined,
 ): InviteTargetState {
   if (jobs.length === 0) return { state: 'ready' };
-  if (kind === 'assessment' && jobs.length > 1) return { state: 'multi' };
+  // Both the AI Assessment and the AI Interview invite target a single job, so
+  // a selection spanning two or more jobs can carry neither → disabled.
+  if (jobs.length > 1) return { state: 'multi' };
   const missing = jobs.filter((j) => configured(j.jdId) === false);
   if (missing.length === 0) return { state: 'ready' };
-  // Several jobs: an AI Interview invite can still go to any interview.
-  if (jobs.length > 1) return kind === 'assessment' ? { state: 'multi' } : { state: 'ready' };
   return { state: 'missing', job: jobs[0] };
 }
 
@@ -600,6 +604,9 @@ export function renderInviteTargetItems({
 export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   const { isTenantAdmin, hasPermissionCode, hasPermission, tenant } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
+  /* A disabled / archived job (Job Details' tabs): no invites from any of
+     its tables, whatever the permissions, with that as the reason. */
+  const jobLock = useJobActionLock();
 
   // Tenant-level feature toggle, independent of the subscription-plan check
   // — mirrors JobDetailView's own isFeatureEnabled(). Assumes enabled when
@@ -639,12 +646,13 @@ export function useScoringActionPermissions(canCarryAIInterview: boolean) {
   const canDownloadScorecard = isTenantAdmin || hasPermissionCode('scoring:download');
 
   return {
-    canCreateAssessments,
-    assessmentDeniedReason,
-    mayInviteAIInterview,
-    aiInterviewDeniedReason,
+    canCreateAssessments: canCreateAssessments && !jobLock,
+    assessmentDeniedReason: jobLock ?? assessmentDeniedReason,
+    mayInviteAIInterview: mayInviteAIInterview && !jobLock,
+    aiInterviewDeniedReason: jobLock ?? aiInterviewDeniedReason,
     invitePlanLocked,
     canDownloadScorecard,
+    jobLockReason: jobLock,
   };
 }
 
@@ -669,6 +677,7 @@ export default function ScoredResumesTable({
   onScoreResumes,
   onScoreResumesFromEmptyState,
   scoreResumesDisabled,
+  scoreResumesDisabledReason,
   onInviteAIInterview,
   enableInternalAIInterviewInvite = false,
   assessmentConfigured,
@@ -718,6 +727,7 @@ export default function ScoredResumesTable({
     aiInterviewDeniedReason,
     invitePlanLocked,
     canDownloadScorecard,
+    jobLockReason,
   } = useScoringActionPermissions(!!onInviteAIInterview || enableInternalAIInterviewInvite);
 
   // Only the cross-job global list needs this — a single-job host (JobDetailView,
@@ -766,7 +776,9 @@ export default function ScoredResumesTable({
   const canInviteAIInterview = mayInviteAIInterview && aiInterviewConfigured !== false;
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
   const inviteDisabledTitle =
-    canCreateAssessments || mayInviteAIInterview
+    jobLockReason
+      ? jobLockReason
+      : canCreateAssessments || mayInviteAIInterview
       ? 'No published assessment or AI interview for this job yet'
       : invitePlanLocked
         ? PLAN_LOCKED_MESSAGE
@@ -1232,9 +1244,10 @@ Best regards`);
      rows the filter hides stay remembered but aren't acted on. */
   const effectiveSelectedRows = useMemo(() => {
     const sel = new Set(selectedResumes);
-    if (!isGrouped) return filteredResumes.filter((r) => sel.has(r.id));
-    const tickedKeys = new Set(filteredResumes.filter((r) => sel.has(r.id)).map(candidateGroupKey));
-    return filteredResumes.filter((r) => tickedKeys.has(candidateGroupKey(r)));
+    // Individual-row selection: bulk actions run on exactly the ticked rows,
+    // even in the grouped Candidates view. A partially-ticked candidate acts on
+    // only its ticked scores, not the whole person.
+    return filteredResumes.filter((r) => sel.has(r.id));
   }, [selectedResumes, filteredResumes, isGrouped]);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
@@ -1423,6 +1436,12 @@ Best regards`);
      handleSelectAll's own toggle-each-row approach so it works the same way
      whether selection is externally or internally controlled. */
   const isGroupSelected = (rows: ScoredResume[]) => rows.some((r) => selectedResumes.includes(r.id));
+  /** none = no scores ticked, some = a subset (indeterminate), all = every score. */
+  const groupSelectionState = (rows: ScoredResume[]): 'none' | 'some' | 'all' => {
+    let n = 0;
+    for (const r of rows) if (selectedResumes.includes(r.id)) n++;
+    return n === 0 ? 'none' : n === rows.length ? 'all' : 'some';
+  };
   const handleSelectGroup = (rows: ScoredResume[]) => {
     // Ticked (any row ticked) → untick all its rows; else tick them all.
     const ticked = isGroupSelected(rows);
@@ -1808,7 +1827,9 @@ Best regards`);
       rowInviteDisabled: !rowCanInviteAssessment && !rowCanInviteAIInterview,
       // The trigger stays visible but inert, with a tooltip naming the
       // reason, rather than disappearing outright.
-      rowInviteDisabledTitle: !(canCreateAssessments || mayInviteAIInterview)
+      rowInviteDisabledTitle: jobLockReason
+        ? jobLockReason
+        : !(canCreateAssessments || mayInviteAIInterview)
         ? (invitePlanLocked ? PLAN_LOCKED_MESSAGE : 'You do not have permission to invite candidates')
         : 'No published assessment or AI interview for this job yet',
     };
@@ -2248,21 +2269,25 @@ Best regards`);
   );
 
   const selectionActions = effectiveSelectedRows.length > 0 ? (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {/* The AI Talent Match reference's Actions pill, exactly: plain
-            "Actions" label (the count already shows on the Select All pill
-            and in this menu's own header strip below), no count suffix. */}
-        <Button
-          variant="secondary"
-          size="sm"
-          className="rounded-full sm:h-9"
+        {/* Matches the Resume Scoring "View by Job" Actions pill: a blinking
+            brand-orange dot and an "Actions (N)" count, so the candidate and
+            job bulk bars read identically. */}
+        <button
+          type="button"
+          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
           aria-label={`Actions for ${effectiveSelectedRows.length} selected`}
         >
+          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+          </span>
           {bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-          Actions
+          Actions ({isGrouped ? new Set(effectiveSelectedRows.map(candidateGroupKey)).size : effectiveSelectedRows.length})
           <ChevronDown className="w-4 h-4" />
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
         {/* Light grey header strip: how many the actions run on. */}
@@ -2289,6 +2314,17 @@ Best regards`);
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+    {/* Clear — untick everything, beside Actions, matching View by Job. */}
+    <button
+      type="button"
+      onClick={clearSelection}
+      title="Clear the selection"
+      className={TOOLBAR_BUTTON_CLASS}
+    >
+      <X className="w-4 h-4" />
+      Clear
+    </button>
+    </>
   ) : null;
 
   // Embedded in a tab (toolbar portals out) drops the padded outer card so the
@@ -2451,7 +2487,7 @@ Best regards`);
               size="sm"
               onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
               aria-disabled={!!scoreResumesDisabled}
-              title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+              title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
               className={`sm:h-9 whitespace-nowrap ${scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}`}
             >
@@ -2719,7 +2755,7 @@ Best regards`);
                   size="md"
                   onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
                   aria-disabled={!!scoreResumesDisabled}
-                  title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                  title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
                   icon={<ClipboardList className="w-4 h-4" />}
                   className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
                 >
@@ -3027,19 +3063,27 @@ Best regards`);
                               the same as View by Job's rows. Then name and
                               email only (no initials avatar, no phone). */}
                           <div className="flex items-start gap-2 min-w-0">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
-                              aria-pressed={groupSelected}
-                              aria-label={groupSelected ? 'Deselect candidate' : 'Select candidate'}
-                              className="inline-flex p-1.5 -ml-1.5 hover:bg-gray-200 rounded flex-shrink-0"
-                            >
-                              {groupSelected ? (
-                                <CheckSquare className="w-4 h-4 text-brand-blue" />
-                              ) : (
-                                <Square className="w-4 h-4 text-gray-400" />
-                              )}
-                            </button>
+                            {(() => {
+                              const st = groupSelectionState(rows);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
+                                  aria-pressed={st !== 'none'}
+                                  aria-label={st !== 'none' ? 'Deselect candidate' : 'Select candidate'}
+                                  title={st === 'some' ? 'Some scores selected' : undefined}
+                                  className="inline-flex p-1.5 -ml-1.5 hover:bg-gray-200 rounded flex-shrink-0"
+                                >
+                                  {st === 'all' ? (
+                                    <CheckSquare className="w-4 h-4 text-brand-blue" />
+                                  ) : st === 'some' ? (
+                                    <MinusSquare className="w-4 h-4 text-brand-blue" />
+                                  ) : (
+                                    <Square className="w-4 h-4 text-gray-400" />
+                                  )}
+                                </button>
+                              );
+                            })()}
                             <div className="min-w-0 w-full">
                               {onViewCandidate ? (
                                 <button
@@ -3116,6 +3160,7 @@ Best regards`);
                               <table className="w-full table-auto">
                                 <thead>
                                   <tr className="border-b border-gray-200">
+                                    <th className="w-8 py-2 px-4" aria-hidden />
                                     {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => (
                                       <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-medium text-gray-600 uppercase tracking-wide whitespace-nowrap`}>
                                         {col.label}
@@ -3139,6 +3184,21 @@ Best regards`);
                                           : 'bg-white hover:bg-[var(--raw-fafbfc)]'
                                       }`}
                                     >
+                                      <td className="py-2.5 px-4 align-middle w-8" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSelectResume(row.id)}
+                                          aria-pressed={selectedResumes.includes(row.id)}
+                                          aria-label={selectedResumes.includes(row.id) ? 'Deselect score' : 'Select score'}
+                                          className="inline-flex p-1 -ml-1 hover:bg-gray-200 rounded"
+                                        >
+                                          {selectedResumes.includes(row.id) ? (
+                                            <CheckSquare className="w-4 h-4 text-brand-blue" />
+                                          ) : (
+                                            <Square className="w-4 h-4 text-gray-400" />
+                                          )}
+                                        </button>
+                                      </td>
                                       {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => renderResumeCell(col, row))}
                                       <td className="py-2.5 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
@@ -3202,11 +3262,16 @@ Best regards`);
                         onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
                         className="p-1 hover:bg-gray-200 rounded mt-1 flex-shrink-0"
                       >
-                        {groupSelected ? (
-                          <CheckSquare className="w-5 h-5 text-gray-800" />
-                        ) : (
-                          <Square className="w-5 h-5 text-gray-400" />
-                        )}
+                        {(() => {
+                          const st = groupSelectionState(rows);
+                          return st === 'all' ? (
+                            <CheckSquare className="w-5 h-5 text-brand-blue" />
+                          ) : st === 'some' ? (
+                            <MinusSquare className="w-5 h-5 text-brand-blue" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-400" />
+                          );
+                        })()}
                       </button>
                       <div className="min-w-0 flex-1">
                         {onViewCandidate ? (
@@ -3460,7 +3525,7 @@ Best regards`);
                 size="md"
                 onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
                 aria-disabled={!!scoreResumesDisabled}
-                title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
                 icon={<ClipboardList className="w-4 h-4" />}
                 className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
               >
@@ -3558,7 +3623,7 @@ Best regards`);
                       setInviteCandidate(resume);
                       setShowInviteModal(true);
                     }}
-                    className={`${CREATE_SEND_BUTTON_CLASS.assessment} w-full justify-center`}
+                    className={`${CREATE_SEND_BUTTON_CLASS.assessment} w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug justify-center`}
                   >
                     <ClipboardList className="w-4 h-4 flex-shrink-0" />
                     Invite for Assessment
@@ -3598,7 +3663,7 @@ Best regards`);
                 disabled={downloadingId === resume.id}
                 aria-disabled={!canDownloadScorecard}
                 title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                className={`w-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
                 {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
@@ -3613,7 +3678,7 @@ Best regards`);
                     setViewResumeCandidate(resume);
                   }}
                   icon={<FileText className="w-4 h-4" />}
-                  className="w-full"
+                  className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
                 >
                   View Resume
                 </Button>
@@ -3633,7 +3698,7 @@ Best regards`);
                   aria-disabled={!canShareResume}
                   title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className={`w-full ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>
@@ -3659,7 +3724,7 @@ Best regards`);
                 size="md"
                 onClick={() => { if (scoreResumesDisabled) return; onScoreResumesFromEmptyState(); }}
                 aria-disabled={!!scoreResumesDisabled}
-                title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
                 icon={<ClipboardList className="w-4 h-4" />}
                 className={scoreResumesDisabled ? 'opacity-50 !cursor-not-allowed' : ''}
               >

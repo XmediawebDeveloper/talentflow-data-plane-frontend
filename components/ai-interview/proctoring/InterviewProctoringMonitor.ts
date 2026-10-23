@@ -519,6 +519,7 @@ export function useInterviewProctoringMonitor({
       const blob = new Blob([getVideoWorkerCode()], { type: 'application/javascript' });
       const url = URL.createObjectURL(blob);
       videoWorkerRef.current = new Worker(url);
+      URL.revokeObjectURL(url); // script already bound to the worker
 
       videoWorkerRef.current.onmessage = (e) => {
         const { type, data } = e.data;
@@ -602,10 +603,15 @@ export function useInterviewProctoringMonitor({
       return;
     }
 
+    // Never stack a second worker / AudioContext on top of a live one.
+    if (audioWorkerRef.current) { audioWorkerRef.current.terminate(); audioWorkerRef.current = null; }
+    if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
+
     try {
       const blob = new Blob([getAudioWorkerCode()], { type: 'application/javascript' });
       const url = URL.createObjectURL(blob);
       audioWorkerRef.current = new Worker(url);
+      URL.revokeObjectURL(url); // the worker has loaded its script; free the blob
 
       audioWorkerRef.current.onmessage = (e) => {
         const { type, data } = e.data;
@@ -1278,8 +1284,12 @@ export function useInterviewProctoringMonitor({
     // the video track id instead of stream identity, so it's unaffected by
     // this effect re-running on an audio-only swap.
     // (Face detection is handled by useInterviewFaceDetection hook, not here)
+    // The timer is cancelled on cleanup: a fast stream swap used to let a
+    // stale one fire and spawn a duplicate worker + AudioContext.
+    let audioSetupTimer: ReturnType<typeof setTimeout> | null = null;
     if (streamRef.current) {
-      setTimeout(() => {
+      audioSetupTimer = setTimeout(() => {
+        audioSetupTimer = null;
         setupAudioWorker();
         setupTrackMonitoring();
       }, 100);
@@ -1296,6 +1306,7 @@ export function useInterviewProctoringMonitor({
       isMonitoringRef.current = false;
       setState(prev => ({ ...prev, isMonitoring: false }));
 
+      if (audioSetupTimer) { clearTimeout(audioSetupTimer); audioSetupTimer = null; }
       // Cleanup event listeners
       cleanups.forEach(fn => fn());
 

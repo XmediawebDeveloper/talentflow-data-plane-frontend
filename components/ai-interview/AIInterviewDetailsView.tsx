@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import {
   interviewVersionOrdinal as storedInterviewVersionOrdinal,
   interviewDuplicateBlockedReason,
@@ -47,6 +47,7 @@ import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMod
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { Skeleton } from '@/components/ui/skeleton';
+import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 
 /* The Version History tab's eye opens a version's configuration in the same
    read-only dialog used elsewhere. Loaded lazily: that dialog renders this
@@ -166,6 +167,9 @@ interface AIInterviewDetailsViewProps {
    * one), so the breadcrumb stays anchored to that job instead of resetting.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /** Where this page was opened from (`?from=…`), kept on links to other
+   *  versions and to the config flow so their breadcrumbs keep the origin. */
+  originQuery?: string;
   /**
    * Render ONLY the Interview Details → Configure Details section — no page
    * chrome, header, tabs or background loads. Used by the Send Invite
@@ -186,7 +190,7 @@ interface AIInterviewDetailsViewProps {
 const DETAIL_TABS = ['overview', 'activity', 'versions', 'viewjd', 'results', 'invites'] as const;
 type DetailTab = typeof DETAIL_TABS[number];
 
-export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false, initialTab, draftLocked = false }: AIInterviewDetailsViewProps) {
+export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false, initialTab, draftLocked = false, originQuery = '' }: AIInterviewDetailsViewProps) {
   /* Greyed and out of reach — `inert` takes pointer, keyboard and assistive
      tech; the classes are the visual state. Per region, so Continue Editing,
      nested among them, can stay live. */
@@ -195,6 +199,25 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     : { className: '' };
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
+  /** A link into the config flow, carrying `originQuery` so its breadcrumb
+   *  keeps the page this was opened from. */
+  const withOrigin = (url: string) =>
+    originQuery ? `${url}${url.includes('?') ? '&' : '?'}${originQuery.slice(1)}` : url;
+  /** Job Details for this interview's JD — Go to JD and View JD's "Open full
+   *  JD page" alike — carrying this interview so the JD page's trail reads
+   *  AI Interviews › <interview> › job, and this page's own list / tab query
+   *  so that crumb comes back to the same view. */
+  const jobDetailsHref = (jdId: string) => {
+    const params = new URLSearchParams({
+      id: jdId,
+      from: 'ai-interview-details',
+      interview_id: config.id,
+      interview_title: config.jd_title || config.position || '',
+    });
+    const here = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
+    if (here) params.set('interview_query', here);
+    return `/recruitment/job-details?${params.toString()}`;
+  };
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
@@ -203,6 +226,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
+  // A disabled JD keeps its interview visible but read-only: every action
+  // below is blocked until the job is enabled again (the backend refuses too).
+  const jdDisabled = isJdDisabled(config.jd_status);
   /* In the URL (`?detailTab=`), so a refresh reopens the same tab; a link's
      own `initialTab` is the default. Moving to another version is a new URL
      without the param, so it opens on the requested tab again. Not in the
@@ -457,20 +483,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     siblingConfigsRequested.current = true;
     (async () => {
       try {
-        const live: AIInterviewResponse[] = [];
-        let apiPage = 1;
-        for (;;) {
-          const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
-          const items = batch.items || [];
-          live.push(...items);
-          const total = batch.total ?? live.length;
-          if (items.length < 100 || live.length >= total) break;
-          apiPage += 1;
-        }
-        const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
-        const archived = archivedProbe.total > archivedProbe.items.length
-          ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
-          : archivedProbe.items;
+        const { live, archived } = await aiInterviewService.listAllConfigsSplit();
 
         const seen = new Set<string>();
         const byJd = new Map<string, AIInterviewResponse[]>();
@@ -515,10 +528,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     () => (config.jd_id ? siblingConfigsByJdId.get(config.jd_id) ?? [] : []),
     [siblingConfigsByJdId, config.jd_id],
   );
-  const duplicateBlockedReason = interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
-  const editBlockedReason = !canUpdateAIInterviews
-    ? 'You do not have permission to edit AI interviews'
-    : interviewEditBlockedReason(config);
+  const duplicateBlockedReason = jdDisabled
+    ? JD_DISABLED_ACTION_MESSAGE
+    : interviewDuplicateBlockedReason(config, lineageConfigs, canCreateAIInterviews);
+  const editBlockedReason = jdDisabled
+    ? JD_DISABLED_ACTION_MESSAGE
+    : !canUpdateAIInterviews
+      ? 'You do not have permission to edit AI interviews'
+      : interviewEditBlockedReason(config);
 
   // Lazy-fetch the full JD record when the View JD tab is opened — cached
   // per config.jd_id so switching tabs (or back to it) doesn't re-fetch.
@@ -548,6 +565,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Quick actions
   const handleCopyLink = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (config.interview_link) {
       const fullLink = `${window.location.origin}${config.interview_link}`;
       await navigator.clipboard.writeText(fullLink);
@@ -568,7 +589,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       // Open the new draft straight in Configure so it can be edited at once.
       // Unsaved until Save as Draft: Discard anywhere in the wizard deletes it.
       markUnsavedVersion(result.cloned_id);
-      router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
+      router.push(withOrigin(aiInterviewConfigureHref(result.cloned_id, config.jd_id || '')));
     } catch (error: any) {
       toast.error(error.message || 'Failed to duplicate config');
     } finally {
@@ -577,6 +598,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleArchive = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      setConfirmAction(null);
+      return;
+    }
     setActionLoading(true);
     try {
       await aiInterviewService.archive(config.id);
@@ -593,6 +619,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   /* The AI Interviews list's Unarchive (AIInterview.tsx handleUnarchiveConfig):
      the backend restores it to Draft or Active, the toast names which. */
   const handleUnarchive = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      return;
+    }
     if (!canArchiveAIInterviews) {
       toast.error('You do not have permission to unarchive AI interviews');
       return;
@@ -614,6 +644,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleDelete = async () => {
+    if (jdDisabled) {
+      toast.error(JD_DISABLED_ACTION_MESSAGE);
+      setConfirmAction(null);
+      return;
+    }
     setActionLoading(true);
     try {
       await aiInterviewService.delete(config.id);
@@ -720,18 +755,41 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   };
 
+  /* The open candidate rides in the URL (`?candidate=<session id>`), written
+     with replaceState like the tab, so a refresh or a shared link reopens the
+     same result with its trail. Not in the embedded Configure-only render. */
+  const setCandidateParam = useCallback((sessionId: string | null) => {
+    if (configureOnly || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (sessionId) params.set('candidate', sessionId);
+    else params.delete('candidate');
+    const qs = params.toString();
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+  }, [configureOnly]);
+  useEffect(() => {
+    if (configureOnly) return;
+    const sessionId = new URLSearchParams(window.location.search).get('candidate');
+    if (!sessionId) return;
+    let cancelled = false;
+    aiInterviewService.get(sessionId)
+      .then((detail) => { if (!cancelled) setCandidateDetail(detail); })
+      .catch(() => { if (!cancelled) setCandidateParam(null); });
+    return () => { cancelled = true; };
+  }, [configureOnly, setCandidateParam]);
+
   const handleCandidateClick = useCallback(async (activityId: string, navIds?: string[]) => {
     if (navIds) setCandidateNavIds(navIds);
     setCandidateLoading(true);
     try {
       const detail = await aiInterviewService.get(activityId);
       setCandidateDetail(detail);
+      setCandidateParam(detail?.id || activityId);
     } catch (error: any) {
       toast.error(error.message || 'Failed to load candidate details');
     } finally {
       setCandidateLoading(false);
     }
-  }, []);
+  }, [setCandidateParam]);
 
   /* Interview Details → Configure Details, as one value so the Send Invite
      picker's preview (`configureOnly`) can render exactly this section. */
@@ -769,9 +827,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   the feature named anywhere. */}
               {PROXY_INTEGRITY_VERIFICATION_ENABLED && (
               <SectionCard title="Mobile Environment Verification" icon={QrCode}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${config.environment_verification_enabled ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-gray-100 ring-1 ring-gray-200'}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${config.environment_verification_enabled ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-gray-100 ring-1 ring-gray-200'}`}>
                       <QrCode className={`w-5 h-5 ${config.environment_verification_enabled ? 'text-brand-blue' : 'text-gray-400'}`} />
                     </div>
                     <div>
@@ -795,8 +853,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <SectionCard title="Time Allocation" icon={Clock}>
                   {/* No .tf-table-shell — a fixed, at-most-3-row table that
                       should size to its content, not the shell's 400px min-height. */}
-                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                    <table className="w-full min-w-[420px] text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-left border-b border-gray-100">
                           <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
@@ -1211,7 +1269,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     // … › <interview> › <candidate> rather than dropping the page the recruiter
     // just came from. onClick, not href: this view lives on the interview's own
     // route, so a link couldn't switch the body back to the candidate list.
-    const backToInterview = () => setCandidateDetail(null);
+    const backToInterview = () => { setCandidateDetail(null); setCandidateParam(null); };
     const interviewLabel = config.jd_title || config.position || 'Interview Details';
     const candidateLabel = candidateDetail.candidate_name || 'Candidate Results';
     return (
@@ -1274,6 +1332,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           card, brand-blue border/ring, a solid ID pill + plain-weight title
           + status on row 1, and a quiet bulleted fact line ending on the
           mode/round/version chips on row 2. */}
+      {jdDisabled && (
+        <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+          <span>{JD_DISABLED_ACTION_MESSAGE} You can still view its details and results.</span>
+        </div>
+      )}
       <div className="mb-4">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -1285,10 +1349,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 {config.jd_short_id && (
                   <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
                 )}
-                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                <h1 className="min-w-0 font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
                   {config.jd_title || config.position || 'Untitled'}
                 </h1>
                 <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
+                {/* Live, with saved edits waiting for Publish — this page shows the published version. */}
+                {hasUnpublishedChanges(config) && <UnpublishedChangesChip />}
               </div>
 
               {/* Row 2: quiet bulleted facts. Experience level and the invite count
@@ -1393,7 +1459,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                     if (!clickable) return;
                                     setShowJobVersionMenu(false);
                                     if (!isCurrent && linkedConfig) {
-                                      router.push(`/recruitment/ai-interviews/${linkedConfig.id}`);
+                                      router.push(`/recruitment/ai-interviews/${linkedConfig.id}${originQuery}`);
                                     }
                                   }}
                                   title={!clickable ? 'No AI interview has been created for this job version' : undefined}
@@ -1458,12 +1524,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
+                    if (jdDisabled) {
+                      toast.error(JD_DISABLED_ACTION_MESSAGE);
+                      return;
+                    }
                     if (!canShareAIInterviews) return;
                     setShowShareModal(true);
                   }}
-                  aria-disabled={!canShareAIInterviews}
-                  className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
-                  title={!canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
+                  aria-disabled={jdDisabled || !canShareAIInterviews}
+                  className={jdDisabled || !canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
                   icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
                   Invite
@@ -1479,7 +1549,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={editBlockedReason ? undefined : () => router.push(aiInterviewConfigureHref(config.id, config.jd_id || ''))}
+                    onClick={editBlockedReason ? undefined : () => router.push(withOrigin(aiInterviewConfigureHref(config.id, config.jd_id || '')))}
                     disabled={!!editBlockedReason && canUpdateAIInterviews}
                     aria-disabled={!!editBlockedReason}
                     aria-label="Edit AI interview"
@@ -1509,23 +1579,28 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
+                    if (jdDisabled) {
+                      toast.error(JD_DISABLED_ACTION_MESSAGE);
+                      return;
+                    }
                     if (!canUpdateAIInterviews) return;
                     // Resumes at the step the draft was left on.
-                    router.push(aiInterviewDraftResumeHref(config));
+                    router.push(withOrigin(aiInterviewDraftResumeHref(config)));
                   }}
-                  aria-disabled={!canUpdateAIInterviews}
-                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
+                  aria-disabled={jdDisabled || !canUpdateAIInterviews}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${jdDisabled || !canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
                 </Button>
               )}
               <div {...draftLockProps} className={draftLocked ? `flex items-center gap-2 ${draftLockProps.className}` : 'contents'}>
-              {/* Archived: Share, then Unarchive (no Refresh at any status). Share
+              {/* Archived: Invite, then Unarchive (no Refresh at any status). Invite
                   stays visible but disabled — Assessment Details' archived
-                  header, where archived records cannot be shared. */}
+                  header, where archived records cannot be shared. Same label
+                  as the Active header and the list menu. */}
               {config.status === 'archived' && (
                 <>
                 <Button
@@ -1535,17 +1610,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   title="Archived interviews cannot be shared"
                   icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
-                  Share
+                  Invite
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={canArchiveAIInterviews ? handleUnarchive : undefined}
                   disabled={actionLoading}
-                  aria-disabled={!canArchiveAIInterviews}
-                  title={!canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
+                  aria-disabled={jdDisabled || !canArchiveAIInterviews}
+                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canArchiveAIInterviews ? 'You do not have permission to unarchive AI interviews' : ''}
                   icon={actionLoading ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-archive" />}
-                  className={`${!canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`${jdDisabled || !canArchiveAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Unarchive
                 </Button>
@@ -1619,18 +1694,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1 lg:border-l-0 lg:border-t lg:pl-0 lg:ml-0 lg:pt-2 lg:mt-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      // Carry this interview along so the JD page's trail reads
-                      // AI Interviews › <interview> › job, as Go to JD on an
-                      // assessment's details page does.
-                      const params = new URLSearchParams({
-                        id: config.jd_id!,
-                        from: 'ai-interview-details',
-                        interview_id: config.id,
-                        interview_title: config.jd_title || config.position || '',
-                      });
-                      router.push(`/recruitment/job-details?${params.toString()}`);
-                    }}
+                    onClick={() => router.push(jobDetailsHref(config.jd_id!))}
                     className={`${tabPill(false)} whitespace-nowrap lg:w-full lg:justify-start lg:px-3 lg:py-2 lg:bg-transparent lg:font-medium lg:text-brand-blue lg:hover:bg-brand-blue/5 lg:hover:underline lg:underline-offset-2`}
                   >
                     Go to JD
@@ -1671,7 +1735,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     type="button"
                     onClick={() => {
                       const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
-                      router.push(url);
+                      router.push(withOrigin(url));
                     }}
                     className="mt-2 inline-flex items-center gap-1 rounded-md border border-warning-line bg-white px-2.5 py-1 text-xs font-medium text-warning-strong hover:bg-warning-subtle"
                   >
@@ -1983,7 +2047,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             const loading = activityLoading || lifecycleEvents === null;
 
             return (
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <TabHeading icon={Clock} title="Recent Activity" />
                 {loading && events.length === 0 ? (
                   <div className="space-y-4">
@@ -2246,7 +2310,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       here is editable. */}
                   <div className="flex justify-end">
                     <button
-                      onClick={() => router.push(`/recruitment/job-details?id=${jdFullData.id}`)}
+                      onClick={() => router.push(jobDetailsHref(jdFullData.id))}
                       className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
                     >
                       Open full JD page
@@ -2265,6 +2329,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <AIInterviewResults
                 embedded
                 showStats
+                readOnly={jdDisabled}
                 // This page is one interview version — the rows all share it.
                 hideVersionDetails
                 configId={config.id}
@@ -2307,7 +2372,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Share — a dialog off the header's Share button / Invites tab's
           "Invite More", not embedded in a tab. */}
-      {config.status === 'published' && canShareAIInterviews && (
+      {config.status === 'published' && canShareAIInterviews && !jdDisabled && (
         <ShareAIInterviewModal
           isOpen={showShareModal}
           config={config}

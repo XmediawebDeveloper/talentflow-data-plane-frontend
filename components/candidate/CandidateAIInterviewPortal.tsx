@@ -341,6 +341,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // popup must NOT terminate the interview (it would block the evaluation).
   const interviewClosingRef = useRef(false);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
+  // InterviewUI reports its timers every second. Only the staging
+  // "Fullscreen Required" overlay displays them, so keep the latest value in
+  // a ref and copy it into state only while that overlay is up — otherwise
+  // every tick re-rendered this portal and, through it, the whole interview.
+  const timerSnapshotRef = useRef<InterviewTimerSnapshot | null>(null);
+  const timerOverlayVisible = !IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive;
+  const timerOverlayVisibleRef = useRef(timerOverlayVisible);
+  timerOverlayVisibleRef.current = timerOverlayVisible;
+  const handleTimerChange = useCallback((s: InterviewTimerSnapshot) => {
+    timerSnapshotRef.current = s;
+    if (timerOverlayVisibleRef.current) setTimerSnapshot(s);
+  }, []);
+  useEffect(() => {
+    if (timerOverlayVisible) setTimerSnapshot(timerSnapshotRef.current);
+  }, [timerOverlayVisible]);
   // Device tier + feature flags — detected once during the system check so the
   // interview runs the heavy/accurate path only on capable machines and a
   // lightweight path on old/low-end systems. See lib/utils/deviceCapability.
@@ -1334,10 +1349,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   };
 
-  /** Preferred audio-aware mimeTypes — vp9/vp8 + opus gives the best results in Chrome/Edge. */
+  /** Preferred audio-aware mimeTypes. VP8 FIRST: the screen is captured at
+   *  1080p (needed by the vision checks) and VP9's real-time software encode of
+   *  that costs roughly twice VP8's CPU at the same capped 300 kbps — a steady
+   *  load on exactly the low-end machines that hung during the interview. VP8
+   *  WebM plays everywhere VP9 does. */
   const SCREEN_MIME_TYPES = [
-    'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9,opus',
     'video/webm',
   ];
 
@@ -1688,7 +1707,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // Bina's TTS audio never plays, and the interview looks stuck ("speaks only
     // after a refresh"). resume() here, in the click handler, unlocks it.
     try {
-      const ctx = new AudioContext({ sampleRate: 24000 });
+      // Reuse the context pre-created earlier (mount / resume paths) — the old
+      // code always made a new one and overwrote the global, orphaning the
+      // previous context (and its audio thread) for the rest of the session.
+      // resume() below still runs inside this gesture, which is what unlocks it.
+      const existing = (window as any).__interviewAudioContext as AudioContext | undefined;
+      const ctx = existing && existing.state !== 'closed' ? existing : new AudioContext({ sampleRate: 24000 });
       ctx.resume().then(
         () => console.log('[Portal] AudioContext resumed in gesture, state:', ctx.state),
         (e) => console.warn('[Portal] AudioContext resume failed:', e),
@@ -2174,6 +2198,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const detail = err?.response?.data?.detail || 'Failed to start interview';
       if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
         await loadInterview();
+      } else if (err?.response?.status === 409) {
+        // The job behind this interview is disabled — retrying won't help.
+        toast.error(detail);
       } else {
         toast.error(detail + ' Please try again.');
       }
@@ -3460,7 +3487,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             force the candidate back into fullscreen. Re-entering needs a user
             gesture, so it happens on this button's click. */}
         {finalConsentFsExited && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <Maximize2 className="w-8 h-8 text-warning" />
@@ -3728,7 +3755,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
     if (screenReshareOnResume) {
       return (
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-500/15 rounded-full flex items-center justify-center mx-auto mb-5">
               <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400" />
@@ -3769,7 +3796,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}
-          onTimerChange={setTimerSnapshot}
+          onTimerChange={handleTimerChange}
           deviceCapability={deviceCapability}
           candidatePhotoUrl={candidatePhotoUrl}
           approvedCameraDeviceId={approvedCameraDeviceId}
@@ -3777,7 +3804,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <AlertTriangle className="w-8 h-8 text-destructive" />
@@ -3809,7 +3836,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {/* Grace-period countdown — shown while candidate has 10s to return
             before the hard-pause overlay kicks in. Silent otherwise. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
@@ -3838,7 +3865,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {/* Hard-pause overlay (STAGING) — shown after the fullscreen grace expires.
             Production uses the unified "return to the interview" pause below. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
-          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
@@ -3973,6 +4000,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           jdDescription={interview.jd_description}
           jdDepartment={interview.jd_department}
           jdLocation={interview.jd_location}
+          jdLocations={interview.jd_locations}
           jdIndustryType={interview.jd_industry_type}
           jdEmploymentType={interview.jd_employment_type}
           jdRemoteType={interview.jd_remote_type}

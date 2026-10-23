@@ -1,6 +1,7 @@
 'use client';
 
 import React, { ReactNode, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { Button } from './button';
 
 /**
@@ -9,6 +10,8 @@ import { Button } from './button';
  *   - scrollable body
  *   - footer: Cancel + action button(s), identical size/width/text style
  * Esc = Cancel. Backdrop clicks do nothing (no accidental loss of a half-filled form).
+ * Exception: read-only views may pass `closeButton` — they get a top-right ✕
+ * instead of the footer Cancel (the footer keeps any `actions`, e.g. Edit).
  *
  * Sizes (one per popup type, so the same kind of popup is always the same width):
  *   sm  ~448px  confirm / delete / short prompts
@@ -71,6 +74,16 @@ interface AppModalProps {
   footer?: ReactNode;
   zIndexClass?: string;
   ariaLabel?: string;
+  /** Read-only views only: top-right ✕ (calls onCancel) replaces the footer
+   *  Cancel. The footer is dropped unless `actions`, `footerStart` or `footer`
+   *  give it content. */
+  closeButton?: boolean;
+  /** Overrides the `size` width (e.g. `sm:max-w-[840px]`). Rare — prefer `size`. */
+  widthClassName?: string;
+  /** Phones (below sm): full-screen sheet that slides up, instead of a
+   *  centred box — for long forms. The footer stays pinned at the bottom.
+   *  From sm up nothing changes. Off by default. */
+  mobileSheet?: boolean;
 }
 
 export function AppModalFooterButtons({
@@ -78,19 +91,22 @@ export function AppModalFooterButtons({
   cancelLabel = 'Cancel',
   cancelDisabled,
   actions = [],
-}: Pick<AppModalProps, 'onCancel' | 'cancelLabel' | 'cancelDisabled' | 'actions'>) {
+  hideCancel = false,
+}: Pick<AppModalProps, 'onCancel' | 'cancelLabel' | 'cancelDisabled' | 'actions'> & { hideCancel?: boolean }) {
   return (
     <div className={MODAL_FOOTER_ROW_CLASS}>
-      <Button
-        type="button"
-        variant="secondary"
-        size="md"
-        onClick={onCancel}
-        disabled={cancelDisabled}
-        className={MODAL_FOOTER_BUTTON_CLASS}
-      >
-        {cancelLabel}
-      </Button>
+      {!hideCancel && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="md"
+          onClick={onCancel}
+          disabled={cancelDisabled}
+          className={MODAL_FOOTER_BUTTON_CLASS}
+        >
+          {cancelLabel}
+        </Button>
+      )}
       {actions.map((action, i) => (
         <Button
           key={i}
@@ -129,7 +145,11 @@ export default function AppModal({
   footer,
   zIndexClass = 'z-[60]',
   ariaLabel,
+  closeButton = false,
+  widthClassName,
+  mobileSheet = false,
 }: AppModalProps) {
+  const showFooter = !closeButton || !!footer || !!footerStart || (actions?.length ?? 0) > 0;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -143,15 +163,15 @@ export default function AppModal({
 
   return (
     <div
-      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-gray-900/60 p-2 backdrop-blur-sm sm:p-6`}
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-gray-900/60 p-2 backdrop-blur-sm sm:p-6 ${mobileSheet ? "max-sm:items-end max-sm:p-0" : ""}`}
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel ?? (typeof title === 'string' ? title : undefined)}
     >
       <div
-        className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${APP_MODAL_WIDTH[size]}`}
+        className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${widthClassName ?? APP_MODAL_WIDTH[size]} ${mobileSheet ? "max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none max-sm:border-0 max-sm:animate-in max-sm:slide-in-from-bottom max-sm:duration-300 motion-reduce:animate-none" : ""}`}
       >
-        {/* Header — no close button; Cancel in the footer is the way out. */}
+        {/* Header — no close button unless `closeButton`; otherwise Cancel in the footer is the way out. */}
         <div className="flex shrink-0 items-center justify-between gap-3 bg-brand-blue px-4 py-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {icon && (
@@ -165,11 +185,23 @@ export default function AppModal({
             </div>
           </div>
           {headerExtra && <div className="shrink-0">{headerExtra}</div>}
+          {closeButton && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={cancelDisabled}
+              aria-label="Close"
+              title="Close"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
 
         <div className={`min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 ${bodyClassName}`}>{children}</div>
 
-        {footer ?? (
+        {showFooter && (footer ?? (
           <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 bg-slate-50/50 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
             {footerStart && <div className="min-w-0 text-sm text-gray-500 dark:text-slate-500">{footerStart}</div>}
             <AppModalFooterButtons
@@ -177,9 +209,10 @@ export default function AppModal({
               cancelLabel={cancelLabel}
               cancelDisabled={cancelDisabled}
               actions={actions}
+              hideCancel={closeButton}
             />
           </div>
-        )}
+        ))}
       </div>
     </div>
   );

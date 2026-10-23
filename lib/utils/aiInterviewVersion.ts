@@ -38,6 +38,8 @@ type VersionLike = {
   invitations_count?: number | null;
   interview_version?: number | null;
   created_at?: string | null;
+  /** The linked JD's live status (published | archived | disabled ..). */
+  jd_status?: string | null;
 };
 
 const norm = (s?: string | null) => String(s ?? '').toLowerCase();
@@ -71,6 +73,9 @@ export function interviewEditBlockedReason(config: VersionLike): string | null {
  * invited → still editable, so a new version is pointless; cap reached.
  * `lineage` is every config you know of, any status — pass the archived ones
  * too: they decide "latest" and count to the cap.
+ * Before all of these: the linked JD must be Published (a republish keeps the
+ * `published` status) — a Disabled or Archived job gets no new interview
+ * version. A row without `jd_status` (older list payloads) is not blocked here.
  */
 export function interviewDuplicateBlockedReason(
   config: VersionLike,
@@ -78,6 +83,12 @@ export function interviewDuplicateBlockedReason(
   canCreate = true,
 ): string | null {
   if (!canCreate) return 'You do not have permission to create AI interviews';
+  const jdStatus = norm(config.jd_status);
+  if (jdStatus === 'disabled') return 'This job is disabled. Enable the job to make changes or run interviews.';
+  if (jdStatus === 'archived') return 'This job is archived. Only interviews of a published job can be duplicated.';
+  if (jdStatus && jdStatus !== 'published' && jdStatus !== 'republished') {
+    return 'Only interviews of a published job can be duplicated.';
+  }
   if (norm(config.status) === 'draft') return 'Publish this version before duplicating it.';
   const siblings = lineage.filter((c) => c.jd_id === config.jd_id);
   // An open draft is the next version already being written — point there

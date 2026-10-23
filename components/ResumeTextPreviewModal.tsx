@@ -420,7 +420,7 @@ export default function ResumeTextPreviewModal({
         </div>
 
         {/* Document */}
-        <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 p-4 sm:p-6">
           {documentMode ? (
             effectiveDocumentUrl ? (
               /* Two things made this read as a raw file viewer rather than the
@@ -476,7 +476,7 @@ export default function ResumeTextPreviewModal({
               <Skeleton className="h-4 w-4/5" />
             </div>
           ) : content ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
               {lines.map((line, idx) => {
                 const trimmed = line.trim();
                 if (!trimmed) return <div key={idx} className="h-3" />;
@@ -488,7 +488,7 @@ export default function ResumeTextPreviewModal({
 
                 if (isHeader) {
                   return (
-                    <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
+                    <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
                       {trimmed}
                     </h3>
                   );
@@ -496,14 +496,14 @@ export default function ResumeTextPreviewModal({
 
                 // The first line of a résumé is almost always the name.
                 if (idx === firstNonEmpty) {
-                  return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>;
+                  return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1 break-words [overflow-wrap:anywhere]">{trimmed}</h2>;
                 }
 
                 if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                  return <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5">{trimmed}</p>;
+                  return <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
                 }
 
-                return <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5">{trimmed}</p>;
+                return <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
               })}
             </div>
           ) : (

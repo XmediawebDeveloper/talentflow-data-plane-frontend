@@ -79,6 +79,9 @@ interface AssessmentDetailsViewProps {
    * the breadcrumb stays anchored to that job instead of resetting.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /** Where this page was opened from (`?from=…`), kept when switching to
+   *  another version so its breadcrumb keeps the origin. */
+  originQuery?: string;
   /**
    * A DRAFT assessment: everything on the page is shown greyed out and
    * non-interactive except the Edit pencil, which stays live and highlighted
@@ -292,6 +295,7 @@ export default function AssessmentDetailsView({
   breadcrumbItems,
   showVersionHistory = true,
   draftLocked = false,
+  originQuery = '',
 }: AssessmentDetailsViewProps) {
   /* Greyed and out of reach - `inert` takes pointer, keyboard and assistive
      tech; the classes are the visual state. Applied per region rather than
@@ -300,6 +304,21 @@ export default function AssessmentDetailsView({
     ? { inert: true as const, 'aria-disabled': true, className: 'opacity-50 grayscale select-none' }
     : { className: '' };
   const router = useRouter();
+  /** Job Details for this assessment's JD — Go to JD and View JD's "Open
+   *  full JD page" alike — carrying this assessment so the JD page's trail
+   *  reads AI Assessments › <assessment> › job, and this page's own query
+   *  (list / tab / origin) so that crumb comes back to the same view. */
+  const jobDetailsHref = (jdId: string) => {
+    const params = new URLSearchParams({
+      id: jdId,
+      from: 'assessment-details',
+      assessment_id: assessment.id,
+      assessment_title: assessment.title || '',
+    });
+    const here = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
+    if (here) params.set('assessment_query', here);
+    return `/recruitment/job-details?${params.toString()}`;
+  };
   const searchParams = useSearchParams();
   const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
@@ -661,7 +680,7 @@ export default function AssessmentDetailsView({
          The scroll option is what keeps the reader where they were: this is a
          version swapped in place, not a new page arrived at, and jumping to
          the top is the jump there is no reason for. */
-      router.push(`/recruitment/assessments/${newest.id}`, { scroll: false });
+      router.push(`/recruitment/assessments/${newest.id}${originQuery}`, { scroll: false });
     } catch (error) {
       console.error('[TalentFlow] Failed to open the assessment for that job version:', error);
       toast.error('Could not open that job version');
@@ -796,7 +815,7 @@ export default function AssessmentDetailsView({
     setAssessmentSwitching({ toId: version.id, fromId: assessment?.id });
     /* In place, like the job menu: the reader is swapping a version, not
        opening a new page, so the scroll position is theirs to keep. */
-    router.push(`/recruitment/assessments/${version.id}`, { scroll: false });
+    router.push(`/recruitment/assessments/${version.id}${originQuery}`, { scroll: false });
   };
 
   /* The tabs, as data.
@@ -1523,7 +1542,7 @@ export default function AssessmentDetailsView({
         className="mb-4"
         items={breadcrumbItems ?? [
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Assessments', href: '/recruitment/assessments' },
+          { label: 'AI Assessments', href: '/recruitment/assessments' },
           { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
         ]}
         actions={totalCount != null && totalCount > 0 ? (
@@ -2151,15 +2170,7 @@ export default function AssessmentDetailsView({
                 <div className="flex items-center border-l border-gray-200 dark:border-slate-700/60 pl-2 ml-1 lg:border-l-0 lg:border-t lg:pl-0 lg:ml-0 lg:pt-1.5 lg:mt-0.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      const params = new URLSearchParams({
-                        id: assessment.jd_id,
-                        from: 'assessment-details',
-                        assessment_id: assessment.id,
-                        assessment_title: assessment.title || '',
-                      });
-                      router.push(`/recruitment/job-details?${params.toString()}`);
-                    }}
+                    onClick={() => router.push(jobDetailsHref(assessment.jd_id))}
                     className={`${tabPill(false)} whitespace-nowrap lg:flex lg:w-full lg:gap-2 lg:px-3 lg:py-2.5 lg:text-left lg:shadow-none lg:bg-transparent lg:text-gray-600 lg:dark:text-slate-400 lg:hover:bg-brand-blue/5 lg:hover:text-brand-blue`}
                   >
                     <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
@@ -2910,24 +2921,6 @@ export default function AssessmentDetailsView({
               ]}
             />
 
-            {/* Why most rows do not navigate — the popup's banner, verbatim. */}
-            <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-              <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
-                <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                  <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
-                </p>
-                {/* Completion rate lives here, not in the card row: the row is
-                    the status FILTER and this was the one tile that filtered
-                    nothing. Same placement and treatment as the AI interview
-                    tracker (2026-09-30). */}
-                <span className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  {inviteStats.total > 0 ? Math.round((inviteStats.completed / inviteStats.total) * 100) : 0}% Completion
-                </span>
-              </div>
-            </div>
-
             <InviteFilterBar
               filters={inviteFilters}
               onChange={(nextFilters) => {
@@ -3664,7 +3657,7 @@ export default function AssessmentDetailsView({
                   is editable. */}
               <div className="flex justify-end">
                 <button
-                  onClick={() => router.push(`/recruitment/job-details?id=${jdData.id}`)}
+                  onClick={() => router.push(jobDetailsHref(jdData.id))}
                   className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
                 >
                   Open full JD page

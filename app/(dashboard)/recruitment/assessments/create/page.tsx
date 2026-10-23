@@ -9,6 +9,7 @@ import api from '@/lib/services/api';
 import { Job } from '@/lib/types/types';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
 interface TopicSettings {
   hr_enabled: boolean;
@@ -53,11 +54,7 @@ export default function CreateAssessmentPage() {
         // status. A pre-filtered seed painted a list the component then replaced.
         const jdParams = { source: 'my-jds' as const };
         const [jobsResponse, topicsResponse] = await Promise.allSettled([
-          jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
-            probe.total > probe.items.length
-              ? jdService.list({ ...jdParams, page_size: probe.total })
-              : probe
-          ),
+          fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
           api.get('/assessments/settings/topics'),
         ]);
 

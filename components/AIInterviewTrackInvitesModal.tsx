@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
@@ -20,6 +21,7 @@ import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import AIInterviewInviteTable, {
@@ -70,6 +72,10 @@ interface AIInterviewTrackInvitesModalProps {
    *  (there is nothing to close back to); everything else — stats, filters,
    *  bulk resend, the table, pagination — is unchanged. */
   embedded?: boolean;
+  /** The interview's job is disabled — invites stay viewable, but Invite More,
+   *  Resend, Edit and Revoke are blocked. Omit it and the tracker looks the
+   *  config's job status up itself. */
+  jdDisabled?: boolean;
   /** Footer "Invite More" — the host closes this tracker and opens its own
    *  invite flow. Left out, the button is not shown. */
   onInviteMore?: () => void;
@@ -107,11 +113,24 @@ export default function AIInterviewTrackInvitesModal({
   hideJobVersionFilter = false,
   onViewResult,
   embedded = false,
+  jdDisabled: jdDisabledProp,
   onInviteMore,
   onChanged,
   refreshSignal,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
+
+  const [lookedUpJdDisabled, setLookedUpJdDisabled] = useState(false);
+  useEffect(() => {
+    if (!isOpen || jdDisabledProp !== undefined || !configId) return;
+    let cancelled = false;
+    aiInterviewService
+      .get(configId)
+      .then((cfg) => { if (!cancelled) setLookedUpJdDisabled(isJdDisabled(cfg?.jd_status)); })
+      .catch(() => { /* Unknown — the server still refuses actions on a disabled job. */ });
+    return () => { cancelled = true; };
+  }, [isOpen, jdDisabledProp, configId]);
+  const jdDisabled = jdDisabledProp ?? lookedUpJdDisabled;
 
   /* Job / interview version for the two version columns. Taken from the host
      when it knows them; otherwise derived here from the config list — the
@@ -208,8 +227,9 @@ export default function AIInterviewTrackInvitesModal({
   /* Selection follows the selected card, as on the AI Interviews page: the
      Invited card ticks revocable rows and offers Revoke; the Expired card
      ticks resendable rows and offers Resend. Other cards have no bulk action. */
-  const bulkMode: 'revoke' | 'resend' | null =
-    filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
+  const bulkMode: 'revoke' | 'resend' | null = jdDisabled
+    ? null
+    : filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
   const bulkResendMode = bulkMode === 'resend';
   const rowSelectable = bulkMode === 'revoke' ? isRevocableInvite : isBulkResendable;
   const selectableIds = bulkMode ? invitations.filter(rowSelectable).map((inv: any) => inv.id) : [];
@@ -531,21 +551,6 @@ export default function AIInterviewTrackInvitesModal({
           ]}
         />
 
-        {/* Results note + completion rate — same banner as the AI Interviews
-            tracker, so the recruiter knows why only some rows open a result. */}
-        <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
-          <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
-            <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-            <p className="flex-1 min-w-0 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-              <span className="font-semibold">Note:</span> Results are available only for candidates with Completed and Terminated status. Other candidates&rsquo; results are not available.
-            </p>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
-              <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
-              {completionRate}% Completion
-            </span>
-          </div>
-        </div>
-
         <InviteFilterBar
           filters={filters}
           onChange={(nextFilters) => {
@@ -645,6 +650,7 @@ export default function AIInterviewTrackInvitesModal({
           {/* Same list and action rules as the AI Interviews tracker. */}
           <AIInterviewInviteTable
             invitations={invitations}
+            jdDisabled={jdDisabled}
             isLoading={initialLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
@@ -720,9 +726,12 @@ export default function AIInterviewTrackInvitesModal({
         </ConfirmationDialog>
 
         {/* Revoke — the old link stops working immediately. */}
-        <ConfirmationDialog
+        <RevokeLinkModal
           isOpen={!!revokeTarget}
-          onClose={() => { if (!revokingId) setRevokeTarget(null); }}
+          kind="interview"
+          email={revokeTarget?.candidate_email}
+          isLoading={!!revokingId && revokingId === revokeTarget?.id}
+          onCancel={() => { if (!revokingId) setRevokeTarget(null); }}
           onConfirm={async () => {
             const inv = revokeTarget;
             if (!inv) return;
@@ -739,15 +748,6 @@ export default function AIInterviewTrackInvitesModal({
               setRevokeTarget(null);
             }
           }}
-          title="Revoke Interview Link?"
-          description={
-            revokeTarget
-              ? `This will immediately expire the interview link sent to ${revokeTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
-              : ''
-          }
-          confirmText={revokingId && revokingId === revokeTarget?.id ? 'Revoking…' : 'Confirm'}
-          cancelText="Cancel"
-          variant="danger"
         />
 
         {/* Bulk revoke — selected Invited candidates only. */}
@@ -814,11 +814,18 @@ export default function AIInterviewTrackInvitesModal({
                 </button>
               </>
             )}
+            {!embedded && (
+              <Button variant="secondary" size="sm" onClick={onClose}>
+                Cancel
+              </Button>
+            )}
             {onInviteMore && !embedded && (
               <Button
                 variant="primary"
                 size="sm"
                 onClick={onInviteMore}
+                disabled={jdDisabled}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More
@@ -833,12 +840,15 @@ export default function AIInterviewTrackInvitesModal({
   const editEmailTrimmed = editForm.candidate_email.trim();
   const editEmailError =
     editEmailTrimmed.length > 0 && !isValidEmailFormat(editEmailTrimmed) ? EMAIL_FORMAT_ERROR : null;
+  const editNameError =
+    editForm.candidate_name.trim().length > 0 && !isValidCandidateName(editForm.candidate_name) ? NAME_FORMAT_ERROR : null;
   const handleSaveEdit = async () => {
     const inv = editTarget;
     if (!inv) return;
     const name = editForm.candidate_name.trim();
     const email = editForm.candidate_email.trim();
     if (!name || !email) { toast.error('Candidate name and email are required'); return; }
+    if (!isValidCandidateName(name)) { toast.error(NAME_FORMAT_ERROR); return; }
     if (!isValidEmailFormat(email)) { toast.error(EMAIL_FORMAT_ERROR); return; }
     setSavingEdit(true);
     try {
@@ -887,8 +897,14 @@ export default function AIInterviewTrackInvitesModal({
               type="text"
               value={editForm.candidate_name}
               onChange={(e) => setEditForm((f) => ({ ...f, candidate_name: e.target.value }))}
-              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+              aria-invalid={editNameError ? 'true' : undefined}
+              className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                editNameError
+                  ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
+                  : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
+              }`}
             />
+            {editNameError && <p className="mt-1 text-xs text-destructive">{editNameError}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
@@ -914,7 +930,7 @@ export default function AIInterviewTrackInvitesModal({
             variant="primary"
             size="md"
             onClick={handleSaveEdit}
-            disabled={savingEdit || !!editEmailError}
+            disabled={savingEdit || !!editEmailError || !!editNameError}
             icon={savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
           >
             Save & Send

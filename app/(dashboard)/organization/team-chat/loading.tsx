@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/skeleton';
+import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
 
 export default function Loading() {
-  return <PageSkeleton variant="cards" showStats={false} />;
+  return <TeamChatSkeleton />;
 }

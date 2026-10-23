@@ -124,6 +124,9 @@ export default function AITalentMatchPageJobsList({
         <JobOpeningPickerList
           excludeDraftsOnly
           showCandidateCounts
+          /* Coloured like the Job Openings badges, applicants read "scored". */
+          coloredCountBadges
+          applicantsLabel="Scored"
           selection={selection}
           onSelectionChange={setSelection}
           radioGroupName="ai-talent-match-job"
