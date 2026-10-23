@@ -30,7 +30,15 @@ import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
-import { isUnsavedVersion, clearUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import { isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
+import {
+  clearStaging, hasPendingThisVisit, markStaging, shouldAnnounceRestoredEdits,
+} from '@/lib/utils/aiInterviewEditSession';
+import { discardWizardChanges, keepWizardChanges } from '@/lib/utils/aiInterviewWizardExit';
+import { formatIST } from '@/lib/utils/dateUtils';
+import { WizardLeavePrompt } from './LeaveInterviewDialog';
+import InterviewEditLockGate from './InterviewEditLockGate';
+import { useEditBaseline, useInterviewLeaveGuard } from './useInterviewLeaveGuard';
 import ClusterGeneratingState, { CLUSTER_GENERATING_ID } from './ClusterGeneratingState';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { closestDuplicate } from '@/lib/skillDuplicates';
@@ -1235,7 +1243,9 @@ export default function AIInterviewClusters() {
 
     const load = async () => {
       try {
-        const draft = await aiInterviewService.get(id);
+        // With pending edits overlaid — the clusters as this edit left them,
+        // not as the config was last saved / published.
+        const draft = await aiInterviewService.get(id, { withPending: true });
         // A disabled JD's interview is view-only — no editing its clusters
         // until the job is enabled again; show its read-only details instead.
         if (isJdDisabled(draft.jd_status)) {
@@ -1243,6 +1253,16 @@ export default function AIInterviewClusters() {
           if (wizardNav) wizardNav.exit();
           else router.replace(`/recruitment/ai-interviews/${draft.id}`);
           return;
+        }
+        // An existing config (not one created in this visit) is edited as
+        // pending edits: every save on this step — generation, Back, Continue —
+        // is staged, so a published interview does not change mid-edit and
+        // Discard can drop it all (lib/utils/aiInterviewEditSession).
+        if (!isUnsavedVersion(draft.id)) markStaging(draft.id);
+        if (shouldAnnounceRestoredEdits(draft)) {
+          toast.info(
+            `Unsaved changes from ${formatIST(draft.pending_edits_updated_at)} restored. Save as Draft to keep them, or Discard to drop them.`,
+          );
         }
         setConfig(draft);
 
@@ -1478,6 +1498,9 @@ export default function AIInterviewClusters() {
 
     load();
   }, [id, toSkillEntries]);
+
+  /* Only while this step is open does the service stage this config's saves. */
+  useEffect(() => () => clearStaging(id), [id]);
 
   /* ── Cluster management ── */
   const toggleExpand = useCallback((clusterId: string) => {
@@ -2924,9 +2947,16 @@ export default function AIInterviewClusters() {
     }
   };
 
-  const handleSaveAsDraft = async () => {
-    if (!config || !id) return;
-    setSaving(true);
+  /* Write this step's state — the clusters as they are on screen, stamped so a
+     draft reopens here. On an existing config the write is staged as pending
+     edits (aiInterviewEditSession). A PUBLISHED config with nothing changed is
+     not written: the write alone would leave it with "Unpublished changes"
+     that change nothing. */
+  const saveState = async (): Promise<boolean> => {
+    if (!config || !id) return false;
+    if (config.status === 'published' && !isDirty() && !config.has_pending_edits && !hasPendingThisVisit(id)) {
+      return true;
+    }
     try {
       const si = JSON.parse(config.special_instructions || '{}');
       si.mth_clusters = mthClusters;
@@ -2945,17 +2975,30 @@ export default function AIInterviewClusters() {
         // Audit-log hint: this IS the recruiter explicitly saving and leaving
         // (as opposed to the silent saves elsewhere on this page), so the
         // trail should show "Saved as Draft" / "Draft Updated" once — see
-        // update_interview in routers/ai_interview.py.
+        // update_interview in routers/ai_interview.py. (A staged save logs
+        // nothing; keepWizardChanges logs the checkpoint once applied.)
         save_and_exit: true,
-        // Editing a published (uninvited) version: saving it as a draft takes
-        // it off "published" instead of leaving it live.
-        ...(config.status === 'published' && { status: 'draft' }),
+        // No `status: 'draft'` for a published version any more: Save as Draft
+        // keeps its edits pending and it stays live (keepWizardChanges).
       });
-      clearUnsavedVersion(id);
-      toast.success('Draft saved!');
+      return true;
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Failed to save draft');
+      return false;
+    }
+  };
+
+  const handleSaveAsDraft = async () => {
+    if (!config || !id) return;
+    setSaving(true);
+    try {
+      if (!(await saveState())) return;
+      const message = await keepWizardChanges(id, config.status);
+      leaveGuard.isNavigatingRef.current = true;
+      toast.success(message);
       router.push(exitHref);
-    } catch {
-      toast.error('Failed to save draft');
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Failed to save draft');
     } finally {
       setSaving(false);
     }
@@ -2963,21 +3006,32 @@ export default function AIInterviewClusters() {
 
   /* Discard — the wizard's one rule (lib/utils/aiInterviewUnsavedVersion):
      an UNSAVED draft (a new interview, or the version Duplicate just minted)
-     is deleted; a draft the recruiter saved earlier, or a published / live
-     version, is left as last saved — Discard never deletes it. */
+     is deleted; any other version — a draft saved earlier, a published / live
+     one — has this edit's pending changes dropped and stays as last saved. */
   const discardDeletesVersion = !!id && config?.status === 'draft' && isUnsavedVersion(id);
   const handleDiscard = async () => {
-    if (id && discardDeletesVersion) {
-      try {
-        await aiInterviewService.delete(id);
-        clearUnsavedVersion(id);
-        toast.success('Draft discarded');
-      } catch {
-        // Silent
-      }
+    leaveGuard.isNavigatingRef.current = true;
+    if (id) {
+      const ok = await discardWizardChanges(id, discardDeletesVersion);
+      if (ok && discardDeletesVersion) toast.success('Draft discarded');
     }
     router.push(exitHref);
   };
+
+  /* ── Leaving with something unsaved ──
+     The prompt appears only when there is something to keep or lose: pending
+     edits on this config (this visit's, or earlier ones restored on load), a
+     new interview never saved, or cluster edits on screen since the step
+     loaded. */
+  const { markEditStart, isDirty } = useEditBaseline(
+    JSON.stringify([mthClusters, nthClusters, mthSkills, nthSkills, skillWeights, nthEnabled, isFinalized]),
+  );
+  const leaveGuard = useInterviewLeaveGuard({
+    active: !loading && !!config,
+    wizardNav,
+    needsPrompt: () =>
+      !!id && (!!config?.has_pending_edits || hasPendingThisVisit(id) || isUnsavedVersion(id) || isDirty()),
+  });
 
   /* ── Validation computed values (only meaningful when clusters exist) ── */
   const activeNthClusters = nthEnabled ? nthClusters : [];
@@ -3094,7 +3148,7 @@ export default function AIInterviewClusters() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
@@ -4268,7 +4322,25 @@ export default function AIInterviewClusters() {
         </div>{/* closes mx-auto max-w wrapper */}
       </main>{/* closes flex-1 main */}
 
+      {/* "Being edited by X" - View only / Take over (see InterviewEditLockGate). */}
+      <InterviewEditLockGate configId={id} />
 
+      {/* ── Leave prompt ── */}
+      <WizardLeavePrompt
+        target={leaveGuard.leaveTarget}
+        onStay={leaveGuard.cancelLeave}
+        onLeave={leaveGuard.leaveTo}
+        configId={id}
+        status={config.status}
+        createdThisVisit={discardDeletesVersion}
+        canDelete={!(config.invitations_count ?? 0)}
+        versionNumber={config.interview_version ?? undefined}
+        jdCode={config.jd_short_id}
+        title={config.jd_title || config.position}
+        currentStepLabel="Clusters"
+        saveState={saveState}
+        afterDeleteHref={exitHref}
+      />
     </DndProvider>
   );
 }

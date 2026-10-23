@@ -61,7 +61,8 @@ export function aiInterviewDraftResumeHref(config: ResumeSource): string {
  */
 export async function resolveAIInterviewDraftResumeHref(id: string, jdId: string): Promise<string> {
   try {
-    const full = await aiInterviewService.get(id);
+    // With pending edits: an unfinished edit's step stamp decides where it reopens.
+    const full = await aiInterviewService.get(id, { withPending: true });
     if (full) return aiInterviewDraftResumeHref({ ...full, jd_id: full.jd_id || jdId });
   } catch { /* fall through to Configure */ }
   return configureHref(id, jdId);

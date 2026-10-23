@@ -31,6 +31,7 @@ import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/
 import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
+import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -1133,6 +1134,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
 
                     <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                       <StatusBadge status={row.status} />
+                      {/* Live, with saved edits waiting for Publish. */}
+                      {hasUnpublishedChanges(row.config) && <UnpublishedChangesChip className="ml-1.5 align-middle" />}
                     </td>
 
                     <td className="px-3 py-2.5 align-middle whitespace-nowrap">
