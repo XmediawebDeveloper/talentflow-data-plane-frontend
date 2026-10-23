@@ -113,6 +113,12 @@ interface JobsListingProps {
    * until the panel was reopened. See JobVersionHistoryPanel.statusOverrides.
    */
   versionStatusOverrides?: Record<string, string>;
+  /**
+   * Version ids the host has successfully deleted since the lineage was
+   * fetched. Dropped from the View Versions table so a deleted version
+   * disappears at once instead of lingering until a page refresh.
+   */
+  deletedVersionIds?: Set<string>;
   onPublishJob?: (job: Job) => void;
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
@@ -187,7 +193,7 @@ const StatVersionsPlaceholder = () => (
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
+export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -1555,6 +1561,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             <div className="space-y-3">
               {currentJobs.map(job => {
                 const versionKey = job.job_id || job.id;
+                /* The cached lineage minus versions deleted since it was fetched. */
+                const liveLineage = deletedVersionIds?.size
+                  ? versionLineage.lineages[versionKey]?.filter((v) => !deletedVersionIds.has(v.id))
+                  : versionLineage.lineages[versionKey];
                 /* A Draft only opens in the JD editor, so without Edit permission
                    the card and its View icon are greyed and do nothing (RBAC:
                    tooltip only) — the user stays on this list. */
@@ -1981,8 +1991,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           job={job}
                           versions={
                             statusFilter === 'all'
-                              ? versionLineage.lineages[versionKey]
-                              : versionLineage.lineages[versionKey]?.filter(
+                              ? liveLineage
+                              : liveLineage?.filter(
                                   /* The cached lineage can be older than the status tab
                                      being viewed — e.g. this version was archived just now,
                                      but the lineage fetched before that still says
