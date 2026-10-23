@@ -10,6 +10,10 @@ import api from '@/lib/services/api';
 import VersionList, { VersionUsage } from './VersionList';
 import SendToPanel from './SendToPanel';
 import ResultsStep from './ResultsStep';
+import ServerCandidatePicker, { EMPTY_SELECTION, describeFilters, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
+import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
+import { bulkInviteService, type BulkInviteJob } from '@/lib/services/bulkInviteService';
+import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
@@ -80,6 +84,7 @@ export default function VersionInviteDialog({
   inviteAllowed = true,
   inviteDeniedReason,
   preselect = true,
+  bulk = false,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -114,6 +119,13 @@ export default function VersionInviteDialog({
   /** Tick every candidate on open (the page ticked them). False = list them
    *  unticked for the recruiter to pick (Job Details' Create / Send tiles). */
   preselect?: boolean;
+  /** Job Details' Create / Send tiles: the candidates are the JOB's — its AI
+   *  Talent Match and Scored Resume lists, read from the server a page at a
+   *  time with search and filters (ServerCandidatePicker) — and Send starts
+   *  a background job (POST /jd/{id}/bulk-invites) whose progress survives
+   *  closing the popup. `candidates` is ignored. Pages that tick rows
+   *  themselves keep the per-candidate flow (and its share step). */
+  bulk?: boolean;
 }) {
   const { user, isTenantAdmin } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
@@ -148,10 +160,16 @@ export default function VersionInviteDialog({
   const [method, setMethod] = useState<DeliveryMethod>('email');
   const [message, setMessage] = useState('');
   const [expiryDays, setExpiryDays] = useState(1);
-  const [view, setView] = useState<'compose' | 'results'>('compose');
+  const [view, setView] = useState<'compose' | 'results' | 'progress'>('compose');
   const [results, setResults] = useState<SendResult[]>([]);
   const [sending, setSending] = useState(false);
   const [sendTotal, setSendTotal] = useState(0);
+  /* `bulk`: the picked rows or the filter — never the rows themselves — and
+     the background send once it has started. */
+  const [serverSelection, setServerSelection] = useState<PickerSelection>(EMPTY_SELECTION);
+  const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
+  const bulkTracker = useOptionalBulkInviteProgress();
+  const bulkReported = useRef(false);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -172,7 +190,7 @@ export default function VersionInviteDialog({
   const [browseConfigs, setBrowseConfigs] = useState<AIInterviewResponse[] | null>(null);
   const [browseIds, setBrowseIds] = useState<string[]>([]);
   /* Send hands over to the host's share step rather than sending here. */
-  const handsOff = kind === 'assessment' ? !!onAssessmentsSent : !!onInterviewsSent;
+  const handsOff = !bulk && (kind === 'assessment' ? !!onAssessmentsSent : !!onInterviewsSent);
   /* Step 2 (assessments): the share step, with what Next handed it. Step 1's
      state stays as it is underneath, so Back returns to it unchanged. */
   const [shareStep, setShareStep] = useState<{ assessments: AssessmentResponse[]; candidates: InviteCandidate[] } | null>(null);
@@ -337,10 +355,12 @@ export default function VersionInviteDialog({
 
   const selected = versions.find((v) => v.id === versionId) ?? null;
   const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
+  /* How many the send goes to: the server selection's count in `bulk`. */
+  const recipientCount = bulk ? selectionCount(serverSelection) : recipients.length;
   /* Next: someone ticked — or, where Next leads to the email step, always:
      that step adds candidates itself (Manual, Upload Excel, Resume Database),
      so an empty list here is not a dead end. */
-  const hasCandidatesForNext = recipients.length > 0 || handsOff;
+  const hasCandidatesForNext = bulk ? recipientCount > 0 : (recipients.length > 0 || handsOff);
   const blocked = createBlockedReason(versions, perms, kind);
   const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(jdId)}`;
   const close = () => { if (!sending && !confirmBusy) onClose(); };
@@ -487,8 +507,54 @@ export default function VersionInviteDialog({
     });
   };
 
+  /* `bulk`: one request with the selection; the backend resolves it, skips
+     what cannot be sent, and sends in the background. The popup switches to
+     the run's progress, which the floating widget keeps following after
+     Done. A refused start (quota, permission, version) is thrown to the
+     confirm's own error toast. */
+  const sendBulk = async () => {
+    if (!selected) return;
+    const job = await bulkInviteService.start(jdId, {
+      kind,
+      version_id: selected.id,
+      selection: toRequestSelection(serverSelection),
+      delivery: kind === 'interview' ? method : 'email',
+      message: method === 'email' ? message : undefined,
+      expiry_days: expiryDays,
+    });
+    bulkReported.current = false;
+    setBulkJob(job);
+    bulkTracker?.track(job, { jdTitle, jdCode });
+    setView('progress');
+    bodyRef.current?.scrollTo({ top: 0 });
+    const queued = job.queued ?? 0;
+    if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
+    else toast.success(`Sending ${queued.toLocaleString()} invitation${queued === 1 ? '' : 's'} in the background`);
+  };
+  /* The run's snapshots: once it ends with something sent, the host is told
+     once (its counts refresh) and the version cards re-read their totals. */
+  const onBulkJobChange = (job: BulkInviteJob) => {
+    setBulkJob(job);
+    if (job.status === 'queued' || job.status === 'running' || bulkReported.current) return;
+    bulkReported.current = true;
+    if (job.sent > 0) onSent?.(kind, job.sent);
+    void reload();
+  };
+
   const askSend = () => {
     if (!selected?.sendable || !hasCandidatesForNext) return;
+    if (bulk) {
+      const links = method === 'link';
+      const scope = serverSelection.mode === 'filter'
+        ? ` (everyone matching ${describeFilters(serverSelection.filters) || 'the current tab'})` : '';
+      setConfirm({
+        title: `${links ? 'Create invitation links for' : 'Send'} ${label.singular} V${selected.version}?`,
+        message: `${links ? 'Creates personal links for' : 'Sends'} ${selected.name} V${selected.version} to ${recipientCount.toLocaleString()} candidate${recipientCount === 1 ? '' : 's'}${scope}. Anyone already invited to this version, team members, repeated emails and candidates without an email are skipped. The send runs in the background — you can close this popup once it starts.`,
+        confirmText: links ? 'Create Links' : 'Send Invitations',
+        run: sendBulk,
+      });
+      return;
+    }
     /* Assessments: no send from here — Next moves to the Share Assessment via
        Email step with the picked version and the ticked candidates. */
     if (kind === 'assessment' && onAssessmentsSent) {
@@ -504,7 +570,7 @@ export default function VersionInviteDialog({
     const links = method === 'link';
     setConfirm({
       title: `${links ? 'Create invitation links for' : 'Send'} ${label.singular} V${selected.version}?`,
-      message: `${links ? 'Creates personal links for' : 'Sends'} ${selected.name} V${selected.version} to ${recipients.length} candidate${recipients.length === 1 ? '' : 's'}. Anyone already invited to this version is skipped.`,
+      message: `${links ? 'Creates personal links for' : 'Sends'} ${selected.name} V${selected.version} to ${recipientCount} candidate${recipientCount === 1 ? '' : 's'}. Anyone already invited to this version is skipped.`,
       confirmText: links ? 'Create Links' : 'Send Invitations',
       run: async () => send(),
     });
@@ -520,12 +586,14 @@ export default function VersionInviteDialog({
     : browseAll
       ? (browseCount === 0
           ? `Select at least one ${browseNoun} to continue`
-          : recipients.length === 0 ? (handsOff ? 'No candidates ticked · add them in the next step' : '') : null)
+          : recipientCount === 0 ? (handsOff ? 'No candidates ticked · add them in the next step' : '') : null)
+    : view === 'progress'
+      ? (bulkJob && (bulkJob.status === 'queued' || bulkJob.status === 'running') ? 'Sending in the background — safe to close' : '')
     : view === 'results'
       ? (sending ? `Sending ${results.length} of ${sendTotal}…` : `${count('sent')} sent · ${count('skipped')} skipped · ${count('failed')} failed`)
       : !selected
         ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
-        : recipients.length === 0
+        : recipientCount === 0
           ? (handsOff ? 'No candidates ticked · add them in the next step' : '')
           : null;
 
@@ -694,6 +762,10 @@ export default function VersionInviteDialog({
                   />
                 </section>
               </div>
+            ) : view === 'progress' && bulkJob ? (
+              /* `bulk`: the run's live counts and per-candidate rows; the
+                 floating widget keeps following it after this popup closes. */
+              <BulkInviteProgressPanel jobId={bulkJob.job_id} initialJob={bulkJob} compact onJobChange={onBulkJobChange} />
             ) : view === 'results' ? (
               <ResultsStep results={results} total={sendTotal} sending={sending} />
             ) : (
@@ -740,6 +812,16 @@ export default function VersionInviteDialog({
                        via Email has its own delivery, message and expiry. */
                     candidatesOnly={handsOff}
                     addInNextStep={handsOff}
+                    listSlot={bulk ? (
+                      <ServerCandidatePicker
+                        jdId={jdId}
+                        kind={kind}
+                        versionId={selected?.sendable ? selected.id : null}
+                        selection={serverSelection}
+                        onSelectionChange={setServerSelection}
+                        pickingDisabled={!selected?.sendable || !perms.canInvite || !!off}
+                      />
+                    ) : undefined}
                   />
                 </section>
               </div>
@@ -752,12 +834,12 @@ export default function VersionInviteDialog({
               {footerText ?? (browseAll ? (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}{handsOff ? ' · add more in the next step' : ''}
+                  Ready to invite {recipientCount} candidate{recipientCount === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}{handsOff ? ' · add more in the next step' : ''}
                 </span>
               ) : selected && (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipients.length} candidate{recipients.length === 1 ? '' : 's'} to {label.singular} V{selected.version}{handsOff ? ' · add more in the next step' : ''}
+                  Ready to invite {recipientCount} candidate{recipientCount === 1 ? '' : 's'} to {label.singular} V{selected.version}{handsOff ? ' · add more in the next step' : ''}
                 </span>
               ))}
             </div>
@@ -778,6 +860,13 @@ export default function VersionInviteDialog({
                     Next
                   </button>
                 </>
+              ) : view === 'progress' ? (
+                <button
+                  onClick={onClose}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                >
+                  Done
+                </button>
               ) : view === 'results' ? (
                 <>
                   {!sending && failed.length > 0 && (
