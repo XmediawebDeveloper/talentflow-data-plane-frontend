@@ -5593,6 +5593,7 @@ export default function ResumeScoringPage({
             setShowResumeSelectionModal(true);
           }}
           proceedDisabled={!canRunScoring}
+          availableVersionsOnly
           proceedLabel="Select Resumes"
           excludeDraftsOnly
           /* The "N assessed" / "N interviewed" tags the Job Descriptions

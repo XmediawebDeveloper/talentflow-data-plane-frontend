@@ -474,6 +474,34 @@ export const buildAssessmentJobList = (
   return reps;
 };
 
+/**
+ * Does this picker card need View Versions? The Create Assessment and Create
+ * AI Interview pickers list one card per job; View Versions is how a version
+ * OTHER than the card's is picked. When the card's own version is the job's
+ * only buildable one — Published/Republished and not `isTaken` — there is
+ * nothing else to pick, so the card's radio and Add act on it directly and the
+ * button would only add a step. It stays whenever another version is
+ * buildable, and whenever the card's version itself is not (the buildable one
+ * then sits in the history).
+ *
+ * `allVersions` is the full version list the picker already holds; the card is
+ * counted even if it is missing from it.
+ */
+export const needsVersionPicker = (
+  card: Job,
+  allVersions: Job[],
+  isTaken: (version: Job) => boolean,
+): boolean => {
+  const key = lineageKey(card);
+  const buildable = new Set(
+    allVersions
+      .filter(version => lineageKey(version) === key && isSelectableVersion(version) && !isTaken(version))
+      .map(version => version.id),
+  );
+  if (isSelectableVersion(card) && !isTaken(card)) buildable.add(card.id);
+  return !(buildable.size === 1 && buildable.has(card.id));
+};
+
 export type JobSortBy = 'date' | 'applicants' | 'assessed' | 'interviewed' | 'title' | 'status' | 'industry';
 export type JobSortOrder = 'asc' | 'desc';
 
