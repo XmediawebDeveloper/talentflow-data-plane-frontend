@@ -1721,7 +1721,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             type="button"
                             onClick={() => toggleSort(col.key)}
                             disabled={!!error}
-                            className={`inline-flex items-center gap-1.5 group uppercase transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
+                            className={`inline-flex items-center gap-1.5 group uppercase uppercase tracking-wider transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
                               col.align === 'right' ? 'flex-row-reverse' : ''
                             } ${isSorted ? 'text-brand-blue' : ''}`}
                             title={`Sort by ${col.label}`}

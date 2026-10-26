@@ -40,6 +40,7 @@ import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctori
 import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
 import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs, currentAudioInputId } from '@/lib/utils/mediaDeviceProbe';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import FadePresence from '@/components/ui/fade-presence';
 import { revealAfterPaint, revealIfHidden } from '@/lib/utils/candidateScroll';
 import SubStepProgress from './SubStepProgress';
@@ -2746,18 +2747,15 @@ export default function StepSystemCheck({
                     <div className="flex items-center gap-2 max-w-md">
                       <Mic className="w-4 h-4 text-brand-blue flex-shrink-0" />
                       <label htmlFor="tf-voice-mic-select" className="sr-only">Microphone</label>
-                      <select
+                      <FilterSelect
                         id="tf-voice-mic-select"
                         value={selectedMicId}
-                        onChange={(e) => switchMicrophone(e.target.value)}
+                        onChange={(v) => switchMicrophone(v)}
                         disabled={isSwitchingDevice}
-                        className="w-full text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                      >
-                        <option value="" disabled>Select your microphone…</option>
-                        {micDevices.map((d, i) => (
-                          <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
-                        ))}
-                      </select>
+                        placeholder="Select your microphone…"
+                        className="w-full sm:w-full min-h-11 sm:min-h-0 px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                        options={micDevices.map((d, i) => ({ value: d.deviceId, label: d.label || `Microphone ${i + 1}` }))}
+                      />
                     </div>
                   </div>
                 )}
@@ -2875,24 +2873,21 @@ export default function StepSystemCheck({
                       <Camera className="w-5 h-5 text-brand-blue flex-shrink-0 mt-6" />
                       <div className="min-w-0 flex-1">
                         <label htmlFor="tf-camera-select" className="block text-sm font-semibold text-gray-900 mb-1">Camera</label>
-                        <select
+                        <FilterSelect
                           id="tf-camera-select"
                           value={selectedCameraId}
-                          onChange={(e) => switchCamera(e.target.value)}
+                          onChange={(v) => switchCamera(v)}
                           disabled={isSwitchingDevice || checksRunning}
-                          className="w-full text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                        >
-                          {cameraDevices.length === 0 && <option value="">System Default</option>}
-                          {cameraDevices.map((d, i) => (
-                            <option
-                              key={d.deviceId}
-                              value={d === defaultCameraDevice ? '' : d.deviceId}
-                              disabled={isVirtualCameraLabel(d.label)}
-                            >
-                              {getCameraDeviceLabel(d, i)}
-                            </option>
-                          ))}
-                        </select>
+                          className="w-full sm:w-full min-h-11 sm:min-h-0 px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                          options={[
+                            ...(cameraDevices.length === 0 ? [{ value: '', label: 'System Default' }] : []),
+                            ...cameraDevices.map((d, i) => ({
+                              value: d === defaultCameraDevice ? '' : d.deviceId,
+                              label: getCameraDeviceLabel(d, i),
+                              disabled: isVirtualCameraLabel(d.label),
+                            })),
+                          ]}
+                        />
                         {cameraSelectionError && (
                           <p className="mt-1 text-xs font-medium text-destructive">{cameraSelectionError}</p>
                         )}
@@ -2905,18 +2900,15 @@ export default function StepSystemCheck({
                         <label htmlFor="tf-mic-select" className="block text-sm font-semibold text-gray-900 mb-1">
                           Microphone <span className="text-destructive">*</span>
                         </label>
-                        <select
+                        <FilterSelect
                           id="tf-mic-select"
                           value={selectedMicId}
-                          onChange={(e) => switchMicrophone(e.target.value)}
+                          onChange={(v) => switchMicrophone(v)}
                           disabled={isSwitchingDevice || checksRunning}
-                          className="w-full text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                        >
-                          <option value="" disabled>Select your microphone…</option>
-                          {micDevices.map((d, i) => (
-                            <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
-                          ))}
-                        </select>
+                          placeholder="Select your microphone…"
+                          className="w-full sm:w-full min-h-11 sm:min-h-0 px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                          options={micDevices.map((d, i) => ({ value: d.deviceId, label: d.label || `Microphone ${i + 1}` }))}
+                        />
                         {/* The Microphone check cannot pass until an explicit
                             device is chosen here — "System Default" does not
                             count. Some browsers won't list real devices until

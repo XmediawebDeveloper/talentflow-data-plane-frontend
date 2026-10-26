@@ -25,6 +25,7 @@ import {
   formatLastUpdated,
   getCreationMethodConfig,
   getDisplayStatus,
+  getPublishedDate,
   getStatusConfig,
 } from '@/lib/utils/jobOpeningDisplay';
 
@@ -91,6 +92,15 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
           Openings cards (showIcons=false) they switch to an icon-less
           "Label: value" pair — bolder label, lighter value — via
           <MetaLabelValue>. */}
+      {/* Job Openings cards: Created (never moved by publishing) always, Posted
+          only once the job was published — the same pair, in the same order,
+          as the job details header. */}
+      {!showIcons && job.created_at && (
+        <MetaLabelValue label="Created" value={formatISTDate(job.created_at)} />
+      )}
+      {!showIcons && getPublishedDate(job) && (
+        <MetaLabelValue label="Posted" value={formatISTDate(getPublishedDate(job))} />
+      )}
       {job.postedBy && (
         showIcons ? (
           <span className="flex items-center gap-1.5">
@@ -101,15 +111,11 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
           <MetaLabelValue label="By" value={job.postedBy} />
         )
       )}
-      {job.postedDate && (
-        showIcons ? (
-          <span className="flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            Posted {formatISTDate(job.postedDate)}
-          </span>
-        ) : (
-          <MetaLabelValue label="Posted" value={formatISTDate(job.postedDate)} />
-        )
+      {showIcons && job.postedDate && (
+        <span className="flex items-center gap-1.5">
+          <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          Posted {formatISTDate(job.postedDate)}
+        </span>
       )}
       {job.updated_at && (
         showIcons ? (
@@ -169,7 +175,10 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
           {job.experience}
         </span>
       )}
-      <span className="flex items-center gap-1.5">
+      {/* Phones: an empty field's bare "-" (here, Location and Salary) is
+          hidden — on a wrapped two-line card it read as a stray dash, not
+          as "not set". From sm the placeholders show as before. */}
+      <span className={`flex items-center gap-1.5 ${job.industry_type ? '' : 'max-sm:hidden'}`}>
         <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {formatIndustryType(job.industry_type)}
       </span>
@@ -178,7 +187,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
           shows its name directly; more than one shows the first name plus "+N more",
           with every name available in a hover tooltip rather than overflowing the row. */}
       {(!hideEmpty || hasLocation) && (
-        <span className="flex items-center gap-1.5">
+        <span className={`flex items-center gap-1.5 ${hasLocation ? '' : 'max-sm:hidden'}`}>
           <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           {locationNames.length > 1 ? (
             <Tooltip
@@ -201,7 +210,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
       )}
       {/* Salary — same conditional treatment: shown only when there is a value. */}
       {(!hideEmpty || hasSalary) && (
-        <span className="flex items-center gap-1.5">
+        <span className={`flex items-center gap-1.5 ${hasSalary ? '' : 'max-sm:hidden'}`}>
           Salary {salaryText || '-'}
           {(job.salary_min || job.salary_max) && job.compensation_type
             ? ` / ${formatCompensationPeriod(job.compensation_type)}`
@@ -232,12 +241,19 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
 const SINGLE_LINE_ROW =
   'flex-wrap gap-x-3 gap-y-1.5 sm:flex-nowrap sm:gap-y-0 sm:whitespace-nowrap sm:overflow-x-auto sm:scrollbar-hide sm:[&>span]:flex-shrink-0';
 
-export function JobOpeningMeta({ job, singleLine = false, showIcons = true, showCounts = true, coloredCounts = false, applicantsLabel }: { job: Job; singleLine?: boolean; showIcons?: boolean; showCounts?: boolean; coloredCounts?: boolean; applicantsLabel?: string }) {
+/* `phoneGrid` (compact phone layout): below sm the row's fields are drawn at
+   text-xs with 14px icons and tighter gaps, and each field stays whole on one
+   line — so they wrap as whole units ("By Deepak Raj", "4 assessed") instead
+   of breaking mid-name or mid-word inside a narrow column. */
+const PHONE_GRID_ROW =
+  'max-sm:text-xs max-sm:gap-x-3 max-sm:gap-y-1.5 max-sm:[&>span]:whitespace-nowrap max-sm:[&>span]:max-w-full max-sm:[&>span]:gap-1 max-sm:[&_svg]:w-3.5 max-sm:[&_svg]:h-3.5';
+
+export function JobOpeningMeta({ job, singleLine = false, showIcons = true, showCounts = true, coloredCounts = false, applicantsLabel, phoneGrid = false }: { job: Job; singleLine?: boolean; showIcons?: boolean; showCounts?: boolean; coloredCounts?: boolean; applicantsLabel?: string; phoneGrid?: boolean }) {
   return (
     <div
       className={`flex items-center text-sm text-gray-600 dark:text-slate-400 ${
         singleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
-      }`}
+      } ${phoneGrid ? PHONE_GRID_ROW : ''}`}
     >
       <JobOpeningMetaItems job={job} showIcons={showIcons} showCounts={showCounts} coloredCounts={coloredCounts} applicantsLabel={applicantsLabel} />
     </div>
@@ -293,6 +309,9 @@ interface JobOpeningSummaryProps {
   /** The word after the applicant count ("scored" on Resume Scoring).
    *  Omitted = "applicant" / "applicants". */
   applicantsLabel?: string;
+  /** Phones only: both info rows as a two-column grid — see PHONE_GRID_ROW.
+   *  Off by default, so every other surface is unchanged. */
+  phoneGrid?: boolean;
 }
 
 /**
@@ -317,6 +336,7 @@ export default function JobOpeningSummary({
   showCountBadges = true,
   coloredCountBadges = false,
   applicantsLabel,
+  phoneGrid = false,
 }: JobOpeningSummaryProps) {
   const displayStatus = getDisplayStatus(job.status, job.currentVersion);
   const statusConfig = getStatusConfig(displayStatus);
@@ -340,7 +360,11 @@ export default function JobOpeningSummary({
             wherever a job name is drawn - see the Job Name cell in
             components/assessments/AllAssessmentsTable, where they were settled. */}
         <h3
-          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+          className={`text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 ${
+            /* Compact phone layout: up to two lines, so the role reads in
+               full instead of "Junior Software T…". */
+            phoneGrid ? 'max-sm:whitespace-normal max-sm:line-clamp-2 max-sm:leading-snug' : ''
+          }`}
           title={job.title}
         >
           {job.title}
@@ -375,15 +399,15 @@ export default function JobOpeningSummary({
           <div
             className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-1.5 ${
               infoSingleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
-            }`}
+            } ${phoneGrid ? PHONE_GRID_ROW : ''}`}
           >
             <JobOpeningPrimaryItems job={job} hideEmpty={hideEmptyFields} />
           </div>
 
           {/* Primary Info Row 2 - Dates / Posted By / Applicants */}
           {showMetaRow && (
-            <div className="mb-2">
-              <JobOpeningMeta job={job} singleLine={metaSingleLine} showIcons={showMetaIcons} showCounts={showCountBadges} coloredCounts={coloredCountBadges} applicantsLabel={applicantsLabel} />
+            <div className={`mb-2 ${phoneGrid ? 'max-sm:mt-2 max-sm:pt-2 max-sm:border-t max-sm:border-gray-100 max-sm:mb-0' : ''}`}>
+              <JobOpeningMeta job={job} singleLine={metaSingleLine} showIcons={showMetaIcons} showCounts={showCountBadges} coloredCounts={coloredCountBadges} applicantsLabel={applicantsLabel} phoneGrid={phoneGrid} />
             </div>
           )}
         </>

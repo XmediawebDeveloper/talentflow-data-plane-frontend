@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 // Neutral-gray skeleton that mirrors the Security page: password form card,
 // 2FA card, session-timeout card and active-sessions list.
@@ -732,27 +733,24 @@ export default function SecurityPage() {
               <p className="text-sm text-gray-500 dark:text-slate-500">Auto log out after inactivity</p>
             </div>
           </div>
-          <div className="relative">
-            <select
+          <div className="relative" title={!canManage ? 'You do not have permission to manage security settings' : undefined}>
+            <FilterSelect
               value={settings.session_timeout_minutes?.toString() || '30'}
-              onChange={(e) => {
+              onChange={(v) => {
                 if (!canManage) return;
-                handleSessionTimeoutChange(e.target.value);
+                handleSessionTimeoutChange(v);
               }}
-              onMouseDown={(e) => {
-                if (!canManage) e.preventDefault();
-              }}
-              disabled={isSavingTimeout}
-              aria-disabled={!canManage}
-              title={!canManage ? 'You do not have permission to manage security settings' : ''}
-              className={`w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none bg-white dark:bg-slate-900 disabled:opacity-50 text-black text-sm ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-              <option value="480">8 hours</option>
-            </select>
+              disabled={isSavingTimeout || !canManage}
+              ariaLabel="Session timeout"
+              options={[
+                { value: '15', label: '15 minutes' },
+                { value: '30', label: '30 minutes' },
+                { value: '60', label: '1 hour' },
+                { value: '120', label: '2 hours' },
+                { value: '480', label: '8 hours' },
+              ]}
+              className={`w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-black disabled:opacity-50 ${!canManage ? 'opacity-50 cursor-not-allowed disabled:cursor-not-allowed' : ''}`}
+            />
             {isSavingTimeout && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                 <Loader2 className="w-4 h-4 animate-spin text-gray-400 dark:text-slate-500" />

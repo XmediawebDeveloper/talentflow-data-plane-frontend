@@ -2,7 +2,7 @@
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
-import { useState, useEffect, useMemo, useRef, useId } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useId } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
@@ -523,6 +523,24 @@ export default function ResumeViewPage() {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
+  }, [showInviteMenu]);
+
+  /* On a phone the Invite button sits near the bottom of the screen, so a menu
+     hung below it ran off the viewport with its options out of sight. Measured
+     on open: flip above the button when there isn't room below and there is
+     more above; otherwise scroll the page just enough to show the menu. */
+  const inviteDropdownRef = useRef<HTMLDivElement>(null);
+  const [inviteMenuUp, setInviteMenuUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!showInviteMenu) { setInviteMenuUp(false); return; }
+    const menu = inviteDropdownRef.current;
+    const anchor = inviteMenuRef.current;
+    if (!menu || !anchor) return;
+    const a = anchor.getBoundingClientRect();
+    const needed = menu.offsetHeight + 8;
+    const below = window.innerHeight - a.bottom;
+    if (below < needed && a.top > below) setInviteMenuUp(true);
+    else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [showInviteMenu]);
 
   const startInvite = async (intent: 'assessment' | 'ai-interview') => {
@@ -1630,7 +1648,7 @@ Best regards`);
                         </button>
 
                         {showInviteMenu && (
-                          <div role="menu" className={`absolute left-0 top-full mt-2 ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
+                          <div ref={inviteDropdownRef} role="menu" className={`absolute left-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
                             {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : (
                               <button
                                 role="menuitem"

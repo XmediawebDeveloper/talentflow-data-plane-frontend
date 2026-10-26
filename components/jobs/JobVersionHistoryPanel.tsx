@@ -302,6 +302,67 @@ export default function JobVersionHistoryPanel({
     includeInactive: includeInactiveVersions,
   });
 
+  /* Everything a version row shows, worked out once — the table (sm and up)
+     and the phone cards below read the same values, so they cannot drift. */
+  const rowModels = jobVersions.map((version) => {
+      /* Lineage rows carry the raw DB status ('published'); the status
+         helpers speak the Job type's capitalised form. */
+      const rawStatus = statusOverrides?.[version.id] || version.status || '';
+      const { isLatest } = version;
+      const versionStatus = getDisplayStatus(
+        rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
+        version.current_version,
+      );
+      const versionStatusConfig = getStatusConfig(versionStatus);
+      /* A Job-shaped stand-in pointed at THIS version's id, so a
+         host's Action menu reuses the exact handlers its job rows
+         call — no duplicate logic. The plain capitalised status (not
+         the display label, which can read "Republished") drives the
+         same per-status gates. */
+      const versionPlainStatus = rawStatus
+        ? rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase()
+        : job.status;
+      const versionJob: Job = {
+        ...job,
+        id: version.id,
+        title: version.title || job.title,
+        status: versionPlainStatus as Job['status'],
+        currentVersion: version.current_version ?? job.currentVersion,
+        versionNumber: version.version_number,
+      };
+      const detail = versionDetails[version.id];
+      const experienceText = detail
+        ? formatJobExperienceText({
+            jobLevel: detail.job_level || detail.experience_level,
+            experienceMin: detail.experience_min,
+            experienceMax: detail.experience_max,
+          })
+        : '';
+      const postedOn = version.published_at || detail?.published_at || version.created_at || detail?.created_at;
+      const lastUpdated = detail?.updated_at || version.published_at || version.created_at;
+      const locationText =
+        detail?.location
+        || (detail?.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ');
+      const isSelected = !!onSelectVersion && selectedVersionId === version.id;
+      /* Only a published version can receive candidates — the same
+         rule the dialog's job list is built on, applied per version
+         here so a draft in the history can't be picked. A host that
+         answers this question itself (`versionSelectionState`)
+         replaces the rule outright: the assessment picker builds
+         against drafts, and blocks on an existing assessment
+         instead. */
+      const hostVeto = versionSelectionState ? versionSelectionState(versionJob) : undefined;
+      const selectableByRule =
+        hostVeto === undefined ? versionPlainStatus === 'Published' : hostVeto === null;
+      const selectable = selectableByRule && !selectionDisabled;
+      const notSelectableReason = selectionDisabled
+        ? selectionDisabledReason
+        : hostVeto ?? (versionPlainStatus === 'Disabled' || versionPlainStatus === 'Archived'
+          ? `This version is ${versionPlainStatus} — only published versions can be selected`
+          : 'Only published versions can receive candidates');
+    return { version, isLatest, versionStatus, versionStatusConfig, versionPlainStatus, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason };
+  });
+
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
       <div className="flex items-center gap-2 mb-2.5">
@@ -324,8 +385,140 @@ export default function JobVersionHistoryPanel({
            Action HEADER is pinned on both axes so the corner never scrolls
            away. The brand-tinted border marks this as the ACTIVE version table
            — it only exists while View Versions is open. */
+        <>
+        {/* Phones: one card per version instead of the 640–960px table, which
+            at phone width showed a sliver of itself and had to be scrolled
+            sideways to read a row. Same values (rowModels), same radio, same
+            actions; from sm up the table below is unchanged. */}
         <div
-          className={`overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
+          className={`sm:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 divide-y divide-gray-200 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:divide-slate-700 ${
+            jobVersions.length > 3 ? 'overflow-y-auto max-h-[360px] overscroll-contain' : ''
+          }`}
+        >
+          {rowModels.map(({ version, isLatest, versionStatus, versionStatusConfig, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
+            const scoredInfo = versionScoredBy ? versionScoredBy[version.id] : undefined;
+            const scoredLoaded = !!versionScoredBy && Object.prototype.hasOwnProperty.call(versionScoredBy, version.id);
+            /* Every value under a NAME — "Experience 2-4 years", not a bare
+               "2-4 years" — so a card reads without the table's headings. A
+               missing value says "Not specified" rather than dropping the row,
+               so every card has the same rows in the same order. */
+            const notSet = <span className="text-gray-400 dark:text-slate-500 italic">Not specified</span>;
+            const jobType = [detail?.employment_type, detail?.remote_type]
+              .filter(Boolean)
+              .map((t) => formatEmploymentType(t as string))
+              .join(' · ');
+            const details: [string, ReactNode][] = [
+              ...(hideJdDetails ? [] : [
+                ['Experience', experienceText || notSet],
+                ['Industry', detail?.industry_type ? formatIndustryType(detail.industry_type) : notSet],
+                ['Location', locationText || notSet],
+                ['Job type', jobType || notSet],
+                ['Posted on', postedOn ? formatISTDate(postedOn) : notSet],
+                ['Posted by', detail?.created_by_name || notSet],
+                ['Last updated', lastUpdated ? formatISTDate(lastUpdated) : notSet],
+              ] as [string, ReactNode][]),
+              ...(versionScoredBy ? [[
+                'Scored by',
+                scoredInfo
+                  ? `${scoredInfo.name}, ${formatIST(scoredInfo.scoredAt)}`
+                  : <span className="text-gray-400 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
+              ] as [string, ReactNode]] : []),
+              [applicantsLabel, (
+                <span className="inline-flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+                  {versionApplicants[version.id] ?? '—'}
+                </span>
+              )],
+              ...extraColumns.map(({ label, render }) => [label, render(versionJob)] as [string, ReactNode]),
+            ];
+            return (
+              <div
+                key={version.id}
+                className={`p-3 text-xs text-gray-600 dark:text-slate-400 ${
+                  isSelected
+                    ? 'bg-brand-blue/[0.07] dark:bg-brand-blue/[0.14]'
+                    : isLatest
+                      ? 'bg-brand-blue/[0.025] dark:bg-brand-blue/[0.06]'
+                      : ''
+                } ${onRowClick ? 'cursor-pointer' : ''}`}
+                onClick={onRowClick ? () => onRowClick(version.id) : undefined}
+              >
+                {/* Line 1: pick · version · status — actions on the right. */}
+                <div className="flex items-center gap-2">
+                  {onSelectVersion && (
+                    <label
+                      className={`flex items-center flex-shrink-0 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                      title={selectable ? selectHint(versionJob) : notSelectableReason}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="radio"
+                        name={`${radioGroupName}-m`}
+                        checked={isSelected}
+                        disabled={!selectable}
+                        onChange={() => selectable && onSelectVersion(versionJob)}
+                        onClick={() => isSelected && onSelectVersion(versionJob)}
+                        className="tf-radio-tinted focus:ring-brand-blue/40 flex-shrink-0"
+                      />
+                      <span className="sr-only">Select version v{version.version_number ?? 1}</span>
+                    </label>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                      v{version.version_number ?? 1}
+                    </span>
+                    {isLatest && (
+                      <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                        Latest
+                      </span>
+                    )}
+                    {!hideJdDetails && (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`} />
+                        {versionStatus}
+                      </span>
+                    )}
+                  </div>
+                  {renderAction && (
+                    <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      {renderAction(versionJob)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Line 2: the role, in full (two lines at most). */}
+                {plainTitle ? (
+                  <p className="mt-1.5 text-sm text-gray-900 dark:text-slate-100 line-clamp-2 [overflow-wrap:anywhere]" title={version.title || detail?.title || ''}>
+                    {version.title || detail?.title || '—'}
+                  </p>
+                ) : (
+                  <Link
+                    href={versionHref(version.id)}
+                    target={openInNewTab ? '_blank' : undefined}
+                    rel={openInNewTab ? 'noopener noreferrer' : undefined}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1.5 block text-sm text-gray-900 dark:text-slate-100 line-clamp-2 [overflow-wrap:anywhere] hover:text-brand-blue hover:underline"
+                  >
+                    {version.title || detail?.title || '—'}
+                  </Link>
+                )}
+
+                {/* Then the details as label / value rows — the name in a
+                    muted left column, the value beside it. */}
+                <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1">
+                  {details.map(([label, value]) => (
+                    <div key={label} className="contents">
+                      <dt className="text-gray-500 dark:text-slate-400">{label}</dt>
+                      <dd className="text-gray-800 dark:text-slate-200 font-medium min-w-0 [overflow-wrap:anywhere]">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            );
+          })}
+        </div>
+        <div
+          className={`max-sm:hidden overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
             jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
           }`}
         >
@@ -361,63 +554,7 @@ export default function JobVersionHistoryPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-              {jobVersions.map((version) => {
-                /* Lineage rows carry the raw DB status ('published'); the status
-                   helpers speak the Job type's capitalised form. */
-                const rawStatus = statusOverrides?.[version.id] || version.status || '';
-                const { isLatest } = version;
-                const versionStatus = getDisplayStatus(
-                  rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
-                  version.current_version,
-                );
-                const versionStatusConfig = getStatusConfig(versionStatus);
-                /* A Job-shaped stand-in pointed at THIS version's id, so a
-                   host's Action menu reuses the exact handlers its job rows
-                   call — no duplicate logic. The plain capitalised status (not
-                   the display label, which can read "Republished") drives the
-                   same per-status gates. */
-                const versionPlainStatus = rawStatus
-                  ? rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase()
-                  : job.status;
-                const versionJob: Job = {
-                  ...job,
-                  id: version.id,
-                  title: version.title || job.title,
-                  status: versionPlainStatus as Job['status'],
-                  currentVersion: version.current_version ?? job.currentVersion,
-                  versionNumber: version.version_number,
-                };
-                const detail = versionDetails[version.id];
-                const experienceText = detail
-                  ? formatJobExperienceText({
-                      jobLevel: detail.job_level || detail.experience_level,
-                      experienceMin: detail.experience_min,
-                      experienceMax: detail.experience_max,
-                    })
-                  : '';
-                const postedOn = version.published_at || detail?.published_at || version.created_at || detail?.created_at;
-                const lastUpdated = detail?.updated_at || version.published_at || version.created_at;
-                const locationText =
-                  detail?.location
-                  || (detail?.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ');
-                const isSelected = !!onSelectVersion && selectedVersionId === version.id;
-                /* Only a published version can receive candidates — the same
-                   rule the dialog's job list is built on, applied per version
-                   here so a draft in the history can't be picked. A host that
-                   answers this question itself (`versionSelectionState`)
-                   replaces the rule outright: the assessment picker builds
-                   against drafts, and blocks on an existing assessment
-                   instead. */
-                const hostVeto = versionSelectionState ? versionSelectionState(versionJob) : undefined;
-                const selectableByRule =
-                  hostVeto === undefined ? versionPlainStatus === 'Published' : hostVeto === null;
-                const selectable = selectableByRule && !selectionDisabled;
-                const notSelectableReason = selectionDisabled
-                  ? selectionDisabledReason
-                  : hostVeto ?? (versionPlainStatus === 'Disabled' || versionPlainStatus === 'Archived'
-                    ? `This version is ${versionPlainStatus} — only published versions can be selected`
-                    : 'Only published versions can receive candidates');
-
+              {rowModels.map(({ version, isLatest, versionStatus, versionStatusConfig, versionPlainStatus, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
                 return (
                   /* NO transform on the row itself: a transformed <tr> becomes
                      the containing block for its cells, which silently kills
@@ -681,6 +818,7 @@ export default function JobVersionHistoryPanel({
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

@@ -17,6 +17,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import SuccessAnimation from '@/components/ui/success-animation';
@@ -1952,19 +1953,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
               <span className="text-sm text-gray-700 dark:text-slate-300">Link expiry</span>
-              <select
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(Number(e.target.value))}
-                aria-label="Link expiry"
-                className="text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent"
-              >
-                <option value={1}>1 day</option>
-                <option value={3}>3 days</option>
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-                <option value={30}>30 days</option>
-                <option value={0}>No expiry</option>
-              </select>
+              <FilterSelect
+                value={String(expiryDays)}
+                onChange={(v) => setExpiryDays(Number(v))}
+                ariaLabel="Link expiry"
+                className="w-auto sm:w-auto text-xs px-2 sm:px-2 py-1 sm:py-1 rounded-lg sm:rounded-lg text-gray-700 dark:text-slate-300"
+                options={[
+                  { value: '1', label: '1 day' },
+                  { value: '3', label: '3 days' },
+                  { value: '7', label: '7 days' },
+                  { value: '14', label: '14 days' },
+                  { value: '30', label: '30 days' },
+                  { value: '0', label: 'No expiry' },
+                ]}
+              />
             </div>
           </div>
 

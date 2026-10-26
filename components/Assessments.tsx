@@ -68,6 +68,7 @@ import TabEmptyState from '@/components/ui/tab-empty-state';
    All Assessments table uses for its Job filter — a plain <select> stops
    working once the option list is drawn from data, which a tenant's job list is. */
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
+import FilterSelect from '@/components/ui/filter-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
 
@@ -7009,34 +7010,34 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <label htmlFor="assessment-type" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Type
                       </label>
-                      <select
+                      <FilterSelect
                         id="assessment-type"
                         value={filterType}
-                        onChange={(e) => assessmentListSearch.setFilter('type', e.target.value as typeof filterType)}
-                        className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                      >
-                        <option value="all">All types</option>
-                        <option value="Technical">Technical</option>
-                        <option value="Behavioral">Behavioral</option>
-                        <option value="Aptitude">Aptitude</option>
-                      </select>
+                        onChange={(v) => assessmentListSearch.setFilter('type', v as typeof filterType)}
+                        options={[
+                          { value: 'all', label: 'All types' },
+                          { value: 'Technical', label: 'Technical' },
+                          { value: 'Behavioral', label: 'Behavioral' },
+                          { value: 'Aptitude', label: 'Aptitude' },
+                        ]}
+                        className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                      />
                     </div>
 
                     <div>
                       <label htmlFor="assessment-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created by
                       </label>
-                      <select
+                      <FilterSelect
                         id="assessment-creator"
                         value={filterCreatedBy}
-                        onChange={(e) => assessmentListSearch.setFilter('createdBy', e.target.value)}
-                        className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                      >
-                        <option value="all">Anyone</option>
-                        {assessmentCreators.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => assessmentListSearch.setFilter('createdBy', v)}
+                        options={[
+                          { value: 'all', label: 'Anyone' },
+                          ...assessmentCreators.map((name) => ({ value: String(name), label: String(name) })),
+                        ]}
+                        className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                      />
                     </div>
 
                     <div>
@@ -7501,16 +7502,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="result-outcome" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Outcome
                             </label>
-                            <select
+                            <FilterSelect
                               id="result-outcome"
                               value={filterResultOutcome}
-                              onChange={(e) => completedCandidatesSearch.setFilter('outcome', e.target.value as typeof filterResultOutcome)}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                            >
-                              <option value="all">All outcomes</option>
-                              <option value="pass">Passed</option>
-                              <option value="fail">Failed</option>
-                            </select>
+                              onChange={(v) => completedCandidatesSearch.setFilter('outcome', v as typeof filterResultOutcome)}
+                              options={[
+                                { value: 'all', label: 'All outcomes' },
+                                { value: 'pass', label: 'Passed' },
+                                { value: 'fail', label: 'Failed' },
+                              ]}
+                              className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                            />
                           </div>
 
                           <div>
@@ -8319,22 +8321,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Status
                             </label>
-                            <select
+                            {/* One option per status tab, in tab order and
+                                on the same keys, so a pick here can never
+                                return rows the tabs cannot explain. */}
+                            <FilterSelect
                               id="invite-status-filter"
                               value={inviteStatusFilters.status}
-                              onChange={(e) => {
-                                setInviteStatusFilters({ ...inviteStatusFilters, status: e.target.value });
+                              onChange={(v) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, status: v });
                                 setInviteStatusPage(1);
                               }}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                            >
-                              {/* One option per status tab, in tab order and
-                                  on the same keys, so a pick here can never
-                                  return rows the tabs cannot explain. */}
-                              {INVITATION_STATUS_TAB_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
-                            </select>
+                              options={INVITATION_STATUS_TAB_OPTIONS}
+                              className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                            />
                           </div>
 
                           <div>
@@ -9901,7 +9900,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div ref={invitePickerScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 {/* Search first, then the list — the reference's order and its
                     labelled, icon-led field, rather than a bare input. */}
-                <div className="mb-4">
+                {/* Sticky: stays at the top of the scroll area while the list
+                    scrolls. The negative margins + matching padding stretch
+                    its background over the area's own padding so rows don't
+                    show around it. Only Preview stays pinned in the table
+                    below; Select scrolls with the row. */}
+                <div className="sticky -top-4 sm:-top-6 z-[8] -mx-4 -mt-4 px-4 pt-4 pb-4 mb-0 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 bg-white dark:bg-slate-900">
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -9989,7 +9993,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <table className="w-full text-sm border-collapse">
                                 <thead className="sticky top-0 z-[6]">
                                   <tr className="border-b border-gray-200 dark:border-slate-700">
-                                    <th className={`${PICKER_TH} w-14 tf-sticky-col-left !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
+                                    <th className={`${PICKER_TH} w-14 !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Name</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
@@ -10030,7 +10034,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
                                         }`}
                                       >
-                                        <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
+                                        <td className="px-3 py-2.5 align-middle">
                                           <input
                                             type="radio"
                                             name="assessment-invite-picker-selection"

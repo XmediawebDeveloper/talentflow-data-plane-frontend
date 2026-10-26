@@ -11,6 +11,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 
 export default function ApiManagementPage() {
   const { hasPermission } = useAuth();
@@ -409,17 +410,19 @@ export default function ApiManagementPage() {
                   <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
                     Expiry (optional)
                   </label>
-                  <select
-                    value={newKeyExpiry || ''}
-                    onChange={(e) => setNewKeyExpiry(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  >
-                    <option value="">Never expires</option>
-                    <option value="30">30 days</option>
-                    <option value="90">90 days</option>
-                    <option value="180">180 days</option>
-                    <option value="365">1 year</option>
-                  </select>
+                  <FilterSelect
+                    value={String(newKeyExpiry || '')}
+                    onChange={(v) => setNewKeyExpiry(v ? Number(v) : undefined)}
+                    ariaLabel="Expiry"
+                    options={[
+                      { value: '', label: 'Never expires' },
+                      { value: '30', label: '30 days' },
+                      { value: '90', label: '90 days' },
+                      { value: '180', label: '180 days' },
+                      { value: '365', label: '1 year' },
+                    ]}
+                    className="w-full sm:w-full pl-4 sm:pl-4 pr-4 sm:pr-4 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                  />
                 </div>
                 <div className="flex gap-3">
                   <Button

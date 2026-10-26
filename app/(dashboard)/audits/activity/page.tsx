@@ -45,6 +45,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
+import Pagination from '@/components/Pagination';
+
+// /audits/recent only takes a limit (no offset), so the latest entries are
+// fetched once and paged on the client.
+const FETCH_LIMIT = 100;
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -125,27 +130,28 @@ export default function ActivityLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [limit, setLimit] = useState(50);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
 
-  // Persist the tab + fetch limit and the scroll position so returning to this
+  // Persist the tab + page/page size and the scroll position so returning to this
   // page (browser back / remount) lands the user where they left off. The
   // active tab swaps between the embedded Audit Trail and the Activity timeline,
   // which changes the page height drastically — re-detect the scroller on it.
   const rootRef = useScrollRestoration<HTMLElement>('audits-activity', !loading, [activeTab]);
   useListStatePersistence(
     'audits-activity',
-    { activeTab, limit },
+    { activeTab, page, pageSize },
     (s) => {
       if (s.activeTab === 'activity' || s.activeTab === 'audit') setActiveTab(s.activeTab);
-      if (typeof s.limit === 'number') setLimit(s.limit);
+      if (typeof s.page === 'number') setPage(s.page);
+      if (typeof s.pageSize === 'number') setPageSize(s.pageSize);
     },
   );
 
   /* Bumped by every fetchRecentActivity run, so only the latest request
-     applies — the mount fetch (default limit) and the one after the saved
-     limit is restored used to race. */
+     applies (e.g. a Refresh clicked while the mount fetch is in flight). */
   const fetchSeqRef = useRef(0);
 
   const fetchRecentActivity = useCallback(async () => {
@@ -161,7 +167,7 @@ export default function ActivityLogsPage() {
         throw new Error('Session expired. Please log in again.');
       }
 
-      const response = await fetch(`${API_URL}/audits/recent?limit=${limit}`, {
+      const response = await fetch(`${API_URL}/audits/recent?limit=${FETCH_LIMIT}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -190,7 +196,7 @@ export default function ActivityLogsPage() {
     } finally {
       if (!isStale()) setLoading(false);
     }
-  }, [limit]);
+  }, []);
 
   useEffect(() => {
     fetchRecentActivity();
@@ -210,10 +216,15 @@ export default function ActivityLogsPage() {
   const clearFilters = () => {
     setSearch('');
     setActionFilter('all');
+    setPage(1);
   };
 
   // Group logs by date
-  const groupedLogs: GroupedLogs = filteredLogs.reduce((groups: GroupedLogs, log) => {
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedLogs = filteredLogs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const groupedLogs: GroupedLogs = pagedLogs.reduce((groups: GroupedLogs, log) => {
     const date = formatISTDate(log.created_at);
     if (!groups[date]) {
       groups[date] = [];
@@ -276,15 +287,6 @@ export default function ActivityLogsPage() {
           </div>
           {activeTab === 'activity' && (
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={limit}
-                onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-              >
-                <option value="25">Last 25</option>
-                <option value="50">Last 50</option>
-                <option value="100">Last 100</option>
-              </select>
               <Tooltip content="Refresh activity">
                 <Button
                   variant="primary"
@@ -302,7 +304,7 @@ export default function ActivityLogsPage() {
 
         {/* Tab navigation — segmented control */}
         <section className="mb-5">
-          <div role="tablist" aria-label="Activity tabs" className="relative inline-flex w-full max-w-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
+          <div role="tablist" aria-label="Activity tabs" className="relative inline-flex w-full max-w-xs max-sm:max-w-none rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
             <span
               aria-hidden
               className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
@@ -370,7 +372,7 @@ export default function ActivityLogsPage() {
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder="Search user, action, entity or IP"
                 aria-label="Search activity"
                 className="h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
@@ -383,7 +385,7 @@ export default function ActivityLogsPage() {
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => setActionFilter(a.id)}
+                    onClick={() => { setActionFilter(a.id); setPage(1); }}
                     aria-pressed={isActive}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       isActive
@@ -481,10 +483,10 @@ export default function ActivityLogsPage() {
                         key={log.id}
                         className="group rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md"
                       >
-                        <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="flex items-start gap-2.5 sm:gap-4">
                           {/* Action icon tile — soft tinted */}
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${tone.tile}`}>
-                            <ActionIcon className={`h-5 w-5 ${tone.icon}`} />
+                          <span className={`flex h-10 w-10 max-sm:h-8 max-sm:w-8 shrink-0 items-center justify-center rounded-xl max-sm:rounded-lg ring-1 ${tone.tile}`}>
+                            <ActionIcon className={`h-5 w-5 max-sm:h-4 max-sm:w-4 ${tone.icon}`} />
                           </span>
 
                           {/* Content */}
@@ -499,7 +501,7 @@ export default function ActivityLogsPage() {
                                   )}
                                 </div>
                                 {/* Line 2 — action + entity */}
-                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-gray-600 dark:text-slate-400">
+                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm max-sm:text-xs text-gray-600 dark:text-slate-400">
                                   <span>{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/5 px-1.5 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
@@ -527,7 +529,7 @@ export default function ActivityLogsPage() {
 
                             {/* Details preview */}
                             {log.details && (log.details.name || log.details.email || log.details.title) && (
-                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500 dark:text-slate-500">
+                              <div className="mt-2 flex flex-wrap gap-x-4 max-sm:gap-x-3 gap-y-0.5 text-xs break-all text-gray-500 dark:text-slate-500">
                                 {log.details.name && (
                                   <span>Name: <span className="font-medium text-gray-700 dark:text-slate-300">{log.details.name}</span></span>
                                 )}
@@ -580,17 +582,17 @@ export default function ActivityLogsPage() {
           </div>
         )}
 
-        {/* Load More */}
-        {logs.length >= limit && (
-          <div className="mt-6 text-center">
-            <Button
-              variant="secondary"
-              onClick={() => setLimit(l => l + 50)}
-              disabled={loading}
-              icon={loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : undefined}
-            >
-              {loading ? 'Loading…' : 'Load More'}
-            </Button>
+        {/* Pagination footer */}
+        {!error && filteredLogs.length > 0 && (
+          <div className="mt-6 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 [&>div]:border-t-0">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredLogs.length}
+              itemsPerPage={pageSize}
+              onPageChange={setPage}
+              onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
+            />
           </div>
         )}
         </div>
