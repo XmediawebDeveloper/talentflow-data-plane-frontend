@@ -11,7 +11,7 @@ import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import InviteToAssessmentFlow from './InviteToAssessmentFlow';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -969,6 +969,23 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     };
   }, [showInviteMenu]);
 
+  /* Near the bottom of a phone screen a menu hung below the Invite button ran
+     off the viewport. Measured on open: flip above the button when there isn't
+     room below and there is more above; otherwise scroll it into view. */
+  const inviteDropdownRef = useRef<HTMLDivElement>(null);
+  const [inviteMenuUp, setInviteMenuUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!showInviteMenu) { setInviteMenuUp(false); return; }
+    const menu = inviteDropdownRef.current;
+    const anchor = inviteMenuRef.current;
+    if (!menu || !anchor) return;
+    const a = anchor.getBoundingClientRect();
+    const needed = menu.offsetHeight + 8;
+    const below = window.innerHeight - a.bottom;
+    if (below < needed && a.top > below) setInviteMenuUp(true);
+    else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [showInviteMenu]);
+
   // The resume this score belongs to — the API returns the score id as `id`
   // and the resume id separately, so prefer the explicit resume id.
   const viewResumeId = fullResumeData.resumeId || resume.resumeId || resume.id;
@@ -1727,12 +1744,13 @@ Best regards`);
 
                 {showInviteMenu && canInvite && (
                   <div
+                    ref={inviteDropdownRef}
                     role="menu"
                     // Anchor left on mobile (the action row wraps and the button
                     // sits near the left edge, so right-0 pushed a 256px menu off
                     // the left of the viewport); keep the original right-0 from sm
                     // up, where the actions are right-aligned on one line.
-                    className="absolute left-0 right-auto sm:left-auto sm:right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                    className={`absolute left-0 right-auto sm:left-auto sm:right-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30`}
                   >
                     {/* Each entry stays visible for anyone permitted to use
                         it and goes disabled when this JD has nothing to

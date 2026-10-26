@@ -106,13 +106,19 @@ function AssessmentStatusBadge({
   if (!created) return null;
   return (
     <span
-      className="px-2 sm:px-2.5 py-1 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs inline-flex items-center gap-1 whitespace-nowrap"
+      /* Phones: may wrap (the date drops under the label) and never runs
+         past the card's edge. */
+      className="px-2 sm:px-2.5 py-1 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs inline-flex items-center gap-1 whitespace-nowrap max-w-full max-sm:flex-wrap max-sm:gap-x-1 max-sm:gap-y-0 max-sm:order-last"
       title={createdAt ? `Assessment created ${formatISTDate(createdAt)}` : undefined}
     >
       <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
       Assessment Created
       {createdAt && (
-        <span className="text-2xs font-normal text-success/80">· {formatISTDate(createdAt)}</span>
+        <span className="text-2xs font-normal text-success/80">
+          <span className="max-sm:hidden">· </span>
+          <span className="sm:hidden">on </span>
+          {formatISTDate(createdAt)}
+        </span>
       )}
     </span>
   );
@@ -3800,6 +3806,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                 ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
                                 : job}
                               metaSingleLine
+                              phoneGrid
                               /* Coloured like the Job Openings badges; applicants read "scored". */
                               coloredCountBadges
                               applicantsLabel="scored"
@@ -3826,7 +3833,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             assessment state of the version this card would
                             build against, its action, and the eye that reads
                             the full version history. */}
-                        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
+                        {/* Phones: this row wraps under the job, so it starts
+                            where the job's text does (past the radio, `pl-6`)
+                            rather than hugging the right edge on its own. */}
+                        <div className="flex flex-wrap items-center justify-end max-sm:justify-start max-sm:pl-6 gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
                           {(() => {
                             // Same detection `handleJobSelect` uses, so the
                             // badge matches what configuration will actually
@@ -3842,8 +3852,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             ) : (
                               <span className="px-2 sm:px-2.5 py-1 bg-slate-100 text-slate-500 rounded text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0">
                                 <Code className="w-3 h-3" />
-                                <span className="hidden sm:inline">No Coding</span>
-                                <span className="sm:hidden">N/A</span>
+                                {/* "No Coding" on phones too — a bare "N/A"
+                                    beside a code icon did not say what was not
+                                    applicable. */}
+                                No Coding
                               </span>
                             );
                           })()}
@@ -3947,7 +3959,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           (needsVersionPicker). The eye still opens the full
                           history. */}
                       {showVersionPicker && (
-                        <div className="mt-3 flex items-center justify-end gap-2">
+                        <div className="mt-3 flex items-center justify-end max-sm:justify-start max-sm:pl-6 gap-2">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -4637,16 +4649,27 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
      * The collapse control on a round row. Disabled while the round is off:
      * there is no section under it to show or hide.
      */
+    /* Not a <button>: the step sits in a `<fieldset disabled>` in view-only
+       mode, which disables every button inside it — and showing or hiding a
+       section is presentational (nothing saved reads it), so it must keep
+       working in the preview. A role="button" element is not a form control,
+       so the fieldset leaves it alone; Enter / Space are handled by hand. */
     const renderRoundChevron = (round: RoundName, enabled: boolean) => (
-      <button
-        type="button"
-        onClick={() => toggleRoundExpanded(round)}
-        disabled={!enabled}
+      <div
+        role="button"
+        tabIndex={enabled ? 0 : -1}
+        aria-disabled={!enabled}
+        onClick={() => { if (enabled) toggleRoundExpanded(round); }}
+        onKeyDown={(e) => {
+          if (!enabled || (e.key !== 'Enter' && e.key !== ' ')) return;
+          e.preventDefault();
+          toggleRoundExpanded(round);
+        }}
         aria-expanded={enabled && expandedRounds.has(round)}
         aria-label={`${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section`}
         title={enabled ? `${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section` : undefined}
         className={`h-8 w-8 inline-flex items-center justify-center flex-shrink-0 rounded-md transition-colors ${
-          enabled ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
+          enabled ? 'cursor-pointer text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : 'text-gray-300 cursor-not-allowed'
         }`}
       >
         <ChevronDown
@@ -4654,7 +4677,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             enabled && expandedRounds.has(round) ? 'rotate-180' : ''
           }`}
         />
-      </button>
+      </div>
     );
 
     return (
@@ -4772,16 +4795,20 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   {/* Technical Round - its percentage slider is the section
                       nested directly below the toggle. */}
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-start max-sm:items-center justify-between gap-2">
+                      <div className="flex items-start max-sm:items-center gap-2 sm:gap-3 min-w-0">
+                        {/* Phones: the tile is dropped (here and on the Coding
+                            and HR rows) — at 320px the tile, the one-line name,
+                            the toggle and the chevron do not fit on one row,
+                            and the toggle ended up over the name. */}
+                        <div className="w-10 h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 max-sm:hidden flex items-center justify-center flex-shrink-0">
                           <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            <span className="text-sm sm:text-base font-medium text-gray-900">Technical Round</span>
+                            <span className="text-sm sm:text-base font-medium text-gray-900 whitespace-nowrap">Technical Round</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
+                          <p className="hidden sm:block text-xs text-gray-500 mt-0.5 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -4794,6 +4821,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         {renderRoundChevron('Technical', !!sections.find(s => s.name === 'Technical')?.enabled)}
                       </div>
                     </div>
+                    {/* Phones: the same line under the whole header row, at the
+                        card's full width, instead of squeezed between the icon
+                        and the toggle. */}
+                    <p className="sm:hidden mt-2 text-xs text-gray-500 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
                     {(() => {
                       const technicalSection = sections.find(s => s.name === 'Technical');
                       if (!technicalSection?.enabled || !expandedRounds.has('Technical')) return null;
@@ -4807,22 +4838,38 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
                     const hasExtractedLanguages = jdExtractedLanguages.length > 0;
                     const isAutoEnabled = hasExtractedLanguages; // IT job = auto-enabled
+                    const codingChip = isAutoEnabled ? (
+                      <span className="px-1.5 sm:px-2 py-0.5 bg-success-subtle text-success rounded text-xs whitespace-nowrap">Auto (IT Job)</span>
+                    ) : (
+                      <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-xs whitespace-nowrap">Auto (Not Required)</span>
+                    );
+                    const codingDescription = (() => {
+                      // Filtered at render so a non-compilable language that
+                      // snuck into state from older data (a draft saved before
+                      // this filter existed) is never displayed.
+                      if (codingEnabled) {
+                        const chosen = filterCompilable(selectedCodingLanguages);
+                        return chosen.length > 0
+                          ? `${chosen.length} ${chosen.length === 1 ? 'language' : 'languages'} selected`
+                          : 'Choose your programming language';
+                      }
+                      const detected = filterCompilable(jdExtractedLanguages);
+                      return detected.length > 0
+                        ? `Detected: ${detected.join(', ')}`
+                        : 'No programming language detected. Enable manually if needed';
+                    })();
 
                     return (
                       <div className={`p-3 sm:p-4 border rounded-xl transition-all ${codingEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                        <div className="flex items-start max-sm:items-center justify-between gap-2">
+                          <div className="flex items-start max-sm:items-center gap-2 sm:gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 max-sm:hidden flex items-center justify-center flex-shrink-0">
                               <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep" />
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                <span className="text-sm sm:text-base font-medium text-gray-900">Coding Round</span>
-                                {isAutoEnabled ? (
-                                  <span className="px-1.5 sm:px-2 py-0.5 bg-success-subtle text-success rounded text-xs whitespace-nowrap">Auto (IT Job)</span>
-                                ) : (
-                                  <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-xs whitespace-nowrap">Auto (Not Required)</span>
-                                )}
+                                <span className="text-sm sm:text-base font-medium text-gray-900 whitespace-nowrap">Coding Round</span>
+                                <span className="max-sm:hidden contents">{codingChip}</span>
                               </div>
                               {/* The message follows the ROUND'S OWN STATE, not
                                   what the JD happened to detect.
@@ -4840,22 +4887,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                   message and they are listed in full in the
                                   section below (`renderPercentageSectionCard`),
                                   where they wrap rather than truncate. */}
-                              <p className="text-xs text-gray-500 mt-0.5 leading-snug">
-                                {(() => {
-                                  // Filtered at render so a non-compilable language that
-                                  // snuck into state from older data (a draft saved before
-                                  // this filter existed) is never displayed.
-                                  if (codingEnabled) {
-                                    const chosen = filterCompilable(selectedCodingLanguages);
-                                    return chosen.length > 0
-                                      ? `${chosen.length} ${chosen.length === 1 ? 'language' : 'languages'} selected`
-                                      : 'Choose your programming language';
-                                  }
-                                  const detected = filterCompilable(jdExtractedLanguages);
-                                  return detected.length > 0
-                                    ? `Detected: ${detected.join(', ')}`
-                                    : 'No programming language detected. Enable manually if needed';
-                                })()}
+                              <p className="hidden sm:block text-xs text-gray-500 mt-0.5 leading-snug">
+                                {codingDescription}
                               </p>
                             </div>
                           </div>
@@ -4869,6 +4902,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             {renderRoundChevron('Coding', !!codingEnabled)}
                           </div>
                         </div>
+                        {/* Phones: full width under the header row, as the
+                            Technical round's line. */}
+                        <div className="sm:hidden mt-2 flex flex-wrap gap-1.5">{codingChip}</div>
+                        <p className="sm:hidden mt-1.5 text-xs text-gray-500 leading-snug">{codingDescription}</p>
                         {(() => {
                           const codingSection = sections.find(s => s.name === 'Coding');
                           if (!codingSection?.enabled || !expandedRounds.has('Coding')) return null;
@@ -4944,26 +4981,36 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
                   {/* HR Round - its question selection is the section nested
                       directly below the toggle. */}
+                  {(() => {
+                  const hrDescription = hrEnabled
+                    ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT})`
+                      + ' — Questions are synced with the HR Question Bank'
+                    : 'Enable HR round to select or manage HR questions.';
+                  /* Beside the title from `sm`; on phones on their own line
+                     under the header row, where the toggle cannot cover them. */
+                  const hrChips = (
+                    <>
+                      <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs whitespace-nowrap">Question Bank</span>
+                      <span className="px-1.5 sm:px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs whitespace-nowrap">No Timer</span>
+                      {!hrEnabled && (
+                        <span className="px-1.5 sm:px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-xs whitespace-nowrap">Disabled</span>
+                      )}
+                    </>
+                  );
+                  return (
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${hrEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-start max-sm:items-center justify-between gap-2">
+                      <div className="flex items-start max-sm:items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 max-sm:hidden flex items-center justify-center flex-shrink-0">
                           <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            <span className="text-sm sm:text-base font-medium text-gray-900">HR Round</span>
-                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs whitespace-nowrap">Question Bank</span>
-                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs whitespace-nowrap">No Timer</span>
-                            {!hrEnabled && (
-                              <span className="px-1.5 sm:px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-xs whitespace-nowrap">Disabled</span>
-                            )}
+                            <span className="text-sm sm:text-base font-medium text-gray-900 whitespace-nowrap">HR Round</span>
+                            <span className="max-sm:hidden contents">{hrChips}</span>
                           </div>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-snug">
-                            {hrEnabled
-                              ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT})`
-                                + ' — Questions are synced with the HR Question Bank'
-                              : 'Enable HR round to select or manage HR questions.'}
+                          <p className="hidden sm:block text-xs text-gray-500 mt-0.5 leading-snug">
+                            {hrDescription}
                           </p>
                         </div>
                       </div>
@@ -4984,10 +5031,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         {renderRoundChevron('HR', hrEnabled)}
                       </div>
                     </div>
+                    {/* Phones: full width under the header row, as the other
+                        rounds' lines. */}
+                    <div className="sm:hidden mt-2 flex flex-wrap gap-1.5">{hrChips}</div>
+                    <p className="sm:hidden mt-1.5 text-xs text-gray-500 leading-snug">{hrDescription}</p>
                     {hrEnabled && expandedRounds.has('HR') && (
                       <div className="mt-3">{renderHRSectionCard()}</div>
                     )}
                   </div>
+                  );
+                  })()}
                 </div>
 
               </div>
@@ -5259,7 +5312,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               })()}
 
               {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 max-sm:p-2 sm:p-4">
                 {/* Header. The icon leads, and the heading with its "Fixed at
                     30 minutes" stacks beside it, so the two lines read as one
                     title block instead of the note sitting under the full-width
@@ -5285,7 +5338,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     where the wider figure needs the room. The rule is a border
                     on the second cell, so it spans the figures and stops inside
                     the panel's padding rather than cutting it edge to edge. */}
-                <div className="mt-3 grid grid-cols-[1.3fr_1fr] bg-slate-50 rounded-xl p-3 sm:p-4">
+                <div className="mt-3 max-sm:mt-2.5 grid grid-cols-[1.3fr_1fr] bg-slate-50 rounded-xl p-3 sm:p-4">
                   <div className="min-w-0 pr-3">
                     <div className="text-xs text-gray-500 mb-1">Total Duration</div>
                     <div className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">{duration} min</div>
@@ -5325,9 +5378,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   }) => (
                     <div
                       key={row.name}
-                      className="flex items-center gap-3 p-2 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]"
+                      className="flex items-center gap-3 max-sm:gap-2.5 p-2 max-sm:py-1.5 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]"
                     >
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${row.tile}`}>
+                      <div className={`w-8 h-8 max-sm:w-7 max-sm:h-7 rounded-xl max-sm:rounded-lg flex items-center justify-center flex-shrink-0 ${row.tile}`}>
                         <row.Icon className={`w-4 h-4 ${row.iconColor}`} />
                       </div>
                       {/* What the round IS on the left, what it COMES TO on the
@@ -5340,8 +5393,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       </div>
                     </div>
                   );
+                  /* Phones: tighter rows and gaps, so the card reads as one
+                     compact block instead of loosely spaced pieces. */
                   return (
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 space-y-2 max-sm:mt-2 max-sm:space-y-1.5">
                       {techSection?.enabled && renderDurationRow({
                         name: 'Technical round',
                         percentage: techSection.percentage,
@@ -5362,8 +5417,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 {/* The card's closing note, on a panel with the icon that
                     marks it as an aside rather than as loose text hanging off
                     the bottom edge. Same words, same colours. */}
-                <div className="mt-3 bg-slate-50 rounded-xl p-3 flex items-start gap-2">
-                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                <div className="mt-3 max-sm:mt-2 bg-slate-50 rounded-xl p-3 max-sm:px-2 max-sm:py-2 flex items-start gap-2 max-sm:gap-1.5">
+                  <Info className="w-4 h-4 max-sm:w-3.5 max-sm:h-3.5 text-brand-blue flex-shrink-0 mt-0.5 max-sm:mt-px" />
                   <p className="text-2xs text-gray-500 leading-snug">
                     HR questions (from Question Bank) are separate and not timed.
                   </p>

@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X, Copy, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, FileSpreadsheet } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X, Copy, ArrowUp, ArrowDown, ArrowUpDown, FileSpreadsheet } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DateField } from '@/components/ui/date-field';
 import { exportRowsToCSV } from '@/lib/utils/exportUtils';
@@ -16,6 +16,7 @@ import InvoiceDetailModal from '@/components/subscription/InvoiceDetailModal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface LineItem {
   description: string;
@@ -572,17 +573,13 @@ export default function BillingHistoryPage() {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="relative">
-                  <select
-                    aria-label="Filter by status"
-                    value={statusFilter}
-                    onChange={(e) => changeStatus(e.target.value as StatusFilter)}
-                    className="appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-3 pr-8 text-sm text-gray-800 dark:text-slate-100 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                  >
-                    {STATUS_FILTERS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                </span>
+                <FilterSelect
+                  ariaLabel="Filter by status"
+                  value={statusFilter}
+                  onChange={(v) => changeStatus(v as StatusFilter)}
+                  options={STATUS_FILTERS.map(f => ({ value: f.value, label: f.label }))}
+                  className="w-auto sm:w-auto py-2.5 sm:py-2.5 pl-3 sm:pl-3 rounded-lg sm:rounded-lg text-gray-800 dark:text-slate-100"
+                />
                 <DateField aria-label="From date" placeholder="From" value={dateFrom} onChange={changeDateFrom} max={dateTo || undefined} className="w-[140px]" />
                 <span className="text-xs text-gray-400 dark:text-slate-500">to</span>
                 <DateField aria-label="To date" placeholder="To" value={dateTo} onChange={changeDateTo} min={dateFrom || undefined} className="w-[140px]" />

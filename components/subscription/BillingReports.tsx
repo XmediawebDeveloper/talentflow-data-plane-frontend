@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } from 'recharts';
-import { Search, FileText, CreditCard, ExternalLink, Download, BarChart3, ChevronDown } from 'lucide-react';
+import { Search, FileText, CreditCard, ExternalLink, Download, BarChart3 } from 'lucide-react';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import ListPagination from '@/components/ListPagination';
+import FilterSelect from '@/components/ui/filter-select';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
 
 // Structural subset of the billing-history invoice — only what the reports read.
@@ -75,8 +76,6 @@ const inr = (n: number, fraction = 0) =>
 const inrCompact = (n: number) =>
   n >= 100000 ? `₹${(n / 100000).toFixed(n % 100000 === 0 ? 0 : 1)}L` : n >= 1000 ? `₹${Math.round(n / 1000)}k` : `₹${n}`;
 
-const selectClass =
-  'appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 pl-3 pr-8 text-sm text-gray-800 dark:text-slate-100 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
 const cardClass =
   'rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5';
 
@@ -84,12 +83,13 @@ function Select({ label, value, onChange, options }: { label?: string; value: st
   return (
     <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
       {label}
-      <span className="relative">
-        <select value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
-          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-      </span>
+      <FilterSelect
+        value={value}
+        onChange={onChange}
+        options={options}
+        ariaLabel={label}
+        className="w-auto sm:w-auto py-2 sm:py-2 pl-3 sm:pl-3 rounded-lg sm:rounded-lg text-gray-800 dark:text-slate-100"
+      />
     </label>
   );
 }

@@ -44,6 +44,7 @@ import {
 } from '@/lib/services/unitPoolService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface TenantUnitPoolProps {
   compact?: boolean;
@@ -825,31 +826,35 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Unit Type</label>
-                          <select
+                          <FilterSelect
                             value={exportUnitType}
-                            onChange={(e) => setExportUnitType(e.target.value as UnitType | '')}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="">All Types</option>
-                            <option value="RS">Resume Scoring</option>
-                            <option value="AS">Assessment</option>
-                            <option value="AIU">AI Interview</option>
-                          </select>
+                            onChange={(v) => setExportUnitType(v as UnitType | '')}
+                            ariaLabel="Unit Type"
+                            options={[
+                              { value: '', label: 'All Types' },
+                              { value: 'RS', label: 'Resume Scoring' },
+                              { value: 'AS', label: 'Assessment' },
+                              { value: 'AIU', label: 'AI Interview' },
+                            ]}
+                            className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                          />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                          <select
+                          <FilterSelect
                             value={exportStatus}
-                            onChange={(e) => setExportStatus(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          >
-                            <option value="">All Statuses</option>
-                            <option value="SUCCESS">Success</option>
-                            <option value="FAILED">Failed</option>
-                            <option value="INSUFFICIENT_UNITS">Insufficient Units</option>
-                            <option value="ABANDONED">Abandoned</option>
-                            <option value="INTERRUPTED">Interrupted</option>
-                          </select>
+                            onChange={(v) => setExportStatus(v)}
+                            ariaLabel="Status"
+                            options={[
+                              { value: '', label: 'All Statuses' },
+                              { value: 'SUCCESS', label: 'Success' },
+                              { value: 'FAILED', label: 'Failed' },
+                              { value: 'INSUFFICIENT_UNITS', label: 'Insufficient Units' },
+                              { value: 'ABANDONED', label: 'Abandoned' },
+                              { value: 'INTERRUPTED', label: 'Interrupted' },
+                            ]}
+                            className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                          />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -875,18 +880,20 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   {exportType === 'summary' && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
-                      <select
-                        value={exportDays}
-                        onChange={(e) => setExportDays(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value={7}>Last 7 days</option>
-                        <option value={30}>Last 30 days</option>
-                        <option value={60}>Last 60 days</option>
-                        <option value={90}>Last 90 days</option>
-                        <option value={180}>Last 6 months</option>
-                        <option value={365}>Last year</option>
-                      </select>
+                      <FilterSelect
+                        value={String(exportDays)}
+                        onChange={(v) => setExportDays(Number(v))}
+                        ariaLabel="Period"
+                        options={[
+                          { value: '7', label: 'Last 7 days' },
+                          { value: '30', label: 'Last 30 days' },
+                          { value: '60', label: 'Last 60 days' },
+                          { value: '90', label: 'Last 90 days' },
+                          { value: '180', label: 'Last 6 months' },
+                          { value: '365', label: 'Last year' },
+                        ]}
+                        className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                      />
                     </div>
                   )}
                 </div>

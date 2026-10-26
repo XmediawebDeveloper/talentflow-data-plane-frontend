@@ -32,6 +32,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import { DateField } from '@/components/ui/date-field';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { PageHeader } from '@/components/ui/page-header';
@@ -3654,7 +3655,7 @@ export default function ResumeScoringPage({
               const uniqueWorkModes = [...new Set(scoredHistory.map(i => i.jdRemoteType).filter(Boolean))];
               const uniqueJobTypes = [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
               const uniqueCreators = [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
-              const selectCls = "w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 text-sm";
+              const selectCls = "w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg";
               const inputCls = "w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 text-sm";
               const labelCls = "block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5";
               return (
@@ -3664,10 +3665,16 @@ export default function ResumeScoringPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div>
                       <label className={labelCls}>Created By</label>
-                      <select value={historyCreatedBy} onChange={e => historySearch.setFilter('createdBy', e.target.value)} className={selectCls}>
-                        <option value="">All Users</option>
-                        {uniqueCreators.map(name => <option key={name} value={name!}>{name}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={historyCreatedBy}
+                        onChange={v => historySearch.setFilter('createdBy', v)}
+                        ariaLabel="Created By"
+                        className={selectCls}
+                        options={[
+                          { value: '', label: 'All Users' },
+                          ...uniqueCreators.map(name => ({ value: name!, label: name! })),
+                        ]}
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Scored From</label>
@@ -3679,20 +3686,32 @@ export default function ResumeScoringPage({
                     </div>
                     <div>
                       <label className={labelCls}>Work Mode</label>
-                      <select value={historyWorkMode} onChange={e => historySearch.setFilter('workMode', e.target.value)} className={selectCls}>
-                        <option value="">All Work Modes</option>
-                        {/* Raw value on the option, formatted label on the face:
-                            the filter compares against `jdRemoteType` as the API
-                            spells it, so the value must stay unformatted. */}
-                        {uniqueWorkModes.map(m => <option key={m} value={m!}>{formatWorkMode(m)}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={historyWorkMode}
+                        onChange={v => historySearch.setFilter('workMode', v)}
+                        ariaLabel="Work Mode"
+                        className={selectCls}
+                        options={[
+                          { value: '', label: 'All Work Modes' },
+                          /* Raw value on the option, formatted label on the face:
+                             the filter compares against `jdRemoteType` as the API
+                             spells it, so the value must stay unformatted. */
+                          ...uniqueWorkModes.map(m => ({ value: m!, label: formatWorkMode(m) })),
+                        ]}
+                      />
                     </div>
                     <div>
                       <label className={labelCls}>Job Type</label>
-                      <select value={historyJobType} onChange={e => historySearch.setFilter('jobType', e.target.value)} className={selectCls}>
-                        <option value="">All Types</option>
-                        {uniqueJobTypes.map(t => <option key={t} value={t!}>{formatEmploymentType(t)}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={historyJobType}
+                        onChange={v => historySearch.setFilter('jobType', v)}
+                        ariaLabel="Job Type"
+                        className={selectCls}
+                        options={[
+                          { value: '', label: 'All Types' },
+                          ...uniqueJobTypes.map(t => ({ value: t!, label: formatEmploymentType(t) })),
+                        ]}
+                      />
                     </div>
                     {/* Done rides the last row of fields, bottom-right, instead
                         of a footer row of its own — same as View by Candidates.
@@ -5069,6 +5088,7 @@ export default function ResumeScoringPage({
 
         const sortHeaderIcon = <ChevronsUpDown className="w-3 h-3 text-gray-400 dark:text-slate-500" />;
         const historySelectClass = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900';
+        const historyFilterSelectClass = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg';
         const historyLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
 
         return (
@@ -5200,42 +5220,44 @@ export default function ResumeScoringPage({
                     </div>
                     <div className="min-w-0 sm:flex-1 sm:min-w-[10rem]">
                       <label className={historyLabelClass}>Scored By</label>
-                      <select
+                      <FilterSelect
                         value={historyModalFilter.scoredBy}
-                        onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, scoredBy: e.target.value }))}
-                        className={`${historySelectClass} w-full`}
-                      >
-                        <option value="all">All Scorers</option>
-                        {distinctHistoryScorers.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, scoredBy: v }))}
+                        ariaLabel="Scored By"
+                        className={historyFilterSelectClass}
+                        options={[
+                          { value: 'all', label: 'All Scorers' },
+                          ...distinctHistoryScorers.map((s) => ({ value: s, label: s })),
+                        ]}
+                      />
                     </div>
                     <div className="min-w-0 sm:flex-1 sm:min-w-[7rem]">
                       <label className={historyLabelClass}>Version</label>
-                      <select
+                      <FilterSelect
                         value={historyModalFilter.version}
-                        onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, version: e.target.value }))}
-                        className={`${historySelectClass} w-full`}
-                      >
-                        <option value="all">All Versions</option>
-                        {distinctHistoryVersions.map((v) => (
-                          <option key={v} value={String(v)}>v{v}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, version: v }))}
+                        ariaLabel="Version"
+                        className={historyFilterSelectClass}
+                        options={[
+                          { value: 'all', label: 'All Versions' },
+                          ...distinctHistoryVersions.map((v) => ({ value: String(v), label: `v${v}` })),
+                        ]}
+                      />
                     </div>
                     <div className="min-w-0 sm:flex-1 sm:min-w-[9rem]">
                       <label className={historyLabelClass}>Status</label>
-                      <select
+                      <FilterSelect
                         value={historyModalFilter.status}
-                        onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, status: e.target.value as ScoringHistoryModalFilters['status'] }))}
-                        className={`${historySelectClass} w-full`}
-                      >
-                        <option value="all">All Status</option>
-                        <option value="exact">Exact Match</option>
-                        <option value="partial">Partial Match</option>
-                        <option value="nomatch">No Match</option>
-                      </select>
+                        onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, status: v as ScoringHistoryModalFilters['status'] }))}
+                        ariaLabel="Status"
+                        className={historyFilterSelectClass}
+                        options={[
+                          { value: 'all', label: 'All Status' },
+                          { value: 'exact', label: 'Exact Match' },
+                          { value: 'partial', label: 'Partial Match' },
+                          { value: 'nomatch', label: 'No Match' },
+                        ]}
+                      />
                     </div>
                     {isHistoryModalFilterActive && (
                       <div className="col-span-2 sm:flex-shrink-0">
@@ -5403,17 +5425,16 @@ export default function ResumeScoringPage({
                       </div>
                       <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Match Breakdown</span>
                     </div>
-                    <select
+                    <FilterSelect
                       value={breakdownVersion}
-                      onChange={(e) => setHistoryBreakdown({ jobId: historyModalItem.jobId, version: e.target.value })}
-                      aria-label="Match breakdown version"
-                      className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 flex-shrink-0"
-                    >
-                      <option value="all">All Versions</option>
-                      {distinctHistoryVersions.map((v) => (
-                        <option key={v} value={String(v)}>v{v}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setHistoryBreakdown({ jobId: historyModalItem.jobId, version: v })}
+                      ariaLabel="Match breakdown version"
+                      className="w-auto text-xs px-2 sm:px-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg flex-shrink-0"
+                      options={[
+                        { value: 'all', label: 'All Versions' },
+                        ...distinctHistoryVersions.map((v) => ({ value: String(v), label: `v${v}` })),
+                      ]}
+                    />
                   </div>
                   <div className="flex flex-col items-center gap-4 flex-1 justify-center">
                     <div className="relative w-[190px] h-[190px] shrink-0">

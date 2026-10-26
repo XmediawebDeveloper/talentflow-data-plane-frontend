@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface UsersManagementProps {
   currentUser?: User;
@@ -1230,15 +1231,17 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
                   Role
                 </label>
-                <select
+                <FilterSelect
                   value={editingUser.role}
-                  onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white dark:bg-slate-900 dark:text-slate-50"
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="tenant_admin">Admin</option>
-                </select>
+                  onChange={(v) => setEditingUser({ ...editingUser, role: v as UserRole })}
+                  ariaLabel="Role"
+                  options={[
+                    { value: 'viewer', label: 'Viewer' },
+                    { value: 'recruiter', label: 'Recruiter' },
+                    { value: 'tenant_admin', label: 'Admin' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:px-4 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg border-gray-300 text-base sm:text-base"
+                />
               </div>
 
               {/* Permissions */}

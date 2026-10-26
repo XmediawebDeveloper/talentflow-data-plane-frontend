@@ -32,6 +32,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import {
   Permission,
   RoleListItem,
@@ -479,14 +480,16 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
               </div>
               <div>
                 <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Copy permissions from</label>
-                <select
-                  value={formData.parent_role_id || ''}
-                  onChange={(e) => handleParentRoleChange(e.target.value)}
-                  className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/40 focus:ring-2 focus:ring-brand-blue/20"
-                >
-                  <option value="">None</option>
-                  {roles.map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
-                </select>
+                <FilterSelect
+                  value={String(formData.parent_role_id || '')}
+                  onChange={(v) => handleParentRoleChange(v)}
+                  ariaLabel="Copy permissions from"
+                  options={[
+                    { value: '', label: 'None' },
+                    ...roles.map((r) => ({ value: String(r.id), label: r.name })),
+                  ]}
+                  className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 w-full sm:w-full rounded-lg sm:rounded-lg px-3 sm:px-3 text-sm max-sm:text-[13px]"
+                />
               </div>
             </div>
             {isLoading ? <PermissionSectionsSkeleton sections={3} Skeleton={Skeleton} /> : renderPermissionCategories()}
@@ -643,18 +646,16 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
 
                 <label className="block">
                   <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Copy permissions from</span>
-                  <select
-                    value={formData.parent_role_id || ''}
-                    onChange={(e) => handleParentRoleChange(e.target.value)}
-                    className={fieldClassName}
-                  >
-                    <option value="">None</option>
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
+                  <FilterSelect
+                    value={String(formData.parent_role_id || '')}
+                    onChange={(v) => handleParentRoleChange(v)}
+                    ariaLabel="Copy permissions from"
+                    options={[
+                      { value: '', label: 'None' },
+                      ...roles.map((role) => ({ value: String(role.id), label: role.name })),
+                    ]}
+                    className={`${fieldClassName} sm:w-full sm:px-4 sm:py-3 sm:rounded-lg`}
+                  />
                   <span className="mt-2 block text-xs text-gray-500">Copies that role&apos;s permissions into this role as a starting point. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>

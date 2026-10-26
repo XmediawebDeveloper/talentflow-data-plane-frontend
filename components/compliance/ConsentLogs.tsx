@@ -27,6 +27,7 @@ import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -38,17 +39,6 @@ interface ConsentLogsProps {
   compact?: boolean;
   defaultFeature?: string;
 }
-
-/* Every control in the More Filters panel wears this. It is the field class the
-   panels on the Assessments page's other tabs use, verbatim, so a select here
-   and a select there are the same object — this row used to set its own height
-   and border because it was its own row; inside the shared panel it is not.
-   A literal string, not a template, so Tailwind's scanner can still see the
-   class names. */
-const FILTER_FIELD =
-  'w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg ' +
-  'bg-white dark:bg-slate-900 text-black dark:text-slate-100 ' +
-  'focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 
 export default function ConsentLogs({ compact = false, defaultFeature = '' }: ConsentLogsProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -305,19 +295,20 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 <label htmlFor="consent-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Status
                 </label>
-                <select
+                <FilterSelect
                   id="consent-status"
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
+                  onChange={(v) => {
+                    setStatusFilter(v);
                     setPage(0);
                   }}
-                  className={FILTER_FIELD}
-                >
-                  <option value="">All statuses</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="declined">Declined</option>
-                </select>
+                  options={[
+                    { value: '', label: 'All statuses' },
+                    { value: 'accepted', label: 'Accepted' },
+                    { value: 'declined', label: 'Declined' },
+                  ]}
+                  className="w-full sm:w-full min-w-0 h-[38px] data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                />
               </div>
 
               <div>
