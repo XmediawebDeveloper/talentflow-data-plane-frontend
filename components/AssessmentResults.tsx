@@ -20,6 +20,7 @@ import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, R
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -258,6 +259,13 @@ const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate }: AssessmentResultsProps) {
+  /* Export (a server export — the endpoint enforces `assessments:export` and
+     writes the audit row) is greyed with this reason when the permission is
+     missing: listed, never hidden. */
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
+  const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
+  const openExportModal = () => { if (canExportAssessments) setShowExportModal(true); };
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -1502,7 +1510,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Export all filtered results
   const handleExportAllFiltered = async (columnIds: string[]) => {
-    if (isExporting) return;
+    if (isExporting || !canExportAssessments) return;
     setIsExporting(true);
     const _toastId = toast.loading('Preparing export of all filtered results…');
     try {
@@ -1530,7 +1538,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       setShowExportModal(false);
     } catch (error) {
       console.error('Failed to export all results:', error);
-      toast.error('Failed to export results. Please try again.', { id: _toastId });
+      const msg = error instanceof Error ? error.message : '';
+      toast.error(/permission|forbidden|403/i.test(msg)
+        ? EXPORT_DENIED_REASON
+        : 'Failed to export results. Please try again.', { id: _toastId });
     } finally {
       setIsExporting(false);
     }
@@ -1937,8 +1948,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               <Button
                 variant="primary"
-                onClick={() => setShowExportModal(true)}
-                className="whitespace-nowrap"
+                onClick={openExportModal}
+                aria-disabled={!canExportAssessments || undefined}
+                title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                className={`whitespace-nowrap ${canExportAssessments ? '' : 'opacity-60 cursor-not-allowed'}`}
                 icon={<FileText className="w-4 h-4" />}
               >
                 Export
@@ -2223,8 +2236,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <span className={MENU_ITEM_SCALE_CLASS}>Customize Columns</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                          onSelect={() => setShowExportModal(true)}
+                          className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExportAssessments ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
+                          aria-disabled={!canExportAssessments || undefined}
+                          title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                          onSelect={(e) => {
+                            if (!canExportAssessments) { e.preventDefault(); return; }
+                            setShowExportModal(true);
+                          }}
                         >
                           <FileDown className="w-4 h-4 text-menu-icon-download" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
@@ -2385,8 +2403,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => setShowExportModal(true)}
-                className="whitespace-nowrap !h-[38px] !text-sm"
+                onClick={openExportModal}
+                aria-disabled={!canExportAssessments || undefined}
+                title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                className={`whitespace-nowrap !h-[38px] !text-sm ${canExportAssessments ? '' : 'opacity-60 cursor-not-allowed'}`}
                 icon={<FileText className="w-4 h-4" />}
               >
                 Export

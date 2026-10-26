@@ -11,7 +11,6 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { draftVersionEditorUrl, openDraftVersionForEdit } from '@/lib/utils/jdDraftVersion';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -419,6 +418,7 @@ function JobDetailsContent() {
         skills: data.must_have_skills || [],
         niceToHaveSkills: data.nice_to_have_skills || [],
         postedDate: data.published_at || data.created_at,
+        created_at: data.created_at, // "Created" in the header — never moved by publishing
         postedBy: data.created_by_name || 'System',
         employmentType: data.employment_type,
         workMode: data.remote_type,
@@ -577,15 +577,9 @@ function JobDetailsContent() {
       router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromQuery}`);
       return;
     }
-    try {
-      const draft = await openDraftVersionForEdit(editJob.id);
-      router.push(draftVersionEditorUrl(draft, fromQuery));
-    } catch (error) {
-      console.error('Failed to open a draft version for editing:', error);
-      toast.error('Could not open this JD for editing', {
-        description: error instanceof Error ? error.message : 'Please try again.',
-      });
-    }
+    // Published and not in use: Edit changes THIS JD (no new version). The editor
+    // opens it through a working copy, so the live row changes only on Republish.
+    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromQuery}`);
   };
 
   /* Editing an in-use JD forks it into a NEW version — a fresh draft copy with

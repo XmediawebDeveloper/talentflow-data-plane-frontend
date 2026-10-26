@@ -43,6 +43,7 @@ import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
+import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
@@ -650,6 +651,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   }, []);
   const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
   const [reportDownloading, setReportDownloading] = useState(false);
+  // ai_interview:download_report — the header's Report button (greyed, never hidden).
+  const canDownloadReports = useCanDownloadAIReports();
   const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
   // liveSession must be declared before any useEffect that references it in its
@@ -2259,18 +2262,21 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 <button
                   type="button"
                   onClick={async () => {
+                    if (!canDownloadReports) return;
                     setReportDownloading(true);
                     try {
                       await downloadSessionReport(liveSession.id);
                     } catch (err) {
                       console.error('[CandidateResultsView] report download failed:', err);
-                      toast.error('Could not download the report. Please try again.');
+                      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
                     } finally {
                       setReportDownloading(false);
                     }
                   }}
                   disabled={reportDownloading}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors"
+                  aria-disabled={!canDownloadReports || undefined}
+                  title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                  className={`${canDownloadReports ? '' : 'opacity-60 cursor-not-allowed '}inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors`}
                 >
                   {reportDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   {reportDownloading ? 'Preparing…' : 'Report'}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Save, Edit2, Loader2, ChevronDown, X, AlertCircle, CheckCircle2, MapPin, FileText } from 'lucide-react';
+import { Building2, Save, Edit2, Loader2, ChevronDown, X, AlertCircle, CheckCircle2, MapPin, FileText, Globe, Mail, Phone, Briefcase, Users, CalendarDays, ExternalLink, Copy, Check, Navigation, Map as MapIcon, LocateFixed, type LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -14,9 +14,76 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
+import PhoneInput, { isValidPhoneNumber, parsePhoneNumber } from 'react-phone-number-input';
+import phoneFlags from 'react-phone-number-input/flags';
+import 'react-phone-number-input/style.css';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
+// Saved numbers without a country code (older profiles) are read as Indian.
+const DEFAULT_PHONE_COUNTRY = 'IN' as const;
+
+type AddressFields = { address: string; city: string; state: string; country: string; zipCode: string };
+
+/** Browser location → address fields, via OpenStreetMap's free reverse geocoder. */
+async function lookupCurrentAddress(): Promise<AddressFields> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    throw new Error('Your browser does not support location access.');
+  }
+  const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 15_000,
+      maximumAge: 60_000,
+    }),
+  ).catch((err: GeolocationPositionError) => {
+    throw new Error(
+      err.code === err.PERMISSION_DENIED
+        ? 'Location permission was denied. Allow location access for this site and try again.'
+        : err.code === err.TIMEOUT
+          ? 'Getting your location took too long. Please try again.'
+          : 'Could not get your current location.',
+    );
+  });
+
+  const { latitude, longitude } = pos.coords;
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&accept-language=en&lat=${latitude}&lon=${longitude}`,
+  ).catch(() => null);
+  if (!res?.ok) throw new Error('Could not look up an address for your location.');
+  const data = (await res.json()) as { address?: Record<string, string> };
+  const a = data.address ?? {};
+
+  const street = [a.house_number, a.road].filter(Boolean).join(' ');
+  const area = a.suburb || a.neighbourhood || a.quarter || '';
+  return {
+    address: [street, area].filter(Boolean).join(', '),
+    city: a.city || a.town || a.village || a.municipality || a.county || '',
+    state: a.state || '',
+    country: a.country || '',
+    zipCode: a.postcode || '',
+  };
+}
+
+/** Stored phone → E.164 ("+918899887766"), or '' if it can't be parsed. */
+function toE164(phone: string): string {
+  if (!phone.trim()) return '';
+  try {
+    return parsePhoneNumber(phone, DEFAULT_PHONE_COUNTRY)?.number ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Stored phone → "+91 88998 87766" for display; falls back to the raw text. */
+function formatPhoneForDisplay(phone: string): string {
+  if (!phone.trim()) return '';
+  try {
+    return parsePhoneNumber(phone, DEFAULT_PHONE_COUNTRY)?.formatInternational() ?? phone;
+  } catch {
+    return phone;
+  }
+}
 
 const COMPANY_SIZE_OPTIONS = [
   '1-10',
@@ -94,8 +161,10 @@ function validate(data: typeof initialFormState): ValidationErrors {
     errors.email = 'Enter a valid email address.';
   }
 
-  if (data.phone && !/^[+\d][\d\s\-().]{6,19}$/.test(data.phone.trim())) {
-    errors.phone = 'Enter a valid phone number (e.g. +91 9876543210).';
+  if (data.phone && !(data.phone.startsWith('+')
+    ? isValidPhoneNumber(data.phone)
+    : /^[+\d][\d\s\-().]{6,19}$/.test(data.phone.trim()))) {
+    errors.phone = 'Enter a valid phone number for the selected country.';
   }
 
   if (data.founded) {
@@ -384,22 +453,60 @@ export default function CompanyProfilePage() {
     fetchOrganizationProfile();
   };
 
+  // Card "Edit"/"Update" links open edit mode scrolled to their section.
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  const openEditAt = (id: string) => {
+    setScrollTarget(id);
+    setIsEditing(true);
+  };
+  useEffect(() => {
+    if (!isEditing || !scrollTarget) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(scrollTarget)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setScrollTarget(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isEditing, scrollTarget]);
+
+  const [isLocating, setIsLocating] = useState(false);
+  const handleUseCurrentLocation = async () => {
+    setIsLocating(true);
+    try {
+      const found = await lookupCurrentAddress();
+      // Only overwrite fields the lookup actually returned.
+      setCompanyData((prev) => ({
+        ...prev,
+        ...Object.fromEntries(Object.entries(found).filter(([, v]) => v)),
+      }));
+      setValidationErrors((prev) => ({ ...prev, zipCode: undefined }));
+      toast.success('Address filled from your current location — please review it.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not get your current location.');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const setValue = (key: keyof typeof companyData, value: string) => {
+    setCompanyData({ ...companyData, [key]: value });
+    if (validationErrors[key as keyof ValidationErrors]) {
+      setValidationErrors({ ...validationErrors, [key]: undefined });
+    }
+  };
+
   const field = (label: string, key: keyof typeof companyData, opts?: {
-    type?: string; placeholder?: string;
+    type?: string; placeholder?: string; required?: boolean; className?: string;
   }) => (
-    <div>
-      <Label className="mb-1.5">{label}</Label>
+    <div className={opts?.className}>
+      <Label className="mb-1.5">
+        {label}
+        {opts?.required && <span className="ml-0.5 text-destructive">*</span>}
+      </Label>
       <Input
         type={opts?.type || 'text'}
         value={companyData[key]}
-        placeholder={isEditing ? opts?.placeholder : undefined}
-        onChange={(e) => {
-          setCompanyData({ ...companyData, [key]: e.target.value });
-          if (validationErrors[key as keyof ValidationErrors]) {
-            setValidationErrors({ ...validationErrors, [key]: undefined });
-          }
-        }}
-        disabled={!isEditing}
+        placeholder={opts?.placeholder}
+        onChange={(e) => setValue(key, e.target.value)}
         aria-invalid={!!validationErrors[key as keyof ValidationErrors]}
       />
       {validationErrors[key as keyof ValidationErrors] && (
@@ -412,40 +519,298 @@ export default function CompanyProfilePage() {
     return <PageSkeleton variant="form" showStats={false} />;
   }
 
+  // ── Derived display values ──
+  const industryLabel = companyData.industry === '__other__' ? '' : companyData.industry;
+  const initials =
+    companyData.name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? '')
+      .join('') || 'C';
+  const websiteHref = companyData.website
+    ? /^https?:\/\//i.test(companyData.website) ? companyData.website : `https://${companyData.website}`
+    : '';
+  const websiteLabel = companyData.website.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+  const cityLine = [companyData.city, companyData.state].filter(Boolean).join(', ');
+  const addressLines = [
+    companyData.address,
+    [cityLine, companyData.zipCode].filter(Boolean).join(' '),
+    companyData.country,
+  ].filter(Boolean);
+
+  // Profile completeness — every editable detail counts once.
+  const completenessKeys: (keyof typeof companyData)[] = [
+    'name', 'website', 'email', 'phone', 'industry', 'size', 'founded',
+    'description', 'address', 'city', 'state', 'country', 'zipCode',
+  ];
+  const filledCount = completenessKeys.filter((k) => {
+    const v = companyData[k];
+    return k === 'industry' ? !!industryLabel : !!v.trim();
+  }).length;
+  const completeness = Math.round((filledCount / completenessKeys.length) * 100);
+  const foundedYear = /^\d{4}$/.test(companyData.founded) ? parseInt(companyData.founded, 10) : null;
+  const yearsActive = foundedYear !== null ? new Date().getFullYear() - foundedYear : null;
+
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-3 sm:p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Company Profile' }]} />
 
-        {/* Plain header row (no card): a framed header inside the page panel
-            pushed the title to a 28/44px inset instead of the standard 16/32. */}
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-              <Building2 className="h-5 w-5 text-brand-blue" />
+        {/* Title row */}
+        <div className="mb-4 flex items-center justify-between gap-3 sm:mb-5">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl dark:text-slate-50">Company Profile</h1>
+            <p className="mt-0.5 text-xs text-gray-500 sm:text-sm dark:text-slate-400">
+              {isEditing
+                ? 'Update your organization’s details, then save.'
+                : 'Your organization’s identity, contact info and address.'}
+            </p>
+          </div>
+          {!isEditing && (
+            <Button
+              variant="primary"
+              onClick={() => setIsEditing(true)}
+              icon={<Edit2 className="h-4 w-4" />}
+              className="shrink-0"
+            >
+              <span className="hidden sm:inline">Edit Profile</span>
+              <span className="sm:hidden">Edit</span>
+            </Button>
+          )}
+        </div>
+
+        {successMessage && (
+          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-brand-teal/20 bg-brand-teal/[0.06] px-4 py-3">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-teal" />
+            <p className="text-sm font-medium text-brand-teal">{successMessage}</p>
+          </div>
+        )}
+        {error && (
+          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-destructive-line bg-destructive-subtle/80 px-4 py-3">
+            <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+            <p className="text-sm font-medium text-destructive">{error}</p>
+          </div>
+        )}
+
+        {/* ── Hero: identity + completeness (live preview while editing) ── */}
+        <section className="relative mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:mb-6 sm:p-6 dark:border-slate-700/60 dark:bg-slate-900">
+          {/* Subtle dot grid for depth */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-40 dark:opacity-20"
+            style={{
+              backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px)',
+              backgroundSize: '16px 16px',
+            }}
+          />
+          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+            <div className="flex min-w-0 items-center gap-4 sm:gap-5">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue to-slate-900 text-2xl font-extrabold tracking-wider text-white shadow-md ring-4 ring-slate-50 sm:h-20 sm:w-20 sm:text-3xl dark:ring-slate-800">
+                {initials}
+              </div>
+              <div className="min-w-0 space-y-1.5 sm:space-y-2">
+                <h2 className="truncate text-lg font-bold tracking-tight text-gray-900 sm:text-xl dark:text-slate-50">
+                  {companyData.name || 'Your company'}
+                </h2>
+                {websiteHref ? (
+                  <a
+                    href={websiteHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex max-w-full items-center gap-1.5 text-xs font-semibold text-brand-blue hover:underline"
+                  >
+                    <Globe className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{websiteLabel}</span>
+                    <ExternalLink className="h-3 w-3 shrink-0 text-gray-400" />
+                  </a>
+                ) : (
+                  <p className="text-xs text-gray-400 dark:text-slate-500">No website added</p>
+                )}
+                {(industryLabel || companyData.size || companyData.founded) && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    {industryLabel && <HeroTag icon={Briefcase}>{industryLabel}</HeroTag>}
+                    {companyData.size && <HeroTag icon={Users}>{companyData.size} employees</HeroTag>}
+                    {companyData.founded && <HeroTag icon={CalendarDays}>Founded {companyData.founded}</HeroTag>}
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Company Profile</h1>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Maintain your organization&apos;s identity, contact info, and address — visible across your dashboard.</p>
+
+            {/* Completeness */}
+            <div className="w-full rounded-xl border border-gray-200/80 bg-slate-50/80 p-4 lg:w-80 dark:border-slate-700 dark:bg-slate-800/60">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-600 dark:text-slate-300">Profile completeness</span>
+                <span className="rounded border border-brand-blue/20 bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-bold tabular-nums text-brand-blue dark:bg-brand-blue/20 dark:text-blue-200">
+                  {completeness}%
+                </span>
+              </div>
+              <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700">
+                <div
+                  className="h-full rounded-full bg-brand-blue transition-[width] duration-500"
+                  style={{ width: `${completeness}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-gray-500 dark:text-slate-400">
+                {completeness === 100 ? (
+                  <span className="flex items-center gap-1 font-semibold text-brand-teal">
+                    <Check className="h-3.5 w-3.5" />
+                    All details completed
+                  </span>
+                ) : !isEditing ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="font-semibold text-brand-blue hover:underline"
+                  >
+                    Complete profile
+                  </button>
+                ) : (
+                  <span>Keep going…</span>
+                )}
+                <span className="tabular-nums">{filledCount} of {completenessKeys.length} details</span>
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isEditing ? (
-              <Button
-                variant="primary"
-                onClick={() => setIsEditing(true)}
-                icon={<Edit2 className="h-4 w-4" />}
-              >
-                Edit Profile
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="secondary"
-                  onClick={handleCancel}
-                  disabled={isSaving}
-                >
+        </section>
+
+        {isEditing ? (
+          /* ── Edit mode: the form ── */
+          <div className="space-y-4 sm:space-y-5">
+            <Section id="cp-edit-basic" icon={Building2} title="Basic information" subtitle="Identity, contact and industry details.">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                {field('Company Name', 'name', { placeholder: 'Acme Corp', required: true })}
+                {field('Website', 'website', { placeholder: 'https://example.com' })}
+                {field('Contact Email', 'email', { type: 'email', placeholder: 'admin@company.com' })}
+                <div>
+                  <Label className="mb-1.5">Phone</Label>
+                  <PhoneField
+                    value={companyData.phone}
+                    onChange={(v) => setValue('phone', v)}
+                    invalid={!!validationErrors.phone}
+                  />
+                  {validationErrors.phone && (
+                    <p className="mt-1 text-xs font-medium text-destructive">{validationErrors.phone}</p>
+                  )}
+                </div>
+
+                {/* Industry — dropdown + free text when "Other" */}
+                <div>
+                  <Label className="mb-1.5">Industry</Label>
+                  {(() => {
+                    const PRESET = INDUSTRY_OPTIONS.filter(o => o !== 'Other');
+                    const isCustom = companyData.industry !== '' && !PRESET.includes(companyData.industry);
+                    const selectValue = isCustom ? 'Other' : companyData.industry;
+                    return (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <select
+                            value={selectValue}
+                            onChange={(e) => {
+                              if (e.target.value === 'Other') {
+                                setCompanyData({ ...companyData, industry: '__other__' });
+                              } else {
+                                setCompanyData({ ...companyData, industry: e.target.value });
+                              }
+                            }}
+                            className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-9 text-sm text-gray-900 outline-none transition focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+                          >
+                            <option value="">Select industry</option>
+                            {INDUSTRY_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        </div>
+                        {(isCustom || companyData.industry === '__other__') && (
+                          <Input
+                            type="text"
+                            value={companyData.industry === '__other__' ? '' : companyData.industry}
+                            onChange={(e) => setCompanyData({ ...companyData, industry: e.target.value || '__other__' })}
+                            placeholder="Specify your industry"
+                            autoFocus
+                            aria-invalid={!!validationErrors.industry}
+                          />
+                        )}
+                        {validationErrors.industry && (
+                          <p className="text-xs font-medium text-destructive">{validationErrors.industry}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div>
+                  <Label className="mb-1.5">Company Size</Label>
+                  <CompanySizeField
+                    value={companyData.size}
+                    onChange={(val) => setCompanyData({ ...companyData, size: val })}
+                    disabled={false}
+                  />
+                </div>
+
+                {field('Founded Year', 'founded', { placeholder: '2010' })}
+              </div>
+            </Section>
+
+            <Section id="cp-edit-address" icon={MapPin} title="Address" subtitle="Where your organization is headquartered.">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                <div className="sm:col-span-2">
+                  <Label className="mb-1.5">Street Address</Label>
+                  {/* "Use current location" sits inside the field, right corner */}
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      value={companyData.address}
+                      placeholder="123 Main Street"
+                      onChange={(e) => setValue('address', e.target.value)}
+                      className="pr-11 sm:pr-44"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUseCurrentLocation}
+                      disabled={isLocating}
+                      title="Use current location"
+                      aria-label="Use current location"
+                      className="absolute right-1 top-1/2 inline-flex h-7 -translate-y-1/2 items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/[0.06] disabled:cursor-wait disabled:opacity-70"
+                    >
+                      {isLocating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LocateFixed className="h-3.5 w-3.5" />}
+                      <span className="hidden sm:inline">{isLocating ? 'Locating…' : 'Use current location'}</span>
+                    </button>
+                  </div>
+                </div>
+                {field('City', 'city', { placeholder: 'Chennai' })}
+                {field('State', 'state', { placeholder: 'Tamil Nadu' })}
+                {field('Country', 'country', { placeholder: 'India' })}
+                {field('ZIP / Postal Code', 'zipCode', { placeholder: '600001' })}
+              </div>
+            </Section>
+
+            <Section id="cp-edit-about" icon={FileText} title="About the company" subtitle="A short summary of what your company does.">
+              <Textarea
+                value={companyData.description}
+                onChange={(e) => setValue('description', e.target.value)}
+                rows={5}
+                placeholder="Describe your company..."
+                maxLength={2000}
+                aria-invalid={!!validationErrors.description}
+              />
+              <div className="mt-1.5 flex justify-between">
+                {validationErrors.description
+                  ? <p className="text-xs font-medium text-destructive">{validationErrors.description}</p>
+                  : <span />}
+                <p className="text-right text-xs tabular-nums text-gray-400 dark:text-slate-500">{companyData.description.length}/2000</p>
+              </div>
+            </Section>
+
+            {/* Form actions — part of the page, not a card */}
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <p className="hidden text-xs text-gray-500 sm:block dark:text-slate-400">
+                Fields marked <span className="text-destructive">*</span> are required.
+              </p>
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <Button variant="secondary" onClick={handleCancel} disabled={isSaving} className="flex-1 sm:flex-none">
                   Cancel
                 </Button>
                 <Button
@@ -453,177 +818,327 @@ export default function CompanyProfilePage() {
                   onClick={handleSave}
                   disabled={isSaving}
                   icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  className="flex-1 sm:flex-none"
                 >
                   {isSaving ? 'Saving...' : 'Save Changes'}
                 </Button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {successMessage && (
-          <div className="mb-5 flex items-center gap-3 rounded-xl border border-brand-teal/20 bg-brand-teal/[0.06] p-4 ring-1 ring-brand-teal/10">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-teal/15 text-brand-teal">
-              <CheckCircle2 className="h-5 w-5" />
-            </span>
-            <p className="text-sm font-medium text-brand-teal">{successMessage}</p>
-          </div>
-        )}
-        {error && (
-          <div className="mb-5 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
-              <AlertCircle className="h-5 w-5" />
-            </span>
-            <p className="text-sm font-medium text-destructive">{error}</p>
-          </div>
-        )}
-
-        {/* Basic Information */}
-        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-              <Building2 className="h-5 w-5 text-brand-blue" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Basic Information</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Identity, contact, and industry details.</p>
+              </div>
             </div>
           </div>
-          <div className="p-4 sm:p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            {field('Company Name *', 'name', { placeholder: 'Acme Corp' })}
-            {field('Website', 'website', { placeholder: 'https://example.com' })}
-            {field('Contact Email', 'email', { type: 'email', placeholder: 'admin@company.com' })}
-            {field('Phone', 'phone', { placeholder: '+91 9876543210' })}
-
-            {/* Industry — dropdown + free text when "Other" */}
-            <div>
-              <Label className="mb-1.5">Industry</Label>
-              {isEditing ? (() => {
-                // A value is "custom" if it's non-empty and not one of the preset options
-                const PRESET = INDUSTRY_OPTIONS.filter(o => o !== 'Other');
-                const isCustom = companyData.industry !== '' && !PRESET.includes(companyData.industry);
-                const selectValue = isCustom ? 'Other' : companyData.industry;
-                return (
-                  <div className="space-y-2">
-                    <select
-                      value={selectValue}
-                      onChange={(e) => {
-                        if (e.target.value === 'Other') {
-                          setCompanyData({ ...companyData, industry: '__other__' });
-                        } else {
-                          setCompanyData({ ...companyData, industry: e.target.value });
-                        }
-                      }}
-                      className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+        ) : (
+          /* ── View mode: read-only details ── */
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+            <Section
+              icon={Mail}
+              title="Contact information"
+              subtitle="How candidates and clients reach your team."
+              action={<SectionEditButton onClick={() => openEditAt('cp-edit-basic')} />}
+            >
+              <dl className="space-y-3">
+                <InfoRow icon={Mail} label="Email">
+                  {companyData.email ? (
+                    <span className="flex min-w-0 items-center gap-2">
+                      <a href={`mailto:${companyData.email}`} className="truncate transition-colors hover:text-brand-blue">
+                        {companyData.email}
+                      </a>
+                      <CopyButton text={companyData.email} label="email" />
+                    </span>
+                  ) : null}
+                </InfoRow>
+                <InfoRow icon={Phone} label="Phone">
+                  {companyData.phone ? (
+                    <a
+                      href={`tel:${toE164(companyData.phone) || companyData.phone.replace(/\s/g, '')}`}
+                      className="tracking-wide transition-colors hover:text-brand-blue"
                     >
-                      <option value="">Select industry</option>
-                      {INDUSTRY_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                    {(isCustom || companyData.industry === '__other__') && (
-                      <Input
-                        type="text"
-                        value={companyData.industry === '__other__' ? '' : companyData.industry}
-                        onChange={(e) => setCompanyData({ ...companyData, industry: e.target.value || '__other__' })}
-                        placeholder="Specify your industry"
-                        autoFocus
-                        aria-invalid={!!validationErrors.industry}
-                      />
+                      {formatPhoneForDisplay(companyData.phone)}
+                    </a>
+                  ) : null}
+                </InfoRow>
+                <InfoRow icon={Globe} label="Website" last>
+                  {websiteHref ? (
+                    <a
+                      href={websiteHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-w-0 items-center gap-1 font-semibold text-brand-blue hover:underline"
+                    >
+                      <span className="truncate">{websiteLabel}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0" />
+                    </a>
+                  ) : null}
+                </InfoRow>
+              </dl>
+            </Section>
+
+            <Section
+              icon={Building2}
+              title="Company details"
+              subtitle="Industry, size and founding year."
+              action={<SectionEditButton onClick={() => openEditAt('cp-edit-basic')} />}
+            >
+              <dl className="space-y-3">
+                <InfoRow icon={Briefcase} label="Industry">
+                  {industryLabel ? (
+                    <span className="truncate rounded-md border border-gray-200/70 bg-slate-50 px-2.5 py-1 font-semibold dark:border-slate-700 dark:bg-slate-800">
+                      {industryLabel}
+                    </span>
+                  ) : null}
+                </InfoRow>
+                <InfoRow icon={Users} label="Company size">
+                  {companyData.size ? <span className="font-semibold">{companyData.size} employees</span> : null}
+                </InfoRow>
+                <InfoRow icon={CalendarDays} label="Founded" last>
+                  {companyData.founded ? (
+                    <span className="font-semibold">
+                      {companyData.founded}
+                      {yearsActive !== null && yearsActive > 0 && (
+                        <span className="ml-1 font-normal text-gray-400 dark:text-slate-500">
+                          ({yearsActive} {yearsActive === 1 ? 'year' : 'years'})
+                        </span>
+                      )}
+                    </span>
+                  ) : null}
+                </InfoRow>
+              </dl>
+            </Section>
+
+            <Section
+              icon={MapPin}
+              title="Headquarters address"
+              subtitle="Where your organization is based."
+              action={<SectionEditButton onClick={() => openEditAt('cp-edit-address')} />}
+              footer={
+                addressLines.length > 0 ? (
+                  <>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressLines.join(', '))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline"
+                    >
+                      <MapIcon className="h-3.5 w-3.5" />
+                      View on Google Maps
+                    </a>
+                    <CopyButton text={addressLines.join(', ')} label="address" showText />
+                  </>
+                ) : undefined
+              }
+            >
+              {addressLines.length > 0 ? (
+                <div className="flex items-start gap-3 rounded-xl border border-gray-200/70 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                  <span className="mt-0.5 shrink-0 rounded-lg border border-gray-200 bg-white p-2 text-brand-blue shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                    <Navigation className="h-4 w-4" />
+                  </span>
+                  <address className="min-w-0 space-y-1 break-words text-xs not-italic text-gray-600 dark:text-slate-300">
+                    {companyData.address && (
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{companyData.address}</p>
                     )}
-                    {validationErrors.industry && (
-                      <p className="text-xs font-medium text-destructive">{validationErrors.industry}</p>
+                    {(cityLine || companyData.zipCode) && (
+                      <p>{[cityLine, companyData.zipCode].filter(Boolean).join(' ')}</p>
                     )}
-                  </div>
-                );
-              })() : (
-                <Input
-                  type="text"
-                  value={companyData.industry}
-                  disabled
-                />
+                    {companyData.country && (
+                      <p className="flex items-center gap-1.5 pt-0.5 font-medium text-gray-800 dark:text-slate-200">
+                        <span className="inline-block h-2 w-2 rounded-full bg-gray-400" />
+                        {companyData.country}
+                      </p>
+                    )}
+                  </address>
+                </div>
+              ) : (
+                <EmptyHint text="No address added yet." onAdd={() => openEditAt('cp-edit-address')} />
               )}
-            </div>
+            </Section>
 
-            {/* Company Size — dropdown + manual */}
-            <div>
-              <Label className="mb-1.5">Company Size</Label>
-              <CompanySizeField
-                value={companyData.size}
-                onChange={(val) => setCompanyData({ ...companyData, size: val })}
-                disabled={!isEditing}
-              />
-            </div>
-
-            {field('Founded Year', 'founded', { placeholder: '2010' })}
-          </div>
-          </div>
-        </div>
-
-        {/* Address */}
-        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-              <MapPin className="h-5 w-5 text-brand-blue" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Address</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-400">Where your organization is headquartered.</p>
-            </div>
-          </div>
-          <div className="p-4 sm:p-5">
-            <div className="space-y-4 sm:space-y-6">
-              {field('Street Address', 'address', { placeholder: '123 Main Street' })}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                {field('City', 'city', { placeholder: 'Chennai' })}
-                {field('State', 'state', { placeholder: 'Tamil Nadu' })}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                {field('Country', 'country', { placeholder: 'India' })}
-                {field('ZIP / Postal Code', 'zipCode', { placeholder: '600001' })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Description */}
-        <div className="mb-5 overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-              <FileText className="h-5 w-5 text-brand-blue" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Company Description</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-400">A short summary of what your company does.</p>
-            </div>
-          </div>
-          <div className="p-4 sm:p-5">
-            <Textarea
-              value={companyData.description}
-              onChange={(e) => {
-                setCompanyData({ ...companyData, description: e.target.value });
-                if (validationErrors.description) setValidationErrors({ ...validationErrors, description: undefined });
-              }}
-              disabled={!isEditing}
-              rows={4}
-              placeholder={isEditing ? 'Describe your company...' : ''}
-              maxLength={2000}
-              aria-invalid={!!validationErrors.description}
-            />
-            <div className="flex justify-between mt-1.5">
-              {validationErrors.description
-                ? <p className="text-xs font-medium text-destructive">{validationErrors.description}</p>
-                : <span />}
-              {isEditing && (
-                <p className="text-xs text-gray-400 dark:text-slate-500 text-right">{companyData.description.length}/2000</p>
+            <Section
+              icon={FileText}
+              title="About the company"
+              subtitle="A short summary of what your company does."
+              action={<SectionEditButton onClick={() => openEditAt('cp-edit-about')} label="Update" />}
+            >
+              {companyData.description ? (
+                <div className="rounded-xl border border-gray-200/70 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                  <p className="whitespace-pre-line break-words text-xs leading-relaxed text-gray-600 sm:text-[13px] dark:text-slate-300">
+                    {companyData.description}
+                  </p>
+                </div>
+              ) : (
+                <EmptyHint text="No description added yet." onAdd={() => openEditAt('cp-edit-about')} />
               )}
-            </div>
+            </Section>
           </div>
-        </div>
+        )}
 
       </div>
       </div>
     </main>
+  );
+}
+
+// ── Presentational helpers ──
+
+/** Country picker (flag + dial code) + number, capped at the country's max length. */
+function PhoneField({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+}) {
+  return (
+    <PhoneInput
+      international
+      countryCallingCodeEditable={false}
+      limitMaxLength
+      defaultCountry={DEFAULT_PHONE_COUNTRY}
+      flags={phoneFlags}
+      value={toE164(value)}
+      onChange={(v) => onChange(v ?? '')}
+      inputComponent={PhoneTextInput}
+      placeholder="Enter phone number"
+      aria-invalid={invalid}
+      className={`tf-phone-input flex h-9 w-full items-center rounded-md border bg-input-background pl-3 transition-[color,box-shadow,border-color] hover:border-[var(--border-dark)] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30 ${
+        invalid ? 'border-destructive ring-destructive/20' : 'border-input'
+      }`}
+    />
+  );
+}
+
+function PhoneTextInput(props: React.ComponentProps<'input'>) {
+  return (
+    <input
+      {...props}
+      className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm text-gray-900 outline-none placeholder:text-muted-foreground focus-visible:!outline-none dark:text-slate-50"
+    />
+  );
+}
+
+function Section({
+  id,
+  icon: Icon,
+  title,
+  subtitle,
+  action,
+  footer,
+  children,
+}: {
+  id?: string;
+  icon: LucideIcon;
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  footer?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="flex scroll-mt-4 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:border-gray-300 sm:p-6 dark:border-slate-700/60 dark:bg-slate-900 dark:hover:border-slate-600">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4 dark:border-slate-700/60">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-blue/10 bg-brand-blue/[0.06] text-brand-blue dark:bg-brand-blue/20 dark:text-blue-200">
+            <Icon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
+            {subtitle && <p className="text-xs text-gray-500 dark:text-slate-400">{subtitle}</p>}
+          </div>
+        </div>
+        {action}
+      </div>
+      <div className="mt-5 flex-1">{children}</div>
+      {footer && (
+        <div className="mt-6 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-slate-700/60">
+          {footer}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SectionEditButton({ onClick, label = 'Edit' }: { onClick: () => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/[0.06]"
+    >
+      {label}
+    </button>
+  );
+}
+
+function HeroTag({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-200/60 bg-slate-100/90 px-2.5 py-1 text-xs font-medium text-gray-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+      <Icon className="h-3.5 w-3.5 text-gray-500 dark:text-slate-400" />
+      {children}
+    </span>
+  );
+}
+
+/** Label on the left, value on the right (stacked on phones). Empty → "Not added". */
+function InfoRow({
+  icon: Icon,
+  label,
+  last,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${
+        last ? '' : 'border-b border-gray-50 pb-3 dark:border-slate-800'
+      }`}
+    >
+      <dt className="flex shrink-0 items-center gap-2 font-medium text-gray-500 dark:text-slate-400">
+        <Icon className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500" />
+        {label}
+      </dt>
+      <dd className="flex min-w-0 items-center font-medium text-gray-800 sm:justify-end dark:text-slate-100">
+        {children ?? <span className="font-normal text-gray-400 dark:text-slate-500">Not added</span>}
+      </dd>
+    </div>
+  );
+}
+
+function CopyButton({ text, label, showText }: { text: string; label: string; showText?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success(`Copied ${label}`);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error(`Couldn't copy ${label}`);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title={`Copy ${label}`}
+      aria-label={`Copy ${label}`}
+      className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-slate-300"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-brand-teal" /> : <Copy className="h-3.5 w-3.5" />}
+      {showText && <span>{copied ? 'Copied' : `Copy ${label}`}</span>}
+    </button>
+  );
+}
+
+function EmptyHint({ text, onAdd }: { text: string; onAdd: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-gray-200 px-4 py-4 dark:border-slate-700">
+      <span className="text-xs text-gray-400 dark:text-slate-500">{text}</span>
+      <button type="button" onClick={onAdd} className="shrink-0 text-xs font-semibold text-brand-blue hover:underline">
+        Add
+      </button>
+    </div>
   );
 }

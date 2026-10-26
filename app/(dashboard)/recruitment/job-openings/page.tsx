@@ -9,6 +9,8 @@ import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel'
 import SelectSourceModal from '@/components/SelectSourceModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
+import { Button } from '@/components/ui/button';
+import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -20,7 +22,6 @@ import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { draftVersionEditorUrl, openDraftVersionForEdit } from '@/lib/utils/jdDraftVersion';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   AlertDialog,
@@ -29,8 +30,6 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
@@ -462,22 +461,9 @@ export default function JobOpeningsPage() {
       // If the usage check fails, carry on - the backend validates again.
     }
 
-    // JD not in use: edit its DRAFT VERSION, never the live row. The editor saves
-    // at every step, so opening it on the published JD put half-finished edits live
-    // before Republish. The job's existing open draft is reused if there is one.
-    await openPublishedJDForEdit(job.id);
-  };
-
-  const openPublishedJDForEdit = async (publishedJdId: string) => {
-    try {
-      const draft = await openDraftVersionForEdit(publishedJdId);
-      router.push(draftVersionEditorUrl(draft));
-    } catch (error) {
-      console.error('Failed to open a draft version for editing:', error);
-      toast.error('Could not open this JD for editing', {
-        description: error instanceof Error ? error.message : 'Please try again.',
-      });
-    }
+    // JD not in use: Edit changes THIS JD (no new version). The editor opens it
+    // through a working copy, so the live row changes only when it is republished.
+    router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
   };
 
   // Version control: editing an in-use JD forks it into a NEW independent version
@@ -1053,15 +1039,23 @@ export default function JobOpeningsPage() {
             </div>
           </div>
 
-          <AlertDialogFooter className="mt-5 flex gap-2 sm:justify-end">
+          {/* Buttons match the Archive / Disable / AI Talent Match confirms: the
+              shared Button (secondary + primary, px-6), slotted into Radix's own
+              Cancel / Action so closing and initial focus are unchanged. */}
+          <AlertDialogFooter className="mt-5 gap-3">
             {/* Cancel just dismisses (onOpenChange above) — nothing is deleted. */}
-            <AlertDialogCancel className="w-full sm:w-auto text-sm">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
-              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"
-            >
-              I Understand
-            </AlertDialogAction>
+            <AlertDialogPrimitive.Cancel asChild>
+              <Button variant="secondary" className="px-6">Cancel</Button>
+            </AlertDialogPrimitive.Cancel>
+            <AlertDialogPrimitive.Action asChild>
+              <Button
+                variant="primary"
+                onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
+                className="px-6"
+              >
+                I Understand
+              </Button>
+            </AlertDialogPrimitive.Action>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

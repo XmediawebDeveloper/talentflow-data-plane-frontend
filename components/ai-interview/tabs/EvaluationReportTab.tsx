@@ -7,6 +7,8 @@ import { OverallSummary } from '../evaluation-dashboard/OverallSummary';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
 import { generateEvaluationPDF } from '../evaluation-dashboard/generatePDF';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '../ResultRowActions';
+import { toast } from 'sonner';
 
 interface ClusterDef {
   id?: string;
@@ -44,7 +46,10 @@ export default function EvaluationReportTab({
     });
   }, [aiEvaluation, clusterConfig, candidate, interview]);
 
+  // ai_interview:download_report — the PDF / Excel / JSON buttons (greyed, never hidden).
+  const canDownloadReports = useCanDownloadAIReports();
   const handleDownload = async (format: 'pdf' | 'excel' | 'json') => {
+    if (!canDownloadReports) return;
     setDownloading(format);
     try {
       if (format === 'pdf' && data) {
@@ -76,8 +81,8 @@ export default function EvaluationReportTab({
         const safeName = (candidate?.name || 'Candidate').replace(/[^a-z0-9]+/gi, '_');
         aiInterviewService.triggerBlobDownload(blob, `Evaluation_Report_${safeName}.${ext}`);
       }
-    } catch {
-      /* silent — surfacing handled by toast elsewhere */
+    } catch (err) {
+      if (isForbiddenError(err)) toast.error(AI_REPORT_DOWNLOAD_DENIED);
     }
     setDownloading(null);
   };
@@ -122,7 +127,9 @@ export default function EvaluationReportTab({
                 key={fmt}
                 onClick={() => handleDownload(fmt)}
                 disabled={downloading !== null}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${
+                aria-disabled={!canDownloadReports || undefined}
+                title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 ${canDownloadReports ? '' : 'opacity-50 cursor-not-allowed '}${
                   isPrimary
                     ? 'bg-gray-900 hover:bg-gray-800 text-white'
                     : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700'

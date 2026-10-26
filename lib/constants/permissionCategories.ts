@@ -227,6 +227,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'assessments:share', label: 'Share' },
       { code: 'assessments:download_report', label: 'Download Report' },
       { code: 'assessments:batch_download', label: 'Batch Download' },
+      // CSV / Excel exports on the Assessments page (lists, results, invitations,
+      // activity logs). Enforced server-side; it was a seeded code no role editor
+      // could switch, mapped to a legacy flag shared with Internal DB export.
+      { code: 'assessments:export', label: 'Export' },
       { code: 'assessments:view_question_bank', label: 'HR Question Bank View' },
       { code: 'assessments:add_question', label: 'HR Question Bank Add' },
       { code: 'assessments:edit_question', label: 'HR Question Bank Edit' },
@@ -273,6 +277,12 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_interview:publish', label: 'Publish' },
       { code: 'ai_interview:archive', label: 'Archive' },
       { code: 'ai_interview:delete', label: 'Delete' },
+      // CSV / Excel exports on the AI Interviews page (lists, results,
+      // invitations, activity logs) — enforced server-side, audit-logged.
+      { code: 'ai_interview:export', label: 'Export' },
+      // Candidate evaluation / coverage report PDFs (single, bulk ZIP) —
+      // enforced on /reports endpoints, audit-logged per download.
+      { code: 'ai_interview:download_report', label: 'Download Report' },
       // HR questions picked from / added to the HR Question Bank inside the
       // AI Interview builder — same three as Assessment's.
       { code: 'ai_interview:view_question_bank', label: 'HR Question Bank View' },
@@ -317,6 +327,8 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       'ai_interview:publish': ['my_resumes:read'],
       'ai_interview:archive': ['my_resumes:read'],
       'ai_interview:delete': ['my_resumes:read'],
+      'ai_interview:export': ['my_resumes:read'],
+      'ai_interview:download_report': ['my_resumes:read'],
       // Adding a question edits the interview (mirrors assessments:add_question).
       'ai_interview:add_question': ['ai_interview:update', 'ai_interview:view_question_bank'],
       'ai_interview:edit_question': ['ai_interview:view_question_bank'],
