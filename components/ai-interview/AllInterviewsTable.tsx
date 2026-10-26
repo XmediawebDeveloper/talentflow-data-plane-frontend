@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, Video, MoreVertical, Eye, Pencil,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
-  Square, CheckSquare, ChevronDown,
+  Square, CheckSquare, ChevronDown, FileDown, FileText, FileSpreadsheet,
+  Archive, ArchiveRestore, Trash2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -17,11 +18,15 @@ import {
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
+import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import ExportColumnsModal from '@/components/ExportColumnsModal';
+import { toast } from 'sonner';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
@@ -229,7 +234,9 @@ export function JobArchivedBadge() {
 
 function CreatedBy({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center gap-2 min-w-0">
+    // Capped, so a long creator name ends in "…" (full name on hover)
+    // instead of widening the Created column.
+    <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
       <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
         {name}
@@ -263,21 +270,21 @@ const COMPARATORS: Record<SortKey, (a: InterviewRow, b: InterviewRow) => number>
 interface ColumnDef {
   key: SortKey;
   label: string;
-  align?: 'left' | 'right';
+  align?: 'left' | 'center' | 'right';
   hideBelow?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 const COLUMNS: ColumnDef[] = [
-  { key: 'jobId', label: 'Job ID' },
+  { key: 'jobId', label: 'JD ID' },
   { key: 'jobName', label: 'Job Name' },
-  { key: 'jobVersion', label: 'Job Version' },
-  { key: 'interviewVersion', label: 'Interview Version' },
+  { key: 'jobVersion', label: 'Job Version', align: 'center' },
+  { key: 'interviewVersion', label: 'Interview Version', align: 'center' },
   { key: 'status', label: 'Status' },
   { key: 'rounds', label: 'Rounds' },
-  { key: 'invitations', label: 'Invitations Sent' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'createdAt', label: 'Created On' },
-  { key: 'createdBy', label: 'Created By', hideBelow: 'lg' },
+  { key: 'invitations', label: 'Invitations Sent', align: 'center' },
+  { key: 'completed', label: 'Completed', align: 'center' },
+  /* Created On + Created By in one column: date, with who underneath. */
+  { key: 'createdAt', label: 'Created' },
 ];
 
 /* With `expandableRows`, the six columns the row shows; the rest open in the
@@ -353,9 +360,60 @@ export interface AllInterviewsTableProps {
    * same handlers. Omitted, the table falls back to its own View / Edit menu.
    */
   renderRowActions?: (config: AIInterviewResponse) => React.ReactNode;
+  /** List (the table) or Card (a grid of cards) — owned by the host so every
+   *  AI Interview tab shares one choice. */
+  displayMode?: ListDisplayMode;
+  /** Given, the shared List/Card switch renders at the end of the toolbar. */
+  onDisplayModeChange?: (mode: ListDisplayMode) => void;
+  /**
+   * Bulk Archive / Unarchive / Delete for the ticked rows (Actions menu). The
+   * table works out which ticked rows qualify — the row ⋮ menu's own rules —
+   * and hands them to the host, which owns the confirm popup, the service
+   * calls and the refresh. Omitted, the Actions menu offers Export only.
+   */
+  bulkActions?: BulkActionsConfig;
+  /** Export permission. False: Export stays in the Actions menu, greyed with
+   *  the reason (RBAC rule: grey out, never hide). Defaults to allowed. */
+  canExport?: boolean;
+  /** Called after an export file is handed to the browser — the host audits it. */
+  onExported?: (info: { format: 'csv' | 'xls'; recordCount: number; tab: string; ids: string[] }) => void;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false }: AllInterviewsTableProps = {}) {
+export type BulkActionKind = 'archive' | 'unarchive' | 'delete';
+export interface BulkSkip { reason: string; count: number }
+export interface BulkActionsConfig {
+  canArchive: boolean;
+  canDelete: boolean;
+  /** Opens the host's confirm popup for `eligible`; resolves true once a run
+   *  has gone through (false if cancelled) so the table clears its ticks. */
+  onRun: (kind: BulkActionKind, eligible: AIInterviewResponse[], skipped: BulkSkip[]) => Promise<boolean>;
+}
+
+/* Bulk eligibility — the SAME rules the row ⋮ menu applies
+   (AIInterview.tsx renderInterviewVersionActions), so a bulk run never does
+   what the row would refuse. Null when the row qualifies, else why not
+   (grouped in the confirm popup's "skipped" list). */
+function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkActionsConfig): string | null {
+  const locked = !!jdActionLockReason(row.config.jd_status);
+  if (kind === 'archive') {
+    if (!cfg.canArchive) return 'no permission to archive';
+    if (row.rawStatus === 'archived') return 'already archived';
+    if (locked) return 'job is disabled or archived';
+    return null;
+  }
+  if (kind === 'unarchive') {
+    if (!cfg.canArchive) return 'no permission to unarchive';
+    if (row.rawStatus !== 'archived') return 'not archived';
+    if (locked) return 'job is disabled or archived';
+    return null;
+  }
+  if (!cfg.canDelete) return 'no permission to delete';
+  if (locked) return 'job is disabled or archived';
+  if ((row.config.invitations_count ?? 0) > 0) return 'candidates already invited';
+  return null;
+}
+
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -616,6 +674,95 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
       return next;
     });
 
+  /* ── Bulk actions on the ticked rows ── Actions (N) + Clear, the Candidate
+     Results pattern. Items per tab: All → Export / Archive / Unarchive /
+     Delete; Active and Draft drop Unarchive; Archived drops Archive. */
+  const selectedRows = useMemo(() => sorted.filter((row) => selectedIds.has(row.id)), [sorted, selectedIds]);
+  const bulkKinds: BulkActionKind[] = fixedStatus === 'archived'
+    ? ['unarchive', 'delete']
+    : fixedStatus
+      ? ['archive', 'delete']
+      : ['archive', 'unarchive', 'delete'];
+  const BULK_META: Record<BulkActionKind, { label: string; Icon: typeof Archive; className: string }> = {
+    archive: { label: 'Archive', Icon: Archive, className: 'text-menu-icon-archive' },
+    unarchive: { label: 'Unarchive', Icon: ArchiveRestore, className: 'text-menu-icon-archive' },
+    delete: { label: 'Delete', Icon: Trash2, className: 'text-destructive' },
+  };
+  const runBulk = async (kind: BulkActionKind) => {
+    if (!bulkActions) return;
+    const eligible: AIInterviewResponse[] = [];
+    const skips = new Map<string, number>();
+    for (const row of selectedRows) {
+      const why = bulkSkipReason(kind, row, bulkActions);
+      if (why) skips.set(why, (skips.get(why) ?? 0) + 1);
+      else eligible.push(row.config);
+    }
+    if (eligible.length === 0) return;
+    const done = await bulkActions.onRun(kind, eligible, [...skips].map(([reason, count]) => ({ reason, count })));
+    if (done) setSelectedIds(new Set());
+  };
+
+  /* Export — the ticked rows, with the columns picked in the popup (the Score
+     Resume tab's Export). Created exports as two columns. */
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
+  const EXPORT_COLUMNS = [
+    { id: 'jobId', label: 'JD ID' },
+    { id: 'jobName', label: 'Job Name' },
+    { id: 'jobVersion', label: 'Job Version' },
+    { id: 'interviewVersion', label: 'Interview Version' },
+    { id: 'status', label: 'Status' },
+    { id: 'rounds', label: 'Rounds' },
+    { id: 'invitations', label: 'Invitations Sent' },
+    { id: 'completed', label: 'Completed' },
+    { id: 'created', label: 'Created' },
+  ];
+  const handleExport = (ids: string[]) => {
+    if (selectedRows.length === 0) return;
+    const cols = EXPORT_COLUMNS.filter((c) => ids.includes(c.id));
+    const headers = cols.flatMap((c) => (c.id === 'created' ? ['Created On', 'Created By'] : [c.label]));
+    const data = selectedRows.map((row) => cols.flatMap((c): string[] => {
+      switch (c.id) {
+        case 'jobId': return [row.jobId || ''];
+        case 'jobName': return [row.jobName];
+        case 'jobVersion': return [`V${row.jobVersion}`];
+        case 'interviewVersion': return [`V${row.interviewVersion}`];
+        case 'status': return [row.status];
+        case 'rounds': return [row.rounds.map((t) => ROUND_LABELS[t] || t).join(', ')];
+        case 'invitations': return [String(row.invitations)];
+        case 'completed': return [String(row.completed)];
+        case 'created': return [formatISTStamp(row.createdAt), row.createdBy];
+        default: return [''];
+      }
+    }));
+    const tab = fixedStatus === 'published' ? 'Active' : fixedStatus === 'draft' ? 'Draft' : fixedStatus === 'archived' ? 'Archived' : 'All';
+    const baseName = `AI_Interviews_${tab}_${new Date().toISOString().slice(0, 10)}`;
+    let blob: Blob;
+    let fileName: string;
+    if (exportFormat === 'csv') {
+      const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const csv = [headers.map(q).join(','), ...data.map((cells) => cells.map(q).join(','))].join('\n');
+      blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      fileName = `${baseName}.csv`;
+    } else {
+      const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background:#f0f0f0;font-weight:bold}</style></head><body><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${data.map((cells) => `<tr>${cells.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+      blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      fileName = `${baseName}.xls`;
+    }
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedRows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
+    onExported?.({ format: exportFormat, recordCount: selectedRows.length, tab, ids: selectedRows.map((row) => row.id) });
+    setShowExportModal(false);
+  };
+
   useEffect(() => {
     if (!highlightId || highlightHandledRef.current || isLoading) return;
 
@@ -776,6 +923,42 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     return actions;
   };
 
+  /* The Actions control for one row — the host's menu when given, else this
+     table's own View / Edit menu. Shared by the table row and the card. */
+  const actionsCell = (row: InterviewRow) => renderRowActions ? (
+  renderRowActions(row.config)
+) : (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          aria-label={`Actions for ${row.jobName}`}
+          title="Actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
+        {rowActions(row).map(({ key, label, icon: Icon, run, disabled, reason }) => (
+          /* aria-disabled, not Radix `disabled`: its pointer-events:none
+             swallowed the permission tooltip. Locked = no-op click. */
+          <DropdownMenuItem
+            key={key}
+            onClick={disabled ? undefined : run}
+            onSelect={disabled ? (e) => e.preventDefault() : undefined}
+            aria-disabled={disabled || undefined}
+            title={disabled ? reason : undefined}
+            className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS} ${disabled ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+          >
+            <Icon className="w-4 h-4" />
+            <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   /* Expandable rows: which rows are open, and which columns the row itself
      shows — the rest render in its expanded panel through `cellContent`. */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
@@ -791,13 +974,13 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
 
   const CELL_CLASS: Record<SortKey, string> = {
     jobId: 'px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col-left',
-    jobName: 'px-3 py-2.5 align-middle max-w-[10rem] sm:max-w-[16rem]',
-    jobVersion: 'px-3 py-2.5 align-middle whitespace-nowrap',
-    interviewVersion: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    jobName: 'px-3 py-2.5 align-middle',
+    jobVersion: 'px-3 py-2.5 align-middle whitespace-nowrap text-center',
+    interviewVersion: 'px-3 py-2.5 align-middle whitespace-nowrap text-center',
     status: 'px-3 py-2.5 align-middle whitespace-nowrap',
     rounds: 'px-3 py-2.5 align-middle whitespace-nowrap',
-    invitations: 'px-3 py-2.5 align-middle whitespace-nowrap',
-    completed: 'px-3 py-2.5 align-middle whitespace-nowrap',
+    invitations: 'px-3 py-2.5 align-middle whitespace-nowrap text-center',
+    completed: 'px-3 py-2.5 align-middle whitespace-nowrap text-center',
     createdAt: 'px-3 py-2.5 align-middle whitespace-nowrap',
     createdBy: `px-3 py-2.5 align-middle max-w-[12rem] ${HIDE_CLASS.lg}`,
   };
@@ -808,9 +991,12 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
         return row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>;
       case 'jobName':
         return (
-          <div className="flex items-center gap-1.5 min-w-0">
+          /* Fixed width on the wrapper, not the td: a table cell's max-width
+             is ignored, so a long job name widened the column uncut. Longer
+             names end in "…" with the full name on hover (title). */
+          <div className="flex items-center gap-1.5 w-[10rem] sm:w-[12rem]">
             <span
-              className="block truncate font-medium text-gray-900 dark:text-slate-50"
+              className="block min-w-0 truncate font-medium text-gray-900 dark:text-slate-50"
               title={row.jobName}
             >
               {row.jobName}
@@ -856,7 +1042,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
             <span className="tabular-nums text-gray-900 dark:text-slate-100">
               {row.invitations.toLocaleString()}
             </span>
-            <span className="text-xs text-gray-400 ml-1">sent</span>
           </>
         );
       case 'completed':
@@ -865,14 +1050,16 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
             <span className="tabular-nums text-gray-900 dark:text-slate-100">
               {row.completed.toLocaleString()}
             </span>
-            <span className="text-xs text-gray-400 ml-1">completed</span>
           </>
         );
       case 'createdAt':
         return (
-          <span className="text-gray-600 dark:text-slate-400 tabular-nums">
-            {formatISTStamp(row.createdAt)}
-          </span>
+          <div className="flex flex-col gap-1 min-w-0">
+            <span className="text-gray-600 dark:text-slate-400 tabular-nums">
+              {formatISTStamp(row.createdAt)}
+            </span>
+            <CreatedBy name={row.createdBy} />
+          </div>
         );
       case 'createdBy':
         return <CreatedBy name={row.createdBy} />;
@@ -889,6 +1076,45 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      exists only to reach it. Nothing to label means nothing to be wide for.
      See `TABLE_EMPTY_PANEL_CLASS`. */
   const hasBodyRows = isLoading || (!error && pageRows.length > 0);
+
+  /* Load-error and no-rows panels — the table's single full-width cell, or
+     the card grid's whole body. */
+  const errorPanel = (
+    <div className={TABLE_EMPTY_PANEL_CLASS}>
+      <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
+        <AlertTriangle className="w-7 h-7 text-destructive" />
+      </div>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+        Unable to load interviews
+      </h3>
+      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+        Something went wrong while loading the interview list. Please try again.
+      </p>
+      <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
+        Retry
+      </Button>
+    </div>
+  );
+  const emptyPanel = (
+    <div className={TABLE_EMPTY_PANEL_CLASS}>
+      <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+        <Video className="w-7 h-7 text-brand-blue" />
+      </div>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+        {isNarrowed ? 'No interviews found' : 'No interviews yet'}
+      </h3>
+      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+        {isNarrowed
+          ? 'No interviews match your current search or filter criteria.'
+          : 'AI interviews you create will be listed here.'}
+      </p>
+      {isNarrowed && (
+        <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
+          Clear Filters
+        </Button>
+      )}
+    </div>
+  );
 
   const toolbar = (
     <>
@@ -940,6 +1166,76 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
               </span>
             )}
           </button>
+          {/* Actions (N) + Clear — only while rows are ticked. */}
+          {selectedRows.length > 0 && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                    aria-label={`Actions for ${selectedRows.length} selected`}
+                  >
+                    <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                      <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                    </span>
+                    Actions ({selectedRows.length})
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                    {selectedRows.length.toLocaleString()} selected
+                  </div>
+                  <DropdownMenuItem
+                    aria-disabled={!canExport || undefined}
+                    title={canExport ? undefined : 'You do not have permission to export AI interviews'}
+                    onSelect={(e) => { if (!canExport) { e.preventDefault(); return; } setShowExportModal(true); }}
+                    className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                  >
+                    <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                    <span>Export</span>
+                  </DropdownMenuItem>
+                  {bulkActions && bulkKinds.map((kind) => {
+                    const { label, Icon, className } = BULK_META[kind];
+                    const reasons = selectedRows.map((row) => bulkSkipReason(kind, row, bulkActions));
+                    const eligibleCount = reasons.filter((r) => r === null).length;
+                    const total = selectedRows.length;
+                    const none = eligibleCount === 0;
+                    // No ticked row qualifies: greyed with the reason, never hidden (RBAC rule).
+                    const firstReason = reasons.find((r) => r !== null) ?? '';
+                    return (
+                      <DropdownMenuItem
+                        key={kind}
+                        aria-disabled={none || undefined}
+                        title={none ? `None of the selected can be ${label === 'Delete' ? 'deleted' : `${label.toLowerCase()}d`} — ${firstReason}` : undefined}
+                        onSelect={(e) => { if (none) { e.preventDefault(); return; } void runBulk(kind); }}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
+                          none ? 'text-gray-400 cursor-not-allowed opacity-60' : kind === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${none ? 'text-gray-300' : className}`} />
+                        <span>{label} ({eligibleCount === total ? total : `${eligibleCount} of ${total}`})</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+                icon={<X className="w-4 h-4" />}
+                className="whitespace-nowrap !h-9 !text-sm"
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+          {onDisplayModeChange && (
+            <ListViewToggle value={displayMode} onChange={onDisplayModeChange} className="self-start sm:self-auto" />
+          )}
         </div>
 
         {filtersOpen && (
@@ -1040,6 +1336,95 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
         ? createPortal(clearSortButton, sortActionSlot)
         : <div className="flex justify-end mb-3">{clearSortButton}</div>)}
 
+      {/* ── Card view ── the Candidate Results tab's card grid: one card per
+          row, carrying the same fields the table shows. */}
+      {displayMode === 'grid' ? (
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={`skeleton-${i}`} className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 flex flex-col gap-3">
+                <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                <div className="h-3 w-3/4 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
+          errorPanel
+        ) : pageRows.length === 0 ? (
+          emptyPanel
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            {pageRows.map((row) => {
+              const isSelected = selectedIds.has(row.id);
+              return (
+                /* A div, not a <button>: the host's Actions menu is a button
+                   and must not nest inside one. */
+                <div
+                  key={row.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openRow(row)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') openRow(row); }}
+                  className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${
+                    flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
+                  } ${gridCardSelectedClass(isSelected)}`}
+                >
+                  <GridCardSelect
+                    selected={isSelected}
+                    onToggle={() => toggleSelected(row.id)}
+                    label={row.jobName}
+                    selectionActive={selectedIds.size > 0}
+                  />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">{cellContent(row, 'jobName')}</div>
+                    <div className="shrink-0 -mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
+                      {actionsCell(row)}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {row.jobId && <JobIdBadge>{row.jobId}</JobIdBadge>}
+                    <span title="Job version"><VersionPill kind="job" version={row.jobVersion} /></span>
+                    <span title="Interview version"><VersionPill kind="interview" version={row.interviewVersion} /></span>
+                  </div>
+
+                  <div className="flex items-center flex-wrap gap-y-1">{cellContent(row, 'status')}</div>
+
+                  {row.rounds.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {row.rounds.map((type, index) => (
+                        <span
+                          key={`${type}-${index}`}
+                          title={ROUND_LABELS[type] || type}
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                        >
+                          {ROUND_SHORT_LABELS[type] || ROUND_LABELS[type] || type}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-4 text-sm">
+                    {/* No column headers on a card, so the counts keep their words
+                        (the table cells show the number alone). */}
+                    <span>{cellContent(row, 'invitations')}<span className="text-xs text-gray-400 ml-1">sent</span></span>
+                    <span>{cellContent(row, 'completed')}<span className="text-xs text-gray-400 ml-1">completed</span></span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs">
+                    <span className="text-gray-500 dark:text-slate-500 tabular-nums">{formatISTStamp(row.createdAt)}</span>
+                    <CreatedBy name={row.createdBy} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      ) : (
+      <>
       {/* ── The table ── */}
       <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
         <div ref={scrollRef} className="tf-table-shell">
@@ -1050,6 +1435,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                 {/* Select All — this page's rows. Not pinned: Job ID is the
                     pinned column, and it covers this one as the table scrolls. */}
                 <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle">
+                  {/* Loading: the header is skeleton bars too, as in the shared
+                      TableSkeleton — no real labels until the rows arrive. */}
+                  {isLoading ? (
+                    <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                  ) : (
                   <button
                     type="button"
                     onClick={toggleAllOnPage}
@@ -1064,6 +1454,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                       <Square className="w-4 h-4 text-gray-400" />
                     )}
                   </button>
+                  )}
                 </th>
                 {shownColumns.map((col) => {
                   const isSorted = sortKey === col.key;
@@ -1073,34 +1464,39 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                       key={col.key}
                       scope="col"
                       aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`px-3 py-2.5 whitespace-nowrap align-middle text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${
-                        col.align === 'right' ? 'text-right' : 'text-left'
+                      className={`px-3 py-2.5 whitespace-nowrap align-middle text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 ${
+                        col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                       } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''} ${col.key === 'jobId' ? 'tf-sticky-col-left' : ''}`}
                     >
+                      {isLoading ? (
+                        <div className={`h-3.5 w-16 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse ${col.align === 'right' ? 'ml-auto' : col.align === 'center' ? 'mx-auto' : ''}`} />
+                      ) : (
                       <button
                         type="button"
                         onClick={() => toggleSort(col.key)}
                         disabled={!!error}
-                        className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
+                        className={`inline-flex items-center gap-1.5 group uppercase transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
                           col.align === 'right' ? 'flex-row-reverse' : ''
                         } ${isSorted ? 'text-brand-blue' : ''}`}
                         title={`Sort by ${col.label}`}
                       >
-                        {col.label}
+                        {/* A long title (Invitations Sent, Interview Version…) wraps to two lines past 8rem. */}
+                        <span className={`inline-block w-max max-w-[8rem] whitespace-normal leading-tight ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}>{col.label}</span>
                         <SortIcon
                           className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
                             isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'
                           }`}
                         />
                       </button>
+                      )}
                     </th>
                   );
                 })}
                 <th
                   scope="col"
-                  className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 tf-sticky-col"
+                  className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 tf-sticky-col"
                 >
-                  Actions
+                  {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                 </th>
               </tr>
             </thead>
@@ -1132,45 +1528,13 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
 
               {!isLoading && error && (
                 <tr>
-                  <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
-                    <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
-                      <AlertTriangle className="w-7 h-7 text-destructive" />
-                    </div>
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                      Unable to load interviews
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
-                      Something went wrong while loading the interview list. Please try again.
-                    </p>
-                    <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
-                      Retry
-                    </Button>
-                    </div>
-                  </td>
+                  <td colSpan={columnCount} className="p-0">{errorPanel}</td>
                 </tr>
               )}
 
               {!isLoading && !error && pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
-                    <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                      <Video className="w-7 h-7 text-brand-blue" />
-                    </div>
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                      {isNarrowed ? 'No interviews found' : 'No interviews yet'}
-                    </h3>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
-                      {isNarrowed
-                        ? 'No interviews match your current search or filter criteria.'
-                        : 'AI interviews you create will be listed here.'}
-                    </p>
-                    {isNarrowed && (
-                      <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-                        Clear Filters
-                      </Button>
-                    )}
-                    </div>
-                  </td>
+                  <td colSpan={columnCount} className="p-0">{emptyPanel}</td>
                 </tr>
               )}
 
@@ -1232,39 +1596,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                         </Button>
                       )}
-                      {renderRowActions ? (
-                        renderRowActions(row.config)
-                      ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                            aria-label={`Actions for ${row.jobName}`}
-                            title="Actions"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
-                          {rowActions(row).map(({ key, label, icon: Icon, run, disabled, reason }) => (
-                            /* aria-disabled, not Radix `disabled`: its pointer-events:none
-                               swallowed the permission tooltip. Locked = no-op click. */
-                            <DropdownMenuItem
-                              key={key}
-                              onClick={disabled ? undefined : run}
-                              onSelect={disabled ? (e) => e.preventDefault() : undefined}
-                              aria-disabled={disabled || undefined}
-                              title={disabled ? reason : undefined}
-                              className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS} ${disabled ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
-                            >
-                              <Icon className="w-4 h-4" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      )}
+                      {actionsCell(row)}
                       </div>
                     </td>
                   </tr>
@@ -1293,6 +1625,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {!isLoading && !error && (
         <ListPagination
@@ -1304,6 +1638,24 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
           itemLabel="interviews"
           pageSizeOptions={PAGE_SIZE_OPTIONS}
           scrollContainerRef={scrollRef}
+        />
+      )}
+
+      {/* Export (Actions menu) — format, then the columns to include. */}
+      {showExportModal && (
+        <ExportColumnsModal<'csv' | 'xls'>
+          title="Export Interviews"
+          recordCount={selectedRows.length}
+          formats={[
+            { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+            { key: 'xls', title: 'Excel Format (.xls)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+          ]}
+          format={exportFormat}
+          onFormatChange={setExportFormat}
+          columns={EXPORT_COLUMNS}
+          initialColumnIds={EXPORT_COLUMNS.map((c) => c.id)}
+          onExport={handleExport}
+          onClose={() => setShowExportModal(false)}
         />
       )}
     </div>

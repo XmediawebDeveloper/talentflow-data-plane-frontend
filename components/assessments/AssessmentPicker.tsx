@@ -397,7 +397,7 @@ export default function AssessmentPicker({
                 <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
                     <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
-                    <th className={PICKER_TH}>Job ID</th>
+                    <th className={PICKER_TH}>JD ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>
                     <th className={PICKER_TH}>Assessment Version</th>

@@ -6,6 +6,8 @@ import {
   CheckCircle2, AlertCircle, MinusCircle, HelpCircle, ArrowRight, XCircle,
 } from 'lucide-react';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '../ResultRowActions';
+import { toast } from 'sonner';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -601,13 +603,18 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
     });
   };
 
+  // ai_interview:download_report — the PDF / Excel / JSON buttons (greyed, never hidden).
+  const canDownloadReports = useCanDownloadAIReports();
   const handleDownload = async (format: 'pdf' | 'excel' | 'json') => {
+    if (!canDownloadReports) return;
     setDownloading(true);
     try {
       const blob = await aiInterviewService.downloadReport(sessionId, 'coverage', format);
       const ext = format === 'excel' ? 'xlsx' : format;
       aiInterviewService.triggerBlobDownload(blob, `Coverage_Report.${ext}`);
-    } catch { /* silent */ }
+    } catch (err) {
+      if (isForbiddenError(err)) toast.error(AI_REPORT_DOWNLOAD_DENIED);
+    }
     setDownloading(false);
   };
 
@@ -625,7 +632,9 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
             key={fmt}
             onClick={() => handleDownload(fmt as any)}
             disabled={downloading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            aria-disabled={!canDownloadReports || undefined}
+            title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors${canDownloadReports ? '' : ' opacity-50 cursor-not-allowed'}`}
           >
             <Download className="w-3.5 h-3.5" />
             {fmt.toUpperCase()}

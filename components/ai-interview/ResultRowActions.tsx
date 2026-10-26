@@ -4,7 +4,20 @@ import { useState } from 'react';
 import { Eye, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { downloadSessionReport, downloadSessionReports, canTryReport, NoReportError } from './evaluation-dashboard/downloadSessionReport';
+
+/** `ai_interview:download_report` — every AI interview report download
+ *  (row icon, bulk PDFs, result page, coverage/evaluation tabs) is gated on
+ *  it; the backend enforces the same code on /reports. Greyed, never hidden. */
+export const AI_REPORT_DOWNLOAD_DENIED = 'You do not have permission to download AI interview reports';
+export function useCanDownloadAIReports(): boolean {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  return isTenantAdmin || hasPermissionCode('ai_interview:download_report');
+}
+/** A 403 from the /reports endpoints — show the permission message, not a generic error. */
+export const isForbiddenError = (err: any): boolean =>
+  err?.response?.status === 403 || err?.status === 403;
 
 /** Below Tailwind's `sm` (640px) — where the results lists default to cards. */
 export const isPhoneWidth = (): boolean =>
@@ -25,8 +38,10 @@ export function DownloadPdfsButton({
   zipName: string;
 }) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const canDownloadReports = useCanDownloadAIReports();
 
   const handleClick = async () => {
+    if (!canDownloadReports) return;
     setProgress({ done: 0, total: 0 });
     try {
       const rows = await getRows();
@@ -42,7 +57,7 @@ export function DownloadPdfsButton({
       }
     } catch (err) {
       console.error('[DownloadPdfsButton] failed:', err);
-      toast.error('Could not download the reports. Please try again.');
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
     } finally {
       setProgress(null);
     }
@@ -51,14 +66,15 @@ export function DownloadPdfsButton({
   const noneSelected = selectedCount === 0;
   return (
     // Wrapper carries the tooltip — a disabled button shows none.
-    <span title={noneSelected ? 'Select candidates to download their reports' : undefined} className="inline-flex">
+    <span title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : noneSelected ? 'Select candidates to download their reports' : undefined} className="inline-flex">
       <Button
         variant="primary"
         size="sm"
         onClick={handleClick}
-        disabled={noneSelected || !!progress}
+        disabled={!canDownloadReports || noneSelected || !!progress}
+        aria-disabled={!canDownloadReports || undefined}
         icon={progress ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-        title={noneSelected ? undefined : 'Download the evaluation report PDFs of the selected candidates'}
+        title={!canDownloadReports || noneSelected ? undefined : 'Download the evaluation report PDFs of the selected candidates'}
         className="whitespace-nowrap !h-[38px] !text-sm"
       >
         {progress
@@ -81,9 +97,16 @@ export function DownloadPdfsButton({
  */
 export default function ResultRowActions({ session, onView }: { session: any; onView: () => void }) {
   const [downloading, setDownloading] = useState(false);
-  const canDownload = canTryReport(session);
+  const canDownloadReports = useCanDownloadAIReports();
+  const hasReport = canTryReport(session);
+  const canDownload = canDownloadReports && hasReport;
+  // Permission reason wins over "not evaluated yet".
+  const downloadBlockedReason = !canDownloadReports
+    ? AI_REPORT_DOWNLOAD_DENIED
+    : !hasReport ? 'Report available once the interview is evaluated' : undefined;
 
   const handleDownload = async () => {
+    if (!canDownload) return;
     setDownloading(true);
     try {
       await downloadSessionReport(session.id);
@@ -93,7 +116,7 @@ export default function ResultRowActions({ session, onView }: { session: any; on
         return;
       }
       console.error('[ResultRowActions] report download failed:', err);
-      toast.error('Could not download the report. Please try again.');
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
     } finally {
       setDownloading(false);
     }
@@ -112,12 +135,13 @@ export default function ResultRowActions({ session, onView }: { session: any; on
         <Eye className="w-4 h-4" />
       </Button>
       {/* Wrapper carries the tooltip — a disabled button shows none. */}
-      <span title={canDownload ? undefined : 'Report available once the interview is evaluated'} className="inline-flex">
+      <span title={downloadBlockedReason} className="inline-flex">
       <Button
         variant="secondary"
         size="sm"
         onClick={handleDownload}
         disabled={!canDownload || downloading}
+        aria-disabled={!canDownloadReports || undefined}
         title={canDownload ? 'Download Report (PDF)' : undefined}
         aria-label="Download Report"
         className="!w-8 !h-8 !px-0"

@@ -1794,7 +1794,7 @@ export default function AuditTrailPage() {
                   </button>
                   <button
                     onClick={() => setExportDateMode('custom')}
-                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${exportDateMode === 'custom' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${exportDateMode === 'custom' ? 'bg-brand-blue text-white border-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'}`}
                   >
                     Custom
                   </button>

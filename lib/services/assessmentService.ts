@@ -647,6 +647,29 @@ export const assessmentService = {
   },
 
   /**
+   * Audit-log a client-side export of the assessment list (All / Active /
+   * Draft / Archived bulk Export). Best-effort: never blocks the download.
+   */
+  async logListExport(payload: {
+    format: 'csv' | 'xls' | 'excel';
+    record_count: number;
+    export_type:
+      | 'assessment_list'
+      | 'assessment_candidate_results'
+      | 'assessment_invitation_status'
+      | 'assessment_activity_logs_selected'
+      | 'assessment_results';
+    tab?: string;
+    ids: string[];
+  }): Promise<void> {
+    try {
+      await api.post('/assessments/export/log', payload);
+    } catch (error) {
+      console.warn('[assessmentService] export audit log failed:', error);
+    }
+  },
+
+  /**
    * Publish assessment
    */
   async publish(id: string): Promise<AssessmentResponse> {
