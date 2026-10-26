@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   Calendar,
   Globe,
+  Search,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -102,11 +104,21 @@ const actionTone: Record<string, { tile: string; icon: string }> = {
   create: { tile: 'bg-success/10 ring-success/20', icon: 'text-success' },
   update: { tile: 'bg-brand-blue/10 ring-brand-blue/15', icon: 'text-brand-blue' },
   delete: { tile: 'bg-destructive/10 ring-destructive/20', icon: 'text-destructive' },
-  publish: { tile: 'bg-brand-orange/10 ring-brand-orange/20', icon: 'text-brand-orange-deep' },
+  publish: { tile: 'bg-brand-blue/10 ring-brand-blue/15', icon: 'text-brand-blue' },
   default: { tile: 'bg-brand-blue/10 ring-brand-blue/15', icon: 'text-brand-blue' },
 };
 
 type ActivityTab = 'activity' | 'audit';
+
+type ActionFilter = 'all' | 'create' | 'update' | 'delete' | 'login';
+
+const ACTION_FILTERS: { id: ActionFilter; label: string; match: string[] }[] = [
+  { id: 'all', label: 'All', match: [] },
+  { id: 'create', label: 'Create', match: ['create', 'upload'] },
+  { id: 'update', label: 'Update', match: ['update', 'change'] },
+  { id: 'delete', label: 'Delete', match: ['delete', 'remove'] },
+  { id: 'login', label: 'Login', match: ['login', 'logout'] },
+];
 
 export default function ActivityLogsPage() {
   const [activeTab, setActiveTab] = useState<ActivityTab>('audit');
@@ -114,6 +126,8 @@ export default function ActivityLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [limit, setLimit] = useState(50);
+  const [search, setSearch] = useState('');
+  const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
 
   // Persist the tab + fetch limit and the scroll position so returning to this
   // page (browser back / remount) lands the user where they left off. The
@@ -182,8 +196,24 @@ export default function ActivityLogsPage() {
     fetchRecentActivity();
   }, [fetchRecentActivity]);
 
+  // Client-side search + action filter over the fetched logs
+  const query = search.trim().toLowerCase();
+  const actionMatch = ACTION_FILTERS.find((a) => a.id === actionFilter)?.match ?? [];
+  const isFiltering = query !== '' || actionFilter !== 'all';
+  const filteredLogs = logs.filter((log) => {
+    const action = log.action.toLowerCase();
+    if (actionMatch.length && !actionMatch.some((m) => action.includes(m))) return false;
+    if (!query) return true;
+    return [log.user_name, log.user_email, log.action_label, log.action, log.entity_type, log.ip_address]
+      .some((v) => v?.toLowerCase().includes(query));
+  });
+  const clearFilters = () => {
+    setSearch('');
+    setActionFilter('all');
+  };
+
   // Group logs by date
-  const groupedLogs: GroupedLogs = logs.reduce((groups: GroupedLogs, log) => {
+  const groupedLogs: GroupedLogs = filteredLogs.reduce((groups: GroupedLogs, log) => {
     const date = formatISTDate(log.created_at);
     if (!groups[date]) {
       groups[date] = [];
@@ -224,9 +254,9 @@ export default function ActivityLogsPage() {
 
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} min ago`;
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return formatISTTime(dateStr);
+    if (diffHours < 24) return `${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+    if (diffDays < 7) return `${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
+    return '';
   };
 
   return (
@@ -272,7 +302,13 @@ export default function ActivityLogsPage() {
 
         {/* Tab navigation — segmented control */}
         <section className="mb-5">
-          <div role="tablist" aria-label="Activity tabs" className="inline-flex w-full max-w-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
+          <div role="tablist" aria-label="Activity tabs" className="relative inline-flex w-full max-w-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
+            <span
+              aria-hidden
+              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                activeTab === 'activity' ? 'translate-x-full' : 'translate-x-0'
+              }`}
+            />
             {([
               { id: 'audit', label: 'Audit Log' },
               { id: 'activity', label: 'Activity Log' },
@@ -285,10 +321,8 @@ export default function ActivityLogsPage() {
                   role="tab"
                   aria-selected={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04]'
-                      : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                  className={`relative z-10 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-300 ${
+                    isActive ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
                   {tab.label}
@@ -303,7 +337,7 @@ export default function ActivityLogsPage() {
             up seamlessly. */}
         {activeTab === 'audit' && (
           <section
-            className="mb-5
+            className="mb-5 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-out
               [&_[data-slot=breadcrumb]]:hidden
               [&>main]:flex-none
               [&>main]:overflow-visible
@@ -326,9 +360,56 @@ export default function ActivityLogsPage() {
 
         {/* Timeline */}
         {activeTab === 'activity' && (
-        <>
+        <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 motion-safe:ease-out">
 
-        {loading ? (
+        {/* Search + action filter chips */}
+        {logs.length > 0 && (
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search user, action, entity or IP"
+                aria-label="Search activity"
+                className="h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {ACTION_FILTERS.map((a) => {
+                const isActive = a.id === actionFilter;
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => setActionFilter(a.id)}
+                    aria-pressed={isActive}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      isActive
+                        ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
+                        : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 border-gray-200 dark:border-slate-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                );
+              })}
+              {isFiltering && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-gray-500 dark:text-slate-400 transition-colors hover:text-brand-blue"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {loading && logs.length === 0 ? (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="flex items-center gap-2 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-5 py-2.5">
               <Skeleton className="h-3.5 w-3.5 rounded" />
@@ -351,7 +432,7 @@ export default function ActivityLogsPage() {
               ))}
             </div>
           </div>
-        ) : error ? (
+        ) : error && logs.length === 0 ? (
           <div className="flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertTriangle className="h-5 w-5" />
@@ -365,6 +446,15 @@ export default function ActivityLogsPage() {
               icon={Activity}
               title="No recent activity"
               description="There is no recent system activity to show yet."
+            />
+          </div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <EmptyState
+              icon={Search}
+              title="No matching activity"
+              description="Try a different search or action filter."
+              action={{ label: 'Clear filters', onClick: clearFilters, variant: 'secondary' }}
             />
           </div>
         ) : (
@@ -421,10 +511,18 @@ export default function ActivityLogsPage() {
                               </div>
 
                               {/* Timestamp */}
-                              <div className="shrink-0 text-right">
-                                <p className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-slate-300">{getRelativeTime(log.created_at)}</p>
-                                <p className="whitespace-nowrap text-2xs text-gray-400 dark:text-slate-500">{formatISTTime(log.created_at)}</p>
-                              </div>
+                              <Tooltip content={`${formatISTDate(log.created_at)} · ${formatISTTime(log.created_at)}`}>
+                                <div className="shrink-0 cursor-default text-right">
+                                  {getRelativeTime(log.created_at) ? (
+                                    <>
+                                      <p className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-slate-300">{getRelativeTime(log.created_at)}</p>
+                                      <p className="whitespace-nowrap text-2xs text-gray-400 dark:text-slate-500">{formatISTTime(log.created_at)}</p>
+                                    </>
+                                  ) : (
+                                    <p className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-slate-300">{formatISTTime(log.created_at)}</p>
+                                  )}
+                                </div>
+                              </Tooltip>
                             </div>
 
                             {/* Details preview */}
@@ -488,12 +586,14 @@ export default function ActivityLogsPage() {
             <Button
               variant="secondary"
               onClick={() => setLimit(l => l + 50)}
+              disabled={loading}
+              icon={loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : undefined}
             >
-              Load More
+              {loading ? 'Loading…' : 'Load More'}
             </Button>
           </div>
         )}
-        </>
+        </div>
         )}
       </div>
       </div>

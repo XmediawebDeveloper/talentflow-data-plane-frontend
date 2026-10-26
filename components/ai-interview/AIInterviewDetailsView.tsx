@@ -201,7 +201,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     ? { inert: true as const, 'aria-disabled': true, className: 'opacity-50 grayscale select-none' }
     : { className: '' };
   const router = useRouter();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   /** A link into the config flow, carrying `originQuery` so its breadcrumb
    *  keeps the page this was opened from. */
   const withOrigin = (url: string) =>
@@ -229,6 +229,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
+  // Export (clusters & HR questions file) — `ai_interview:export`; greyed, not hidden.
+  const canExportAIInterviews = isTenantAdmin || hasPermissionCode('ai_interview:export');
   // A disabled JD keeps its interview visible but read-only: every action
   // below is blocked until the job is enabled again (the backend refuses too).
   const jdDisabled = isJdDisabled(config.jd_status);
@@ -724,6 +726,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   };
 
   const handleExport = async (format: ExportFileFormat) => {
+    if (!canExportAIInterviews) return;
     const title = config.jd_title || config.position || 'AI Interview';
     const displayId = config.display_id || config.id;
     await exportRows(format, CONFIG_EXPORT_HEADERS, buildConfigExportRows(), `${displayId}-clusters-hr`, {
@@ -1771,10 +1774,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setShowExportModal(true)}
-                  title="Export clusters & HR questions"
+                  onClick={() => { if (canExportAIInterviews) setShowExportModal(true); }}
+                  title={canExportAIInterviews ? 'Export clusters & HR questions' : 'You do not have permission to export AI interviews'}
                   aria-label="Export"
-                  className="px-2 min-w-[40px] min-h-[40px] flex-shrink-0"
+                  aria-disabled={!canExportAIInterviews || undefined}
+                  className={`px-2 min-w-[40px] min-h-[40px] flex-shrink-0 ${canExportAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   <Download className="w-4 h-4" />
                 </Button>
