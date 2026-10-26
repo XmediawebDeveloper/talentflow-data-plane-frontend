@@ -350,8 +350,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
       {/* Main Audit Trail */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 tf-round-edges">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+        {/* Tighter padding and a stacked header below sm: on a phone the
+            Export button sat beside a three-line description, and the chips
+            and timeline cards below clipped against the card's right edge. */}
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Activity Log</h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -379,11 +382,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
           </div>
 
           {/* Category Filter Chips */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-sm text-gray-600 mr-2">Filter:</span>
             <button
               onClick={() => setCategoryFilter('all')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 categoryFilter === 'all'
                   ? 'bg-gray-900 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -393,7 +396,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             </button>
             <button
               onClick={() => setCategoryFilter('config_lifecycle')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 categoryFilter === 'config_lifecycle'
                   ? 'bg-blue-600 text-white'
                   : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -403,7 +406,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             </button>
             <button
               onClick={() => setCategoryFilter('candidate_activity')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 categoryFilter === 'candidate_activity'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
@@ -421,7 +424,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         </div>
 
         {/* Timeline View */}
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {isLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -528,9 +531,12 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
+                        {/* Stacks below sm (timestamp + Details under the text):
+                            side by side, the 115px timestamp column pushed the
+                            text column past the card's edge on a phone. */}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                               <h4 className={`font-medium ${colors.text}`}>
                                 {activity.title}
                               </h4>
@@ -542,8 +548,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                                 {getCategoryLabel(activity.category)}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600">{activity.description}</p>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                            <p className="text-sm text-gray-600 [overflow-wrap:anywhere]">{activity.description}</p>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3" />
@@ -564,7 +570,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                               )}
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
+                          <div className="flex items-center gap-3 sm:block sm:text-right flex-shrink-0">
                             <p className="text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
                             <button className="mt-1 text-xs text-gray-400 hover:text-gray-600">
                               <Eye className="w-3 h-3 inline mr-1" />
@@ -576,7 +582,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                     </div>
 
                     {isExpanded && (
-                      <div className="ml-0 sm:ml-14 mt-2 sm:mt-0 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm">
+                      <div className="ml-0 sm:ml-14 mt-2 sm:mt-0 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm [overflow-wrap:anywhere]">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
@@ -615,7 +621,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         </div>
 
         {/* Footer with Pagination */}
-        <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+        <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600">
             Showing {activities.length} of {total} activity entries
           </div>

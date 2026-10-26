@@ -121,7 +121,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                   {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate">
                 Which version of {resume.name}&apos;s resume to use
               </p>
             </div>
@@ -290,7 +290,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
 
         {/* Footer */}
         <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
-          <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+          <p className="text-sm text-gray-600 dark:text-slate-400">
             {compareChecked.length > 0
               ? `${compareChecked.length} of 2 selected to compare`
               : `Version ${numberFor(selectedVersionId) ?? '-'} will be used`}

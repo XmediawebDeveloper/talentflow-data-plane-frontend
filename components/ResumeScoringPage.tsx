@@ -2719,10 +2719,12 @@ export default function ResumeScoringPage({
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
+                {/* Icon tile from sm only (as on the other page headers): on a
+                    phone it held a 52px column and squeezed the long title. */}
+                <div className="hidden sm:flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
                   <ClipboardList className="h-5 w-5" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     {/* JD ID before the title — the same badge the job rows use. */}
                     {jdCodeOf(selectedHistoryItem) && (
@@ -3566,11 +3568,12 @@ export default function ResumeScoringPage({
             )}
           </div>
         ) : (
-        /* One card around the whole job view — search bar, job rows and
-           pagination — the same box View by Candidates sits in (the
-           ScoredResumesTable shell), so switching views doesn't change the
-           page's shape. */
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
+        /* The whole job view — search bar, job rows and pagination — sits
+           straight on the page panel. It used to be wrapped in a bordered
+           card (p-4 sm:p-6) inside the panel: a double frame that put the
+           content 33px / 57px in instead of the panel's 16px / 32px, and
+           framed the job cards card-in-card. */
+        <div>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
@@ -3587,6 +3590,12 @@ export default function ResumeScoringPage({
               // Row 1: Search (fills the row), Location and Industry inline,
               // More Filters, Reset, Sort by, List / Grid.
               controlsFollowSearch
+              // Breaks on the toolbar's own width, not the viewport's: from
+              // sm the viewport-based row gave the two 12rem selects and the
+              // buttons their full width and crushed the search box to an
+              // icon on a tablet. Below 56rem the search gets its own line.
+              fitToContainer
+              containerBreakpoint="4xl"
               onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
               filtersOpen={showHistoryFilters}
               activeFilterCount={historySearch.activeFilterCount}
@@ -4044,7 +4053,7 @@ export default function ResumeScoringPage({
               const inlineCandidatesPanel = isJobExpanded ? (
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="mt-3 pt-3 pl-3 sm:pl-6 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
+                  className="mt-3 pt-3 sm:pl-6 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
                 >
                   {!globalLoaded ? (
                     <div className="flex items-center gap-2 py-3 text-sm text-gray-500 dark:text-slate-400">

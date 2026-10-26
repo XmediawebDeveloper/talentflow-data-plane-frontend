@@ -114,7 +114,7 @@ function LoadingSteps({ steps }: { steps: string[] }) {
                 />
               </span>
               <span
-                className={`mt-2 text-xs sm:text-sm transition-colors duration-500 ${
+                className={`mt-2 text-sm transition-colors duration-500 ${
                   current ? 'font-medium text-gray-900' : 'text-gray-500'
                 }`}
               >

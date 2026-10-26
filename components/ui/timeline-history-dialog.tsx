@@ -112,7 +112,7 @@ export function TimelineHistoryDialog({
           </div>
           <div className="min-w-0">
             <h3 id="timeline-history-title" className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 tracking-tight">Timeline History</h3>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={[candidateName, candidateEmail].filter(Boolean).join(' · ')}>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={[candidateName, candidateEmail].filter(Boolean).join(' · ')}>
               {candidateName || 'Candidate'}
               {candidateEmail && <span className="text-gray-400 dark:text-slate-500"> · {candidateEmail}</span>}
             </p>

@@ -2455,14 +2455,11 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   outline-offset: 1px;
 }
 
-/* ── Prevent iOS auto-zoom on input focus ─────────────────── */
-@media (max-width: 640px) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-  textarea,
-  select {
-    font-size: 16px;
-  }
-}
+/* ── iOS auto-zoom on input focus ─────────────────────────────
+   Handled by `maximumScale: 1` in app/layout.tsx's viewport export. A
+   16px-on-phones override used to live here; it made every search box and
+   select larger than the text around it, so inputs now keep their own
+   Tailwind size (text-sm) at every width. */
 
 /* ── Page containers clip sideways with `overflow-x: clip`, never `hidden` ──
    House rule, and the reason every page shell in this app reads

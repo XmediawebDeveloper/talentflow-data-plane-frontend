@@ -242,7 +242,7 @@ export default function AIInterviewVersionHistoryModal({
                 {/* JD ID · job name · job version */}
                 <div className="flex items-center gap-2 mt-0.5 min-w-0 flex-wrap">
                   {jobShortId && <JobIdBadge>{jobShortId}</JobIdBadge>}
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">{jobTitle || 'This job'}</span>
+                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{jobTitle || 'This job'}</span>
                   {jobVersion != null && (
                     <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">V{jobVersion}</span>
                   )}

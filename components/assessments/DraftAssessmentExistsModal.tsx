@@ -78,7 +78,7 @@ export default function DraftAssessmentExistsModal({
                 <FileText className="w-5 h-5 text-brand-blue dark:text-blue-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">Existing Draft</p>
+                <p className="text-sm text-gray-500 dark:text-slate-400">Existing Draft</p>
                 {/* ONE LINE: JD ID | job name | job version | assessment version + Draft.
                     The app's own pieces - the shared JobIdBadge, the job list's
                     name typography, VersionChip (blue = job, cyan = assessment)

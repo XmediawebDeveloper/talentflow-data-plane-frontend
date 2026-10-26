@@ -357,7 +357,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                 <Icon className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{config.title}</h1>
+                <h1 className="text-lg font-semibold tracking-tight sm:text-xl">{config.title}</h1>
                 <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">{config.description}</p>
               </div>
             </div>
@@ -430,10 +430,13 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
             <table className="w-full">
               <thead className="bg-gray-50/80">
                 <tr className="text-left">
-                  {config.columns.map((col) => (
+                  {config.columns.map((col, c) => (
                     <th
                       key={col}
-                      className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500"
+                      /* Actions pinned right: the table is ~1000px wide, so on
+                         a phone or tablet Edit / Delete sat off-screen behind a
+                         sideways scroll. */
+                      className={`px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 ${c === config.columns.length - 1 ? 'tf-sticky-col' : ''}`}
                     >
                       {col}
                     </th>
@@ -464,7 +467,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                         {item.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4 tf-sticky-col">
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => openEditModal(item)}

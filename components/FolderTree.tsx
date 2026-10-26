@@ -267,6 +267,11 @@ interface FolderTreeProps {
    *  the whole column into a slim rail (md and up), remembered per browser
    *  and shared with every other database view. */
   collapsible?: boolean;
+  /** The tree sits directly on a page panel (no card around it): drop the
+   *  padding on its outer edges so its content lines up with the panel's
+   *  content inset. Below md (a full-width band) both sides; from md (left
+   *  column) the left side only. */
+  flushStart?: boolean;
 }
 
 export default function FolderTree({
@@ -290,6 +295,7 @@ export default function FolderTree({
   canUploadToFolder = true,
   hideDeleteFolder = false,
   collapsible = false,
+  flushStart = false,
 }: FolderTreeProps) {
   // Collapsed folder column (md and up) — shared state, button and rail
   // (components/ui/folder-panel-collapse), the same in every database view.
@@ -894,7 +900,7 @@ export default function FolderTree({
       {/* Content column. Static (and self-sized) below md where the panel is a
           full-width band above the table; pinned to the panel's box from md up
           so the tree fills the row rather than defining it. */}
-      <div className="flex flex-col p-3 sm:p-4 md:absolute md:inset-0 md:overflow-hidden">
+      <div className={`flex flex-col md:absolute md:inset-0 md:overflow-hidden ${flushStart ? 'py-3 sm:py-4 md:pr-4' : 'p-3 sm:p-4'}`}>
       {/* Pinned fixtures — All Resumes, root, Archived Resumes. Named as their
           own section so it's clear why they can't be renamed or deleted. */}
       {pinnedFolders.length > 0 && (

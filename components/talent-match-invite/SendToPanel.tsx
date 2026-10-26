@@ -196,7 +196,7 @@ export default function SendToPanel({
             brand-orange wash and border, lightbulb, "Tip:" lead. Only beside a
             list — an empty one already says where to add candidates. */}
         {addInNextStep && candidates.length > 0 && (
-          <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+          <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5 text-sm text-gray-700 dark:text-slate-300">
             <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" aria-hidden="true" />
             <span className="min-w-0">
               <span className="font-semibold">Tip:</span> You can add more candidates in the next step: manually, by uploading an Excel file, or from the Resume Database.

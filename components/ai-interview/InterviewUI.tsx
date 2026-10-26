@@ -11541,7 +11541,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         the light chat background (reported). */}
                     {/* Pre-turn shows only the top "Get ready to answer" chip. */}
                     {!isPre && (
-                      <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-xs sm:text-sm leading-snug shadow-lg">{subtitle}</div>
+                      <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-sm leading-snug shadow-lg">{subtitle}</div>
                     )}
                   </div>
                 </div>

@@ -663,7 +663,7 @@ export default function AdminDashboard({
                 </span>
                 Recent Activity
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
+              <p className="text-sm text-gray-600 mt-0.5">
                 Latest actions across your workspace
               </p>
             </div>

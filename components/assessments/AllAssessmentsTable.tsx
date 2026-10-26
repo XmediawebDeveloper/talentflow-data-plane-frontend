@@ -1032,7 +1032,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   return (
     <div className={embedded ? 'w-full' : 'flex-1 overflow-x-clip bg-slate-50'}>
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? 'w-full' : 'p-3 sm:p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
           {!embedded && (
             <PageBreadcrumb
               className="mb-4 md:mb-6"
@@ -1065,7 +1065,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight">
                 {heading}
               </h1>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+              <p className="text-sm text-gray-600 dark:text-slate-400">
                 {subheading}
               </p>
             </div>
@@ -1190,7 +1190,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       value={draftFilters.createdFrom}
                       max={draftFilters.createdTo || undefined}
                       onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
-                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
+                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-sm"
                     />
                     <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
                     <DateField
@@ -1198,7 +1198,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       value={draftFilters.createdTo}
                       min={draftFilters.createdFrom || undefined}
                       onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
-                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
+                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-sm"
                     />
                   </div>
                 </div>

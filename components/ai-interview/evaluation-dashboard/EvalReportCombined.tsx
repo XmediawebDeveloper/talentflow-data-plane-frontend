@@ -847,10 +847,12 @@ function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
   label: string; value: number; Icon: typeof Target; bar: string; iconTone: string; badge: ReactNode;
 }) {
   return (
-  <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(160px,1.2fr)_minmax(0,2fr)_64px_96px] items-center gap-x-4 gap-y-2 px-5 py-4">
+  <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(160px,1.2fr)_minmax(0,2fr)_64px_96px] items-center gap-x-4 gap-y-2 px-4 sm:px-5 py-4">
     <div className="flex items-center gap-3 min-w-0">
       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${iconTone}`}><Icon className="w-4 h-4" /></div>
-      <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{label}</div>
+      {/* Wraps on a phone, where the label column is ~120px and truncating
+          left "Must-Have…" / "Nice-to-H…"; one truncated line from sm. */}
+      <div className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100 [overflow-wrap:anywhere] sm:truncate">{label}</div>
     </div>
     <div className="relative col-span-2 sm:col-span-1 order-last sm:order-none">
       <div className="h-2.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
@@ -876,7 +878,8 @@ function CoverageBlock({ label, cov, tone, Icon }: {
     <div className="flex items-center justify-between gap-2 mb-2">
       <div className="flex items-center gap-2 min-w-0">
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tone.icon}`}><Icon className="w-3.5 h-3.5" /></div>
-        <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{label}</div>
+        {/* Same as SectionRow: wrap on a phone rather than truncate to "…-Have …". */}
+        <div className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100 [overflow-wrap:anywhere] sm:truncate">{label}</div>
       </div>
       <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${
         cov.pct === 100 ? 'bg-success-subtle text-success-strong ring-success-line'
@@ -1034,7 +1037,7 @@ export function EvalReportCombined({
       ? { tile: 'bg-success-subtle/60 border-success-line', icon: 'bg-success text-white', text: 'text-success', pill: 'bg-success-subtle text-success-strong ring-success-line' }
       : { tile: 'bg-destructive-subtle/60 border-destructive-line', icon: 'bg-destructive text-white', text: 'text-destructive', pill: 'bg-destructive-subtle text-destructive ring-destructive-line' };
   const card = 'rounded-2xl border border-gray-300 dark:border-slate-600/70 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5';
-  const cardHeader = 'flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-600/70';
+  const cardHeader = 'flex items-center gap-3 px-4 sm:px-5 py-4 border-b border-gray-200 dark:border-slate-600/70';
   const headerIcon = 'w-9 h-9 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0';
   const cardTitle = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 
@@ -1083,7 +1086,9 @@ export function EvalReportCombined({
             {/* Key stats sit beside the Match Score, same height as its
                 badge, so the row (and the photo, which follows the row
                 height) doesn't grow. */}
-            <div className="flex flex-wrap items-stretch gap-2.5 shrink-0">
+            {/* Shrinks below sm so the tiles wrap inside the card; shrink-0
+                there held the row at its one-line width and clipped the last tile. */}
+            <div className="flex flex-wrap items-stretch gap-2.5 min-w-0 sm:shrink-0">
               {statTiles.map(({ label, value, Icon, icon }) => (
                 <div key={label} className="flex items-center gap-2.5 rounded-xl bg-white/80 dark:bg-slate-900/60 ring-1 ring-black/5 dark:ring-white/10 px-3 py-2">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${icon}`}><Icon className="w-4 h-4" /></div>
@@ -1114,7 +1119,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Executive Summary</div>
         </div>
         {/* The original summary wording, one sentence per point, each with a tick. */}
-        <ul className="p-5 space-y-2.5 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+        <ul className="p-4 sm:p-5 space-y-2.5 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
           {[
             <>{candidate.name} completed an AI-powered technical interview for the <strong>{candidate.role}</strong> position on {interview.date || 'the scheduled date'}.</>,
             <>The evaluation consisted of <strong>{totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</strong> covering <strong>{totalSkills} skill{totalSkills !== 1 ? 's' : ''}</strong> across multiple priority levels.</>,
@@ -1192,7 +1197,7 @@ export function EvalReportCombined({
             <div className={headerIcon}><Layers className="w-4 h-4" /></div>
             <div className={cardTitle}>Cluster Coverage Overview</div>
           </div>
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <div className="divide-y divide-gray-200 dark:divide-slate-700">
               {sectionsPresent.mustHave && (
                 <CoverageBlock label="Must-Have Section" cov={mhCov} Icon={Target}
@@ -1286,7 +1291,7 @@ export function EvalReportCombined({
                         : 'No response — no answer was given.')
                   : rawAns;
               return (
-                <div key={i} className="px-5 py-4 space-y-2" style={{ pageBreakInside: 'avoid' }}>
+                <div key={i} className="px-4 sm:px-5 py-4 space-y-2" style={{ pageBreakInside: 'avoid' }}>
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-sm font-bold text-brand-blue">Q{i + 1}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ring-1 ${sectionClass}`}>{sectionLabel} · Q{q.qNum}</span>
@@ -1354,7 +1359,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Hiring Verdict</div>
         </div>
         {/* AI Analysis — why pass / fail, plus the AI narrative */}
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <div className={`flex items-center gap-2 mb-3 font-semibold text-sm ${verdictTone.text}`}>
               {isPartialEvaluation || !isPassed ? <AlertTriangle className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
               {isPartialEvaluation ? 'AI Analysis — Partial Interview Review' : `AI Analysis — Why this candidate ${isPassed ? 'Passed' : 'Failed'}`}
@@ -1397,7 +1402,7 @@ export function EvalReportCombined({
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-slate-600/70">
           {/* Key Strengths */}
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-success-strong">
               <CheckCircle className="w-4 h-4" />
               Key Strengths
@@ -1414,7 +1419,7 @@ export function EvalReportCombined({
           </div>
 
           {/* Areas of Concern */}
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-destructive">
               <XCircle className="w-4 h-4" />
               Areas of Concern
@@ -1438,7 +1443,7 @@ export function EvalReportCombined({
           <div className={headerIcon}><Lightbulb className="w-4 h-4" /></div>
           <div className={cardTitle}>Recommendations &amp; Next Steps</div>
         </div>
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
             <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300 list-disc pl-5">
               {isPassed ? (
                 <>
@@ -1459,7 +1464,7 @@ export function EvalReportCombined({
       </div>
 
       {/* 9. Methodology + confidentiality */}
-      <div className="rounded-2xl bg-brand-blue/5 border border-brand-blue/25 px-5 py-4 flex items-start gap-3" style={{ pageBreakInside: 'avoid' }}>
+      <div className="rounded-2xl bg-brand-blue/5 border border-brand-blue/25 px-4 sm:px-5 py-4 flex items-start gap-3" style={{ pageBreakInside: 'avoid' }}>
         <Info className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
         <div className="text-xs leading-relaxed text-gray-600 dark:text-slate-400 space-y-1.5">
           <p>

@@ -3394,7 +3394,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 PAGE, and the page under the popup has its own. */}
             {!embedded && (
               <PageBreadcrumb
-                className="mb-3"
+                className="mb-4 md:mb-6"
                 items={buildBreadcrumbItems()}
               />
             )}
@@ -3475,7 +3475,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
-              className="mb-3"
+              className="mb-4 md:mb-6"
               items={buildBreadcrumbItems()}
             />
             <div className="w-full">
@@ -3491,8 +3491,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
             <div>
-              <div className="text-xs sm:text-sm text-brand-blue font-medium mb-1">AI-Powered Assessment Generation</div>
-              <div className="text-xs sm:text-sm text-gray-700">
+              <div className="text-sm text-brand-blue font-medium mb-1">AI-Powered Assessment Generation</div>
+              <div className="text-sm text-gray-700">
                 Automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
             </div>
@@ -3563,7 +3563,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 {/* Search Jobs — the Apply to Job dialog's own field, down to
                     the label, the icon and what it searches. */}
                 <div className="mb-4">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Search Jobs</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Jobs</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -3599,7 +3599,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 {/* The count follows the search, so it always describes exactly
                     what is listed — no total beside it, nothing hardcoded. */}
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs sm:text-sm font-medium text-gray-700">
+                  <span className="text-sm font-medium text-gray-700">
                     Select a Job Opening
                     {filteredAvailableJobs.length > 0 && (
                       <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
@@ -4197,7 +4197,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           ? 'No jobs available for a new assessment'
                           : 'No published jobs available'}
                     </p>
-                    <p className="text-xs sm:text-sm mt-1">
+                    <p className="text-sm mt-1">
                       {availableJobs.length > 0
                         ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
                         : hasAnyPublishedVersion
@@ -4300,7 +4300,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-sm sm:text-base text-white font-medium truncate tracking-tight">Create New Job</h2>
-                    <p className="text-white/80 text-xs sm:text-sm hidden sm:block">Create a job description for your assessment</p>
+                    <p className="text-white/80 text-sm hidden sm:block">Create a job description for your assessment</p>
                   </div>
                 </div>
                 <button
@@ -4556,7 +4556,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
                   {section.percentage}
                 </span>
-                <span className="text-xs sm:text-sm text-gray-600">%</span>
+                <span className="text-sm text-gray-600">%</span>
               </div>
             </div>
           </div>
@@ -4676,7 +4676,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 labelled the same thing twice. */}
             {!embedded && (
               <PageBreadcrumb
-                className="mb-3"
+                className="mb-4 md:mb-6"
                 items={buildBreadcrumbItems()}
               />
             )}
@@ -4732,7 +4732,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     {enabledSectionsCount} of 3 enabled
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
+                <p className="text-sm text-gray-500 mb-3 sm:mb-4">
                   Choose which rounds to include in this assessment. Disabled rounds will not appear below.
                 </p>
 
@@ -4894,7 +4894,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             <Clock className="w-4 h-4 text-brand-blue flex-shrink-0" />
                             <h4 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Total Assessment Distribution</h4>
                           </div>
-                          <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
+                          <span className="text-sm text-gray-500 flex-shrink-0">
                             Total:{' '}
                             <span className={`font-bold ${isPercentageValid ? 'text-success' : 'text-destructive'}`}>
                               {totalPercentage}%
@@ -4915,7 +4915,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         </div>
                         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
                           {distribution.map(section => (
-                            <span key={section.name} className="inline-flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                            <span key={section.name} className="inline-flex items-center gap-2 text-sm text-gray-600">
                               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${barColor(section.name)}`} />
                               {/* "Technical round", not "Technical Section" —
                                   the round is what the recruiter switched on
@@ -5376,7 +5376,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     variant="secondary"
                     onClick={() => handleGenerateAssessment(true)}
                     disabled={!isPercentageValid || isGenerating}
-                    className="flex-1"
+                    /* `sm:` only: in the stacked phone column a 0% flex-basis
+                       collapsed both buttons to ~20px tall. */
+                    className="sm:flex-1"
                   >
                     {generatingAction === 'draft' ? 'Saving...' : 'Save as Draft'}
                   </Button>
@@ -5403,7 +5405,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           ? 'Select at least one HR question before publishing'
                           : ''
                     }
-                    className={`flex-1 ${!canPublishAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`sm:flex-1 ${!canPublishAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {generatingAction === 'publish' ? (
                       <>
@@ -5462,7 +5464,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">
                       Disable Coding Round?
                     </h3>
-                    <p className="text-xs sm:text-sm text-destructive">
+                    <p className="text-sm text-destructive">
                       This will remove the coding assessment
                     </p>
                   </div>
@@ -5518,7 +5520,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                   <div>
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Cannot Disable Round</h3>
-                    <p className="text-xs sm:text-sm text-warning">Minimum requirement not met</p>
+                    <p className="text-sm text-warning">Minimum requirement not met</p>
                   </div>
                 </div>
               </div>
@@ -5628,7 +5630,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       <div className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-3" items={buildBreadcrumbItems()} />
+            <PageBreadcrumb className="mb-4 md:mb-6" items={buildBreadcrumbItems()} />
 
             {/* PUBLISHED. One centred column on the page's own white surface —
                 no card of its own, because a bordered panel inside the page
@@ -5757,7 +5759,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <div className="text-center">
             <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-brand-blue animate-spin mx-auto mb-4" />
             <h3 className="text-sm sm:text-base text-gray-900 mb-2 tracking-tight">Saving Assessment Definition...</h3>
-            <p className="text-xs sm:text-sm text-gray-600">Configuring your assessment parameters</p>
+            <p className="text-sm text-gray-600">Configuring your assessment parameters</p>
           </div>
         </div>
       );
@@ -5770,7 +5772,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             {/* Past the commit point, so the trail is one leaf and the wizard
                 steps are not in it — see `buildStepCrumbs`. */}
             <PageBreadcrumb
-              className="mb-3"
+              className="mb-4 md:mb-6"
               items={buildBreadcrumbItems()}
             />
             <div className="w-full">
@@ -5792,7 +5794,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm sm:text-base text-success-strong mb-2 tracking-tight">Unique Question Generation Enabled</h3>
-                <p className="text-xs sm:text-sm text-success-strong mb-3">
+                <p className="text-sm text-success-strong mb-3">
                   <strong>Each candidate will receive a completely unique set of questions</strong> when they take this assessment. 
                   This ensures fairness, prevents question sharing, and maintains assessment integrity.
                 </p>
@@ -5828,15 +5830,15 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             </div>
             <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
               <div className="min-w-0 p-3 sm:p-4 bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 ring-1 ring-brand-blue/15 rounded-xl">
-                <div className="text-xs sm:text-sm text-brand-blue mb-1 font-medium">Duration</div>
+                <div className="text-sm text-brand-blue mb-1 font-medium">Duration</div>
                 <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{duration} min</div>
               </div>
               <div className="min-w-0 p-3 sm:p-4 bg-success-subtle ring-1 ring-success-line rounded-xl">
-                <div className="text-xs sm:text-sm text-success mb-1 font-medium">Sections</div>
+                <div className="text-sm text-success mb-1 font-medium">Sections</div>
                 <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{generatedAssessment?.sections.length}</div>
               </div>
               <div className="min-w-0 p-3 sm:p-4 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl">
-                <div className="text-xs sm:text-sm text-brand-orange-deep mb-1 font-medium">Difficulty</div>
+                <div className="text-sm text-brand-orange-deep mb-1 font-medium">Difficulty</div>
                 <div className="text-lg sm:text-2xl text-gray-900 truncate font-semibold tracking-tight">{selectedJob?.experience}</div>
               </div>
             </div>
@@ -5848,7 +5850,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
               <div>
                 <h3 className="text-sm sm:text-base text-brand-blue mb-2 font-semibold tracking-tight">Evaluation & Scoring Logic</h3>
-                <p className="text-xs sm:text-sm text-gray-700">
+                <p className="text-sm text-gray-700">
                   How candidates will be evaluated when taking this assessment
                 </p>
               </div>
@@ -5860,7 +5862,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <Brain className="w-4 h-4 text-brand-cyan" />
                   <Code className="w-4 h-4 text-brand-orange-deep" />
-                  <h4 className="text-xs sm:text-sm text-gray-900 font-medium">Technical + Coding</h4>
+                  <h4 className="text-sm text-gray-900 font-medium">Technical + Coding</h4>
                   <span className="ml-auto px-2 py-0.5 bg-success-subtle text-success rounded text-xs">
                     Scored
                   </span>
@@ -5915,7 +5917,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </div>
 
                 <div className="mb-3 sm:mb-4">
-                  <div className="text-xs sm:text-sm text-gray-700 mb-2">Topics Covered:</div>
+                  <div className="text-sm text-gray-700 mb-2">Topics Covered:</div>
                   <div className="flex flex-wrap gap-2">
                     {/* HR topics come back as `{text, type, time}` objects from the
                         backend (the HR Question Bank shape), while Technical/Coding
@@ -5923,7 +5925,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         triggers React error #31 ("Objects are not valid as a child").
                         Resolve to the visible text per item. */}
                     {section.topics.map((topic: any, tidx: number) => (
-                      <span key={tidx} className="px-2 sm:px-3 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm max-w-full [overflow-wrap:anywhere]">
+                      <span key={tidx} className="px-2 sm:px-3 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-sm max-w-full [overflow-wrap:anywhere]">
                         {typeof topic === 'string' ? topic : (topic?.text || topic?.name || '')}
                       </span>
                     ))}
@@ -5932,7 +5934,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
                 {/* Note: Questions NOT generated yet */}
                 <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4">
-                  <div className="text-xs sm:text-sm text-gray-700">
+                  <div className="text-sm text-gray-700">
                     <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>
                 </div>
@@ -5942,7 +5944,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="text-xs sm:text-sm text-gray-600">
+            <div className="text-sm text-gray-600">
               Status: <span className={`font-medium ${generatedAssessment?.status === 'Active' ? 'text-success' : 'text-warning'}`}>
                 {generatedAssessment?.status === 'Active' ? 'Published' : 'Draft'}
               </span>

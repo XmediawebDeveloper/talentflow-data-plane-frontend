@@ -370,7 +370,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
           </p>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+              <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
               <input
                 type="number"
                 min={1}

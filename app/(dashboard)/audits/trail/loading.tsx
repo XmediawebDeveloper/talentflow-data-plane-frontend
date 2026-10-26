@@ -33,7 +33,7 @@ export default function Loading() {
           {/* Stats cards */}
           <div className="mb-4 sm:mb-6 lg:mb-8 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 sm:p-4 md:p-6">
+              <div key={i} className="rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6">
                 <div className="flex items-start justify-between">
                   <div className="space-y-2 min-w-0">
                     <Skeleton className="h-3.5 w-20" />

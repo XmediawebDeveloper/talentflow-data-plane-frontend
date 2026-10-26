@@ -203,7 +203,7 @@ export default function InviteFilterBar({
         <DateField
           value={filters.dateFrom}
           onChange={(v) => onChange({ ...filters, dateFrom: v })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-sm"
           aria-label="Invite date from"
         />
 
@@ -211,7 +211,7 @@ export default function InviteFilterBar({
           value={filters.dateTo}
           min={filters.dateFrom || undefined}
           onChange={(v) => onChange({ ...filters, dateTo: v })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-sm"
           aria-label="Invite date to"
         />
 

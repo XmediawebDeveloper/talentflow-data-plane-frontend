@@ -155,7 +155,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
           <div className={RECRUITER_CARD}>
 
             {/* Page header — the recruiter pattern exactly: 36px brand tile,
-                `text-lg sm:text-xl` title, `text-xs sm:text-sm` subtitle. The
+                `text-lg sm:text-xl` title, `text-sm` subtitle. The
                 blue gradient hero with a `text-4xl` title that stood here is
                 the single loudest reason these pages read as another app. */}
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">

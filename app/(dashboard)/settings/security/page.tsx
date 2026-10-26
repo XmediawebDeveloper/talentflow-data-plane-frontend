@@ -24,7 +24,7 @@ function SecuritySkeleton() {
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
           {/* Hero */}
-          <section className="mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-5 sm:p-6 lg:p-7">
+          <section className="mb-4 sm:mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="flex-1 space-y-2">
@@ -36,7 +36,7 @@ function SecuritySkeleton() {
           </section>
 
           {/* Password card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 md:p-6 mb-4 sm:mb-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -50,7 +50,7 @@ function SecuritySkeleton() {
           </div>
 
           {/* Two-Factor Authentication card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 md:p-6 mb-4 sm:mb-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
@@ -64,7 +64,7 @@ function SecuritySkeleton() {
           </div>
 
           {/* Session Timeout card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 md:p-6 mb-4 sm:mb-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center gap-3 mb-4">
               <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
               <div className="space-y-2">
@@ -76,7 +76,7 @@ function SecuritySkeleton() {
           </div>
 
           {/* Active Sessions card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-3 sm:p-4 md:p-6">
+          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
             <Skeleton className="h-5 w-36 mb-4" />
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -376,7 +376,7 @@ export default function SecurityPage() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Security Settings' }]} />
 
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+        <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
           <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
@@ -390,17 +390,17 @@ export default function SecurityPage() {
                 Account protection
               </div>
               <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Security Settings</h1>
-              <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage password, two-factor auth, sessions, and trust controls.</p>
+              <p className="mt-2 max-w-2xl text-sm text-white/80">Manage password, two-factor auth, sessions, and trust controls.</p>
             </div>
           </div>
         </section>
 
         {/* Password Section */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
-          <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2 sm:mb-3 md:mb-4">Password</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Password</h2>
           <div className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Current Password</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Current Password</label>
               <div className="relative">
                 <input
                   type={showCurrentPassword ? 'text' : 'password'}
@@ -411,7 +411,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-black text-xs sm:text-sm md:text-base"
+                  className="w-full px-3 py-2 pr-9 sm:pr-10 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-black text-sm"
                 />
                 <button
                   type="button"
@@ -423,7 +423,7 @@ export default function SecurityPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">New Password</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">New Password</label>
               <div className="relative">
                 <input
                   type={showNewPassword ? 'text' : 'password'}
@@ -434,7 +434,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
+                  className={`w-full px-3 py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-sm ${
                     passwordForm.newPassword
                       ? passwordStrength === 5
                         ? 'border-success'
@@ -454,7 +454,7 @@ export default function SecurityPage() {
               </div>
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm New Password</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
@@ -465,7 +465,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
+                  className={`w-full px-3 py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-sm ${
                     passwordForm.confirmPassword
                       ? passwordsMatch
                         ? 'border-success'
@@ -486,7 +486,7 @@ export default function SecurityPage() {
             {/* Password Requirements - Live Validation */}
             {(passwordForm.newPassword || passwordForm.confirmPassword) && (
               <div className="p-2.5 sm:p-3 md:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
-                <p className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Password Requirements:</p>
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Password Requirements:</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                   {[
                     { label: 'At least 8 characters', check: passwordChecks.length },
@@ -498,7 +498,7 @@ export default function SecurityPage() {
                   ].map((req, i) => (
                     <div key={i} className="flex items-center gap-1.5 sm:gap-2">
                       <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 transition-colors ${req.check ? 'text-success' : 'text-gray-300 dark:text-slate-500'}`} />
-                      <span className={`text-xs sm:text-sm transition-colors ${req.check ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
+                      <span className={`text-sm transition-colors ${req.check ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
                         {req.label}
                       </span>
                     </div>
@@ -534,7 +534,7 @@ export default function SecurityPage() {
               }}
               disabled={Boolean(isChangingPassword || (passwordForm.newPassword && passwordStrength < 3) || !canManage)}
               title={!canManage ? 'You do not have permission to change the password' : ''}
-              className="text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
+              className="text-sm w-full sm:w-auto justify-center sm:justify-start"
             >
               {isChangingPassword ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -549,15 +549,15 @@ export default function SecurityPage() {
         </div>
 
         {/* Two-Factor Authentication */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-4">
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
-                <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-success" />
+              <div className="w-10 h-10 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                <Smartphone className="w-5 h-5 text-success" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50">Two-Factor Authentication</h2>
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500">Add an extra layer of security</p>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Two-Factor Authentication</h2>
+                <p className="text-sm text-gray-500 dark:text-slate-500">Add an extra layer of security</p>
               </div>
             </div>
             {!show2FASetup && (
@@ -583,7 +583,7 @@ export default function SecurityPage() {
 
           {settings.two_factor_enabled && !show2FASetup && (
             <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-success-subtle rounded-lg">
-              <p className="text-xs sm:text-sm text-success">
+              <p className="text-sm text-success">
                 Two-factor authentication is enabled. You'll need to enter a code from your authenticator app when signing in.
               </p>
             </div>
@@ -591,9 +591,9 @@ export default function SecurityPage() {
 
           {/* 2FA Setup Modal */}
           {show2FASetup && (
-            <div className="mt-2 sm:mt-3 md:mt-4 p-3 sm:p-4 md:p-6 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+            <div className="mt-2 sm:mt-3 md:mt-4 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="font-medium text-xs sm:text-sm md:text-base text-gray-900 dark:text-slate-50">Setup Two-Factor Authentication</h3>
+                <h3 className="font-medium text-sm text-gray-900 dark:text-slate-50">Setup Two-Factor Authentication</h3>
                 <button
                   onClick={() => setShow2FASetup(false)}
                   className="p-1 hover:bg-gray-200 rounded"
@@ -604,7 +604,7 @@ export default function SecurityPage() {
 
               <div className="space-y-3 sm:space-y-4">
                 <div>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2 sm:mb-3">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2 sm:mb-3">
                     1. Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                   </p>
                   {twoFAQRCode ? (
@@ -617,23 +617,23 @@ export default function SecurityPage() {
                       />
                     </div>
                   ) : (
-                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border text-sm text-gray-600 dark:text-slate-400">
                       QR code unavailable. Enter the setup key below into your authenticator app instead.
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
                     Or manually enter this secret key:
                   </p>
-                  <code className="block p-2 sm:p-3 bg-gray-800 text-green-400 rounded-lg font-mono text-2xs sm:text-xs md:text-sm break-all">
+                  <code className="block p-2 sm:p-3 bg-gray-800 text-green-400 rounded-lg font-mono text-sm break-all">
                     {twoFASecret}
                   </code>
                 </div>
 
                 <div>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
                     2. Enter the 6-digit code from your authenticator app:
                   </p>
                   <input
@@ -641,7 +641,7 @@ export default function SecurityPage() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -665,9 +665,9 @@ export default function SecurityPage() {
 
           {/* Disable 2FA Confirmation Dialog */}
           {showDisable2FADialog && (
-            <div className="mt-2 sm:mt-3 md:mt-4 p-3 sm:p-4 md:p-6 bg-destructive-subtle rounded-lg border border-destructive-line">
+            <div className="mt-2 sm:mt-3 md:mt-4 p-4 sm:p-6 bg-destructive-subtle rounded-lg border border-destructive-line">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="font-medium text-xs sm:text-sm md:text-base text-gray-900 dark:text-slate-50">Disable Two-Factor Authentication</h3>
+                <h3 className="font-medium text-sm text-gray-900 dark:text-slate-50">Disable Two-Factor Authentication</h3>
                 <button
                   onClick={() => {
                     setShowDisable2FADialog(false);
@@ -682,13 +682,13 @@ export default function SecurityPage() {
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex items-start gap-2 p-2.5 sm:p-3 bg-warning-subtle border border-warning-line rounded-lg">
                   <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0 mt-0.5" />
-                  <p className="text-xs sm:text-sm text-warning-strong">
+                  <p className="text-sm text-warning-strong">
                     Disabling 2FA will make your account less secure. You'll only need your password to sign in.
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
                     Enter the 6-digit code from your authenticator app to confirm:
                   </p>
                   <input
@@ -696,7 +696,7 @@ export default function SecurityPage() {
                     value={disable2FACode}
                     onChange={(e) => setDisable2FACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-destructive-line focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-destructive-line focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -706,7 +706,7 @@ export default function SecurityPage() {
                     variant="destructive"
                     onClick={confirmDisable2FA}
                     disabled={is2FALoading || disable2FACode.length !== 6}
-                    className="flex-1 text-sm sm:text-base"
+                    className="flex-1 text-sm"
                   >
                     {is2FALoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -722,14 +722,14 @@ export default function SecurityPage() {
         </div>
 
         {/* Session Timeout */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
-          <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800 dark:text-slate-100" />
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <div className="flex items-center gap-2 sm:gap-3 mb-4">
+            <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Clock className="w-5 h-5 text-gray-800 dark:text-slate-100" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50">Session Timeout</h2>
-              <p className="text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500">Auto log out after inactivity</p>
+              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Session Timeout</h2>
+              <p className="text-sm text-gray-500 dark:text-slate-500">Auto log out after inactivity</p>
             </div>
           </div>
           <div className="relative">
@@ -745,7 +745,7 @@ export default function SecurityPage() {
               disabled={isSavingTimeout}
               aria-disabled={!canManage}
               title={!canManage ? 'You do not have permission to manage security settings' : ''}
-              className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none bg-white dark:bg-slate-900 disabled:opacity-50 text-black text-xs sm:text-sm md:text-base ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none bg-white dark:bg-slate-900 disabled:opacity-50 text-black text-sm ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>
@@ -763,18 +763,18 @@ export default function SecurityPage() {
 
         {/* SSO (Single Sign-On) */}
         <FeatureGate feature="sso" mode="section">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
-            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-600" />
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+            <div className="flex items-center gap-2 sm:gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <KeyRound className="w-5 h-5 text-blue-600" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50">Single Sign-On (SSO)</h2>
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500">Configure SSO for your organization</p>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Single Sign-On (SSO)</h2>
+                <p className="text-sm text-gray-500 dark:text-slate-500">Configure SSO for your organization</p>
               </div>
             </div>
             <div className="p-2.5 sm:p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-xs sm:text-sm text-blue-700">
+              <p className="text-sm text-blue-700">
                 SSO is available for your plan. Contact your administrator to configure SAML or OIDC integration.
               </p>
             </div>
@@ -782,9 +782,9 @@ export default function SecurityPage() {
         </FeatureGate>
 
         {/* Active Sessions */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3 md:mb-4">
-            <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50">Active Sessions</h2>
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-4">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Active Sessions</h2>
             {sessions.filter(s => !s.is_current).length > 0 && (
               <button
                 onClick={() => {
@@ -793,7 +793,7 @@ export default function SecurityPage() {
                 }}
                 aria-disabled={!canManage}
                 title={!canManage ? 'You do not have permission to manage security settings' : ''}
-                className={`text-xs sm:text-sm self-start sm:self-auto ${
+                className={`text-sm self-start sm:self-auto ${
                   canManage ? 'text-destructive hover:text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'
                 }`}
               >
@@ -803,7 +803,7 @@ export default function SecurityPage() {
           </div>
 
           {sessions.length === 0 ? (
-            <p className="text-gray-500 dark:text-slate-500 text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">No active sessions found</p>
+            <p className="text-gray-500 dark:text-slate-500 text-center py-6 sm:py-8 text-sm">No active sessions found</p>
           ) : (
             <div className="space-y-2 sm:space-y-3 md:space-y-4">
               {sessions.map((session) => (
@@ -812,25 +812,25 @@ export default function SecurityPage() {
                   className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 md:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg gap-2 sm:gap-3 md:gap-4 overflow-hidden"
                 >
                   <div className="flex items-start sm:items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600 dark:text-slate-400" />
+                    <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-5 h-5 text-gray-600 dark:text-slate-400" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 dark:text-slate-50 text-xs sm:text-sm md:text-base truncate">{session.device_info || 'Unknown Device'}</p>
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 md:gap-2 text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500">
+                      <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{session.device_info || 'Unknown Device'}</p>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 md:gap-2 text-sm text-gray-500 dark:text-slate-500">
                         <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                         <span className="truncate max-w-[100px] sm:max-w-none">{session.location || 'Unknown Location'}</span>
                         {session.ip_address && (
                           <span className="text-gray-400 dark:text-slate-500 truncate">({session.ip_address})</span>
                         )}
                         <span className="hidden sm:inline">•</span>
-                        <span className="text-2xs sm:text-xs md:text-sm">{session.is_current ? 'Current session' : formatLastActive(session.last_active_at)}</span>
+                        <span className="text-sm">{session.is_current ? 'Current session' : formatLastActive(session.last_active_at)}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex-shrink-0 self-end sm:self-auto">
                     {session.is_current ? (
-                      <span className="px-1.5 sm:px-2 md:px-3 py-0.5 bg-success-subtle text-success rounded-full text-2xs sm:text-xs md:text-sm font-medium whitespace-nowrap">
+                      <span className="px-1.5 sm:px-2 md:px-3 py-0.5 bg-success-subtle text-success rounded-full text-xs font-medium whitespace-nowrap">
                         Current
                       </span>
                     ) : (
@@ -841,7 +841,7 @@ export default function SecurityPage() {
                         }}
                         aria-disabled={!canManage}
                         title={!canManage ? 'You do not have permission to manage security settings' : ''}
-                        className={`text-2xs sm:text-xs md:text-sm whitespace-nowrap ${
+                        className={`text-sm whitespace-nowrap ${
                           canManage ? 'text-destructive hover:text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'
                         }`}
                       >
@@ -866,21 +866,21 @@ export default function SecurityPage() {
             />
 
             {/* Modal */}
-            <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-3 sm:p-4 md:p-6 animate-in fade-in zoom-in duration-200">
-              <div className="flex items-center justify-between mb-2 sm:mb-3 md:mb-4">
-                <h3 className="text-xs sm:text-sm md:text-lg font-semibold text-gray-900 dark:text-slate-50">Revoke All Other Sessions</h3>
+            <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Revoke All Other Sessions</h3>
                 <button
                   onClick={() => setShowRevokeAllDialog(false)}
                   className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors flex-shrink-0"
                  aria-label="Close">
-                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-500 dark:text-slate-500" />
+                  <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
                 </button>
               </div>
 
               <div className="space-y-2.5 sm:space-y-3 md:space-y-4">
                 <div className="flex items-start gap-2 p-2.5 sm:p-3 md:p-4 bg-warning-subtle border border-warning-line rounded-lg">
-                  <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-warning flex-shrink-0 mt-0.5" />
-                  <p className="text-2xs sm:text-xs md:text-sm text-warning-strong">
+                  <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-warning-strong">
                     This will sign you out from all other devices and browsers. Only your current session will remain active.
                   </p>
                 </div>
@@ -890,7 +890,7 @@ export default function SecurityPage() {
                     variant="destructive"
                     onClick={confirmRevokeAllOtherSessions}
                     disabled={isRevokingSession}
-                    className="flex-1 font-medium text-xs sm:text-sm md:text-base"
+                    className="flex-1 font-medium text-sm"
                   >
                     {isRevokingSession ? (
                       <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />

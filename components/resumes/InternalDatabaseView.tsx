@@ -1044,7 +1044,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 )}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+            <p className="text-sm text-gray-600 dark:text-slate-400">
               Search and filter resumes shared across your organization
             </p>
           </div>
@@ -1081,19 +1081,21 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         </div>
       )}
 
-      {/* tf-round-edges, not overflow-hidden: SearchFilterBarCompact opens its
-          filter panel and sort menu as absolutely positioned children, and
-          clipping the card would cut them off. Without it the bar's white and
-          the pager's slate square off the corners they sit in. */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+      {/* No frame of its own: this wraps the page's whole list inside the white
+          page panel, so a border/ring/shadow here was a card-in-panel double
+          frame that pushed the search and cards in from the panel's 16/32px
+          content inset. Not overflow-hidden either — SearchFilterBarCompact
+          opens its filter panel and sort menu as absolutely positioned
+          children, and clipping would cut them off. */}
+      <div className="bg-white dark:bg-slate-900">
         {/* Search pinned to the top of the scroll viewport so it stays reachable
             while the list scrolls. Opaque background so rows can't show through,
             and z above the rows below it. The filter panel/sort menu open as
-            children, so they ride along with the sticky bar. `[&>div]:rounded-t-xl`
-            rounds the inner bar so it doesn't square off the card's rounded top
-            corners (this wrapper is now the tf-round-edges first child) — no
-            overflow-hidden, which would clip the open filter panel. */}
-        <div className="sticky top-0 z-20 bg-white dark:bg-slate-900 [&>div]:rounded-t-xl">
+            children, so they ride along with the sticky bar — no
+            overflow-hidden, which would clip the open filter panel. Offset by
+            --crumb-h (set by the page) so it pins just below the sticky
+            breadcrumb instead of under it. */}
+        <div className="sticky top-[var(--crumb-h,0px)] z-20 bg-white dark:bg-slate-900">
           <SearchFilterBarCompact
             searchQuery={searchQuery}
             onSearchChange={handleSearchChange}
@@ -1108,13 +1110,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         {loading && (
           <div className="flex items-center justify-center py-3 border-b border-gray-100 dark:border-slate-700 bg-brand-blue/5 dark:bg-brand-blue/10">
             <Loader2 className="w-4 h-4 animate-spin text-brand-blue mr-2" />
-            <span className="text-xs sm:text-sm text-brand-blue">Searching...</span>
+            <span className="text-sm text-brand-blue">Searching...</span>
           </div>
         )}
 
         {/* Search Results Summary */}
         {(appliedSearchQuery || activeFilterCount > 0) && !loading && (
-          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+          <div className="py-3 border-b border-gray-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-brand-blue" />
               <span className="text-sm text-gray-700 dark:text-slate-300">
@@ -1137,6 +1139,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         )}
 
         <ResumeTable
+          flushCards
           resumes={paginatedResumes}
           selectedResumes={selectedResumes}
           draggable={false}
@@ -1161,13 +1164,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
         {/* Pagination */}
         {calculatedTotalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+          <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 py-3 border-t border-gray-100 dark:border-slate-700">
             <div className="text-sm text-gray-600 dark:text-slate-400">
               Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -1359,7 +1362,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       )}
       {/* Delete Resume Confirmation Dialog */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
-        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
+        <AlertDialogContent className="sm:max-w-lg" hideClose>
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">

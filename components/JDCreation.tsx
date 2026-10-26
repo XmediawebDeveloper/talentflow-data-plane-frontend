@@ -955,8 +955,11 @@ const STEP2_REQUIRED_MESSAGES = {
 const STEP2_REQUIRED_FIELD_ORDER = [
   'mustHaveSkills', 'experience', 'industryType', 'salaryRange', 'allowOverqualified', 'locations',
 ] as const;
+// A field group inside a Step 2 section card. Framed from sm only: on a phone a
+// bordered, padded box inside the bordered, padded card was card-in-card and
+// squeezed the inputs by another 26px; there the groups are just spaced apart.
 const STEP2_PANEL_CLASS =
-  'min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-3 sm:p-4';
+  'min-w-0 sm:rounded-lg sm:border sm:border-gray-100 sm:dark:border-slate-700/60 sm:p-4';
 
 /**
  * Where a phrase from the "possibly missed" panel can go.
@@ -8228,7 +8231,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">
                       AI-Generated JD
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
                       Let AI create a professional job description based on your inputs
                     </p>
                   </div>
@@ -8250,7 +8253,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">
                       Manual Input
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
                       Write or paste your own job description
                     </p>
                   </div>
@@ -8658,7 +8661,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             value={generatedJD}
                             onChange={(e) => setGeneratedJD(e.target.value)}
                             readOnly={isJDInUse}
-                            className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-xs sm:text-sm text-black ${
+                            className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-sm text-black ${
                               generatedJD.length > 0 && !isEnglishOnly(generatedJD)
                                 ? 'border-destructive-line bg-destructive-subtle'
                                 : 'border-gray-200 dark:border-slate-700'
@@ -8686,7 +8689,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="text-center">
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
                         <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">No job description generated yet</p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 px-4">
+                        <p className="text-sm text-gray-500 dark:text-slate-500 px-4">
                           Fill in the job details and click &quot;Generate Job Description&quot;
                         </p>
                       </div>
@@ -8707,7 +8710,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="text-center">
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
                         <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">Start typing your job description</p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 px-4">
+                        <p className="text-sm text-gray-500 dark:text-slate-500 px-4">
                           Paste or write your JD in the left panel
                         </p>
                       </div>
@@ -8717,8 +8720,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
             </div>
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-end mt-4 sm:mt-6">
+            {/* Navigation Buttons — full-width Next on a phone, as on Steps 2
+                and 3, so the wizard's footer reads the same at every step. */}
+            <div className="flex justify-end mt-4 sm:mt-6 [&>button]:w-full sm:[&>button]:w-auto">
               <Button
                 variant="primary"
                 onClick={handleNext}
@@ -8800,7 +8804,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                   <div>
                     <h4 className="text-sm sm:text-base text-brand-blue font-medium">Parameters Modified</h4>
-                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-gray-700 dark:text-slate-300">
                       You&apos;ve made changes to skills or comments. The JD will be regenerated when you continue to Review.
                     </p>
                   </div>
@@ -8819,7 +8823,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Extracted Information</h2>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
                     {isRegenerating
                       ? 'Processing... Fields are temporarily read-only.'
                       : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
@@ -9355,7 +9359,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
-                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                      <span className="text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
 
@@ -9513,7 +9517,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
-                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <span className="text-sm text-gray-700 dark:text-slate-300">
                       Evaluate Job Hopping
                     </span>
                   </label>
@@ -9542,7 +9546,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
-                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                      <span className="text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
                   <select
@@ -9861,7 +9865,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {!experienceHasCeiling && (
                     <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
                       <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                      <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                      <p className="min-w-0 flex-1 text-sm text-gray-700 dark:text-slate-300">
                         <span className="font-semibold">Set to Yes:</span> the experience requirement has no upper limit, so there is no range to exceed. Enter a To (maximum) years value above to choose No.
                       </p>
                     </div>
@@ -9932,7 +9936,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
-                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                    <span className="text-sm text-gray-700 dark:text-slate-300">Required field</span>
                   </label>
                 </div>
 
@@ -11304,7 +11308,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
 
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center mt-6 sm:mt-8 gap-3 sm:gap-0">
-              <div className="flex gap-2 sm:gap-3">
+              <div className="flex gap-2 sm:gap-3 [&>button]:w-full sm:[&>button]:w-auto">
                 <Button
                   variant="secondary"
                   onClick={async () => {
@@ -11392,7 +11396,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         navigator.clipboard.writeText(text);
                         toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
                       }}
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm text-black"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm text-black"
                       title="Copy to clipboard"
                     >
                       <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -11403,7 +11407,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                          format is chosen there. */
                       onClick={() => setShowDownloadFormatDialog(true)}
                       aria-haspopup="dialog"
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm text-black"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm text-black"
                     >
                       <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Download
@@ -11411,7 +11415,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 }
               />
-              <div className="min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 sm:p-6 lg:p-8">
+              {/* Document frame from sm only — on a phone a second bordered,
+                  padded box inside the card squeezed the JD text column. */}
+              <div className="min-w-0 sm:rounded-lg sm:border sm:border-gray-100 sm:dark:border-slate-700/60 sm:p-6 lg:p-8">
                 <div className="prose prose-sm max-w-none">
                   {/* Job Title & Quick Info */}
                   <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-200 dark:border-slate-700">
@@ -11606,7 +11612,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {salaryText ? (
                       <p className="flex flex-wrap items-center gap-1.5">
                         <span className={fieldValue}>{salaryText}</span>
-                        <span className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">/ {extractedData.compensationType}</span>
+                        <span className="text-gray-600 dark:text-slate-400 text-sm">/ {extractedData.compensationType}</span>
                       </p>
                     ) : (
                       <p className={emptyValue}>Not specified</p>
@@ -11683,7 +11689,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </span>
                     </h4>
                     {extractedData.assessmentGuidance
-                      ? <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.assessmentGuidance}</p>
+                      ? <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.assessmentGuidance}</p>
                       : <p className={emptyValue}>No assessment guidance provided</p>}
                   </div>
                   <div className={tile}>
@@ -11697,7 +11703,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {extractedData.internalRecruiterComments.length > 0 ? (
                       <div className="space-y-2">
                         {extractedData.internalRecruiterComments.map((comment, index) => (
-                          <div key={index} className="bg-warning-subtle p-2.5 sm:p-3 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 border border-warning-line [overflow-wrap:anywhere]">
+                          <div key={index} className="bg-warning-subtle p-2.5 sm:p-3 rounded-lg text-sm text-gray-700 dark:text-slate-300 border border-warning-line [overflow-wrap:anywhere]">
                             {comment}
                           </div>
                         ))}
@@ -11715,7 +11721,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </span>
                     </h4>
                     {extractedData.additionalDetails
-                      ? <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
+                      ? <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
                       : <p className={emptyValue}>No additional details provided</p>}
                   </div>
                 </div>
@@ -11750,7 +11756,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </div>
                       <div className="min-w-0">
                         <h2 id="jd-download-format-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Download Job Description</h2>
-                        <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Choose a file format</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Choose a file format</p>
                       </div>
                     </div>
                     <Button
@@ -11793,7 +11799,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between">
-              <div className="flex gap-2 sm:gap-3 order-2 sm:order-1">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3 order-2 sm:order-1">
                 <Button
                   variant="secondary"
                   onClick={() => setStep('extract')}
@@ -11821,7 +11827,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                 </Button>
               </div>
-              <div className="flex gap-2 sm:gap-3 order-1 sm:order-2">
+              <div className="flex gap-2 sm:gap-3 order-1 sm:order-2 [&>button]:w-full sm:[&>button]:w-auto">
                 <Button
                   variant="primary"
                   onClick={handleConfirmPublish}
@@ -11862,7 +11868,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight mb-4 sm:mb-5">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
             <PublishedSummaryCard
-              className="mx-auto mb-5 sm:mb-6 w-fit max-w-full sm:max-w-3xl"
+              /* Capped at 48rem AND the column: `sm:max-w-3xl` alone let a long
+                 job name push it past a 768px tablet's 704px content box. */
+              className="mx-auto mb-5 sm:mb-6 w-fit max-w-[min(100%,48rem)]"
               icon={<Briefcase className="w-5 h-5 text-brand-blue" />}
               jobId={publishedJobCode}
               jobName={jobTitle}
@@ -11937,7 +11945,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ? 'You already have this industry'
                 : 'This industry may not fit the JD'}
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm space-y-2">
+            <DialogDescription className="text-sm space-y-2">
               <span className="block">
                 You proposed <strong>{extractedData.industrySuggestedName}</strong>.
               </span>
@@ -12016,7 +12024,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
               This JD also welcomes freshers
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm space-y-2">
+            <DialogDescription className="text-sm space-y-2">
               <span className="block">
                 The JD text asks for experience and, in the same breath, invites freshers with
                 internship experience to apply.
@@ -12101,7 +12109,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
           <DialogHeader>
             <DialogTitle className="text-base sm:text-lg">Cancel JD Creation?</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogDescription className="text-sm">
               Are you sure you want to cancel? {editingId && (!isPreExistingDraft || hasUnsavedChanges) ? 'This will delete the current draft and all your progress will be lost.' : 'You will be taken back to the job openings list.'}
             </DialogDescription>
           </DialogHeader>

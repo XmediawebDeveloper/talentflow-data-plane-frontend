@@ -2694,7 +2694,7 @@ export default function AIInterview() {
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
                 AI Interview Management
               </h1>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 max-w-xl">
+              <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 max-w-xl">
                 Run live AI-powered interviews where candidates answer in real time
               </p>
             </div>
@@ -3018,7 +3018,7 @@ export default function AIInterview() {
                 key={tab.key}
                 onClick={() => openListView(tab.key as TabKey)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                     : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3039,7 +3039,7 @@ export default function AIInterview() {
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
                     isActive
                       ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                       : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3094,29 +3094,29 @@ export default function AIInterview() {
           )}
 
           {/* Sort by — moved out of More Filters to sit before Refresh, in the
-              Job Openings page's sort control (JobsListing.tsx): the tab pills'
-              resting tint, a 28px select on phones, label hidden below sm so the
-              row still fits a 320px screen. The options carry their own
-              direction (Newest / Oldest), so there is no order toggle. Only on
-              the grouped job list, the one list it sorts. */}
+              shared SortByControl's shape (components/ui/select-all-menu.tsx):
+              the label always shown, p-1 + h-7 = the toolbar's 36px band and
+              14px text at every width, like the controls beside it. The
+              options carry their own direction (Newest / Oldest), so there is
+              no order toggle. Only on the grouped job list, the one list it sorts. */}
           {isConfigListTab && !showUngroupedList && (
             <div className="flex items-center gap-2">
-              <label htmlFor="ai-interview-sort" className="hidden sm:inline text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
-              <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-0.5 sm:p-1 transition-all">
+              <label htmlFor="ai-interview-sort" className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
+              <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                 <div className="relative">
                   <select
                     id="ai-interview-sort"
                     aria-label="Sort by"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                    className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+                    className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
                   >
                     <option value="newest">Newest</option>
                     <option value="oldest">Oldest</option>
                     <option value="active">Active first</option>
                     <option value="draft">Draft first</option>
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                 </div>
               </div>
             </div>
@@ -3580,17 +3580,17 @@ export default function AIInterview() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
-                          <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{session.jd_title || session.position}</div>
+                          <div className="text-sm text-gray-500 dark:text-slate-500 truncate">{session.jd_title || session.position}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm pl-10 sm:pl-0">
+                      <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-sm pl-10 sm:pl-0">
                         <span className="text-gray-500 dark:text-slate-500">{getInterviewDuration(session.duration_minutes, (session as any).special_instructions)}</span>
                         {session.started_at && (
                           <span className="text-xs text-gray-400 dark:text-slate-500">
                             Started {formatIST(session.started_at)}
                           </span>
                         )}
-                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-2xs sm:text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
+                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                           In Progress
                         </span>
                       </div>
@@ -3979,7 +3979,7 @@ export default function AIInterview() {
 
                       <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
                         <div className="flex items-center gap-2.5 sm:gap-3">
-                          <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                          <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
                           <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
                             <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
                           </div>
@@ -4102,7 +4102,7 @@ export default function AIInterview() {
                   <button
                     key={sub.key}
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
-                    className={`pb-2 sm:pb-3 text-xs sm:text-sm border-b-2 transition-colors ${
+                    className={`pb-2 sm:pb-3 text-sm border-b-2 transition-colors ${
                       settingsSubTab === sub.key
                         ? 'border-brand-blue text-brand-blue font-medium'
                         : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
@@ -4248,8 +4248,8 @@ export default function AIInterview() {
                                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                                   <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                                   <div className="min-w-0">
-                                    <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
-                                    <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
+                                    <div className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
+                                    <div className="text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
                                   </div>
                                 </div>
                                 <input
@@ -4261,7 +4261,7 @@ export default function AIInterview() {
                               </div>
                             ))}
 
-                            <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Thresholds</h4>
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Thresholds</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                               <div>
                                 <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Max Tab Switches</label>
@@ -4298,7 +4298,7 @@ export default function AIInterview() {
                               </div>
                             </div>
 
-                            <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
                             <p className="text-2xs text-gray-500 dark:text-slate-500 mb-2">Set the score boundaries for Low / Medium / High risk in the Violations tab. Each violation scores 1 pt (Low), 2 pts (Medium), or 3 pts (High).</p>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                               <div>
@@ -4430,7 +4430,7 @@ export default function AIInterview() {
 
               {/* Footer */}
               <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
-                <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <div className="min-w-0 truncate whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                   {!invitePickerSelection ? (
                     'Select an interview to continue'
                   ) : blockedReason ? (
@@ -4580,7 +4580,7 @@ export default function AIInterview() {
           (invitationOverview ? pick(invitationOverview) : '—');
 
         const pageBtn =
-          'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
+          'px-2 sm:px-3 py-1 sm:py-1.5 text-sm border border-gray-200 dark:border-slate-700 ' +
           'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
           'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
@@ -4605,12 +4605,12 @@ export default function AIInterview() {
                       <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
                         <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                         <span className="sm:hidden">Invite Status</span>
                       </h2>
                       {/* JD ID, then the job title. */}
-                      <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                      <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
                         {viewInvitationsConfig.jd_short_id && (
                           <JobIdBadge className="flex-shrink-0">{viewInvitationsConfig.jd_short_id}</JobIdBadge>
                         )}
@@ -4720,7 +4720,7 @@ export default function AIInterview() {
                     <button
                       type="button"
                       onClick={toggleSelectAll}
-                      className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                      className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                     >
                       <span role="checkbox" aria-checked={allSelectableOnPageSelected} className="p-1 flex-shrink-0">
                         {allSelectableOnPageSelected ? (
@@ -4836,7 +4836,7 @@ export default function AIInterview() {
                     className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
                     aria-live="polite"
                   >
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                       <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                       Refreshing invite statuses...
                     </span>
@@ -4848,14 +4848,14 @@ export default function AIInterview() {
                   Invite More and Close overflowed a 320px row. First/Last drop out
                   below sm — Prev/Next and the indicator are enough there. */}
               <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+                <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                   {invitationResultsLabel}
                 </p>
                 <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                   {invitationTotalPages > 1 && (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                        <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                         <input
                           type="number"
                           min={1}
@@ -4870,13 +4870,13 @@ export default function AIInterview() {
                           }}
                           onBlur={commitGoToInvitationPage}
                           aria-label="Go to page"
-                          className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-xs sm:text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                          className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                       </div>
                       <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
                         Prev
                       </button>
-                      <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                      <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                         Page {invitationPage} of {invitationTotalPages}
                       </span>
                       <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>

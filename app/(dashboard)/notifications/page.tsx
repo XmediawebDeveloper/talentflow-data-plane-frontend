@@ -194,7 +194,7 @@ export default function NotificationsPage() {
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Notifications</h1>
-            <p className="text-xs sm:text-sm text-gray-500">
+            <p className="text-sm text-gray-500">
               {loading && total === null
                 ? 'Loading…'
                 : <>{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}{total !== null && ` · ${total} total`}</>}
@@ -274,7 +274,7 @@ export default function NotificationsPage() {
               <Bell className="w-6 h-6 sm:w-7 sm:h-7 text-muted-foreground" />
             </div>
             <p className="text-base sm:text-lg font-semibold text-foreground mb-1">No notifications</p>
-            <p className="text-xs sm:text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {filter === 'unread' ? 'All notifications have been read' : "You're all caught up!"}
             </p>
           </div>
@@ -302,16 +302,16 @@ export default function NotificationsPage() {
                     >
                       <div className="flex items-start justify-between gap-2 sm:gap-4 mb-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <p className={`text-xs sm:text-sm truncate ${notification.is_read ? 'text-gray-700' : 'text-gray-900 font-semibold'}`}>
+                          <p className={`text-sm truncate ${notification.is_read ? 'text-gray-700' : 'text-gray-900 font-semibold'}`}>
                             {notification.title}
                           </p>
                           {!notification.is_read && (
                             <span className="w-2 h-2 bg-brand-blue rounded-full flex-shrink-0"></span>
                           )}
                         </div>
-                        <span className="text-2xs sm:text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
+                        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
                       </div>
-                      <p className="text-xs sm:text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
+                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">
                         {isTenantAdmin && notification.action_label && (
                           <span className="text-xs text-brand-blue font-medium hover:underline">

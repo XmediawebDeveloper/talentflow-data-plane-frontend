@@ -520,11 +520,11 @@ export default function BulkScoringProgressModal({
                 {/* Line 2: what this is, and how far it got. */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   {scopedToJobTitle && (
-                    <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-slate-400">
+                    <span className="text-sm font-medium text-gray-600 dark:text-slate-400">
                       Bulk scoring progress
                     </span>
                   )}
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                  <span className="text-sm text-gray-600 dark:text-slate-400">
                     {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
                   </span>
                 </div>

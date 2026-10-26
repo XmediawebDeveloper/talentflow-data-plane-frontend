@@ -281,7 +281,10 @@ export default function BulkActionsBar({
   };
 
   return (
-    <div className="sticky top-0 z-50 bg-brand-blue shadow-lg shadow-brand-blue/25 border-b border-white/10 ring-1 ring-white/10 animate-fadeIn rounded-xl">
+    /* top: --crumb-h, the page's measured sticky-breadcrumb height (set by
+       the Resume Database page), so a stuck bar sits below the breadcrumb
+       instead of covering it; 0 where no page sets it. */
+    <div className="sticky top-[var(--crumb-h,0px)] z-50 bg-brand-blue shadow-lg shadow-brand-blue/25 border-b border-white/10 ring-1 ring-white/10 animate-fadeIn rounded-xl">
       {/* Wraps to as many lines as it needs rather than scrolling sideways —
           no action should ever end up reachable only by a scroll a phone
           user has no visible hint exists. Equal padding at both ends and

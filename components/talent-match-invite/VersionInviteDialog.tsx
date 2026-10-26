@@ -838,7 +838,7 @@ export default function VersionInviteDialog({
 
           <div ref={setFooterEl} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
             {!inStep2 && (<>
-            <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+            <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
               {footerText ?? (browseAll ? (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />

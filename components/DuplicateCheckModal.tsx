@@ -67,7 +67,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">Check for Duplicate Resumes</h2>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">Upload a resume to check if it already exists</p>
+              <p className="text-sm text-gray-500 dark:text-slate-500 truncate">Upload a resume to check if it already exists</p>
             </div>
           </div>
           <button
@@ -100,7 +100,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                   <Upload className="w-8 h-8 text-brand-blue" />
                 </div>
                 <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">Upload Resume to Check</h3>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-4">
+                <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                   Drop your resume file here or click to browse
                 </p>
                 <label className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors cursor-pointer">
@@ -127,10 +127,10 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                   </div>
                   <div className="flex-1">
                     <h3 className="text-base sm:text-lg font-semibold text-brand-orange-deep mb-2">Duplicate Resume Detected!</h3>
-                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 mb-3">
+                    <p className="text-sm text-gray-700 dark:text-slate-300 mb-3">
                       This resume appears to already exist in your database. We found a match based on the candidate's name and email address.
                     </p>
-                    <div className="flex items-center gap-2 text-xs sm:text-sm text-brand-orange-deep">
+                    <div className="flex items-center gap-2 text-sm text-brand-orange-deep">
                       <FileText className="w-4 h-4" />
                       <span className="font-medium">Uploaded file: {uploadedFiles[0]?.name}</span>
                     </div>
@@ -157,7 +157,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                       <div>
                         <h3 className="text-base sm:text-xl text-gray-900 dark:text-slate-50 font-semibold mb-1">{existingResume.name}</h3>
                         <p className="text-sm sm:text-base text-gray-700 dark:text-slate-300 mb-2">{existingResume.title}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600 dark:text-slate-400">
                           <div className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />
                             {existingResume.experience}
