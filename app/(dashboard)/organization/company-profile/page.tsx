@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Save, Edit2, Loader2, ChevronDown, X, AlertCircle, CheckCircle2, MapPin, FileText, Globe, Mail, Phone, Briefcase, Users, CalendarDays, ExternalLink, Copy, Check, Navigation, Map as MapIcon, LocateFixed, type LucideIcon } from 'lucide-react';
+import { Building2, Save, Edit2, Loader2, X, AlertCircle, CheckCircle2, MapPin, FileText, Globe, Mail, Phone, Briefcase, Users, CalendarDays, ExternalLink, Copy, Check, Navigation, Map as MapIcon, LocateFixed, type LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip } from '@/components/ui/tooltip';
+import FilterSelect from '@/components/ui/filter-select';
 import PhoneInput, { isValidPhoneNumber, parsePhoneNumber } from 'react-phone-number-input';
 import phoneFlags from 'react-phone-number-input/flags';
 import 'react-phone-number-input/style.css';
@@ -207,6 +208,8 @@ const initialFormState = {
 };
 
 // Company Size field: dropdown + manual input fallback
+const CUSTOM_SIZE = '__custom__';
+
 function CompanySizeField({
   value,
   onChange,
@@ -218,17 +221,6 @@ function CompanySizeField({
 }) {
   const isPreset = COMPANY_SIZE_OPTIONS.includes(value) || value === '';
   const [mode, setMode] = useState<'select' | 'manual'>(isPreset ? 'select' : 'manual');
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   if (disabled) {
     return (
@@ -267,42 +259,20 @@ function CompanySizeField({
   }
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 text-left flex items-center justify-between"
-      >
-        <span className={value ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}>
-          {value || 'Select company size'}
-        </span>
-        <ChevronDown className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-      </button>
-
-      {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-60 overflow-y-auto">
-          {COMPANY_SIZE_OPTIONS.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => { onChange(opt); setOpen(false); }}
-              className={`w-full text-left px-4 py-2 text-sm transition hover:bg-brand-blue/[0.06] hover:text-brand-blue ${value === opt ? 'bg-brand-blue/[0.06] text-brand-blue font-medium' : 'text-gray-700 dark:text-slate-300'}`}
-            >
-              {opt}
-            </button>
-          ))}
-          <div className="border-t border-gray-100 dark:border-slate-700/60">
-            <button
-              type="button"
-              onClick={() => { setMode('manual'); setOpen(false); onChange(''); }}
-              className="w-full text-left px-4 py-2 text-sm font-medium text-brand-blue hover:bg-brand-blue/[0.06]"
-            >
-              Enter custom value...
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+    <FilterSelect
+      ariaLabel="Company size"
+      placeholder="Select company size"
+      value={value}
+      onChange={(v) => {
+        if (v === CUSTOM_SIZE) { setMode('manual'); onChange(''); }
+        else onChange(v);
+      }}
+      options={[
+        ...COMPANY_SIZE_OPTIONS.map((opt) => ({ value: opt, label: opt })),
+        { value: CUSTOM_SIZE, label: 'Enter custom value...' },
+      ]}
+      className="w-full sm:w-full data-[size=default]:h-auto sm:data-[size=default]:h-auto py-2.5 sm:py-2.5 px-3 sm:px-3 rounded-lg sm:rounded-lg focus-visible:ring-4 focus-visible:ring-brand-blue/10 focus-visible:border-brand-blue/30"
+    />
   );
 }
 
@@ -704,25 +674,14 @@ export default function CompanyProfilePage() {
                     const selectValue = isCustom ? 'Other' : companyData.industry;
                     return (
                       <div className="space-y-2">
-                        <div className="relative">
-                          <select
-                            value={selectValue}
-                            onChange={(e) => {
-                              if (e.target.value === 'Other') {
-                                setCompanyData({ ...companyData, industry: '__other__' });
-                              } else {
-                                setCompanyData({ ...companyData, industry: e.target.value });
-                              }
-                            }}
-                            className="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-3 pr-9 text-sm text-gray-900 outline-none transition focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
-                          >
-                            <option value="">Select industry</option>
-                            {INDUSTRY_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                        </div>
+                        <FilterSelect
+                          ariaLabel="Industry"
+                          placeholder="Select industry"
+                          value={selectValue}
+                          onChange={(v) => setCompanyData({ ...companyData, industry: v === 'Other' ? '__other__' : v })}
+                          options={INDUSTRY_OPTIONS.map((opt) => ({ value: opt, label: opt }))}
+                          className="w-full sm:w-full data-[size=default]:h-auto sm:data-[size=default]:h-auto py-2.5 sm:py-2.5 px-3 sm:px-3 rounded-lg sm:rounded-lg focus-visible:ring-4 focus-visible:ring-brand-blue/10 focus-visible:border-brand-blue/30"
+                        />
                         {(isCustom || companyData.industry === '__other__') && (
                           <Input
                             type="text"

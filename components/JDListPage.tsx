@@ -14,6 +14,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import DisableJobModal from '@/components/DisableJobModal';
@@ -706,18 +707,20 @@ export default function JDListPage() {
             {/* JD04: Sort dropdown */}
             <div className="flex items-center gap-2">
               <ArrowUpDown className="w-4 h-4 text-gray-400" />
-              <select
+              <FilterSelect
                 value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-              >
-                <option value="latest">Latest Updated</option>
-                <option value="oldest">Oldest Updated</option>
-                <option value="a-z">Title A-Z</option>
-                <option value="z-a">Title Z-A</option>
-                <option value="created_latest">Recently Created</option>
-                <option value="created_oldest">Oldest Created</option>
-              </select>
+                onChange={(v) => { setSortBy(v); setCurrentPage(1); }}
+                ariaLabel="Sort by"
+                className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                options={[
+                  { value: 'latest', label: 'Latest Updated' },
+                  { value: 'oldest', label: 'Oldest Updated' },
+                  { value: 'a-z', label: 'Title A-Z' },
+                  { value: 'z-a', label: 'Title Z-A' },
+                  { value: 'created_latest', label: 'Recently Created' },
+                  { value: 'created_oldest', label: 'Oldest Created' },
+                ]}
+              />
             </div>
             {/* Results count */}
             <div className="flex items-center gap-2 text-sm text-gray-500">

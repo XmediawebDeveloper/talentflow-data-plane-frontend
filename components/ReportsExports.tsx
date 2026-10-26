@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { FileDown, FileText, Users, Briefcase, ClipboardList, Calendar, Filter, Download, CheckSquare, Square, BarChart3, FileSpreadsheet, FileJson, Mail, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 
 export default function ReportsExports() {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -271,16 +272,18 @@ export default function ReportsExports() {
             {/* Format Selection */}
             <div>
               <label className="block text-sm text-gray-700 mb-2">Export Format</label>
-              <select
+              <FilterSelect
                 value={selectedFormat}
-                onChange={(e) => setSelectedFormat(e.target.value as any)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-              >
-                <option value="excel">Excel (.xlsx)</option>
-                <option value="pdf">PDF (.pdf)</option>
-                <option value="csv">CSV (.csv)</option>
-                <option value="json">JSON (.json)</option>
-              </select>
+                onChange={(v) => setSelectedFormat(v as any)}
+                ariaLabel="Export Format"
+                options={[
+                  { value: 'excel', label: 'Excel (.xlsx)' },
+                  { value: 'pdf', label: 'PDF (.pdf)' },
+                  { value: 'csv', label: 'CSV (.csv)' },
+                  { value: 'json', label: 'JSON (.json)' },
+                ]}
+                className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2 sm:py-2 rounded-md sm:rounded-md border-gray-300"
+              />
             </div>
 
             {/* Action Buttons */}

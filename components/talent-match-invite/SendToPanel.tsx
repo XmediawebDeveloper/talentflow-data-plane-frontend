@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { AlertTriangle, Lightbulb } from 'lucide-react';
 import { CANDIDATE_SOURCE_LABEL, type DeliveryMethod, type InviteCandidate, type InviteCandidateSource, type InviteKind } from './inviteVersions';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
+import FilterSelect from '@/components/ui/filter-select';
 
 /* The share modals' Link expiry options. */
 const EXPIRY_OPTIONS: { value: number; label: string }[] = [
@@ -253,14 +254,13 @@ export default function SendToPanel({
 
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={`invite-expiry-${kind}`} className={SECTION}>Link expiry</label>
-        <select
+        <FilterSelect
           id={`invite-expiry-${kind}`}
-          value={expiryDays}
-          onChange={(e) => onExpiry(Number(e.target.value))}
-          className="text-sm border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-        >
-          {EXPIRY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+          value={String(expiryDays)}
+          onChange={(v) => onExpiry(Number(v))}
+          options={EXPIRY_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+          className="w-auto sm:w-auto text-sm px-2 sm:pl-2 sm:pr-2 py-1 sm:py-1 rounded-lg sm:rounded-lg text-gray-700 dark:text-slate-300"
+        />
       </div>
       </>)}
     </div>

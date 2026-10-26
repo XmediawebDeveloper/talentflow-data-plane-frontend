@@ -17,6 +17,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -1126,16 +1127,13 @@ export function MultiLanguageCodeEditor({
             </button>
 
             {/* Font Size */}
-            <select
-              value={fontSize}
-              onChange={(e) => setFontSize(Number(e.target.value))}
-              className="hidden sm:block bg-gray-700 text-gray-300 text-sm rounded-lg px-2 py-1.5 border-none focus:ring-0"
-            >
-              <option value={12}>12px</option>
-              <option value={14}>14px</option>
-              <option value={16}>16px</option>
-              <option value={18}>18px</option>
-            </select>
+            <FilterSelect
+              value={String(fontSize)}
+              onChange={(v) => setFontSize(Number(v))}
+              ariaLabel="Font size"
+              className="hidden sm:flex w-auto sm:w-auto bg-gray-700 dark:bg-gray-700 text-gray-300 dark:text-gray-300 rounded-lg sm:rounded-lg px-2 sm:px-2 py-1.5 sm:py-1.5 border-0"
+              options={[12, 14, 16, 18].map((n) => ({ value: String(n), label: `${n}px` }))}
+            />
 
             {/* Run Button */}
             <Button

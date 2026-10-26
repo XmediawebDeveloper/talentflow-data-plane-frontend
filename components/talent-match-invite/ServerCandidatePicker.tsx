@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, Lock, Search, X } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
+import FilterSelect from '@/components/ui/filter-select';
 import { folderService, type Folder } from '@/lib/services/resumeService';
 import {
   bulkInviteService,
@@ -98,6 +99,8 @@ const matchTone = (status: ServerMatchStatus) =>
 
 const SECTION = 'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
 const CONTROL = 'text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40';
+/* FilterSelect trigger sized to match CONTROL. */
+const SELECT_CONTROL = 'w-auto sm:w-auto text-xs px-2 sm:pl-2 sm:pr-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-gray-700 dark:text-slate-300';
 
 const fmt = (n: number) => n.toLocaleString();
 
@@ -367,43 +370,77 @@ export default function ServerCandidatePicker({
           />
         </div>
         {source === 'my-resumes' && (
-          <select aria-label="Folder" value={filters.folder_id ?? ''} onChange={(e) => setFilter('folder_id', e.target.value || undefined)} className={CONTROL}>
-            <option value="">All folders</option>
-            {(folders ?? []).map((f) => (
-              <option key={f.id} value={f.id}>{'\u00a0\u00a0'.repeat(f.depth)}{f.name} ({f.count})</option>
-            ))}
-          </select>
+          <FilterSelect
+            ariaLabel="Folder"
+            value={filters.folder_id ?? ''}
+            onChange={(v) => setFilter('folder_id', v || undefined)}
+            options={[
+              { value: '', label: 'All folders' },
+              ...(folders ?? []).map((f) => ({ value: String(f.id), label: `${'\u00a0\u00a0'.repeat(f.depth)}${f.name} (${f.count})` })),
+            ]}
+            className={SELECT_CONTROL}
+          />
         )}
         {!isDbTab(source) && (<>
-        <select aria-label="Match status" value={filters.match_status ?? ''} onChange={(e) => setFilter('match_status', (e.target.value || undefined) as ServerMatchStatus | undefined)} className={CONTROL}>
-          <option value="">Any match status</option>
-          <option value="exact_match">Exact Match</option>
-          <option value="partial_match">Partial Match</option>
-          <option value="no_match">No Match</option>
-        </select>
-        <select aria-label="Scored" value={filters.scored === undefined ? '' : filters.scored ? 'yes' : 'no'} onChange={(e) => setFilter('scored', e.target.value === '' ? undefined : e.target.value === 'yes')} className={CONTROL}>
-          <option value="">Scored or not</option>
-          <option value="yes">Scored</option>
-          <option value="no">Not scored</option>
-        </select>
+        <FilterSelect
+          ariaLabel="Match status"
+          value={filters.match_status ?? ''}
+          onChange={(v) => setFilter('match_status', (v || undefined) as ServerMatchStatus | undefined)}
+          options={[
+            { value: '', label: 'Any match status' },
+            { value: 'exact_match', label: 'Exact Match' },
+            { value: 'partial_match', label: 'Partial Match' },
+            { value: 'no_match', label: 'No Match' },
+          ]}
+          className={SELECT_CONTROL}
+        />
+        <FilterSelect
+          ariaLabel="Scored"
+          value={filters.scored === undefined ? '' : filters.scored ? 'yes' : 'no'}
+          onChange={(v) => setFilter('scored', v === '' ? undefined : v === 'yes')}
+          options={[
+            { value: '', label: 'Scored or not' },
+            { value: 'yes', label: 'Scored' },
+            { value: 'no', label: 'Not scored' },
+          ]}
+          className={SELECT_CONTROL}
+        />
         {source === 'talent-match' && (
-          <select aria-label="Minimum rating" value={filters.min_rating ?? ''} onChange={(e) => setFilter('min_rating', e.target.value ? Number(e.target.value) : undefined)} className={CONTROL}>
-            <option value="">Any rating</option>
-            {[9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>Rating ≥ {n}</option>)}
-          </select>
+          <FilterSelect
+            ariaLabel="Minimum rating"
+            value={filters.min_rating != null ? String(filters.min_rating) : ''}
+            onChange={(v) => setFilter('min_rating', v ? Number(v) : undefined)}
+            options={[
+              { value: '', label: 'Any rating' },
+              ...[9, 8, 7, 6, 5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `Rating ≥ ${n}` })),
+            ]}
+            className={SELECT_CONTROL}
+          />
         )}
-        <select aria-label="Minimum score" value={filters.min_score ?? ''} onChange={(e) => setFilter('min_score', e.target.value ? Number(e.target.value) : undefined)} className={CONTROL}>
-          <option value="">Any score</option>
-          {[90, 80, 70, 60, 50, 40].map((n) => <option key={n} value={n}>Score ≥ {n}%</option>)}
-        </select>
+        <FilterSelect
+          ariaLabel="Minimum score"
+          value={filters.min_score != null ? String(filters.min_score) : ''}
+          onChange={(v) => setFilter('min_score', v ? Number(v) : undefined)}
+          options={[
+            { value: '', label: 'Any score' },
+            ...[90, 80, 70, 60, 50, 40].map((n) => ({ value: String(n), label: `Score ≥ ${n}%` })),
+          ]}
+          className={SELECT_CONTROL}
+        />
         </>)}
-        <select aria-label="Sort" value={filters.sort ?? 'best'} onChange={(e) => setFilter('sort', e.target.value as InviteCandidateSort)} className={CONTROL}>
-          <option value="best">{isDbTab(source) ? 'Newest first' : 'Best first'}</option>
-          {!isDbTab(source) && <option value="score">Score</option>}
-          {source === 'talent-match' && <option value="rating">Rating</option>}
-          {!isDbTab(source) && <option value="recent">Recently scored</option>}
-          <option value="name">Name</option>
-        </select>
+        <FilterSelect
+          ariaLabel="Sort"
+          value={filters.sort ?? 'best'}
+          onChange={(v) => setFilter('sort', v as InviteCandidateSort)}
+          options={[
+            { value: 'best', label: isDbTab(source) ? 'Newest first' : 'Best first' },
+            ...(!isDbTab(source) ? [{ value: 'score', label: 'Score' }] : []),
+            ...(source === 'talent-match' ? [{ value: 'rating', label: 'Rating' }] : []),
+            ...(!isDbTab(source) ? [{ value: 'recent', label: 'Recently scored' }] : []),
+            { value: 'name', label: 'Name' },
+          ]}
+          className={SELECT_CONTROL}
+        />
         <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
           <input type="checkbox" checked={!!filters.exclude_invited} onChange={(e) => setFilter('exclude_invited', e.target.checked || undefined)} disabled={!versionId} className="m-0 rounded border-gray-300" />
           Hide already invited

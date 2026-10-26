@@ -2,6 +2,7 @@
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
+import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -589,17 +590,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         leadingActions={
           /* Result (Pass / Fail) first, ahead of More Filters — the same
              toolbar order as the per-interview results view. */
-          <select
+          <Dropdown
             value={search.filters.result}
-            onChange={(e) => search.setFilter('result', e.target.value)}
-            aria-label="Result"
-            className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black dark:text-slate-100"
-          >
-            <option value="">All Results</option>
-            {RESULT_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            onChange={(v) => search.setFilter('result', v)}
+            ariaLabel="Result"
+            className="w-auto sm:w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-black dark:text-slate-100"
+            options={[
+              { value: '', label: 'All Results' },
+              ...RESULT_FILTER_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
+            ]}
+          />
         }
         filterPanel={
           /* One filter per column that has a fixed set of values; name,
@@ -922,14 +922,13 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
-                    <select
-                      value={pageSize}
-                      onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                      aria-label="Rows per page"
-                      className="h-8 px-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                    >
-                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
+                    <Dropdown
+                      value={String(pageSize)}
+                      onChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}
+                      ariaLabel="Rows per page"
+                      className="w-auto sm:w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 px-2 sm:px-2 rounded-lg sm:rounded-lg text-gray-900 dark:text-slate-100"
+                      options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                    />
                     <span>per page</span>
                   </label>
                   <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}</span>
@@ -1199,14 +1198,13 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
-                    <select
-                      value={pageSize}
-                      onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-                      aria-label="Rows per page"
-                      className="h-8 px-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                    >
-                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
+                    <Dropdown
+                      value={String(pageSize)}
+                      onChange={(v) => { setPageSize(Number(v)); setCurrentPage(1); }}
+                      ariaLabel="Rows per page"
+                      className="w-auto sm:w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 px-2 sm:px-2 rounded-lg sm:rounded-lg text-gray-900 dark:text-slate-100"
+                      options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                    />
                     <span>per page</span>
                   </label>
                   <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}</span>

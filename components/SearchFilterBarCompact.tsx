@@ -3,6 +3,7 @@
 import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, ChevronRight, Upload, Users, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -378,18 +379,16 @@ export default function SearchFilterBarCompact({
                         </div>
                         <div>
                           <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Education</label>
-                          <select
+                          <FilterSelect
                             value={mapBackendCodeToDisplay(tempFilters.education)}
-                            onChange={(e) => {
-                              const backendCode = mapEducationToBackendCode(e.target.value);
+                            onChange={(v) => {
+                              const backendCode = mapEducationToBackendCode(v);
                               setTempFilters({ ...tempFilters, education: backendCode });
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black"
-                          >
-                            {educationLevels.map(level => (
-                              <option key={level} value={level}>{level}</option>
-                            ))}
-                          </select>
+                            ariaLabel="Education"
+                            options={educationLevels.map(level => ({ value: level, label: level }))}
+                            className="w-full sm:w-full py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-gray-300 bg-gray-50 text-sm text-black"
+                          />
                         </div>
                       </div>
                     </div>
@@ -426,15 +425,13 @@ export default function SearchFilterBarCompact({
                         </div>
                         <div>
                           <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Notice Period</label>
-                          <select
+                          <FilterSelect
                             value={tempFilters.noticePeriod || 'Any'}
-                            onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black"
-                          >
-                            {noticePeriods.map(period => (
-                              <option key={period} value={period}>{period}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => setTempFilters({ ...tempFilters, noticePeriod: v === 'Any' ? null : v })}
+                            ariaLabel="Notice Period"
+                            options={noticePeriods.map(period => ({ value: period, label: period }))}
+                            className="w-full sm:w-full py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-gray-300 bg-gray-50 text-sm text-black"
+                          />
                         </div>
                       </div>
                     </div>
@@ -511,15 +508,13 @@ export default function SearchFilterBarCompact({
                         </div>
                         <div>
                           <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Source Type</label>
-                          <select
+                          <FilterSelect
                             value={tempFilters.sourceType || ''}
-                            onChange={(e) => setTempFilters({ ...tempFilters, sourceType: e.target.value || null })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black"
-                          >
-                            {sourceTypes.map(source => (
-                              <option key={source.value} value={source.value}>{source.label}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => setTempFilters({ ...tempFilters, sourceType: v || null })}
+                            ariaLabel="Source Type"
+                            options={sourceTypes}
+                            className="w-full sm:w-full py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-gray-300 bg-gray-50 text-sm text-black"
+                          />
                         </div>
                       </div>
                     </div>

@@ -45,6 +45,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
+import FilterSelect from '@/components/ui/filter-select';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -275,16 +276,20 @@ export default function ActivityLogsPage() {
             </div>
           </div>
           {activeTab === 'activity' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={limit}
-                onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="h-10 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-              >
-                <option value="25">Last 25</option>
-                <option value="50">Last 50</option>
-                <option value="100">Last 100</option>
-              </select>
+            <div className="flex flex-wrap items-center gap-2 max-sm:w-full">
+              <div className="max-sm:flex-1">
+                <FilterSelect
+                  ariaLabel="Number of entries"
+                  value={String(limit)}
+                  onChange={(v) => setLimit(parseInt(v, 10))}
+                  options={[
+                    { value: '25', label: 'Last 25' },
+                    { value: '50', label: 'Last 50' },
+                    { value: '100', label: 'Last 100' },
+                  ]}
+                  className="data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 px-3 sm:px-3 rounded-lg sm:rounded-lg sm:min-w-[7.5rem]"
+                />
+              </div>
               <Tooltip content="Refresh activity">
                 <Button
                   variant="primary"
@@ -302,7 +307,7 @@ export default function ActivityLogsPage() {
 
         {/* Tab navigation — segmented control */}
         <section className="mb-5">
-          <div role="tablist" aria-label="Activity tabs" className="relative inline-flex w-full max-w-xs rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
+          <div role="tablist" aria-label="Activity tabs" className="relative inline-flex w-full max-w-xs max-sm:max-w-none rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
             <span
               aria-hidden
               className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
@@ -481,10 +486,10 @@ export default function ActivityLogsPage() {
                         key={log.id}
                         className="group rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md"
                       >
-                        <div className="flex items-start gap-3 sm:gap-4">
+                        <div className="flex items-start gap-2.5 sm:gap-4">
                           {/* Action icon tile — soft tinted */}
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${tone.tile}`}>
-                            <ActionIcon className={`h-5 w-5 ${tone.icon}`} />
+                          <span className={`flex h-10 w-10 max-sm:h-8 max-sm:w-8 shrink-0 items-center justify-center rounded-xl max-sm:rounded-lg ring-1 ${tone.tile}`}>
+                            <ActionIcon className={`h-5 w-5 max-sm:h-4 max-sm:w-4 ${tone.icon}`} />
                           </span>
 
                           {/* Content */}
@@ -499,7 +504,7 @@ export default function ActivityLogsPage() {
                                   )}
                                 </div>
                                 {/* Line 2 — action + entity */}
-                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-gray-600 dark:text-slate-400">
+                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm max-sm:text-xs text-gray-600 dark:text-slate-400">
                                   <span>{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/5 px-1.5 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
@@ -527,7 +532,7 @@ export default function ActivityLogsPage() {
 
                             {/* Details preview */}
                             {log.details && (log.details.name || log.details.email || log.details.title) && (
-                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500 dark:text-slate-500">
+                              <div className="mt-2 flex flex-wrap gap-x-4 max-sm:gap-x-3 gap-y-0.5 text-xs break-all text-gray-500 dark:text-slate-500">
                                 {log.details.name && (
                                   <span>Name: <span className="font-medium text-gray-700 dark:text-slate-300">{log.details.name}</span></span>
                                 )}

@@ -17,6 +17,7 @@ import readXlsxFile from 'read-excel-file/browser';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import ListPagination from '@/components/ListPagination';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ResumeVersionsModal from '@/components/ResumeVersionsModal';
@@ -2125,19 +2126,20 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
               <span className="text-sm text-gray-700 dark:text-slate-300">Link expiry</span>
-              <select
-                value={expiryDays}
-                onChange={(e) => setExpiryDays(Number(e.target.value))}
-                aria-label="Link expiry"
-                className="text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent"
-              >
-                <option value={1}>1 day</option>
-                <option value={3}>3 days</option>
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-                <option value={30}>30 days</option>
-                <option value={0}>No expiry</option>
-              </select>
+              <FilterSelect
+                value={String(expiryDays)}
+                onChange={(v) => setExpiryDays(Number(v))}
+                ariaLabel="Link expiry"
+                options={[
+                  { value: '1', label: '1 day' },
+                  { value: '3', label: '3 days' },
+                  { value: '7', label: '7 days' },
+                  { value: '14', label: '14 days' },
+                  { value: '30', label: '30 days' },
+                  { value: '0', label: 'No expiry' },
+                ]}
+                className="w-auto sm:w-auto py-1 sm:py-1 pl-2 sm:pl-2 pr-2 sm:pr-2 gap-1 rounded-lg sm:rounded-lg text-xs text-gray-700 dark:text-slate-300"
+              />
             </div>
           </div>
 

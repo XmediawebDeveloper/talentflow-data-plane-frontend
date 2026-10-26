@@ -15,6 +15,7 @@ import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
@@ -322,27 +323,22 @@ function ToolbarFilterSelect<T extends string>({
   const isActive = value !== 'all';
 
   return (
-    <label className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
+    <label title={label} className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
       <span className="sr-only">{label}</span>
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-400">
         {icon}
       </span>
-      <select
+      <FilterSelect
         value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className={`h-10 w-full appearance-none rounded-lg border pl-9 pr-8 text-sm text-black transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 ${
+        onChange={(v) => onChange(v as T)}
+        ariaLabel={label}
+        options={options}
+        className={`w-full sm:w-full data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 pl-9 sm:pl-9 pr-3 sm:pr-3 rounded-lg sm:rounded-lg transition-all ${
           isActive
-            ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+            ? 'border-brand-blue/40 dark:border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
             : 'border-gray-300 bg-gray-50 hover:bg-white'
         }`}
-        aria-label={label}
-        title={label}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      />
     </label>
   );
 }

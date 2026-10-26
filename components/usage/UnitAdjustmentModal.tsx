@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
+import FilterSelect from '@/components/ui/filter-select';
 import {
   unitPoolService,
   UnitType,
@@ -412,17 +413,19 @@ export default function UnitAdjustmentModal({
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                     Reference Type
                   </label>
-                  <select
+                  <FilterSelect
                     value={referenceType}
-                    onChange={(e) => setReferenceType(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  >
-                    <option value="">None</option>
-                    <option value="ticket">Support Ticket</option>
-                    <option value="subscription">Subscription</option>
-                    <option value="invoice">Invoice</option>
-                    <option value="manual">Manual Override</option>
-                  </select>
+                    onChange={(v) => setReferenceType(v)}
+                    ariaLabel="Reference Type"
+                    options={[
+                      { value: '', label: 'None' },
+                      { value: 'ticket', label: 'Support Ticket' },
+                      { value: 'subscription', label: 'Subscription' },
+                      { value: 'invoice', label: 'Invoice' },
+                      { value: 'manual', label: 'Manual Override' },
+                    ]}
+                    className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-base sm:text-base"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
