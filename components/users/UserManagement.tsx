@@ -3640,11 +3640,17 @@ export default function UserManagement() {
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name</label>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Name</label>
+                    <span className={`text-xs tabular-nums ${editingUser.name.length >= 50 ? 'text-brand-orange' : 'text-gray-400'}`}>
+                      {editingUser.name.length}/50
+                    </span>
+                  </div>
                   <Input
                     type="text"
                     value={editingUser.name}
-                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                    maxLength={50}
+                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value.slice(0, 50) })}
                   />
                 </div>
                 <div>
