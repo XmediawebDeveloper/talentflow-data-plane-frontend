@@ -418,6 +418,7 @@ function JobDetailsContent() {
         skills: data.must_have_skills || [],
         niceToHaveSkills: data.nice_to_have_skills || [],
         postedDate: data.published_at || data.created_at,
+        created_at: data.created_at, // "Created" in the header — never moved by publishing
         postedBy: data.created_by_name || 'System',
         employmentType: data.employment_type,
         workMode: data.remote_type,

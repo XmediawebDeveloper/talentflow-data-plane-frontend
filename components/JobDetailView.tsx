@@ -11,7 +11,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated } from '@/lib/utils/jobOpeningDisplay';
+import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -3144,10 +3144,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     (JobOpeningSummary's MetaLabelValue). The bullets between the
                     three were dropped: the label weight is what now separates
                     them, exactly as on the master card. */}
+                {/* Created (never moved by publishing) always, Posted only once
+                    published — the same pair, order and date format as the Job
+                    Openings card. */}
                 <span className="inline-flex items-center gap-1">
-                  <span className="font-medium text-gray-700 dark:text-slate-300">Posted:</span>
-                  <span className="font-normal text-gray-500 dark:text-slate-400">{job.postedDate ? formatISTDateTime(job.postedDate) : 'N/A'}</span>
+                  <span className="font-medium text-gray-700 dark:text-slate-300">Created:</span>
+                  <span className="font-normal text-gray-500 dark:text-slate-400">{job.created_at ? formatISTDate(job.created_at) : 'N/A'}</span>
                 </span>
+                {getPublishedDate(job) && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="font-medium text-gray-700 dark:text-slate-300">Posted:</span>
+                    <span className="font-normal text-gray-500 dark:text-slate-400">{formatISTDate(getPublishedDate(job))}</span>
+                  </span>
+                )}
                 <span className="inline-flex items-center gap-1">
                   <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
                   <span className="font-normal text-gray-500 dark:text-slate-400">{job.postedBy || 'Unknown'}</span>

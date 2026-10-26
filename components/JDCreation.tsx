@@ -3820,6 +3820,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Works in both AI mode and manual mode during create step
   useEffect(() => {
     if (step !== 'create') return;
+    // Paused while the leave prompt is open: the recruiter is deciding what
+    // happens to the JD, and a timer save behind the dialog flashed the save
+    // status and raced the prompt's own Save as Draft (two creates, two copies).
+    // Cancel closes the prompt and re-arms this; Save / Discard / Delete settle
+    // the record themselves.
+    if (showUnsavedDialog) return;
 
     // Need at least 1 non-space character in job title
     const trimmedJobTitle = jobTitle.trim();
@@ -3894,7 +3900,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(autosaveTimer);
-  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished, isJobTitleValidating]);
+  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished, isJobTitleValidating, showUnsavedDialog]);
 
   // Track changes for unsaved changes warning
   useEffect(() => {
@@ -7453,6 +7459,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // What the leave prompt shows and allows.
   const leaveJobCode = leaveCheckpointMeta?.jobCode ?? effectiveEditingJD?.job_id ?? null;
   const leaveIsPublishedJD = (leaveCheckpointMeta?.status ?? effectiveEditingJD?.status) === 'published';
+  /* New-creation flow — a new JD the recruiter has not saved yet (before its
+     first autosave there is no record at all; after it, an unsaved working
+     copy), or a version made by "New Job Version" in this visit and not yet
+     saved. Its leave prompt is Cancel / Discard / Save as Draft only. Keying on
+     the record alone made a new JD's prompt change with autosave timing: a
+     disabled "Delete this entire JD" before the first autosave, gone after it.
+     Editing an existing draft keeps Delete. */
+  const isNewCreationLeave = !editingId
+    || isUnsavedNewCopy
+    || (jdWorkflow === 'new-version' && !userSavedDraftRef.current);
   const leaveDeleteBlockedReason = !editingId
     ? 'Nothing has been saved yet, so there is no JD to delete.'
     : leaveIsPublishedJD
@@ -8279,12 +8295,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           Saving...
                         </span>
                       )}
-                      {autosaveStatus === 'saved' && (
-                        <span className="flex items-center gap-1.5 text-success">
-                          <Cloud className="w-4 h-4" />
-                          Draft saved
-                        </span>
-                      )}
                       {autosaveStatus === 'error' && (
                         <span className="flex items-center gap-1.5 text-destructive">
                           <CloudOff className="w-4 h-4" />
@@ -8450,12 +8460,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Saving...
-                        </span>
-                      )}
-                      {autosaveStatus === 'saved' && (
-                        <span className="flex items-center gap-1.5 text-success">
-                          <Cloud className="w-4 h-4" />
-                          Draft saved
                         </span>
                       )}
                       {autosaveStatus === 'error' && (
@@ -11922,7 +11926,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         discardTarget={leaveCheckpointMeta?.label ?? null}
         nothingSavedYet={!editingId || isUnsavedNewCopy}
         deleteBlockedReason={leaveDeleteBlockedReason}
-        hideDelete={leaveCheckpointMeta?.isFreshFork === true || isUnsavedNewCopy}
+        hideDelete={leaveCheckpointMeta?.isFreshFork === true || isNewCreationLeave}
         isPublishedJD={leaveIsPublishedJD}
         currentStepLabel={step === 'create' ? 'Step 1 (Create)' : step === 'extract' ? 'Step 2 (Extract)' : 'Step 3 (Review)'}
         busy={leaveBusy}

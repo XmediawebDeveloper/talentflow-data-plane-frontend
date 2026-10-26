@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { AlertTriangle, RotateCcw, Save, Trash2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppModal from '@/components/ui/app-modal';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { deleteWizardConfig, discardWizardChanges, keepWizardChanges } from '@/lib/utils/aiInterviewWizardExit';
 import { LEAVE_BACK } from './useInterviewLeaveGuard';
 
@@ -12,8 +11,10 @@ export type LeaveInterviewBusy = 'save' | 'discard' | 'delete' | null;
 
 export interface LeaveInterviewDialogProps {
   open: boolean;
-  /** The job's code (JD-076), shown with the title so it is clear which interview this is. */
+  /** The job's code (JD-076). Accepted but not shown — the prompt carries only
+   *  the four actions, like LeaveJDDialog. */
   jdCode?: string | null;
+  /** Accepted but not shown, like `jdCode`. */
   title?: string;
   /** Lineage version (1, 2, ...) of the interview on screen. */
   versionNumber?: number;
@@ -52,8 +53,6 @@ export interface LeaveInterviewDialogProps {
  */
 export default function LeaveInterviewDialog({
   open,
-  jdCode,
-  title,
   versionNumber = 1,
   nothingSavedYet,
   createdThisVisit,
@@ -88,7 +87,9 @@ export default function LeaveInterviewDialog({
       open={open}
       onCancel={onCancel}
       cancelDisabled={busy !== null}
-      size="lg"
+      size="md"
+      tone="warning"
+      compactFooter
       zIndexClass="z-[10000]"
       icon={<AlertTriangle />}
       title="Leave this AI interview?"
@@ -122,41 +123,37 @@ export default function LeaveInterviewDialog({
         },
       ]}
     >
-      {(jdCode || title) && (
-        <div className="mb-4 flex min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
-          {jdCode && <JobIdBadge className="flex-shrink-0">{jdCode}</JobIdBadge>}
-          {title && (
-            <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</span>
-          )}
-          {!nothingSavedYet && (
-            <span className="ml-auto flex-shrink-0 text-xs font-medium text-gray-500 dark:text-slate-400">V{versionNumber}</span>
-          )}
-        </div>
-      )}
-
       <ul className="space-y-3 text-sm">
         <li className="flex gap-3">
-          <Save className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-          <p className="text-gray-700 dark:text-slate-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15 dark:bg-orange-500/15 dark:text-orange-300">
+            <Save className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">Save as Draft</span> — {saveHint}
           </p>
         </li>
         <li className="flex gap-3">
-          <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-400" />
-          <p className="text-gray-700 dark:text-slate-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+            <Undo2 className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">Cancel</span> — stay on this page and keep working.
           </p>
         </li>
         <li className="flex gap-3">
-          <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-          <p className="text-gray-700 dark:text-slate-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-brand-teal/10 text-brand-teal ring-brand-teal/15 dark:bg-brand-teal/15">
+            <RotateCcw className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">Discard current changes</span> — {discardHint}
           </p>
         </li>
         {canDelete && (
           <li className="flex gap-3">
-            <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-            <p className="text-gray-700 dark:text-slate-300">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-red-50 text-red-600 ring-red-100 dark:bg-red-500/15 dark:text-red-400 dark:ring-red-500/20">
+              <Trash2 className="h-4 w-4" />
+            </span>
+            <p className="pt-1 text-gray-700 dark:text-slate-300">
               <span className="font-semibold text-gray-900 dark:text-slate-100">Delete this interview</span> —{' '}
               {isLaterVersion
                 ? <>permanently remove this V{versionNumber} draft. {earlierVersions} kept. This cannot be undone.</>

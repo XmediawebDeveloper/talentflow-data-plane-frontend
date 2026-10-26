@@ -47,6 +47,15 @@ export const formatIndustryType = (type: string | undefined): string => {
 };
 
 /**
+ * The publish date, or undefined for a job that was never published.
+ * `postedDate` is `published_at || created_at`, so a value equal to `created_at`
+ * is the creation fallback, not a publish. Lets the Job Openings card and the
+ * job details header show Created always and Posted only once published.
+ */
+export const getPublishedDate = (job: Pick<Job, 'postedDate' | 'created_at'>): string | undefined =>
+  job.postedDate && job.postedDate !== job.created_at ? job.postedDate : undefined;
+
+/**
  * Within 24 hours: "31 mins ago" / "3 hours ago". Older than that: the date.
  * Server times are UTC, so they go through the IST parser first.
  */
@@ -242,7 +251,10 @@ export const mapJDToJob = (jd: JDListRow): Job => ({
      exactly what it read before. */
   must_have_skills: jd.must_have_skills || [],
   nice_to_have_skills: jd.nice_to_have_skills || [],
-  postedDate: jd.created_at,
+  // "Posted" is when the JD was PUBLISHED - the same field the job details page
+  // (job-details/page.tsx) and publishedJdToJob show. A draft has no publish
+  // date yet, so it falls back to creation. Creation stays in `created_at`.
+  postedDate: jd.published_at || jd.created_at,
   postedBy: jd.created_by_name || jd.created_by,
   employmentType: jd.employment_type,
   workMode: jd.remote_type, // onsite, hybrid, remote
