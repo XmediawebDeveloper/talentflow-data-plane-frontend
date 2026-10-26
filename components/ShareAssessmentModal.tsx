@@ -1303,7 +1303,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               {/* JD ID, the job, its job version, then the assessment version
                   — which job, and which version of it, these invitations are
                   for. The version chips are the Assessments page's own. */}
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-sm text-gray-600 dark:text-slate-400 min-w-0">
                 {assessment.jd_short_id && <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>}
                 <span className="truncate min-w-0" title={assessment.jd_title || assessmentTitleForEmail}>
                   {assessment.jd_title || assessmentTitleForEmail}
@@ -1321,7 +1321,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   </span>
                 )}
                 {allAssessments.length > 1 && (
-                  <span className="flex-shrink-0 text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
+                  <span className="flex-shrink-0 text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
                     +{allAssessments.length - 1} more
                   </span>
                 )}
@@ -1487,11 +1487,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             );
             const statusPill = (tone: 'ok' | 'low' | 'out', freePercent: number) =>
               tone === 'out' ? (
-                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">Quota exhausted</span>
+                <span className="flex-shrink-0 text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">Quota exhausted</span>
               ) : tone === 'low' ? (
-                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">Low quota</span>
+                <span className="flex-shrink-0 text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">Low quota</span>
               ) : (
-                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">{freePercent.toFixed(0)}% free</span>
+                <span className="flex-shrink-0 text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">{freePercent.toFixed(0)}% free</span>
               );
 
             if (quotaStatsLoading) {
@@ -1516,7 +1516,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 return (
                   <div className={`${panelClass('ok')} flex items-center gap-3`}>
                     {iconTile('ok')}
-                    <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Unlimited assessment units</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Unlimited assessment units</span>
                   </div>
                 );
               }
@@ -1531,7 +1531,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     {iconTile(tone)}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
-                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
                           {isInsufficient
                             ? 'No assessment units available'
                             : isLow
@@ -1539,7 +1539,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             : `${available} assessment unit${available !== 1 ? 's' : ''} available`
                           }
                         </span>
-                        <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
+                        <span className="text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
                           {available.toLocaleString()} / {total_quota.toLocaleString()} available
                         </span>
                       </div>
@@ -1549,7 +1549,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
                       </div>
                       <div className="flex items-start justify-between gap-2 mt-1.5">
-                        <div className="min-w-0 text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
+                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400">
                           <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
                             <span>Total: {total_quota}</span>
                             <span>Attended (consumed): {consumed}</span>
@@ -1560,8 +1560,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                           {/* Always shown, with the live count — the AI
                               Interviews note's own sentence, plus revoke, the
                               other way a held unit comes back. */}
-                          <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-0.5 text-brand-blue dark:text-slate-200">
-                            <Info className="w-3 h-3 flex-shrink-0" />
+                          {/* A pill on wide screens; on a phone the sentence
+                              wraps to three lines, so a rounded box instead. */}
+                          <p className="mt-1.5 inline-flex items-start sm:items-center gap-1.5 rounded-lg sm:rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-1 sm:py-0.5 text-brand-blue dark:text-slate-200">
+                            <Info className="w-3 h-3 flex-shrink-0 mt-0.5 sm:mt-0" />
                             <span>
                               <span className="font-semibold">Note:</span>{' '}
                               {pending} unit{pending !== 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.
@@ -1589,10 +1591,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     {iconTile(tone)}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
-                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
                           {Math.max(0, remaining)} assessment unit{remaining !== 1 ? 's' : ''} remaining
                         </span>
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 tabular-nums">
+                        <span className="text-sm text-gray-600 dark:text-slate-400 tabular-nums">
                           ({subscriptionUsed} used of {subscriptionLimit})
                         </span>
                       </div>
@@ -1674,7 +1676,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                           </span>
                         );
                       })()}
-                      <div className="flex items-center gap-3">
+                      {/* Stacked under `sm`: beside Copy Link + Add the two
+                          inputs were squeezed to ~90px on a phone. The action
+                          group's own `self-end` already expects this column. */}
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                         <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>

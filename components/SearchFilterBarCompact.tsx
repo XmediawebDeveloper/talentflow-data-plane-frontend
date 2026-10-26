@@ -31,6 +31,20 @@ export default function SearchFilterBarCompact({
   const [showSort, setShowSort] = useState(false);
   const [tempFilters, setTempFilters] = useState(filters);
   const filterPanelRef = useRef<HTMLDivElement>(null);
+  /* From sm up the panel hangs off the Filter button's right edge. Where that
+     button sits at the LEFT of its toolbar (My Resumes) a 500–700px panel ran
+     off the left of the screen, so on open it is measured and, if it would,
+     anchored to the button's left instead (pulled back in if that overflows
+     the right). null = default right anchoring; phones use the bottom sheet. */
+  const [filterPanelLeft, setFilterPanelLeft] = useState<number | null>(null);
+  const placeFilterPanel = () => {
+    const anchor = filterPanelRef.current;
+    const vw = window.innerWidth;
+    if (!anchor || vw < 640) { setFilterPanelLeft(null); return; }
+    const r = anchor.getBoundingClientRect();
+    const w = Math.min(vw >= 768 ? 700 : 500, vw - 32);
+    setFilterPanelLeft(r.right - w < 16 ? Math.min(0, vw - 16 - (r.left + w)) : null);
+  };
 
   // Accordion states for collapsible sections
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
@@ -244,7 +258,7 @@ export default function SearchFilterBarCompact({
   return (
     <div className={inline ? "relative" : "bg-white border-b border-gray-200"}>
       {/* Main Search Bar */}
-      <div className={inline ? "flex gap-2 items-center" : "p-3 flex gap-2 items-center"}>
+      <div className={inline ? "flex gap-2 items-center" : "py-3 flex gap-2 items-center"}>
         {/* Global Search Bar */}
         {!hideSearch ? (
           <div className="flex-1 relative">
@@ -274,7 +288,10 @@ export default function SearchFilterBarCompact({
         {/* Filter Button */}
         <div className="relative" ref={filterPanelRef}>
           <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            onClick={() => {
+              if (!showAdvancedFilters) placeFilterPanel();
+              setShowAdvancedFilters(!showAdvancedFilters);
+            }}
             className={`flex items-center gap-1.5 ${inline ? 'h-10' : 'h-9'} px-3 rounded-lg font-medium text-sm transition-all ${
               activeFilterCount > 0
                 ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
@@ -292,14 +309,15 @@ export default function SearchFilterBarCompact({
 
           {/* Filter Panel - Matching Screenshot Layout */}
           {showAdvancedFilters && (
-            <div className="fixed inset-x-2 sm:inset-x-auto bottom-2 sm:bottom-auto sm:absolute sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] sm:max-w-[calc(100vw-2rem)] bg-white rounded-xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[80dvh] sm:max-h-[600px] flex flex-col">
+            <div className="fixed inset-x-2 sm:inset-x-auto bottom-2 sm:bottom-auto sm:absolute sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] sm:max-w-[calc(100vw-2rem)] bg-white rounded-xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[80dvh] sm:max-h-[600px] flex flex-col"
+              style={filterPanelLeft !== null ? { left: filterPanelLeft, right: 'auto' } : undefined}>
               <div className="flex-1 overflow-y-auto">
                 {/* Experience Row */}
                 <div className="p-3 sm:p-5 border-b border-gray-100">
                   <div>
                     {/* Experience */}
                     <div>
-                      <label className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
+                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
                         <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue" />
                         Experience
                       </label>
@@ -316,7 +334,7 @@ export default function SearchFilterBarCompact({
                               ...tempFilters,
                               experienceRange: { min: range.min, max: range.max }
                             })}
-                            className={`px-3 py-2 text-xs sm:text-sm rounded-lg border transition-all ${
+                            className={`px-3 py-2 text-sm rounded-lg border transition-all ${
                               tempFilters.experienceRange?.min === range.min && tempFilters.experienceRange?.max === range.max
                                 ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                                 : 'bg-white text-gray-700 border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/[0.02]'
@@ -336,7 +354,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('location-education')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                       <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Location & Education</span>
                       {(tempFilters.location || (tempFilters.education && tempFilters.education !== 'Any')) && (
@@ -349,7 +367,7 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <div>
-                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Location</label>
+                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Location</label>
                           <input
                             type="text"
                             placeholder="e.g., San Francisco"
@@ -359,7 +377,7 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Education</label>
+                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Education</label>
                           <select
                             value={mapBackendCodeToDisplay(tempFilters.education)}
                             onChange={(e) => {
@@ -384,7 +402,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('company-notice')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                       <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Company & Notice Period</span>
                       {(tempFilters.currentCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
@@ -397,7 +415,7 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <div>
-                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Current Company</label>
+                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Current Company</label>
                           <input
                             type="text"
                             placeholder="e.g., Google"
@@ -407,7 +425,7 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Notice Period</label>
+                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Notice Period</label>
                           <select
                             value={tempFilters.noticePeriod || 'Any'}
                             onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
@@ -429,7 +447,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('dates')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Date Filters</span>
                       {(tempFilters.uploadDateRange?.start || tempFilters.uploadDateRange?.end) && (
@@ -440,7 +458,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('dates') && (
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
-                      <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Upload Date Range</label>
+                      <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Upload Date Range</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <DateField
                           aria-label="Upload date from"
@@ -469,7 +487,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('upload-source')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Uploaded By & Source</span>
                       {(tempFilters.uploadedBy || tempFilters.sourceType) && (
@@ -482,7 +500,7 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <div>
-                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Uploaded By</label>
+                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Uploaded By</label>
                           <input
                             type="text"
                             placeholder="Enter name..."
@@ -492,7 +510,7 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Source Type</label>
+                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Source Type</label>
                           <select
                             value={tempFilters.sourceType || ''}
                             onChange={(e) => setTempFilters({ ...tempFilters, sourceType: e.target.value || null })}
@@ -511,7 +529,7 @@ export default function SearchFilterBarCompact({
 
               {/* Footer */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 bg-slate-50 border-t border-gray-100">
-                <div className="text-xs sm:text-sm text-brand-blue">
+                <div className="text-sm text-brand-blue">
                   {activeFilterCount > 0 ? (
                     <span>{activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} applied</span>
                   ) : (
@@ -525,7 +543,7 @@ export default function SearchFilterBarCompact({
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     onClick={handleApplyFilters}
-                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                   >
                     Apply Filters
                   </button>
@@ -580,8 +598,8 @@ export default function SearchFilterBarCompact({
 
       {/* Active Filter Chips */}
       {activeFilterCount > 0 && (
-        <div className={inline ? "mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center" : "px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center"}>
-          <span className="text-xs sm:text-sm text-gray-500 mr-1">Active filters:</span>
+        <div className={inline ? "mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center" : "pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center"}>
+          <span className="text-sm text-gray-500 mr-1">Active filters:</span>
           {getActiveFilterChips().map((chip) => (
             <div
               key={chip.key}

@@ -86,13 +86,13 @@ export default function DeleteRecordModal({
               <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue dark:text-blue-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-2xs sm:text-xs font-semibold tracking-wide text-gray-500 dark:text-slate-400 uppercase">
+              <p className="text-xs font-semibold tracking-wide text-gray-500 dark:text-slate-400 uppercase">
                 Job Details
               </p>
               <p className="mt-0.5 text-sm sm:text-base font-bold text-gray-900 dark:text-slate-100 uppercase break-words" title={heading}>
                 {heading}
               </p>
-              <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center gap-y-0.5">
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center gap-y-0.5">
                 {metaParts.map((part, i) => (
                   <span key={part} className="inline-flex items-center">
                     {i > 0 && <span className="mx-1.5 sm:mx-2 text-gray-300 dark:text-slate-600">|</span>}

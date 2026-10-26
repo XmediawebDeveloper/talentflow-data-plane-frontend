@@ -423,7 +423,7 @@ export default function HRQuestionBank() {
               { label: 'HR Question Bank' },
             ]}
           />
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-6">
       {!canViewHRQuestionBank ? (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
           You do not have permission to view the HR Question Bank.
@@ -438,7 +438,7 @@ export default function HRQuestionBank() {
           </div>
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">HR Question Bank</h2>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 mt-0.5">
               Manage reusable HR questions for AI Assessments and AI Interviews. The same questions can be used across both.
             </p>
           </div>
@@ -590,7 +590,7 @@ export default function HRQuestionBank() {
               type="button"
               onClick={() => setAnswerTypeFilter(pill.id)}
               aria-pressed={active}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${
                 active
                   ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                   : 'bg-brand-blue/5 text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -663,7 +663,7 @@ export default function HRQuestionBank() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 leading-relaxed">{question.question_text}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${
+                    <span className={`px-2 py-0.5 rounded-lg sm:rounded-full text-xs font-medium ring-1 ${
                       question.answer_type === 'yes_no'
                         ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                         : 'bg-brand-cyan/10 text-brand-blue ring-brand-cyan/20'

@@ -1674,7 +1674,7 @@ export default function UserManagement() {
         value={roleFilter}
         onChange={(e) => setRoleFilter(e.target.value)}
         aria-label="Filter by role"
-        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors max-sm:!text-xs hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
+        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
           roleFilter === 'all'
             ? 'border-gray-200 text-gray-700 dark:border-slate-700 dark:text-slate-300'
             : 'border-brand-blue/40 text-brand-blue'
@@ -2917,7 +2917,7 @@ export default function UserManagement() {
               icon={<Plus className="w-4 h-4" />}
               aria-disabled={!canCreateUser}
               title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
-              className={`max-sm:h-8 max-sm:px-3 max-sm:text-xs ${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
+              className={`${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
                 if (!canCreateUser) return;
                 if (isAtLimit) {
@@ -2980,7 +2980,7 @@ export default function UserManagement() {
                   <Icon className="hidden h-4 w-4 sm:block" />
                   {key === 'all' ? <><span className="sm:hidden">All</span><span className="hidden sm:inline">{label}</span></> : label}
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums sm:px-2 sm:text-xs ${
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
                       active ? 'bg-white/20 text-white' : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
                     }`}
                   >
@@ -4363,7 +4363,7 @@ export default function UserManagement() {
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
-                  <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{viewingRolePopup.code}</div>
+                  <div className="font-semibold text-brand-blue text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>

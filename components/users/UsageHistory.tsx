@@ -403,7 +403,7 @@ function AnalyticsCards({
   };
 
   return (
-    <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
       {/* Phones: a swipeable row (cards snap into place) instead of five
           stacked cards; sm and up: the grid. */}
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
@@ -1759,7 +1759,7 @@ export default function UsageHistory() {
               icon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
               aria-label="Refresh"
               title="Refresh"
-              className="max-sm:h-8 max-sm:gap-0 max-sm:px-2"
+              className="max-sm:gap-0 max-sm:px-3"
             >
               {/* Icon-only on phones */}
               <span className="hidden sm:inline">Refresh</span>
@@ -1768,7 +1768,6 @@ export default function UsageHistory() {
               variant="primary"
               onClick={() => setShowExportModal(true)}
               icon={<Download className="w-4 h-4" />}
-              className="max-sm:h-8 max-sm:px-3 max-sm:text-xs"
             >
               Export
             </Button>

@@ -75,7 +75,7 @@ export default function StatsCards({ cards }: StatsCardsProps) {
           <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg ${iconBg} flex items-center justify-center flex-shrink-0`}>
             <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${iconColor}`} />
           </div>
-          <span className="text-xs sm:text-sm text-muted-foreground font-medium truncate">{label}</span>
+          <span className="text-sm text-muted-foreground font-medium truncate">{label}</span>
         </div>
         <div className="text-2xl sm:text-3xl font-semibold text-foreground mb-1 tracking-tight tabular-nums">
           {value}

@@ -186,7 +186,7 @@ export default function ListPagination({
               <span className="font-medium text-gray-900">{totalItems}</span>
             </span>
           )}
-          <span className={`${minimalOnMobile ? 'hidden sm:inline' : ''} ${compact ? 'text-xs' : 'text-xs sm:text-sm'} text-gray-600`}>
+          <span className={`${minimalOnMobile ? 'hidden sm:inline' : ''} ${compact ? 'text-xs' : 'text-sm'} text-gray-600`}>
             Showing <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
             <span className="font-medium text-gray-900">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
             <span className="font-medium text-gray-900">{totalItems}</span> {itemLabel}

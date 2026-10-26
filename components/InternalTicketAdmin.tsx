@@ -335,7 +335,7 @@ export default function InternalTicketAdmin() {
                     <Sparkles className="h-3 w-3 text-brand-orange" />
                     Internal helpdesk
                   </div>
-                  <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Team Support Tickets</h1>
+                  <h1 className="text-lg font-semibold tracking-tight sm:text-xl">Team Support Tickets</h1>
                   <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage help requests from your team members in one place.</p>
                 </div>
               </div>

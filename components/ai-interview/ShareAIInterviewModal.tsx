@@ -1171,9 +1171,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     <>
               {/* JD ID, the job title, then its job version — which job (and
                   which version of it) these invitations are for. */}
-              <p className="flex items-center gap-2 mt-0.5 text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
+              {/* Wraps below sm: on one line the no-shrink version pills ran
+                  past the header and under the close button on a phone. */}
+              <p className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 mt-0.5 text-sm text-gray-600 dark:text-slate-400 min-w-0">
                 {config.jd_short_id && <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>}
-                <span className="truncate">{config.jd_title || config.position}</span>
+                <span className="min-w-0 truncate">{config.jd_title || config.position}</span>
                 {config.jd_id && (
                   <span className="inline-flex items-center gap-1.5 flex-shrink-0" title="Job version">
                     -
@@ -1239,11 +1241,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             );
             const statusPill = (tone: 'ok' | 'low' | 'out', freePercent: number) =>
               tone === 'out' ? (
-                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">Quota exhausted</span>
+                <span className="flex-shrink-0 text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">Quota exhausted</span>
               ) : tone === 'low' ? (
-                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">Low quota</span>
+                <span className="flex-shrink-0 text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">Low quota</span>
               ) : (
-                <span className="flex-shrink-0 text-2xs sm:text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">{freePercent.toFixed(0)}% free</span>
+                <span className="flex-shrink-0 text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">{freePercent.toFixed(0)}% free</span>
               );
 
             if (quotaStatsLoading) {
@@ -1268,7 +1270,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 return (
                   <div className={`${panelClass('ok')} flex items-center gap-3`}>
                     {iconTile('ok')}
-                    <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Unlimited AI interview units</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Unlimited AI interview units</span>
                   </div>
                 );
               }
@@ -1283,7 +1285,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                     {iconTile(tone)}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
-                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
                           {isInsufficient
                             ? 'No AI interview units available'
                             : isLow
@@ -1291,7 +1293,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             : `${available} AI interview unit${available !== 1 ? 's' : ''} available`
                           }
                         </span>
-                        <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
+                        <span className="text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
                           {available.toLocaleString()} / {total_quota.toLocaleString()} available
                         </span>
                       </div>
@@ -1301,7 +1303,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
                       </div>
                       <div className="flex items-start justify-between gap-2 mt-1.5">
-                        <div className="min-w-0 text-2xs sm:text-xs text-gray-600 dark:text-slate-400">
+                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400">
                           <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
                             <span>Total: {total_quota}</span>
                             <span>Attended (consumed): {consumed}</span>
@@ -1340,10 +1342,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                     {iconTile(tone)}
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
-                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
                           {Math.max(0, remaining)} AI interview unit{remaining !== 1 ? 's' : ''} remaining
                         </span>
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 tabular-nums">
+                        <span className="text-sm text-gray-600 dark:text-slate-400 tabular-nums">
                           ({subscriptionUsed} used of {subscriptionLimit})
                         </span>
                       </div>

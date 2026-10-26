@@ -135,7 +135,7 @@ export default function ApiManagementPage() {
           <div className="mx-auto w-full max-w-[1400px]">
             <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
               {/* Hero */}
-              <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-5 sm:p-6">
+              <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-4 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div className="flex items-start gap-3">
                     <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -151,7 +151,7 @@ export default function ApiManagementPage() {
               {/* API key cards */}
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+                  <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
@@ -191,7 +191,7 @@ export default function ApiManagementPage() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />
 
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+        <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -203,7 +203,7 @@ export default function ApiManagementPage() {
                   Developer access
                 </div>
                 <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">API Management</h1>
-                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
+                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
               </div>
             </div>
             <Button
@@ -249,7 +249,7 @@ export default function ApiManagementPage() {
             apiKeys.map((apiKey) => (
               <div
                 key={apiKey.id}
-                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition hover:shadow-md sm:p-6"
+                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition hover:shadow-md sm:p-6"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

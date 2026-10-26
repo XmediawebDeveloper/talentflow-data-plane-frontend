@@ -11,7 +11,7 @@ export default function Loading() {
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
           {/* Hero */}
-          <section className="rounded-2xl border border-gray-100 bg-gray-50 p-5 sm:p-6 lg:p-7">
+          <section className="rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="flex-1 space-y-2">

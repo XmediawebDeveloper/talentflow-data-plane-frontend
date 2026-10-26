@@ -591,7 +591,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
           <div>
             <h2 className="text-sm sm:text-base text-gray-900">Assessment Results</h2>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 mt-1">
               {filteredResults.length} {filteredResults.length === 1 ? 'result' : 'results'}
               {searchTerm && ` matching "${searchTerm}"`}
               {activeFiltersCount > 0 && ` with ${activeFiltersCount} filter${activeFiltersCount !== 1 ? 's' : ''} applied`}
@@ -605,7 +605,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <div className="relative">
               <button
                 onClick={() => setShowColumnSelector(!showColumnSelector)}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Columns ({enabledColumns.length})
@@ -695,7 +695,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
             />
           </div>
 
@@ -705,7 +705,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Complete' | 'In Progress' | 'Terminated' | 'Pending')}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Complete">Complete</option>
@@ -721,7 +721,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <select
               value={filterPassFail}
               onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Pass">Pass</option>
@@ -739,7 +739,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                 }}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -759,7 +759,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                 }}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -1478,7 +1478,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 <div className="flex items-center justify-between p-3 sm:p-5 border-b border-gray-200">
                   <div>
                     <h3 className="text-base sm:text-lg font-medium text-gray-900">Export Assessment Results</h3>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                    <p className="text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
                   </div>
                   <button
                     onClick={() => {

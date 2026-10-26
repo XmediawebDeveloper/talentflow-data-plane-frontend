@@ -101,7 +101,7 @@ function StarRating({ label, hint, Icon, iconClass, value, onChange, disabled }:
       <Icon className={`w-5 h-5 sm:w-6 sm:h-6 shrink-0 mt-0.5 ${iconClass}`} aria-hidden />
       <div className="min-w-0 flex-1">
       <p className="text-sm sm:text-base font-semibold text-gray-900">{label}</p>
-      <p className="text-xs sm:text-sm text-gray-500 mt-0.5 mb-2.5">{hint}</p>
+      <p className="text-sm text-gray-500 mt-0.5 mb-2.5">{hint}</p>
       <div
         role="radiogroup"
         aria-label={label}

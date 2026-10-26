@@ -1270,7 +1270,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <span className="hidden sm:inline">Team Support Tickets</span>
               <span className="sm:hidden">Team</span>
               {internalUnassignedTickets > 0 && (
-                <span className="px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20 rounded-full font-semibold">
+                <span className="px-1.5 sm:px-2 py-0.5 text-xs bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20 rounded-full font-semibold">
                   {internalUnassignedTickets}
                 </span>
               )}
@@ -1969,7 +1969,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -2089,8 +2089,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
-                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
-                              <h4 className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
+                              <span className="text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
+                              <h4 className="text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1">
                               {getStatusBadge(ticket.status)}
@@ -2100,10 +2100,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
                             <div className="flex items-center gap-1 min-w-0">
                               <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
+                              <span className="text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
+                            <span className="text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -2805,7 +2805,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -2825,7 +2825,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     >
                       <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
                       <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">{cat.label}</h4>
-                      <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
                     </div>
                   );
                 })}
@@ -2960,7 +2960,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : internalTickets.length === 0 ? (
                 <div className="text-center py-8 sm:py-12">
                   <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
                 </div>
               ) : (() => {
                 const openInternal = (ticket: InternalTicket) => {

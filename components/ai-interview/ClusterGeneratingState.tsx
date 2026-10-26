@@ -87,7 +87,7 @@ export default function ClusterGeneratingState() {
                     ) : null}
                   </span>
                   <span
-                    className={`text-2xs sm:text-xs leading-tight transition-colors duration-500 ${
+                    className={`text-xs leading-tight transition-colors duration-500 ${
                       done || current ? 'text-brand-blue font-medium' : 'text-gray-400'
                     }`}
                   >

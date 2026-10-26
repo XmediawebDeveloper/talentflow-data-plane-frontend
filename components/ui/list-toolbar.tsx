@@ -152,19 +152,12 @@ export interface ListToolbarProps {
   overflowVisible?: boolean;
 
   /**
-   * Render the built-in More Filters and Reset buttons at a 36px height
-   * (`h-9`) instead of their natural 38px (`py-2`) — from sm up; on phones
-   * they take the `compactOnMobile` size (32px, 12px text). Opt-in so existing pages
-   * are unchanged; used where a toolbar must match the 36px control band of
-   * the Job Details tabs (the AI Talent Match reference).
+   * @deprecated No effect. The built-in More Filters / Reset buttons are now
+   * always 36px (`h-9`) with 14px text, matching the search box at every width.
    */
   compactButtons?: boolean;
 
-  /**
-   * Phones only (below `sm`): render More Filters and Reset as 32px chips
-   * (`h-8`, `text-xs`, tighter padding) so a stacked mobile toolbar stays
-   * compact. From `sm` up the buttons are exactly as without it. Opt-in.
-   */
+  /** @deprecated No effect — see `compactButtons`. */
   compactOnMobile?: boolean;
 
   className?: string;
@@ -194,8 +187,6 @@ export default function ListToolbar({
   controlsFollowSearch = false,
   singleLine = false,
   overflowVisible = false,
-  compactButtons = false,
-  compactOnMobile = false,
   className,
 }: ListToolbarProps) {
   const container = containerBreakpoint === '4xl'
@@ -245,16 +236,14 @@ export default function ListToolbar({
     }
   };
 
-  // Size of the built-in More Filters / Reset buttons — see `compactButtons`
-  // and `compactOnMobile`.
-  // compactButtons also takes the compactOnMobile phone size: the Job Details
-  // result tabs (its only users) follow the Job Openings mobile toolbar.
-  const buttonSize = compactButtons
-    ? 'h-8 px-2.5 text-xs sm:h-9 sm:px-3 sm:text-sm'
-    : compactOnMobile
-    ? 'h-8 px-2.5 text-xs sm:h-auto sm:px-3 sm:py-2 sm:text-sm'
-    : 'px-3 py-2';
-  const buttonIcon = compactOnMobile || compactButtons ? 'w-3.5 h-3.5 sm:w-4 sm:h-4' : 'w-4 h-4';
+  // Size of the built-in More Filters / Reset buttons. `compactButtons` and
+  // `compactOnMobile` used to pick smaller variants. All three now resolve to one size: the search box's h-9 band and 14px text
+  // at every width. Phones used to get 32px / 12px chips here, which put
+  // More Filters and Reset at a different type size from the search box and
+  // dropdowns in the same row. The props stay accepted so callers need not
+  // change; they are simply no longer read.
+  const buttonSize = 'h-9 px-3';
+  const buttonIcon = 'w-4 h-4';
 
   const hasSearch = draftSearch.trim() !== '';
   const showClear = typeof onClearFilters === 'function' && (filtersApplied || hasSearch);

@@ -2029,12 +2029,12 @@ export function AssessmentInterface({
                           <Clock className={`w-5 h-5 ${timerTone}`} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs sm:text-sm text-gray-600">Time Remaining</p>
+                          <p className="text-sm text-gray-600">Time Remaining</p>
                           <p className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight ${timerTone} ${globalTimeRemaining < 300 ? 'animate-pulse' : ''}`}>
                             {formatTime(globalTimeRemaining)}
                           </p>
                         </div>
-                        <span className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-blue/5 text-xs sm:text-sm font-semibold text-brand-blue tabular-nums whitespace-nowrap" title="Total duration">
+                        <span className="shrink-0 px-2.5 py-1 rounded-lg bg-brand-blue/5 text-sm font-semibold text-brand-blue tabular-nums whitespace-nowrap" title="Total duration">
                           {totalLabel} total
                         </span>
                       </div>
@@ -2086,7 +2086,7 @@ export function AssessmentInterface({
                         </div>
                         <div>
                           <p className="font-medium text-success-strong text-sm sm:text-base">All questions answered!</p>
-                          <p className="text-xs sm:text-sm text-success">You can review and edit your answers before submitting.</p>
+                          <p className="text-sm text-success">You can review and edit your answers before submitting.</p>
                         </div>
                       </div>
                     )}
