@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import Pagination from '@/components/Pagination';
@@ -342,7 +343,19 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const [exportStep, setExportStep] = useState<'format' | 'scope'>('format');
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
 
+  /* Export is a server export — the endpoint enforces `assessments:export`
+     and writes the audit row. Without the permission it stays listed,
+     greyed, with this reason. */
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
+  const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
+  const exportErrorMessage = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : '';
+    return /permission|forbidden|403/i.test(msg) ? EXPORT_DENIED_REASON : 'Failed to export results. Please try again.';
+  };
+
   const handleExportExcel = () => {
+    if (!canExportAssessments) return;
     setShowExportModal(true);
   };
 
@@ -392,7 +405,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setExportStep('format');
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error(exportErrorMessage(error));
     }
   };
 
@@ -431,7 +444,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setExportStep('format');
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error(exportErrorMessage(error));
     }
   };
 
@@ -649,6 +662,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 variant="primary"
                 size="sm"
                 onClick={handleExportExcel}
+                aria-disabled={!canExportAssessments || undefined}
+                title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                className={canExportAssessments ? undefined : 'opacity-60 cursor-not-allowed'}
                 icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               >
                 Export
@@ -677,6 +693,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   variant="primary"
                   size="sm"
                   onClick={handleExportExcel}
+                  aria-disabled={!canExportAssessments || undefined}
+                  title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                  className={canExportAssessments ? undefined : 'opacity-60 cursor-not-allowed'}
                   icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
                   Export

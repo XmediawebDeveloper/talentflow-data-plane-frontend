@@ -1,26 +1,34 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
-import { Fragment, useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
+import ResultRowActions, { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TimelineStamps from '@/components/ui/timeline-stamps';
 import NameAvatar from '@/components/ui/name-avatar';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/providers/AuthProvider';
 import {
-  ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
-  SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare, ChevronDown,
+  ChevronLeft, ChevronRight, Users, CheckCircle, XCircle,
+  FileDown, FileText, FileSpreadsheet, Download, X, ChevronDown, Loader2,
+  Square, CheckSquare,
 } from 'lucide-react';
-import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
+import ExportColumnsModal from '@/components/ExportColumnsModal';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { downloadSessionReports } from './evaluation-dashboard/downloadSessionReport';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -82,15 +90,12 @@ const CANDIDATE_COLUMNS = [
   { id: 'proctoring', label: 'Proctoring Risk' },
   { id: 'inviteSource', label: 'Invite Source' },
   { id: 'cid', label: 'CID' },
-  { id: 'jobId', label: 'Job ID' },
+  { id: 'jobId', label: 'JD ID' },
   { id: 'jobTitle', label: 'Job Title' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
 ] as const;
 type CandidateColumnId = (typeof CANDIDATE_COLUMNS)[number]['id'];
-/* The six columns a list row shows; every other enabled column opens in the
-   row's expanded panel (the Resume Scoring list's expand pattern). */
-const PRIMARY_CANDIDATE_COLUMNS: CandidateColumnId[] = ['candidate', 'jobTitle', 'status', 'score', 'result', 'proctoring'];
 
 /** A session plus the interview it belongs to — rows here span configs. */
 type CandidateSessionRow = AIInterviewResponse & {
@@ -159,10 +164,20 @@ export interface AIInterviewCandidateResultsProps {
    * reload — this table otherwise only refetches on mount.
    */
   refreshSignal?: number;
+  /**
+   * The AI Interviews page's one List/Card choice, shared by every tab. When
+   * both are passed the host owns the view; otherwise this list keeps its own.
+   */
+  displayMode?: ListDisplayMode;
+  onDisplayModeChange?: (mode: ListDisplayMode) => void;
 }
 
-export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal }: AIInterviewCandidateResultsProps = {}) {
+export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
   const router = useRouter();
+  // Export is RBAC-gated (`ai_interview:export`, enforced server-side by the
+  // audit endpoint too) — greyed with the reason when missing, never hidden.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
 
   const [rows, setRows] = useState<CandidateSessionRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -170,7 +185,10 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
-  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  const [localDisplayMode, setLocalDisplayMode] = useState<ListDisplayMode>('list');
+  const hostOwnsView = hostDisplayMode !== undefined && !!onDisplayModeChange;
+  const displayMode: ListDisplayMode = (hostOwnsView && hostDisplayMode) || localDisplayMode;
+  const setDisplayMode = (hostOwnsView && onDisplayModeChange) || setLocalDisplayMode;
 
   // Search state lives in the shared hook: typed vs applied query, plus a
   // reset. No status filter — the fetch itself is scoped to Completed only
@@ -196,7 +214,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   // Phones open on the cards — the table only scrolls sideways there.
   // Before the restore below, which still wins on larger screens.
   useEffect(() => {
-    if (isPhoneWidth()) setDisplayMode('grid');
+    if (isPhoneWidth()) setLocalDisplayMode('grid');
   }, []);
   useListStatePersistence(
     'ai-interview-candidate-results',
@@ -204,7 +222,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     (s) => {
       if (typeof s.query === 'string' && s.query) search.setQuery(s.query);
       if (s.filters && typeof s.filters === 'object') search.setFilters({ ...EMPTY_CANDIDATE_FILTERS, ...s.filters });
-      if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setDisplayMode(s.displayMode);
+      if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setLocalDisplayMode(s.displayMode);
       if (typeof s.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(s.pageSize)) setPageSize(s.pageSize);
       if (typeof s.currentPage === 'number' && s.currentPage >= 1) setCurrentPage(s.currentPage);
     },
@@ -388,22 +406,9 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     }
   };
 
-  const [columns, setColumns] = useState(() => CANDIDATE_COLUMNS.map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
-  const [showColumnModal, setShowColumnModal] = useState(false);
-  const enabledColumns = columns.filter((c) => c.enabled);
-  const col = (id: CandidateColumnId) => columns.some((c) => c.id === id && c.enabled);
-  /* List view: an enabled column is either in the row or in its expanded panel. */
-  const showInRow = (id: CandidateColumnId) => col(id) && PRIMARY_CANDIDATE_COLUMNS.includes(id);
-  const rowColumns = CANDIDATE_COLUMNS.filter((c) => showInRow(c.id));
-  const detailColumns = CANDIDATE_COLUMNS.filter((c) => col(c.id) && !PRIMARY_CANDIDATE_COLUMNS.includes(c.id));
-  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
-  const toggleExpanded = (key: string) =>
-    setExpandedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  /* The table always shows every column; which ones go into a file is picked
+     in the Export popup (the Score Resume tab's pattern). */
+  const exportColumns = CANDIDATE_COLUMNS.map((c) => ({ id: c.id as string, label: c.label as string }));
 
   // Row selection for Export — rows span configs, so key by config + session.
   const rowKey = (row: CandidateSessionRow) => `${row._config_id}-${row.id}`;
@@ -431,15 +436,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
 
   // One export cell per column; Timeline splits into its three parts so each
   // lands in its own spreadsheet column.
-  const exportHeaders = (): string[] =>
-    enabledColumns.flatMap((c) => (
+  const pickColumns = (ids: string[]) => exportColumns.filter((c) => ids.includes(c.id));
+  const exportHeaders = (ids: string[]): string[] =>
+    pickColumns(ids).flatMap((c) => (
       c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration']
       // Email lives under the name on screen, but stays its own spreadsheet column.
       : c.id === 'candidate' ? ['Candidate', 'Email']
       : [c.label]
     ));
-  const exportRow = (row: CandidateSessionRow): string[] =>
-    enabledColumns.flatMap((c): string[] => {
+  const exportRow = (row: CandidateSessionRow, ids: string[]): string[] =>
+    pickColumns(ids).flatMap((c): string[] => {
       switch (c.id) {
         case 'cid': return [row.candidate_cid || ''];
         case 'candidate': return [row.candidate_name || '', row.candidate_email || ''];
@@ -461,16 +467,17 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       }
     });
 
-  // Exports the selected rows when any are picked; otherwise every row
-  // matching the current search — all pages, not just this one.
-  const handleExport = () => {
-    const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows;
+  // Exports the ticked rows (Export lives in the Actions menu, which only
+  // shows once a row is ticked), with the columns picked in the popup.
+  const handleExport = (ids: string[]) => {
+    if (!canExport) return;
+    const exportRows = selectedRows;
     if (exportRows.length === 0) {
       toast.warning('No candidates to export');
       return;
     }
-    const headers = exportHeaders();
-    const data = exportRows.map(exportRow);
+    const headers = exportHeaders(ids);
+    const data = exportRows.map((row) => exportRow(row, ids));
     const baseName = `AI_Interview_Candidate_Results_${new Date().toISOString().slice(0, 10)}`;
     let blob: Blob;
     let fileName: string;
@@ -493,8 +500,44 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+    // Audit trail: the file is built here, so record the export server-side.
+    void aiInterviewService.logListExport({
+      format: exportFormat,
+      recordCount: exportRows.length,
+      tab: 'candidate-results',
+      ids: exportRows.map((row) => row.id),
+      exportType: 'ai_interview_candidate_results',
+    });
     toast.success(`Exported ${exportRows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
     setShowExportModal(false);
+  };
+
+  /* Download PDF Reports — an item in the Actions menu (as on the per-interview
+     results view), so it uses downloadSessionReports directly rather than the
+     standalone DownloadPdfsButton. */
+  const [downloadingPdfs, setDownloadingPdfs] = useState<{ done: number; total: number } | null>(null);
+  const canDownloadReports = useCanDownloadAIReports();
+  const handleDownloadSelectedPdfs = async () => {
+    if (!canDownloadReports) return;
+    setDownloadingPdfs({ done: 0, total: 0 });
+    try {
+      const zipName = `AI_Interview_Candidate_Reports_${new Date().toISOString().slice(0, 10)}.zip`;
+      const { downloaded, skipped, failed } = await downloadSessionReports(
+        selectedRows, zipName, (done, total) => setDownloadingPdfs({ done, total }),
+      );
+      if (downloaded === 0 && failed === 0) {
+        toast.warning('No evaluated candidates to download — reports are available once an interview is evaluated.');
+      } else if (failed > 0) {
+        toast.error(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}; ${failed} could not be generated.`);
+      } else if (skipped > 0) {
+        toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
+      }
+    } catch (err) {
+      console.error('[AIInterviewCandidateResults] Bulk PDF download failed:', err);
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
+    } finally {
+      setDownloadingPdfs(null);
+    }
   };
 
   /**
@@ -524,104 +567,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       `/recruitment/ai-interviews/${row._config_id}/results/details?session_id=${row.id}&from=candidate-results`
     );
   };
-
-  if (isLoading) {
-    return (
-      <div>
-        {/* Toolbar mirror */}
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <Skeleton className="h-10 w-full max-w-md rounded-lg" />
-          <div className="flex gap-2">
-            <Skeleton className="h-10 w-32 rounded-lg" />
-            <Skeleton className="h-10 w-24 rounded-lg" />
-          </div>
-        </div>
-
-        {/* Table mirror — same columns/order as the real candidate results table */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-          <div className="overflow-x-auto tf-table-shell">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
-                <tr>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i}>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-md" /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Skeleton className="w-7 h-7 rounded-full" />
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Skeleton className="h-1.5 w-16 rounded-full" />
-                        <Skeleton className="h-4 w-8" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        <Skeleton className="h-3 w-28" />
-                        <Skeleton className="h-3 w-28" />
-                        <Skeleton className="h-3 w-16" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-3 text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-sm text-destructive mb-3">{error}</p>
-        <Button variant="primary" size="md" onClick={loadAllSessions}>
-          Retry
-        </Button>
-      </div>
-    );
-  }
-
-  if (rows.length === 0) {
-    return (
-      <ListEmptyState
-        icon={Users}
-        isNarrowed={false}
-        entityLabel="candidate result"
-        emptyTitle="No candidate results yet"
-        emptyDescription="Results appear here once a candidate completes an AI interview."
-      />
-    );
-  }
 
   const toolbar = (
     <>
@@ -697,37 +642,178 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           </div>
         }
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setShowColumnModal(true)}
-          icon={<SlidersHorizontal className="w-4 h-4" />}
-          className="hidden sm:flex whitespace-nowrap !h-[38px] !text-sm"
-        >
-          <span className="hidden md:inline">Customize Columns</span>
-          <span className="md:hidden">Columns</span>
-        </Button>
-        {/* Download PDF acts on the ticked rows only (disabled until one is
-            selected); Export is always on — the ticked rows, else every
-            filtered row. */}
-        <DownloadPdfsButton
-          getRows={() => selectedRows}
-          selectedCount={selectedRows.length}
-          zipName={`AI_Interview_Candidate_Reports_${new Date().toISOString().slice(0, 10)}.zip`}
-        />
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => setShowExportModal(true)}
-          icon={<FileDown className="w-4 h-4" />}
-          className="whitespace-nowrap !h-[38px] !text-sm"
-        >
-          Export{selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}
-        </Button>
+        {/* Actions — the Resume Scoring pill: appears once a row is ticked and
+            holds Export (format + columns picked in its popup) and Download
+            PDF Reports. Clear unticks everything. */}
+        {selectedRows.length > 0 && (
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                  aria-label={`Actions for ${selectedRows.length} selected`}
+                >
+                  <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                  </span>
+                  {downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Actions ({selectedRows.length})
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                  {selectedRows.length.toLocaleString()} selected
+                </div>
+                <DropdownMenuItem
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                  aria-disabled={!canExport || undefined}
+                  title={canExport ? undefined : 'You do not have permission to export AI interviews'}
+                  onSelect={(e) => {
+                    if (!canExport) { e.preventDefault(); return; }
+                    setShowExportModal(true);
+                  }}
+                >
+                  <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                  <span>Export</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
+                  disabled={!!downloadingPdfs}
+                  aria-disabled={!canDownloadReports || undefined}
+                  title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                  onSelect={(e) => {
+                    if (!canDownloadReports) { e.preventDefault(); return; }
+                    void handleDownloadSelectedPdfs();
+                  }}
+                >
+                  <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                  <span>
+                    {downloadingPdfs
+                      ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
+                      : 'Download PDF Reports'}
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setSelectedKeys(new Set())}
+              icon={<X className="w-4 h-4" />}
+              className="whitespace-nowrap !h-[38px] !text-sm"
+            >
+              Clear
+            </Button>
+          </>
+        )}
         <ListViewToggle value={displayMode} onChange={setDisplayMode} />
       </ListToolbar>
     </>
   );
+
+  /* Loading / error / never-any-results states. Rendered BELOW the real
+     toolbar (see the return further down) rather than returned early: the
+     toolbar lives in the page's shared slot, and returning before it was
+     built left that slot empty — the search bar vanished on every load and
+     Refresh, then popped back in. */
+  let stateBody: ReactNode = null;
+  if (isLoading) {
+    // Card view loads as card skeletons, not a table.
+    stateBody = displayMode === 'grid' ? <CardGridSkeleton count={8} className="xl:grid-cols-4" /> : (
+      <div>
+        {/* Table mirror — same columns/order as the real candidate results table */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                <tr>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-md" /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="w-7 h-7 rounded-full" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-1.5 w-16 rounded-full" />
+                        <Skeleton className="h-4 w-8" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-3 text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  } else if (error) {
+    stateBody = (
+      <div className="p-6 text-center">
+        <p className="text-sm text-destructive mb-3">{error}</p>
+        <Button variant="primary" size="md" onClick={loadAllSessions}>
+          Retry
+        </Button>
+      </div>
+    );
+  } else if (rows.length === 0) {
+    stateBody = (
+      <ListEmptyState
+        icon={Users}
+        isNarrowed={false}
+        entityLabel="candidate result"
+        emptyTitle="No candidate results yet"
+        emptyDescription="Results appear here once a candidate completes an AI interview."
+      />
+    );
+  }
+
+  if (stateBody) {
+    return (
+      <div>
+        {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
+        {stateBody}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -750,10 +836,15 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                 const risk = getProctoringRisk(row);
                 const isSelected = selectedKeys.has(rowKey(row));
                 return (
-                  <button
+                  /* A div, not a <button>: the card carries the row's own View /
+                     Download buttons, which can't nest inside a button. */
+                  <div
                     key={`${row._config_id}-${row.id}`}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => openSession(row)}
-                    className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${gridCardSelectedClass(isSelected)}`}
+                    onKeyDown={(e) => { if (e.key === 'Enter') openSession(row); }}
+                    className={`group relative text-left cursor-pointer bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${gridCardSelectedClass(isSelected)}`}
                   >
                     <GridCardSelect
                       selected={isSelected}
@@ -782,7 +873,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       {row._config_title}
                     </p>
 
-                    {col('inviteSource') && inviteSourceLabel(row) && (
+                    {inviteSourceLabel(row) && (
                       <p className="text-xs text-gray-600 dark:text-slate-400">
                         <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
                       </p>
@@ -817,15 +908,11 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       startedAt={row.started_at} completedAt={row.completed_at} format={formatIST} duration={formatDuration(row)}
                     />
 
-                    <div
-                      onClick={(e) => { e.stopPropagation(); openSession(row); }}
-                      title="View Details"
-                      className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">View Details</span>
+                    {/* Same View / Download Report pair as the table row's Actions. */}
+                    <div className="flex justify-end">
+                      <ResultRowActions session={row} onView={() => openSession(row)} />
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -909,26 +996,25 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         )}
                       </button>
                     </th>
-                    {showInRow('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
-                    {showInRow('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
-                    {showInRow('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
-                    {showInRow('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
-                    {showInRow('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
-                    {showInRow('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
-                    {showInRow('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
-                    {showInRow('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
-                    {showInRow('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
-                    {showInRow('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
-                    {showInRow('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
-                    {showInRow('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {pageRows.map((row) => {
                     const risk = getProctoringRisk(row);
-                    /* Each column's cell, rendered in the row or — for the
-                       columns the row leaves out — in its expanded panel. */
+                    /* Each enabled column's cell, rendered in the row. */
                     const cells: Record<CandidateColumnId, { className: string; content: ReactNode }> = {
                       candidate: {
                         className: 'px-4 py-3',
@@ -1076,15 +1162,9 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       },
                     };
                     const key = rowKey(row);
-                    const isExpanded = expandedKeys.has(key);
                     return (
-                      <Fragment key={key}>
-                      <tr
-                        onClick={() => toggleExpanded(key)}
-                        aria-expanded={isExpanded}
-                        className={`transition-colors cursor-pointer ${isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : 'hover:bg-brand-blue/5'}`}
-                      >
-<td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                      <tr key={key} className="transition-colors hover:bg-brand-blue/5">
+                        <td className="px-4 py-3 w-12 align-middle tf-sticky-col-left">
                           <button
                             type="button"
                             onClick={() => toggleSelected(row)}
@@ -1098,48 +1178,15 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             )}
                           </button>
                         </td>
-                        {rowColumns.map((c) => (
+                        {CANDIDATE_COLUMNS.map((c) => (
                           <td key={c.id} className={cells[c.id].className}>{cells[c.id].content}</td>
                         ))}
-                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center justify-end gap-1.5">
-                            {/* The Resume Scoring list's expand control. */}
-                            {detailColumns.length > 0 && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => toggleExpanded(key)}
-                                aria-expanded={isExpanded}
-                                aria-label={isExpanded ? 'Hide details' : 'Show details'}
-                                title={isExpanded ? 'Hide details' : 'Show details'}
-                                className="h-8 w-8 p-0"
-                              >
-                                <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                              </Button>
-                            )}
                             <ResultRowActions session={row} onView={() => openSession(row)} />
                           </div>
                         </td>
                       </tr>
-                      {/* The columns the row leaves out, as the Resume Scoring
-                          list's expanded full-width row. */}
-                      {isExpanded && detailColumns.length > 0 && (
-                        <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                          <td colSpan={rowColumns.length + 2} className="px-4 lg:px-6 pt-3 pb-4">
-                            <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-3">
-                              {detailColumns.map((c) => (
-                                <div key={c.id} className="min-w-0">
-                                  <dt className="text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1">
-                                    {c.label}
-                                  </dt>
-                                  <dd className="text-sm min-w-0 text-gray-600 dark:text-slate-400">{cells[c.id].content}</dd>
-                                </div>
-                              ))}
-                            </dl>
-                          </td>
-                        </tr>
-                      )}
-                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -1208,88 +1255,23 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         )}
       </div>
 
-    {showColumnModal && (
-      <ColumnCustomizationModal
-        columns={columns}
-        onClose={() => setShowColumnModal(false)}
-        onApply={(ids) => setColumns((prev) => prev.map((c) => ({ ...c, enabled: ids.includes(c.id) })))}
-      />
-    )}
-
-    {/* Export format picker — same modal as the resume scoring All Resumes tab. */}
+    {/* Export — the Score Resume tab's popup: format, then the columns to
+        include (all ticked to start), then Cancel / Export. */}
     {showExportModal && (
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-          <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
-            <div className="flex items-start gap-3">
-              <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <FileDown className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Export Candidate Results</h3>
-                <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
-                  {selectedRows.length > 0 ? `${selectedRows.length} selected records` : `${filteredRows.length} records`}
-                  <span className="w-1 h-1 rounded-full bg-blue-500" />
-                  {enabledColumns.length} columns
-                </p>
-              </div>
-            </div>
-            <Button variant="secondary" size="sm" onClick={() => setShowExportModal(false)} className="px-2 flex-shrink-0" aria-label="Close">
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-
-          <div className="p-5 overflow-y-auto flex-1">
-            <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
-            <div className="space-y-3">
-              {([
-                { key: 'csv', title: 'CSV Format', desc: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
-                { key: 'xls', title: 'Excel Format (.xls)', desc: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
-              ] as const).map(({ key, title, desc, Icon, iconWrap, iconColor }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setExportFormat(key)}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                    exportFormat === key ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${iconWrap}`}>
-                    <Icon className={`w-6 h-6 ${iconColor}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-gray-900">{title}</div>
-                    <div className="text-sm text-gray-500">{desc}</div>
-                  </div>
-                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${exportFormat === key ? 'border-blue-600' : 'border-gray-300'}`}>
-                    {exportFormat === key && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
-              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-gray-600">
-                <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
-                {enabledColumns.map((c) => c.label).join(', ')}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleExport}
-              disabled={enabledColumns.length === 0}
-              icon={<Download className="w-4 h-4" />}
-            >
-              Export
-            </Button>
-          </div>
-        </div>
-      </div>
+      <ExportColumnsModal<'csv' | 'xls'>
+        title="Export Candidate Results"
+        recordCount={selectedRows.length}
+        formats={[
+          { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+          { key: 'xls', title: 'Excel Format (.xls)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+        ]}
+        format={exportFormat}
+        onFormatChange={setExportFormat}
+        columns={exportColumns}
+        initialColumnIds={exportColumns.map((c) => c.id)}
+        onExport={handleExport}
+        onClose={() => setShowExportModal(false)}
+      />
     )}
     </div>
   );

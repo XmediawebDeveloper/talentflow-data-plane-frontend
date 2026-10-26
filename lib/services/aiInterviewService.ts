@@ -1160,6 +1160,30 @@ export const aiInterviewService = {
     }
   },
 
+  /** Puts an All / Active / Draft / Archived list export (Actions → Export)
+   *  on the audit trail. Best-effort: the file is already downloaded, so a
+   *  failure here only warns — it never blocks or undoes the export. */
+  async logListExport(info: {
+    format: 'csv' | 'xls' | 'excel';
+    recordCount: number;
+    tab: string;
+    ids: string[];
+    /** Which page's export — 'ai_interview_list' (default), 'ai_interview_candidate_results', 'ai_interview_results', … */
+    exportType?: string;
+  }): Promise<void> {
+    try {
+      await api.post('/ai-interview/export/log', {
+        format: info.format,
+        record_count: info.recordCount,
+        export_type: info.exportType || 'ai_interview_list',
+        tab: info.tab,
+        ids: info.ids,
+      });
+    } catch (error) {
+      console.warn('[aiInterviewService] list export audit log failed:', error);
+    }
+  },
+
   /**
    * Expand a small main-skill list into JD-grounded sub-skills (timed mode only).
    * Called silently from Configure page when parents < Q for a bucket.

@@ -23,9 +23,10 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { tabPill } from '@/components/ui/filter-pills';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import ResultRowActions, { isPhoneWidth } from './ResultRowActions';
+import ResultRowActions, { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import { downloadSessionReport, downloadSessionReports, canTryReport, NoReportError } from './evaluation-dashboard/downloadSessionReport';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/providers/AuthProvider';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
@@ -302,6 +303,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
+  // Export is RBAC-gated (`ai_interview:export`, also enforced by the audit
+  // endpoint) — greyed with the reason when missing, never hidden.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
+  const EXPORT_DENIED = 'You do not have permission to export AI interviews';
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalSessions, setTotalSessions] = useState(0);
@@ -724,7 +730,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     });
   /* ⋮ › Download Report — ResultRowActions' download, from the menu. */
   const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  // ai_interview:download_report — the row ⋮ item and the bulk Download PDF Reports.
+  const canDownloadReports = useCanDownloadAIReports();
   const handleDownloadReport = async (sessionId: string) => {
+    if (!canDownloadReports) return;
     setDownloadingReportId(sessionId);
     try {
       await downloadSessionReport(sessionId);
@@ -734,7 +743,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         return;
       }
       console.error('[AIInterviewResults] report download failed:', err);
-      toast.error('Could not download the report. Please try again.');
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
     } finally {
       setDownloadingReportId(null);
     }
@@ -796,6 +805,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   };
 
   const handleExport = async (columnIds: string[]) => {
+    if (!canExport) return;
     setIsExporting(true);
     try {
       const rows = await collectExportRows();
@@ -827,6 +837,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      // Audit trail: the file is built here, so record the export server-side.
+      void aiInterviewService.logListExport({
+        format: exportFormat,
+        recordCount: rows.length,
+        tab: configId,
+        ids: rows.map((row: any) => row.id),
+        exportType: 'ai_interview_results',
+      });
       toast.success(`Exported ${rows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
       setShowExportModal(false);
     } catch (error) {
@@ -891,6 +909,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      toast wording `DownloadPdfsButton` uses. */
   const [downloadingPdfs, setDownloadingPdfs] = useState<{ done: number; total: number } | null>(null);
   const handleDownloadSelectedPdfs = async () => {
+    if (!canDownloadReports) return;
     setDownloadingPdfs({ done: 0, total: 0 });
     try {
       const rows = Array.from(selected.values());
@@ -907,7 +926,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       }
     } catch (err) {
       console.error('[AIInterviewResults] Bulk PDF download failed:', err);
-      toast.error('Could not download the reports. Please try again.');
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
     } finally {
       setDownloadingPdfs(null);
     }
@@ -1096,10 +1115,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       <span>Customize Columns</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                      onSelect={() => setShowExportModal(true)}
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                      aria-disabled={!canExport || undefined}
+                      title={canExport ? undefined : EXPORT_DENIED}
+                      onSelect={(e) => {
+                        if (!canExport) { e.preventDefault(); return; }
+                        setShowExportModal(true);
+                      }}
                     >
-                      <FileDown className="w-4 h-4 text-menu-icon-download" />
+                      <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                       <span>Export</span>
                     </DropdownMenuItem>
                     {revocableSelected.length > 0 && (
@@ -1123,11 +1147,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
                       disabled={!!downloadingPdfs}
-                      onSelect={() => handleDownloadSelectedPdfs()}
+                      aria-disabled={!canDownloadReports || undefined}
+                      title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                      onSelect={(e) => { if (!canDownloadReports) { e.preventDefault(); return; } handleDownloadSelectedPdfs(); }}
                     >
-                      <Download className="w-4 h-4 text-menu-icon-download" />
+                      <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                       <span>
                         {downloadingPdfs
                           ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
@@ -1282,9 +1308,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setShowExportModal(true)}
+              onClick={() => { if (canExport) setShowExportModal(true); }}
+              aria-disabled={!canExport || undefined}
+              title={canExport ? undefined : EXPORT_DENIED}
               icon={<FileDown className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
+              className={`whitespace-nowrap !h-[38px] !text-sm ${canExport ? '' : 'opacity-50 cursor-not-allowed'}`}
             >
               Export{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
@@ -1579,11 +1607,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                    className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
                     disabled={!!downloadingPdfs}
-                    onSelect={() => handleDownloadSelectedPdfs()}
+                    aria-disabled={!canDownloadReports || undefined}
+                    title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                    onSelect={(e) => { if (!canDownloadReports) { e.preventDefault(); return; } handleDownloadSelectedPdfs(); }}
                   >
-                    <Download className="w-4 h-4 text-menu-icon-download" />
+                    <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                     <span>
                       {downloadingPdfs
                         ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
@@ -2035,10 +2065,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                     </>
                                   )}
                                   <DropdownMenuItem
-                                    className={ROW_MENU_ITEM_CLASS}
-                                    disabled={!canTryReport(session) || downloadingReportId === session.id}
-                                    title={canTryReport(session) ? undefined : 'Report available once the interview is evaluated'}
-                                    onSelect={() => void handleDownloadReport(session.id)}
+                                    className={`${ROW_MENU_ITEM_CLASS}${canDownloadReports ? '' : ' cursor-not-allowed opacity-60 text-gray-400'}`}
+                                    disabled={(canDownloadReports && !canTryReport(session)) || downloadingReportId === session.id}
+                                    aria-disabled={!canDownloadReports || undefined}
+                                    title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : canTryReport(session) ? undefined : 'Report available once the interview is evaluated'}
+                                    onSelect={(e) => {
+                                      if (!canDownloadReports) { e.preventDefault(); return; }
+                                      void handleDownloadReport(session.id);
+                                    }}
                                   >
                                     {downloadingReportId === session.id
                                       ? <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
