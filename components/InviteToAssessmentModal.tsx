@@ -5,6 +5,7 @@ import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
 import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks, type PickSource } from '@/lib/utils/resumeSelection';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
@@ -679,18 +680,19 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
           {/* Assessment Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Select Assessment *</label>
-            <select
+            <FilterSelect
               value={selectedAssessment}
-              onChange={(e) => setSelectedAssessment(e.target.value)}
-              className="w-full min-w-0 h-[38px] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm text-black"
-            >
-              <option value="">-- Choose an assessment --</option>
-              {assessments.map((assessment) => (
-                <option key={assessment.id} value={assessment.id}>
-                  {assessment.title} • {assessment.duration_minutes} min • {assessment.status}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setSelectedAssessment(v)}
+              ariaLabel="Select Assessment"
+              options={[
+                { value: '', label: '-- Choose an assessment --' },
+                ...assessments.map((assessment) => ({
+                  value: String(assessment.id),
+                  label: `${assessment.title} • ${assessment.duration_minutes} min • ${assessment.status}`,
+                })),
+              ]}
+              className="w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:pl-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 focus-visible:ring-green-500 focus-visible:border-transparent"
+            />
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-2">
               <p className="text-xs text-gray-500 dark:text-slate-500">
                 {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job
@@ -971,17 +973,19 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
           {/* Expiry Settings */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Link Expiry</label>
-            <select
-              value={expiryDays}
-              onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full min-w-0 h-[38px] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm text-black"
-            >
-              <option value={1}>1 day</option>
-              <option value={3}>3 days</option>
-              <option value={7}>7 days</option>
-              <option value={14}>14 days</option>
-              <option value={30}>30 days</option>
-            </select>
+            <FilterSelect
+              value={String(expiryDays)}
+              onChange={(v) => setExpiryDays(Number(v))}
+              ariaLabel="Link Expiry"
+              options={[
+                { value: '1', label: '1 day' },
+                { value: '3', label: '3 days' },
+                { value: '7', label: '7 days' },
+                { value: '14', label: '14 days' },
+                { value: '30', label: '30 days' },
+              ]}
+              className="w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:pl-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 focus-visible:ring-green-500 focus-visible:border-transparent"
+            />
           </div>
 
           {/* Preview */}

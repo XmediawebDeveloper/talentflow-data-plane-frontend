@@ -14,6 +14,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
 
@@ -471,30 +472,24 @@ export default function InternalHelpDesk() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Category <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <FilterSelect
                       value={category}
-                      onChange={(e) => setCategory(e.target.value as InternalTicketCategory)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {categories.map(cat => (
-                        <option key={cat.value} value={cat.value}>{cat.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setCategory(v as InternalTicketCategory)}
+                      options={categories.map(cat => ({ value: cat.value, label: cat.label }))}
+                      className="w-full sm:w-full px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                    />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Priority <span className="text-red-500">*</span>
                     </label>
-                    <select
+                    <FilterSelect
                       value={priority}
-                      onChange={(e) => setPriority(e.target.value as InternalTicketPriority)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    >
-                      {priorities.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setPriority(v as InternalTicketPriority)}
+                      options={priorities.map(p => ({ value: p.value, label: p.label }))}
+                      className="w-full sm:w-full px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                    />
                   </div>
                 </div>
 
@@ -563,28 +558,30 @@ export default function InternalHelpDesk() {
                     />
                   </div>
 
-                  <select
+                  <FilterSelect
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="open">Open</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="closed">Closed</option>
-                  </select>
+                    onChange={(v) => setFilterStatus(v)}
+                    options={[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'open', label: 'Open' },
+                      { value: 'in-progress', label: 'In Progress' },
+                      { value: 'resolved', label: 'Resolved' },
+                      { value: 'closed', label: 'Closed' },
+                    ]}
+                    className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                  />
 
-                  <select
+                  <FilterSelect
                     value={filterPriority}
-                    onChange={(e) => setFilterPriority(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="all">All Priority</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
+                    onChange={(v) => setFilterPriority(v)}
+                    options={[
+                      { value: 'all', label: 'All Priority' },
+                      { value: 'low', label: 'Low' },
+                      { value: 'medium', label: 'Medium' },
+                      { value: 'high', label: 'High' },
+                    ]}
+                    className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                  />
                 </div>
               </div>
 

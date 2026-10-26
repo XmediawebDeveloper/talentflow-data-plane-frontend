@@ -13,6 +13,7 @@ import AccessRestrictedModal from "@/components/AccessRestrictedModal";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 import TableScrollbars from "@/components/TableScrollbars";
 import TableRowCap from "@/components/TableRowCap";
+import DropdownViewportGuard from "@/components/DropdownViewportGuard";
 
 // import localFont from "next/font/local";
 
@@ -184,6 +185,9 @@ export default function RootLayout({
                   {/* Sizes every data table to header + 10 rows, then scroll.
                       Renders nothing itself; finds tables by class. */}
                   <TableRowCap />
+                  {/* Phones only: flips / nudges hand-rolled dropdowns that
+                      would open off screen. Renders nothing itself. */}
+                  <DropdownViewportGuard />
                 </BulkInviteProgressProvider>
                 </ScoringProgressProvider>
               </GlobalDialogProvider>

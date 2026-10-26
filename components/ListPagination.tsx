@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface ListPaginationProps {
   currentPage: number;
@@ -129,8 +130,8 @@ export default function ListPagination({
   const labelClass = compact ? 'text-xs' : 'text-sm';
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
   const selectClass = compact
-    ? 'h-7 px-1.5 rounded-md text-xs'
-    : 'h-9 px-2.5 sm:px-3 rounded-xl text-sm';
+    ? 'data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-1.5 sm:pl-1.5 pr-1.5 sm:pr-1.5 gap-1 rounded-md sm:rounded-md text-xs'
+    : 'data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-2.5 sm:pl-3 pr-2 sm:pr-2.5 rounded-xl sm:rounded-xl text-sm';
   const stepButtonClass = compact ? 'w-7 h-7' : 'w-9 h-9';
   const goToInputClass = compact
     ? 'w-10 h-7 text-xs rounded-md'
@@ -160,21 +161,22 @@ export default function ListPagination({
   return (
     <div className={shellClass}>
       <div className={`flex ${minimalOnMobile ? 'flex-row items-center justify-between' : 'flex-col sm:flex-row sm:items-center sm:justify-between'} ${compact ? 'gap-2' : 'gap-3'}`}>
-        <div className={`flex flex-wrap items-center ${groupGapClass}`}>
+        {/* Compact (popups) on phones: the bar stacks into two rows, and the
+            lower one (Go to / ‹ page ›) is centred — so the upper one (Show /
+            Showing) is centred too, instead of hanging off the left edge. */}
+        <div className={`flex flex-wrap items-center ${groupGapClass} ${compact && !minimalOnMobile ? 'max-sm:justify-center max-sm:text-center' : ''}`}>
           <div className={`${minimalOnMobile ? 'hidden sm:flex' : 'flex'} items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
             <span className={`${labelClass} text-gray-600`}>Show:</span>
-            <select
-              value={itemsPerPage}
-              onChange={(e) => {
-                onItemsPerPageChange(Number(e.target.value));
+            <FilterSelect
+              value={String(itemsPerPage)}
+              onChange={(v) => {
+                onItemsPerPageChange(Number(v));
                 onPageChange(1);
               }}
-              className={`${selectClass} border border-gray-200 bg-white text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue`}
-            >
-              {pageSizeOptions.map((size) => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
+              ariaLabel="Items per page"
+              options={pageSizeOptions.map((size) => ({ value: String(size), label: String(size) }))}
+              className={`w-auto ${selectClass} border-gray-200 bg-white text-gray-900`}
+            />
             <span className={`${labelClass} text-gray-600`}>per page</span>
           </div>
 

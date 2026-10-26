@@ -24,6 +24,7 @@ import {
   type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1515,25 +1516,24 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     the sort control belongs to the same pill system. One size at
                     every width (36px, 14px text) — the toolbar type standard. */}
                 <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
-                  <div className="relative">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => {
-                        const value = e.target.value as JobSortBy;
-                        setSortBy(value);
-                      }}
-                      className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 cursor-pointer"
-                    >
-                      <option value="date">Date Posted</option>
-                      <option value="applicants">Scored</option>
-                      <option value="assessed">Assessed</option>
-                      <option value="interviewed">Interviewed</option>
-                      <option value="title">Job Title</option>
-                      <option value="status">Status</option>
-                      <option value="industry">Industry Type</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-                  </div>
+                  <FilterSelect
+                    value={sortBy}
+                    onChange={(v) => {
+                      const value = v as JobSortBy;
+                      setSortBy(value);
+                    }}
+                    ariaLabel="Sort jobs by"
+                    className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
+                    options={[
+                      { value: 'date', label: 'Date Posted' },
+                      { value: 'applicants', label: 'Scored' },
+                      { value: 'assessed', label: 'Assessed' },
+                      { value: 'interviewed', label: 'Interviewed' },
+                      { value: 'title', label: 'Job Title' },
+                      { value: 'status', label: 'Status' },
+                      { value: 'industry', label: 'Industry Type' },
+                    ]}
+                  />
                   <button
                     type="button"
                     onClick={(e) => {
@@ -2223,17 +2223,13 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Show:</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={40}>40</option>
-                    <option value={100}>100</option>
-                  </select>
+                  <FilterSelect
+                    value={String(itemsPerPage)}
+                    onChange={(v) => handleItemsPerPageChange(Number(v))}
+                    ariaLabel="Items per page"
+                    className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                    options={[5, 10, 20, 40, 100].map((n) => ({ value: String(n), label: String(n) }))}
+                  />
                   <span className="text-sm text-gray-600">per page</span>
                 </div>
 

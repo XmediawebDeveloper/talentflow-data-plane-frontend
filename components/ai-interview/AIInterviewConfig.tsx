@@ -32,6 +32,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import FilterSelect from '@/components/ui/filter-select';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
@@ -585,14 +586,16 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
             {skill.name}
             {fromJd && <span className="text-2xs opacity-60">JD</span>}
           </span>
-          <select
+          <FilterSelect
             value={skillType}
-            onChange={e => updateSkillType(skill.name, e.target.value as SkillType)}
-            className={`flex-shrink-0 text-2xs font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
-          >
-            <option value="Skill">Skill</option>
-            <option value="Command">Command</option>
-          </select>
+            onChange={v => updateSkillType(skill.name, v as SkillType)}
+            ariaLabel={`${skill.name} type`}
+            className={`w-auto sm:w-auto flex-shrink-0 gap-0.5 text-2xs font-medium px-1.5 sm:px-1.5 py-0.5 sm:py-0.5 rounded sm:rounded [&>svg]:size-3 ${SKILL_TYPE_COLORS[skillType]}`}
+            options={[
+              { value: 'Skill', label: 'Skill' },
+              { value: 'Command', label: 'Command' },
+            ]}
+          />
           {/* Flexible mode: move skill to the other category */}
           {mode === 'flexible' && onMoveSkill && !isLocked && (
             <button
@@ -3500,20 +3503,13 @@ export default function AIInterviewConfig() {
                 subtitle="Engine used to transcribe the candidate's spoken answers."
               />
               <div className="flex items-center gap-2.5 flex-wrap">
-                <div className="relative max-w-full">
-                  <select
-                    value={sttModel}
-                    onChange={e => setSttModel(e.target.value)}
-                    className="max-w-full truncate appearance-none text-sm font-medium pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  >
-                    {STT_MODELS.map(m => (
-                      <option key={m.value} value={m.value}>
-                        {m.label}{m.recommended ? ' (Recommended)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                </div>
+                <FilterSelect
+                  value={sttModel}
+                  onChange={v => setSttModel(v)}
+                  ariaLabel="Speech-to-Text Model"
+                  className="w-auto sm:w-auto max-w-full font-medium pl-3 sm:pl-3 pr-2.5 sm:pr-2.5 py-2 sm:py-2 rounded-lg sm:rounded-lg text-gray-900"
+                  options={STT_MODELS.map(m => ({ value: m.value, label: `${m.label}${m.recommended ? ' (Recommended)' : ''}` }))}
+                />
                 {(() => {
                   const sel = STT_MODELS.find(m => m.value === sttModel) ?? STT_MODELS[0];
                   return (
@@ -3950,19 +3946,13 @@ export default function AIInterviewConfig() {
                   {/* One dropdown rather than a row of chips: the interview runs
                       in a single language, and a chip that could not be removed
                       read as a status rather than as the setting it is. */}
-                  <div className="relative inline-block max-w-full">
-                    <select
-                      value={availableLanguages[0] ?? CANDIDATE_LANGUAGES[0]}
-                      onChange={e => setAvailableLanguages([e.target.value])}
-                      aria-label="Interview language"
-                      className="appearance-none max-w-full text-sm font-medium pl-3 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue min-w-0 sm:min-w-[180px]"
-                    >
-                      {CANDIDATE_LANGUAGES.map(lang => (
-                        <option key={lang} value={lang}>{lang}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  </div>
+                  <FilterSelect
+                    value={availableLanguages[0] ?? CANDIDATE_LANGUAGES[0]}
+                    onChange={v => setAvailableLanguages([v])}
+                    ariaLabel="Interview language"
+                    className="w-auto sm:w-auto max-w-full font-medium pl-3 sm:pl-3 pr-2.5 sm:pr-2.5 py-2 sm:py-2 rounded-lg sm:rounded-lg text-gray-900 min-w-0 sm:min-w-[180px]"
+                    options={CANDIDATE_LANGUAGES.map(lang => ({ value: lang, label: lang }))}
+                  />
                 </div>
               )}
 

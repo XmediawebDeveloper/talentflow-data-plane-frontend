@@ -366,10 +366,12 @@ function JDCreationSkeleton({ stage }: { stage?: string | null }) {
           {/* 4-step indicator block (shared across all stages) */}
           <div className="mb-4 sm:mb-6 rounded-xl border border-gray-100 bg-gradient-to-br from-slate-50 to-white px-3 py-3 sm:px-5 sm:py-4">
             <div className="overflow-x-auto">
-              <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-1">
+              {/* Phones: spans the card with stretching connectors, as the
+                  real indicator (JDCreation) does, so it never scrolls. */}
+              <div className="flex w-fit min-w-max max-sm:w-full max-sm:min-w-0 mx-auto items-center gap-2 sm:gap-4 px-1">
                 {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-3 sm:gap-4">
-                    {i > 0 && <div className="w-6 sm:w-12 lg:w-24 h-0.5 rounded-full bg-gray-200" />}
+                  <div key={i} className={`flex items-center gap-2 sm:gap-4 ${i > 0 ? 'max-sm:flex-1' : ''}`}>
+                    {i > 0 && <div className="w-6 max-sm:w-auto max-sm:flex-1 sm:w-12 lg:w-24 h-0.5 rounded-full bg-gray-200" />}
                     <div className="flex items-center gap-2.5">
                       <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full bg-gray-200 animate-pulse" />
                       <div className="hidden sm:block h-4 w-16 rounded bg-gray-200 animate-pulse" />

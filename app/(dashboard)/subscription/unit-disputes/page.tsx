@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { ArrowLeft, Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Plus, Copy, ChevronRight, ChevronLeft, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Plus, Copy, ChevronRight, ChevronLeft, X } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { DateField } from '@/components/ui/date-field';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import FilterSelect from '@/components/ui/filter-select';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -604,18 +605,13 @@ export default function UnitDisputesPage() {
                 className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
               />
             </div>
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-              >
-                {STATUS_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-            </div>
+            <FilterSelect
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v)}
+              ariaLabel="Filter by status"
+              options={STATUS_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+              className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2.5 sm:py-2.5 rounded-xl sm:rounded-xl"
+            />
             <DateField
               aria-label="Start date"
               value={startDate}
@@ -1113,19 +1109,16 @@ export default function UnitDisputesPage() {
                       {/* Reason */}
                       <label className="block">
                         <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Reason <span className="text-brand-orange">*</span></span>
-                        <div className="relative">
-                          <select
-                            value={disputeReason}
-                            onChange={(e) => setDisputeReason(e.target.value)}
-                            className="w-full appearance-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                          >
-                            <option value="">Select a reason</option>
-                            {REASON_OPTIONS.map(opt => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-                        </div>
+                        <FilterSelect
+                          value={disputeReason}
+                          onChange={(v) => setDisputeReason(v)}
+                          ariaLabel="Reason"
+                          options={[
+                            { value: '', label: 'Select a reason' },
+                            ...REASON_OPTIONS.map(opt => ({ value: opt.value, label: opt.label })),
+                          ]}
+                          className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2.5 sm:py-2.5 rounded-xl sm:rounded-xl"
+                        />
                       </label>
 
                       {/* Description */}
