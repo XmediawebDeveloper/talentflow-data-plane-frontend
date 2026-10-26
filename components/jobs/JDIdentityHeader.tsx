@@ -211,7 +211,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
           </div>
         </div>
         {onOpen && (
-          <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue whitespace-nowrap shrink-0">
+          <span className="inline-flex items-center gap-1.5 text-sm text-brand-blue whitespace-nowrap shrink-0">
             View Job Details
             <ExternalLink className="w-3.5 h-3.5" />
           </span>

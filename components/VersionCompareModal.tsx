@@ -278,8 +278,10 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
     <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center ${zIndexClassName} p-4`}>
       <div className={`bg-white rounded-2xl shadow-2xl w-full ${viewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="flex items-center gap-3">
+        {/* Stacks below sm: title + view toggle + diff counts in one row
+            pushed the close button off a phone screen. */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <History className="w-5 h-5 text-white" />
             </div>
@@ -290,7 +292,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex bg-slate-100 rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode('side-by-side')}

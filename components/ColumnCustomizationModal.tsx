@@ -39,7 +39,7 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
         <div className="flex items-center p-4 sm:p-5 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Customize Columns</h2>
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
               {enabledCount} of {selectedColumns.length} columns selected
             </p>
           </div>

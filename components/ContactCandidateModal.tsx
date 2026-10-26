@@ -95,7 +95,7 @@ export default function ContactCandidateModal({
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">Contact Candidate</h2>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{candidateName}</p>
+              <p className="text-sm text-gray-500 dark:text-slate-500 truncate">{candidateName}</p>
             </div>
           </div>
           <button

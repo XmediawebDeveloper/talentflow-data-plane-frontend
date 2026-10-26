@@ -1794,7 +1794,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     <span className="w-2 h-2 rounded-full bg-white tf-step-pulse-dot" />
                   ) : null}
                 </span>
-                <span className={`text-2xs sm:text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
+                <span className={`text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
                   {label}
                 </span>
               </div>
@@ -2088,7 +2088,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 <div className="mb-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-xl font-semibold text-gray-900 tracking-tight">
+                      <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
                         {interview.candidate_name || 'Unknown Candidate'}
                       </h1>
                       <Badge variant={getStatusVariant(interview.status)}>
@@ -2470,7 +2470,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       aria-current={isActive ? 'page' : undefined}
                       className={`${
                         isAlertTab
-                          ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
+                          ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-all ${
                               isActive
                                 ? 'bg-destructive text-white shadow-sm shadow-destructive/25'
                                 : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
@@ -2532,9 +2532,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           </div>
 
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
-            box instead of stretching the grid column. */}
+            box instead of stretching the grid column. p-4 below sm: the
+            standard card inset — p-6 stacked on the cards inside each tab. */}
         <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {/* Evaluation pending spinner — shown for ALL tabs while batch eval
                 runs, except View JD, which does not depend on the evaluation. */}
             {evaluationPending && activeTab !== 'viewjd' && renderEvaluationSpinner()}

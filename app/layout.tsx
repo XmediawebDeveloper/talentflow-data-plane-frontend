@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 // import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
@@ -41,6 +41,17 @@ export const metadata: Metadata = {
     shortcut: "/logos/favicon.png",
     apple: "/logos/favicon.png",
   },
+};
+
+/* `maximumScale: 1` is what stops iOS Safari zooming in when a field under
+   16px is focused. It replaces the old globals.css rule that forced every
+   input/select/textarea to 16px on phones — which kept iOS from zooming but
+   made search boxes and dropdowns visibly bigger than the 14px text around
+   them. iOS still allows pinch-zoom with this set; Android Chrome does not. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

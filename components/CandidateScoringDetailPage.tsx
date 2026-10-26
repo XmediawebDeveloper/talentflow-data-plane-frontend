@@ -1521,14 +1521,14 @@ Best regards`);
                   flatHeaderActions ? (
                     /* Flat: View Resume as a small eye joined to the version
                        badge — the resume it opens is that version. */
-                    <span className="inline-flex items-stretch rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
+                    <span className="inline-flex items-stretch rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                       <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1">
                         Version {resume.resumeVersion}
                       </span>
                       {renderViewResumeEye(true)}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                       Version {resume.resumeVersion}
                     </span>
                   )
@@ -1540,7 +1540,7 @@ Best regards`);
                     <button
                       type="button"
                       onClick={() => setShowVersionMenu((v) => !v)}
-                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
                       aria-label={`Select resume version, currently Version ${resume.resumeVersion}`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
@@ -1830,12 +1830,12 @@ Best regards`);
               </div>
               {fullResumeData.ratingSummaryText ? (
                 <Tooltip content={fullResumeData.ratingSummaryText} position="bottom">
-                  <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                  <span className={`px-2 sm:px-3 py-1 rounded-md text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                     {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
                   </span>
                 </Tooltip>
               ) : (
-                <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                <span className={`px-2 sm:px-3 py-1 rounded-md text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                   {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
                 </span>
               )}
@@ -1846,7 +1846,7 @@ Best regards`);
                   version badges are whitespace-nowrap and can't shrink, so a
                   nowrap+truncate parent overflowed the card on mobile instead of
                   clipping — let the group wrap to a second line below sm. */}
-              <span className="text-xs sm:text-sm font-normal text-gray-700 min-w-0 break-words">
+              <span className="text-sm font-normal text-gray-700 min-w-0 break-words">
                 <span className="font-bold text-gray-800">Job Title :</span>{' '}
                 {/* Read as one: "EDG 267 High Court Judge v3.0" - the job's
                     ID, its title, its version, the ID and version in the JD
@@ -1872,7 +1872,7 @@ Best regards`);
                 )}
               </span>
             </div>
-            <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+            <div className="text-sm text-gray-600 whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
                 ? formatIST(fullResumeData.scoredDate)
                 : fullResumeData.scoredDate}
@@ -1922,7 +1922,7 @@ Best regards`);
                 onClick={() => setActiveTab(tab.id as DetailTab)}
                 // Both states carry the same borders (transparent when idle)
                 // so switching tabs never shifts the row by a pixel.
-                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
+                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
                   activeTab === tab.id
                     ? 'font-semibold text-brand-blue bg-white border-x-gray-200 border-t-brand-blue'
                     : 'font-medium text-gray-600 border-transparent hover:text-gray-900 hover:bg-white/70'

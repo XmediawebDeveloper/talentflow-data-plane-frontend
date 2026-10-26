@@ -474,7 +474,7 @@ const buildFullTimeline = (
  *  status regardless of where tracking was opened from. */
 export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
   const base =
-    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
+    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
   switch (inv.status) {
     case 'completed': {
       // (Auto) surfaces when the timeout monitor finalized an abandoned session —
@@ -808,11 +808,11 @@ export default function AIInterviewInviteTable({
         <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/30" />
         {/* "None invited" is wrong when a filter is what emptied the list — it
             reads as data loss rather than as a narrowed view. */}
-        <p className="text-xs sm:text-sm">
+        <p className="text-sm">
           {hasActiveFilters ? 'No candidates match the current filters.' : 'No candidates invited yet.'}
         </p>
         {!hasActiveFilters && emptyHint && (
-          <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
         )}
       </div>
     );
@@ -868,8 +868,9 @@ export default function AIInterviewInviteTable({
               </div>
 
               {/* Two-column grid rather than a free wrap, so entries line up
-                  instead of staggering by label width. */}
-              <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
+                  instead of staggering by label width. One column below sm:
+                  two columns cut every date short on a phone ("01:3…"). */}
+              <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
                 {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
                   <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                     <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />

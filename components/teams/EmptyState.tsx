@@ -27,8 +27,8 @@ export default function EmptyState({
       </p>
       <Button
         variant="primary"
-        size="lg"
-        icon={<Plus className="w-5 h-5" />}
+        size="md"
+        icon={<Plus className="w-4 h-4" />}
         onClick={() => {
           if (!canCreateTeams) return;
           onCreateTeam();

@@ -11,7 +11,7 @@ export default function PageHeader({ onUploadClick, onVersionClick }: PageHeader
 
   return (
     <div className="bg-card rounded-xl shadow-sm border border-border p-4 sm:p-6 mb-4 sm:mb-6">
-      <div className="flex items-center flex-wrap text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3 gap-y-1">
+      <div className="flex items-center flex-wrap text-sm text-muted-foreground mb-2 sm:mb-3 gap-y-1">
         <span>Home</span>
         <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 mx-1.5 sm:mx-2 shrink-0" />
         <span>Recruiters</span>

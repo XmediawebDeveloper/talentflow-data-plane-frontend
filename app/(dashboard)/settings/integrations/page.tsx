@@ -83,7 +83,7 @@ export default function IntegrationsPage() {
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             {/* Hero */}
-            <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-5 sm:p-6">
+            <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-4 sm:p-6">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
                 <div className="space-y-2">
@@ -94,7 +94,7 @@ export default function IntegrationsPage() {
               </div>
             </section>
             {/* Category filter chips */}
-            <div className="flex flex-wrap gap-2 mb-5 sm:mb-6">
+            <div className="flex flex-wrap gap-2 mb-4 sm:mb-6">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} className="h-9 w-20 rounded-lg" />
               ))}
@@ -102,7 +102,7 @@ export default function IntegrationsPage() {
             {/* Integration cards grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5 lg:p-6">
+                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-4 min-w-0 flex-1">
                       <Skeleton className="w-12 h-12 shrink-0 rounded-lg" />
@@ -130,7 +130,7 @@ export default function IntegrationsPage() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Integrations' }]} />
 
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+        <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
           <div className="relative flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <LinkIcon className="h-5 w-5 text-brand-blue" />
@@ -141,18 +141,18 @@ export default function IntegrationsPage() {
                 Connected apps
               </div>
               <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Integrations</h1>
-              <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Connect TalentFlow with your favorite tools and services.</p>
+              <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400">Connect TalentFlow with your favorite tools and services.</p>
             </div>
           </div>
         </section>
 
         {/* Category Filter */}
-        <div className="flex flex-wrap gap-2 mb-5 sm:mb-6 overflow-x-auto scrollbar-hide">
+        <div className="flex flex-wrap gap-2 mb-4 sm:mb-6 overflow-x-auto scrollbar-hide">
           {categories.map((category) => (
             <button
               key={category}
               onClick={() => setFilter(category)}
-              className={`inline-flex items-center justify-center h-9 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+              className={`inline-flex items-center justify-center h-9 px-3 sm:px-4 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
                 filter === category
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
@@ -170,14 +170,14 @@ export default function IntegrationsPage() {
               <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <LinkIcon className="w-6 h-6 text-brand-blue" />
               </span>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">No integrations found</h3>
+              <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">No integrations found</h3>
               <p className="text-sm text-gray-500 dark:text-slate-500">No integrations available in this category.</p>
             </div>
           ) : (
             filteredIntegrations.map((integration) => (
               <div
                 key={integration.id}
-                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-5 lg:p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:shadow-md hover:border-brand-blue/30 transition-all"
+                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:shadow-md hover:border-brand-blue/30 transition-all"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-4 min-w-0 flex-1">
@@ -244,9 +244,9 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Request Integration */}
-        <div className="mt-6 sm:mt-8 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 sm:p-6 text-center ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="mt-6 sm:mt-8 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6 text-center ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1.5">Need a different integration?</h3>
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-4">
+          <p className="text-sm text-gray-500 dark:text-slate-500 mb-4">
             Let us know what tools you&apos;d like to connect with TalentFlow.
           </p>
           <Button variant="secondary">

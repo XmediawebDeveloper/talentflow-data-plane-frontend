@@ -891,13 +891,13 @@ export default function AuditTrailPage() {
               <button
                 type="button"
                 onClick={() => { setStatsPopup(null); clearAllFilters(); openListView(); }}
-                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${pageView === 'list' && !statsPopup ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all ${pageView === 'list' && !statsPopup ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
-                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       Last {stats.period_days} days
                     </p>
@@ -910,13 +910,13 @@ export default function AuditTrailPage() {
               <button
                 type="button"
                 onClick={() => setStatsPopup(p => p === 'users' ? null : 'users')}
-                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${statsPopup === 'users' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all ${statsPopup === 'users' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />}</p>
-                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
                     </p>
@@ -929,13 +929,13 @@ export default function AuditTrailPage() {
               <button
                 type="button"
                 onClick={() => setStatsPopup(p => p === 'actions' ? null : 'actions')}
-                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${statsPopup === 'actions' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all ${statsPopup === 'actions' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Action Types</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-slate-400">Action Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
-                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
                     </p>
@@ -948,13 +948,13 @@ export default function AuditTrailPage() {
               <button
                 type="button"
                 onClick={() => setStatsPopup(p => p === 'entities' ? null : 'entities')}
-                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 md:p-6 hover:shadow-md transition-all ${statsPopup === 'entities' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all ${statsPopup === 'entities' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
+                    <p className="text-sm font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
-                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
                     </p>
@@ -1098,8 +1098,8 @@ export default function AuditTrailPage() {
           {/* Record Count */}
           <div className="px-3 sm:px-4 md:px-5 pt-3 sm:pt-4 md:pt-5 pb-3 sm:pb-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">Audit Records</span>
-              <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium">{total} records</span>
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Audit Records</span>
+              <span className="text-sm text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium">{total} records</span>
             </div>
           </div>
 
@@ -1123,7 +1123,7 @@ export default function AuditTrailPage() {
                   <select
                     value={actionFilter}
                     onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="">All Actions</option>
                     {availableActions.map(action => (
@@ -1136,7 +1136,7 @@ export default function AuditTrailPage() {
                   <select
                     value={entityFilter}
                     onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="">All Entities</option>
                     {availableEntities.map(entity => (
@@ -1150,7 +1150,7 @@ export default function AuditTrailPage() {
                   <select
                     value={dateRange}
                     onChange={(e) => { setDateRange(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="7">7 days</option>
                     <option value="30">30 days</option>
@@ -1164,7 +1164,7 @@ export default function AuditTrailPage() {
                   <select
                     value={errorOriginFilter}
                     onChange={(e) => { setErrorOriginFilter(e.target.value as '' | ErrorOrigin); setPage(1); }}
-                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="">All Origins</option>
                     <option value="TENANT">Tenant</option>
@@ -1398,13 +1398,13 @@ export default function AuditTrailPage() {
           {filteredLogs.length > 0 && (
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50/50 dark:bg-slate-800/50">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">
+                <p className="text-sm text-gray-600 dark:text-slate-400">
                   Showing <span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900 dark:text-slate-50">{total}</span>
                 </p>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
                 <div className="flex items-center gap-1.5">
-                  <span className="hidden sm:inline text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="hidden sm:inline text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -1419,7 +1419,7 @@ export default function AuditTrailPage() {
                     }}
                     onBlur={jumpToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-2xs sm:text-xs md:text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50"
+                    className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50"
                   />
                 </div>
 
@@ -1432,7 +1432,7 @@ export default function AuditTrailPage() {
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                <span className="text-2xs sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                 </span>
 
@@ -1465,7 +1465,7 @@ export default function AuditTrailPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 dark:text-slate-50">Audit Log Details</h3>
-                  <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">Complete event information</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-500">Complete event information</p>
                 </div>
               </div>
               <button
@@ -1477,17 +1477,17 @@ export default function AuditTrailPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-3 sm:p-4 md:p-6 flex-1 min-h-0 overflow-y-auto space-y-3 sm:space-y-4 md:space-y-5">
+            <div className="p-4 sm:p-6 flex-1 min-h-0 overflow-y-auto space-y-3 sm:space-y-4 md:space-y-5">
               {/* User & Action Header */}
               <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 pb-3 sm:pb-4 md:pb-5 border-b border-gray-100 dark:border-slate-700/60">
                 <NameAvatar name={selectedLog.user_name} fallback={selectedLog.user_email} size="lg" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-xs sm:text-sm md:text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
+                  <p className="font-semibold text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
                   {selectedLog.actor_role && (
-                    <p className="text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500 truncate capitalize">{selectedLog.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate capitalize">{selectedLog.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
                   )}
                 </div>
-                <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
+                <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
                   {selectedLog.action_label}
                 </span>
               </div>
@@ -1495,22 +1495,22 @@ export default function AuditTrailPage() {
               {/* Log ID */}
               <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                 <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Log ID</p>
-                <p className="text-2xs sm:text-xs font-mono text-gray-700 dark:text-slate-300 break-all">{selectedLog.id}</p>
+                <p className="text-xs font-mono text-gray-700 dark:text-slate-300 break-all">{selectedLog.id}</p>
               </div>
 
               {/* Summary Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                   <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">When</p>
-                  <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">{formatDate(selectedLog.created_at)}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{formatDate(selectedLog.created_at)}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                   <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity</p>
-                  <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 capitalize">{selectedLog.entity_type?.replace(/_/g, ' ') || '—'}</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-50 capitalize">{selectedLog.entity_type?.replace(/_/g, ' ') || '—'}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                   <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">IP Address</p>
-                  <p className="text-xs sm:text-sm font-mono font-medium text-gray-900 dark:text-slate-50 break-all">{selectedLog.ip_address || '—'}</p>
+                  <p className="text-sm font-mono font-medium text-gray-900 dark:text-slate-50 break-all">{selectedLog.ip_address || '—'}</p>
                 </div>
               </div>
 
@@ -1527,7 +1527,7 @@ export default function AuditTrailPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                         <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
-                        {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-2xs sm:text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
+                        {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                       </div>
                       <div className="hidden sm:block" /><div className="hidden sm:block" />
                     </div>
@@ -1539,7 +1539,7 @@ export default function AuditTrailPage() {
                       <div className="bg-gray-100 dark:bg-slate-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                         <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Impact</p>
                         <div className="flex items-baseline gap-1.5">
-                          <span className={`text-sm sm:text-lg font-bold ${modalImpact.negative ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>
+                          <span className={`text-lg font-bold ${modalImpact.negative ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>
                             {modalImpact.text}
                           </span>
                         </div>
@@ -1549,15 +1549,15 @@ export default function AuditTrailPage() {
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                         <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">{modalBalanceBefore}</span>
+                          <span className="text-sm text-gray-500 dark:text-slate-500">{modalBalanceBefore}</span>
                           <span className="text-gray-300 dark:text-slate-500">→</span>
-                          <span className="text-sm sm:text-lg font-bold text-gray-900 dark:text-slate-50">{modalBalanceAfter ?? 0}</span>
+                          <span className="text-lg font-bold text-gray-900 dark:text-slate-50">{modalBalanceAfter ?? 0}</span>
                         </div>
                       </div>
                     ) : <div className="hidden sm:block" />}
                     <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                       <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
-                      {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-2xs sm:text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
+                      {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                     </div>
                   </div>
                 );
@@ -1567,7 +1567,7 @@ export default function AuditTrailPage() {
               {selectedLog.entity_id && (
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                   <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
-                  <p className="text-2xs sm:text-xs md:text-sm font-mono text-gray-700 dark:text-slate-300 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
+                  <p className="text-sm font-mono text-gray-700 dark:text-slate-300 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
                 </div>
               )}
 
@@ -1578,58 +1578,58 @@ export default function AuditTrailPage() {
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
                     {selectedLog.module_type && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Module</span>
-                        <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">{MODULE_TYPE_LABELS[selectedLog.module_type] || selectedLog.module_type}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Module</span>
+                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{MODULE_TYPE_LABELS[selectedLog.module_type] || selectedLog.module_type}</span>
                       </div>
                     )}
                     {selectedLog.session_start_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session Start</span>
-                        <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_start_time)}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session Start</span>
+                        <span className="text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_start_time)}</span>
                       </div>
                     )}
                     {selectedLog.interruption_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Interruption</span>
-                        <span className="text-xs sm:text-sm text-destructive">{formatDate(selectedLog.interruption_time)}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Interruption</span>
+                        <span className="text-sm text-destructive">{formatDate(selectedLog.interruption_time)}</span>
                       </div>
                     )}
                     {selectedLog.session_end_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session End</span>
-                        <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_end_time)}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session End</span>
+                        <span className="text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_end_time)}</span>
                       </div>
                     )}
                     {selectedLog.total_session_duration != null && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
-                        <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{formatSessionDuration(selectedLog.total_session_duration)}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{formatSessionDuration(selectedLog.total_session_duration)}</span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
-                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin]}`}>
+                      <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin]}`}>
                         {ERROR_ORIGIN_LABELS[selectedLog.error_origin]}
                       </span>
                     </div>
                     {selectedLog.error_code && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
-                        <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold ${ERROR_CODE_COLORS[selectedLog.error_code] || 'bg-gray-50 text-gray-600'}`}>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
+                        <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[selectedLog.error_code] || 'bg-gray-50 text-gray-600'}`}>
                           {ERROR_CODE_LABELS[selectedLog.error_code] || selectedLog.error_code}
                         </span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
-                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
+                      <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
                         {selectedLog.refund_flag}
                       </span>
                     </div>
                     {selectedLog.error_origin !== 'NONE' && (selectedLog.units_consumed ?? 0) > 0 && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
-                        <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
+                        <span className="text-sm text-gray-700 dark:text-slate-300 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
                       </div>
                     )}
                   </div>
@@ -1698,11 +1698,11 @@ export default function AuditTrailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
-                    <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{aiAuditData.ai_model_version || 'N/A'}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{aiAuditData.ai_model_version || 'N/A'}</p>
                   </div>
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
-                    <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-50">
                       {formatIST(aiAuditData.questions_generated_at)}
                     </p>
                   </div>
@@ -1716,27 +1716,27 @@ export default function AuditTrailPage() {
                   {aiAuditData.generation_params ? (
                     <>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">JD Title</span>
-                        <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 break-words">{aiAuditData.generation_params.jd_title || 'N/A'}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">JD Title</span>
+                        <span className="text-sm text-gray-900 dark:text-slate-50 break-words">{aiAuditData.generation_params.jd_title || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Experience</span>
-                        <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 capitalize">{aiAuditData.generation_params.experience_level?.replace(/_/g, ' ') || 'N/A'}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Experience</span>
+                        <span className="text-sm text-gray-900 dark:text-slate-50 capitalize">{aiAuditData.generation_params.experience_level?.replace(/_/g, ' ') || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
-                        <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.duration_minutes ? `${aiAuditData.generation_params.duration_minutes} min` : 'N/A'}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
+                        <span className="text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.duration_minutes ? `${aiAuditData.generation_params.duration_minutes} min` : 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Questions</span>
-                        <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.total_questions_generated ?? 'N/A'}</span>
+                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Questions</span>
+                        <span className="text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.total_questions_generated ?? 'N/A'}</span>
                       </div>
                       {aiAuditData.generation_params.rounds_config && aiAuditData.generation_params.rounds_config.length > 0 && (
                         <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                          <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
+                          <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
                           <div className="flex flex-wrap gap-1 sm:gap-1.5">
                             {aiAuditData.generation_params.rounds_config.map((round: any, idx: number) => (
-                              <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-2xs sm:text-xs font-medium capitalize">
+                              <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-xs font-medium capitalize">
                                 {round.type} ({round.weightage}%)
                               </span>
                             ))}
@@ -1746,7 +1746,7 @@ export default function AuditTrailPage() {
                     </>
                   ) : (
                     <div className="px-3 sm:px-4 py-2 sm:py-3">
-                      <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">No input parameters recorded</span>
+                      <span className="text-sm text-gray-500 dark:text-slate-500">No input parameters recorded</span>
                     </div>
                   )}
                 </div>

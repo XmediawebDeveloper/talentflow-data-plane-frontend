@@ -347,7 +347,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     : `Showing ${filteredInvitations.length === 0 ? 0 : pageStart + 1} to ${pageStart + visibleInvitations.length} of ${filteredInvitations.length} invites`;
 
   const pageBtn =
-    'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
+    'px-2 sm:px-3 py-1 sm:py-1.5 text-sm border border-gray-200 dark:border-slate-700 ' +
     'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
     'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
@@ -392,11 +392,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
                   <span className="hidden sm:inline">Assessment - Invite Status Tracking</span>
                   <span className="sm:hidden">Invite Status</span>
                 </h2>
-                <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
                   {jobVersion != null && jobVersion > 0 && (
@@ -464,7 +464,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
         {!isLoading && invitations.length > 0 && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-            <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
+            <p className="text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
             {/* Completion rate — the AI tracker's badge, in place of the old card. */}
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
               <TrendingUp className="w-3.5 h-3.5" />
@@ -488,7 +488,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
               {/* "None found" is wrong when a filter is what emptied the list —
                   it reads as data loss rather than as a narrowed view. */}
-              <p className="text-xs sm:text-sm">
+              <p className="text-sm">
                 {filtersActive
                   ? 'No invitations match the current filters.'
                   : "No invitations found for this job's assessments."}
@@ -762,7 +762,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         {/* Footer — stacks on phones; First/Last drop out below sm, matching the
             Assessments and AI Interviews trackers. */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+          <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
             {/* The filtered count, not the raw total — the number has to agree
                 with the rows actually on screen. */}
             {resultsLabel}
@@ -771,7 +771,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             {totalPages > 1 && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -786,13 +786,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-xs sm:text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <button onClick={() => setPage(() => Math.max(1, currentPage - 1))} disabled={currentPage === 1} className={pageBtn}>
                   Prev
                 </button>
-                <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                   Page {currentPage} of {totalPages}
                 </span>
                 <button onClick={() => setPage(() => Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className={pageBtn}>

@@ -460,13 +460,13 @@ export default function PricingPage() {
   if (isLoading) {
     return (
       <div className="py-20">
-        <div className="container mx-auto max-w-[1400px] px-6">
+        <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
           <div className="text-center mb-16">
             <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0">
               <Sparkles className="w-4 h-4 mr-2" />
               Simple Pricing
             </Badge>
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-4">
               Choose the right plan for your team
             </h1>
           </div>
@@ -481,14 +481,14 @@ export default function PricingPage() {
 
   return (
     <div className="py-20">
-      <div className="container mx-auto max-w-[1400px] px-6">
+      <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
         {/* Header */}
         <div className="text-center mb-16">
           <Badge className="mb-4 px-4 py-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-0">
             <Sparkles className="w-4 h-4 mr-2" />
             Simple Pricing
           </Badge>
-          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-4">
             Choose the right plan for your team
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
@@ -986,7 +986,7 @@ export default function PricingPage() {
               <Zap className="w-4 h-4 mr-2" />
               Add-ons
             </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
               Enhance your plan with add-ons
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
@@ -1051,7 +1051,7 @@ export default function PricingPage() {
 
         {/* FAQ Section */}
         <div className="mt-24 text-center">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4">
             Questions? We&apos;ve got answers.
           </h2>
           <p className="text-gray-600 dark:text-gray-400 mb-8">

@@ -433,7 +433,7 @@ export default function AIInterviewTrackInvitesModal({
     : `Showing ${startIndex} to ${endIndex} of ${filteredTotal} invites`;
 
   const pageBtn =
-    'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
+    'px-2 sm:px-3 py-1 sm:py-1.5 text-sm border border-gray-200 dark:border-slate-700 ' +
     'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
     'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
@@ -456,7 +456,7 @@ export default function AIInterviewTrackInvitesModal({
                 <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
                   {embedded ? (
                     // Embedded as the details page's Invitation Status tab —
                     // headed with that tab's own name.
@@ -469,7 +469,7 @@ export default function AIInterviewTrackInvitesModal({
                   )}
                 </h2>
                 {/* JD ID · job title · job version */}
-                <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
                   {/* "Job title - V1   Interview Version - V1", as the AI
@@ -595,7 +595,7 @@ export default function AIInterviewTrackInvitesModal({
               <button
                 type="button"
                 onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
               >
                 <span role="checkbox" aria-checked={allSelected} className="p-1 flex-shrink-0">
                   {allSelected ? (
@@ -674,7 +674,7 @@ export default function AIInterviewTrackInvitesModal({
               className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
               aria-live="polite"
             >
-              <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                 <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                 Refreshing invite statuses...
               </span>
@@ -778,14 +778,14 @@ export default function AIInterviewTrackInvitesModal({
             count or page when nobody is invited, so embedded it goes too. */}
         {!(isUnstarted && embedded) && (
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+          <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
             {resultsLabel}
           </p>
           <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
             {totalPages > 1 && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -800,13 +800,13 @@ export default function AIInterviewTrackInvitesModal({
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-xs sm:text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   />
                 </div>
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className={pageBtn}>
                   Prev
                 </button>
-                <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                   Page {page} of {totalPages}
                 </span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className={pageBtn}>

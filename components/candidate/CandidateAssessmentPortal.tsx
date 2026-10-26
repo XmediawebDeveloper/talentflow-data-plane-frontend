@@ -147,7 +147,7 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
           </div>
 
           <h1 className="text-xl md:text-2xl font-bold text-gray-900 text-center lg:text-left">Start Assessment</h1>
-          <p className="mt-1.5 text-xs md:text-sm text-gray-600 text-center lg:text-left leading-relaxed">
+          <p className="mt-1.5 text-sm text-gray-600 text-center lg:text-left leading-relaxed">
             This assessment runs in fullscreen{screenShareRequired ? ' with entire screen sharing' : ''} and active
             proctoring, to ensure a focused, fair and secure testing experience.
           </p>
@@ -191,8 +191,8 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
                 <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto">
                   <Icon className="w-5 h-5" />
                 </span>
-                <p className="mt-2 text-xs sm:text-sm font-semibold text-gray-900 leading-snug">{title}</p>
-                <p className="mt-1 text-2xs sm:text-xs text-gray-500 leading-relaxed">{text}</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900 leading-snug">{title}</p>
+                <p className="mt-1 text-xs text-gray-500 leading-relaxed">{text}</p>
               </li>
             ))}
           </ul>
@@ -201,7 +201,7 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
             <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-destructive" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-destructive">Actions not allowed</p>
-              <p className="mt-0.5 text-2xs sm:text-xs leading-relaxed text-gray-700">
+              <p className="mt-0.5 text-xs leading-relaxed text-gray-700">
                 {IS_PRODUCTION_ENV
                   ? 'Switching tabs, minimising the window, Alt+Tab, Windows key, Esc or F11, or opening a Picture-in-Picture video ends the assessment immediately, with no resume.'
                   : 'Switching tabs, minimising the window, Alt+Tab, Windows key, Esc or F11, or opening a Picture-in-Picture video will be recorded as a violation.'}

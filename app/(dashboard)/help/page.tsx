@@ -1166,7 +1166,7 @@ export default function HelpCenterPage() {
                 <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{selectedArticle.subtitle}</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm text-gray-500 dark:text-slate-500">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-500">
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {selectedArticle.readTime} read
@@ -1249,7 +1249,7 @@ export default function HelpCenterPage() {
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-5 rounded-full text-xs sm:text-sm transition-all font-medium whitespace-nowrap flex-shrink-0 ${
+              className={`inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-5 rounded-full text-sm transition-all font-medium whitespace-nowrap flex-shrink-0 ${
                 selectedCategory === category.id
                   ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:text-brand-blue'
@@ -1269,7 +1269,7 @@ export default function HelpCenterPage() {
           >
             <Lightbulb className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Quick Start Guide</div>
-            <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
+            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
           </button>
           <button
             onClick={() => router.push('/support-tickets')}
@@ -1277,7 +1277,7 @@ export default function HelpCenterPage() {
           >
             <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Contact Support</div>
-            <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Get personalized help</div>
+            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Get personalized help</div>
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
@@ -1285,7 +1285,7 @@ export default function HelpCenterPage() {
           >
             <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Settings</div>
-            <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Configure your account</div>
+            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Configure your account</div>
           </button>
         </div>
 

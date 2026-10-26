@@ -1890,7 +1890,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 {selectedAddonOverage && (
                   <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning-line bg-warning-subtle p-3">
                     <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" />
-                    <div className="min-w-0 text-xs sm:text-sm">
+                    <div className="min-w-0 text-sm">
                       <p className="font-semibold text-warning-strong">
                         You are {selectedAddonOverage.overBy.toLocaleString()} {selectedAddonOverage.name} units over your limit
                       </p>

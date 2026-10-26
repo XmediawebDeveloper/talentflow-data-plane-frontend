@@ -356,7 +356,7 @@ export default function Settings() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />
 
       {/* Header panel — design-flow gray header (icon tile + title + subtitle) */}
-      <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-4 sm:mb-6 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <SlidersHorizontal className="h-5 w-5 text-brand-blue" />
@@ -368,8 +368,9 @@ export default function Settings() {
         </div>
       </div>
 
-      {/* Tabs + Content Layout — wrapped in the design-flow gray content box */}
-      <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+      {/* Tabs + Content Layout — sits directly in the page panel (no extra framed box: that
+          was a double frame pushing content to 28/44px instead of the 16/32 panel inset) */}
+      <div>
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
         <div className="w-full lg:w-64 flex-shrink-0">
@@ -485,7 +486,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">My Profile</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">My Profile</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Update your personal information and recruiter profile</p>
                   </div>
                 </div>
@@ -581,7 +582,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Notification Settings</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Notification Settings</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Choose how you want to be notified about recruitment activities</p>
                   </div>
                 </div>
@@ -692,7 +693,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Job Posting Preferences</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Job Posting Preferences</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Set default values for new job postings</p>
                   </div>
                 </div>
@@ -786,7 +787,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Workflow Preferences</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Workflow Preferences</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Customize how you interact with the platform</p>
                   </div>
                 </div>
@@ -848,7 +849,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Privacy & Security</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Privacy & Security</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Manage your privacy settings and account security</p>
                   </div>
                 </div>
@@ -928,7 +929,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Appearance Settings</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Appearance Settings</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Customize how TalentFlow looks and feels</p>
                   </div>
                 </div>
@@ -1044,7 +1045,7 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">Change Password</h2>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Change Password</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Update your password. You will be logged out after changing it.</p>
                   </div>
                 </div>

@@ -78,7 +78,7 @@ return (
         </div>
         <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
       </div>
-      <p className="text-xs sm:text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
+      <p className="text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
     </div>
 
     {!hasData ? (

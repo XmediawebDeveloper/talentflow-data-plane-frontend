@@ -329,7 +329,7 @@ export default function PermissionsPage() {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle p-4 ring-1 ring-destructive-line">
+          <div className="mb-4 sm:mb-6 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle p-4 ring-1 ring-destructive-line">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
@@ -343,7 +343,7 @@ export default function PermissionsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Roles List */}
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 lg:p-6">
-            <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Roles</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Roles</h2>
             <div className="space-y-2 sm:space-y-3">
               {roles.map((role) => (
                 <button
@@ -356,13 +356,13 @@ export default function PermissionsPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{role.name}</p>
+                    <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm truncate">{role.name}</p>
                     {(role.is_system || role.code === 'recruiter') && (
-                      <span className="text-2xs sm:text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
+                      <span className="text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
                     )}
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
-                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-2xs sm:text-xs text-gray-500 dark:text-slate-500">
+                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
+                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-xs text-gray-500 dark:text-slate-500">
                     <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3 text-brand-blue/70" />{role.permission_count || role.permissions?.length || 0} perms</span>
                     <span className="inline-flex items-center gap-1"><Users className="w-3 h-3 text-brand-cyan/70" />{role.user_count} users</span>
                   </div>
@@ -377,8 +377,8 @@ export default function PermissionsPage() {
               <>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                   <div className="min-w-0">
-                    <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">{selectedRole.name} Permissions</h2>
-                    <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{selectedRole.description || 'No description'}</p>
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{selectedRole.name} Permissions</h2>
+                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                     {!selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
@@ -412,7 +412,7 @@ export default function PermissionsPage() {
                       </>
                     )}
                     {saveSuccess && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs sm:text-sm font-semibold">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-sm font-semibold">
                         <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         Saved!
                       </div>
@@ -421,7 +421,7 @@ export default function PermissionsPage() {
                 </div>
 
                 {(selectedRole.is_system || selectedRole.code === 'recruiter') && (
-                  <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-brand-orange/5 ring-1 ring-brand-orange/20 rounded-lg text-xs sm:text-sm text-brand-orange-deep">
+                  <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-brand-orange/5 ring-1 ring-brand-orange/20 rounded-lg text-sm text-brand-orange-deep">
                     System roles cannot be edited. They have predefined permissions.
                   </div>
                 )}
@@ -429,7 +429,7 @@ export default function PermissionsPage() {
                 <div className="space-y-4 sm:space-y-6 max-h-[500px] sm:max-h-[600px] overflow-y-auto">
                   {Object.entries(permissionsByModule).map(([module, modulePermissions]) => (
                     <div key={module} className="border border-gray-100 dark:border-slate-700/60 rounded-lg p-3 sm:p-4 bg-white dark:bg-slate-900 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                      <h3 className="font-semibold text-brand-blue mb-2 sm:mb-3 text-xs sm:text-sm lg:text-base">
+                      <h3 className="font-semibold text-brand-blue mb-2 sm:mb-3 text-sm">
                         {moduleDisplayNames[module] || module.charAt(0).toUpperCase() + module.slice(1)}
                       </h3>
                       <div className="space-y-1.5 sm:space-y-2">
@@ -446,7 +446,7 @@ export default function PermissionsPage() {
                               }`}
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-gray-900 dark:text-slate-50 text-xs sm:text-sm">{permission.name}</p>
+                                <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{permission.name}</p>
                               </div>
                               {isEditing && !selectedRole.is_system && selectedRole.code !== 'recruiter' ? (
                                 <button

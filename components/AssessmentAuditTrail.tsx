@@ -363,7 +363,7 @@ export default function AssessmentAuditTrail() {
             not act on. Hairline dividers rather than gaps alone so the pairs
             group at a glance, and `tabular-nums` so nothing shifts sideways as
             the counts refresh underneath. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:text-sm lg:justify-end flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm lg:justify-end flex-shrink-0">
           {([
             { icon: Plus, value: stats.assessments_created, label: 'created', text: 'text-brand-blue' },
             { icon: Mail, value: stats.candidates_invited, label: 'invited', text: 'text-brand-cyan' },
@@ -399,7 +399,7 @@ export default function AssessmentAuditTrail() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Activity Log</h2>
-              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
+              <p className="text-sm text-gray-600 mt-0.5 sm:mt-1">
                 Complete activity log for assessments and candidates
               </p>
             </div>
@@ -537,7 +537,7 @@ export default function AssessmentAuditTrail() {
             <div className="py-10 sm:py-14 text-center">
               <AlertTriangle className="w-8 h-8 text-brand-orange-deep mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-900 mb-1">Could not load the activity log</p>
-              <p className="text-xs sm:text-sm text-gray-600 mb-4">{loadError}</p>
+              <p className="text-sm text-gray-600 mb-4">{loadError}</p>
               <button
                 type="button"
                 onClick={() => loadAuditTrail()}
@@ -588,7 +588,7 @@ export default function AssessmentAuditTrail() {
                               <h4 className={`min-w-0 text-sm sm:text-base font-medium [overflow-wrap:anywhere] ${colors.text}`}>
                                 {activity.title}
                               </h4>
-                              <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                              <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
                                 activity.category === 'assessment_lifecycle'
                                   ? 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
                                   : 'bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20'
@@ -596,15 +596,15 @@ export default function AssessmentAuditTrail() {
                                 {getCategoryLabel(activity.category)}
                               </span>
                               {activity.passed !== null && activity.passed !== undefined && (
-                                <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                                <span className={`text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
                                   activity.passed ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
                                 }`}>
                                   {activity.passed ? 'Passed' : 'Failed'}
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{activity.description}</p>
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-2xs sm:text-xs text-gray-500">
+                            <p className="text-sm text-gray-600 line-clamp-2">{activity.description}</p>
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-xs text-gray-500">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3 flex-shrink-0" />
@@ -626,8 +626,8 @@ export default function AssessmentAuditTrail() {
                             </div>
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 mt-1 sm:mt-0">
-                            <p className="text-xs sm:text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
-                            <button className="sm:mt-1 text-2xs sm:text-xs text-gray-400 hover:text-brand-blue">
+                            <p className="text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
+                            <button className="sm:mt-1 text-xs text-gray-400 hover:text-brand-blue">
                               <Eye className="w-3 h-3 inline mr-0.5 sm:mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
                             </button>
@@ -638,7 +638,7 @@ export default function AssessmentAuditTrail() {
 
                     {/* Expanded Details */}
                     {isExpanded && (
-                      <div className="ml-0 sm:ml-14 p-3 sm:p-4 bg-slate-50 rounded-lg border border-gray-100 text-xs sm:text-sm">
+                      <div className="ml-0 sm:ml-14 p-3 sm:p-4 bg-slate-50 rounded-lg border border-gray-100 text-sm">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
@@ -671,7 +671,7 @@ export default function AssessmentAuditTrail() {
                           {activity.assessment_id && (
                             <div className="break-all">
                               <span className="text-gray-500">Assessment ID:</span>
-                              <span className="ml-1.5 sm:ml-2 text-gray-900 font-mono text-2xs sm:text-xs">{activity.assessment_id}</span>
+                              <span className="ml-1.5 sm:ml-2 text-gray-900 font-mono text-xs">{activity.assessment_id}</span>
                             </div>
                           )}
                         </div>
@@ -686,13 +686,13 @@ export default function AssessmentAuditTrail() {
 
         {/* Footer with Pagination */}
         <div className="p-3 sm:p-4 bg-slate-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
-          <div className="text-xs sm:text-sm text-gray-600">
+          <div className="text-sm text-gray-600">
             Showing {activities.length} of {total} entries
           </div>
           {total > pageSize && (
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="hidden sm:inline text-sm text-gray-600 whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -707,7 +707,7 @@ export default function AssessmentAuditTrail() {
                   }}
                   onBlur={commitGoToPage}
                   aria-label="Go to page"
-                  className="w-14 h-8 px-2 text-xs sm:text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  className="w-14 h-8 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
                 />
               </div>
               <button
@@ -718,7 +718,7 @@ export default function AssessmentAuditTrail() {
               >
                 <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
-              <span className="text-xs sm:text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+              <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
               </span>
               <button
@@ -748,7 +748,7 @@ export default function AssessmentAuditTrail() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight truncate">Export Activity Logs</h3>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1">Choose format</p>
+                  <p className="text-sm text-gray-500 mt-1">Choose format</p>
                 </div>
               </div>
               <button
@@ -761,7 +761,7 @@ export default function AssessmentAuditTrail() {
             </div>
 
             <div className="p-4 sm:p-5">
-              <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
+              <p className="text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
 
               <div className="space-y-2.5 sm:space-y-3">
                 <button
@@ -773,7 +773,7 @@ export default function AssessmentAuditTrail() {
                   </div>
                   <div className="text-left flex-1 min-w-0">
                     <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
-                    <div className="text-xs sm:text-sm text-gray-500">Compatible with Excel, Google Sheets</div>
+                    <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets</div>
                   </div>
                 </button>
 
@@ -786,7 +786,7 @@ export default function AssessmentAuditTrail() {
                   </div>
                   <div className="text-left flex-1 min-w-0">
                     <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
-                    <div className="text-xs sm:text-sm text-gray-500">Native Excel format with better formatting</div>
+                    <div className="text-sm text-gray-500">Native Excel format with better formatting</div>
                   </div>
                 </button>
               </div>

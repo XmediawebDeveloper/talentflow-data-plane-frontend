@@ -653,7 +653,7 @@ export default function AIInterviewPreview() {
                 {/* Laid out as Assessment Published is: headline, the one-line
                     card, the compact row of ways on — with the handoff hint
                     only when there is a next step elsewhere to name. */}
-                <h1 className={`text-xl sm:text-2xl font-bold text-gray-900 tracking-tight ${fromInviteOrigin ? 'mb-2 sm:mb-3' : 'mb-4 sm:mb-5'}`}>
+                <h1 className={`text-lg sm:text-xl font-semibold text-gray-900 tracking-tight ${fromInviteOrigin ? 'mb-2 sm:mb-3' : 'mb-4 sm:mb-5'}`}>
                   AI Interview Published!
                 </h1>
                 {fromInviteOrigin && (
@@ -776,7 +776,7 @@ export default function AIInterviewPreview() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Review &amp; Publish</h1>
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Review &amp; Publish</h1>
                     {/* The same stealth dot the Clusters step carries after its
                         heading: the per-question skill plan, one click away on
                         the last screen before publishing. Reads the SAVED plan
@@ -902,14 +902,17 @@ export default function AIInterviewPreview() {
                   <Clock className="w-4 h-4 text-brand-blue" />
                   <h4 className="text-sm font-semibold text-gray-800 tracking-tight">Time Allocation</h4>
                 </div>
+                {/* Below sm: no 360px floor, tighter cells, no wrapping — the
+                    round names no longer break mid-word ("Must-To-/Have") and
+                    Time stays in view or a short scroll away. */}
                 <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
-                  <table className="w-full min-w-[360px] text-sm">
+                  <table className="w-full sm:min-w-[360px] text-sm whitespace-nowrap">
                     <thead>
                       <tr className="bg-slate-50 text-left">
-                        <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
-                        <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
-                        <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
-                        <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600">Round</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -922,12 +925,12 @@ export default function AIInterviewPreview() {
                         const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
                         return (
                           <tr key={r.type}>
-                            <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
-                            <td className="px-4 py-2.5 text-gray-700 text-right">
+                            <td className="px-2 sm:px-4 py-2.5 text-gray-900">{roundLabel}</td>
+                            <td className="px-2 sm:px-4 py-2.5 text-gray-700 text-right">
                               <span className="inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{previewQuestions}</span>
                             </td>
-                            <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
-                            <td className="px-4 py-2.5 text-gray-700 text-right">
+                            <td className="px-2 sm:px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
+                            <td className="px-2 sm:px-4 py-2.5 text-gray-700 text-right">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">{previewMin} min</span>
                             </td>
                           </tr>
@@ -936,14 +939,14 @@ export default function AIInterviewPreview() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-slate-50 font-semibold">
-                        <td className="px-4 py-2.5 text-gray-900">Total</td>
-                        <td className="px-4 py-2.5 text-gray-900 text-right">
+                        <td className="px-2 sm:px-4 py-2.5 text-gray-900">Total</td>
+                        <td className="px-2 sm:px-4 py-2.5 text-gray-900 text-right">
                           {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-900 text-right">
+                        <td className="px-2 sm:px-4 py-2.5 text-gray-900 text-right">
                           {mthClusters.length + nthClusters.length}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-900 text-right">
+                        <td className="px-2 sm:px-4 py-2.5 text-gray-900 text-right">
                           {enabledRounds.reduce((s, r) => s + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0)} min
                         </td>
                       </tr>

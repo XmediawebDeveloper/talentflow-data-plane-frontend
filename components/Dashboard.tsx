@@ -472,7 +472,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
-              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">Resume Storage</div>
+              <div className="text-xs text-gray-600 mb-2 sm:mb-3">Resume Storage</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -480,11 +480,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%` }}
                   ></div>
                 </div>
-                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%
                 </span>
               </div>
-              <div className="text-2xs sm:text-xs text-gray-500">
+              <div className="text-xs text-gray-500">
                 {usage?.resumeUploads?.toLocaleString() || '1,593'} used of {limits?.resumeUploads?.toLocaleString() || '2,450'}
               </div>
             </div>}</PlanLockedOverlay>}
@@ -497,7 +497,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.jobPostings || '100'}</div>
-              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">Job Postings</div>
+              <div className="text-xs text-gray-600 mb-2 sm:mb-3">Job Postings</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -505,11 +505,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%` }}
                   ></div>
                 </div>
-                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%
                 </span>
               </div>
-              <div className="text-2xs sm:text-xs text-gray-500">
+              <div className="text-xs text-gray-500">
                 {usage?.jobPostings || '42'} used of {limits?.jobPostings || '100'}
               </div>
             </div>
@@ -522,7 +522,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
-              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">Assessment Units</div>
+              <div className="text-xs text-gray-600 mb-2 sm:mb-3">Assessment Units</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -530,11 +530,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%` }}
                   ></div>
                 </div>
-                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%
                 </span>
               </div>
-              <div className="text-2xs sm:text-xs text-gray-500">
+              <div className="text-xs text-gray-500">
                 {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
             </div>}</PlanLockedOverlay>}
@@ -549,7 +549,7 @@ export default function Dashboard({
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">
                 {limits?.aiInterviews === 'unlimited' ? 'Unlimited' : limits?.aiInterviews || 'Unlimited'}
               </div>
-              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">AI Interviews</div>
+              <div className="text-xs text-gray-600 mb-2 sm:mb-3">AI Interviews</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -561,12 +561,12 @@ export default function Dashboard({
                     }}
                   ></div>
                 </div>
-                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.aiInterviews === 'unlimited' ? '∞' :
                     typeof limits?.aiInterviews === 'number' ? `${Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100)}%` : '∞'}
                 </span>
               </div>
-              <div className="text-2xs sm:text-xs text-gray-500">
+              <div className="text-xs text-gray-500">
                 {limits?.aiInterviews === 'unlimited'
                   ? `${usage?.aiInterviews || '87'} conducted this month`
                   : `${usage?.aiInterviews || '87'} used of ${limits?.aiInterviews || 'Unlimited'}`}

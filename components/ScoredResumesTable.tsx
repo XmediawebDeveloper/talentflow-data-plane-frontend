@@ -2327,11 +2327,11 @@ Best regards`);
     </>
   ) : null;
 
-  // Embedded in a tab (toolbar portals out) drops the padded outer card so the
-  // table sits in a single bordered card like the AI Talent Match tab, not a
-  // card inside a card. Standalone keeps its own card.
+  // No padded outer card, embedded or standalone: standalone it sat inside the
+  // page panel and framed the already-bordered rows a second time (a card
+  // inside a card). Resume Scoring's View by Job dropped the same shell.
   return (
-    <div className={compact || toolbarPortal ? '' : 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6'}>
+    <div>
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
@@ -2392,7 +2392,10 @@ Best regards`);
           /* In Job Details the row also carries Select All and Actions, so it
              lays out by the tab card's width: search takes its own row until
              the card is wide enough, instead of shrinking to an icon. */
-          fitToContainer={!!toolbarPortal}
+          // Standalone too: at 768 the inline filters crushed the search box
+          // to an icon, the same fix Resume Scoring's View by Job uses.
+          fitToContainer
+          containerBreakpoint={toolbarPortal ? undefined : '4xl'}
           /* Select All — embedded in Job Details, at the very start of the
              toolbar row, matching the AI Talent Match reference. Standalone
              Resume Scoring keeps it leading row 2 instead (see below), the
