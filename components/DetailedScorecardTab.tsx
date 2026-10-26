@@ -635,7 +635,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   return (
     <div className="space-y-4">
       {/* Score Summary Header - Compact */}
-      <div className="flex items-center gap-4 text-sm">
+      {/* Wraps: on one line the averages squeezed into each other in the
+          modal on tablets and phones. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
         <span className="text-gray-700 flex items-center gap-1">
           {/* Resume Match Rating Mechanism (client doc, Sept 2026): the headline
               number is now the 0-10 Overall Rating, not a percentage - the color
@@ -752,7 +754,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               line at phone widths, so render a stacked card per criterion
               instead — every field label:value, reasoning in full. The table
               below is shown from md up, where the columns have room. */}
-          <div className="md:hidden divide-y divide-gray-200">
+          {/* Cards up to `lg`, not `md`: at 768px the 12% Criteria column was
+              narrower than its no-wrap pill, which ran over AI Reasoning. */}
+          <div className="lg:hidden divide-y divide-gray-200">
             {criteriaScores.map((criteria, index) => {
               const Icon = criteria.icon;
               const eligibility = getEligibleStatus(criteria.rating);
@@ -813,7 +817,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               );
             })}
           </div>
-          <div className="overflow-x-auto hidden md:block">
+          <div className="overflow-x-auto hidden lg:block">
             <table className="w-full table-fixed">
               <thead className="bg-brand-sky dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
@@ -891,7 +895,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         </div>
                       </td>
                       <td className="px-3 py-3">
-                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                        <span className={`inline-block max-w-full truncate px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                           criteria.criteriaType === 'Required'
                             ? 'bg-destructive-subtle text-destructive border border-destructive-line'
                             : 'bg-gray-100 text-gray-900 border border-gray-300'
