@@ -27,7 +27,7 @@
  *     acceptable fallback for this model family.
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import {
   DETECTABLE_OBJECTS,
   WATCHED_COCO_LABELS,
@@ -233,6 +233,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
   const pendingConfirmRef = useRef(false);
   const watchdogRef = useRef<number | null>(null);
   const sawResultRef = useRef(false);
+  const shutDownRef = useRef<((reason: string) => void) | null>(null);
 
   const callbacksRef = useRef(config);
   useEffect(() => { callbacksRef.current = config; }, [config]);
@@ -389,6 +390,24 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
     }
     workerRef.current = worker;
 
+    // Stop the detector for the rest of the session and report why.
+    const shutDown = (reason: string) => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (watchdogRef.current !== null) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+      try { worker.postMessage({ type: "dispose" }); worker.terminate(); } catch {}
+      workerRef.current = null;
+      isReadyRef.current = false;
+      inFlightRef.current = false;
+      markUnavailable(reason);
+    };
+    shutDownRef.current = shutDown;
+
     // Every branch below runs inside this handler, so ANY throw in here kills
     // the detector for the rest of the interview. That is exactly how a stale
     // `interval` reference once stopped the loop from ever starting while the
@@ -400,6 +419,16 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       const msg = e.data;
 
       if (msg.type === "ready") {
+        // The worker's own warm-up run already shows the GPU is over budget —
+        // refuse it now rather than let the first real frame (dispatched in a
+        // gap between Bina's turns) freeze the machine while she speaks.
+        if (typeof msg.warmupMs === "number" && msg.warmupMs > MAX_FIRST_INFERENCE_MS) {
+          shutDown(
+            `GPU too slow for object detection: warm-up took ${Math.round(msg.warmupMs)} ms ` +
+            `(budget ${MAX_FIRST_INFERENCE_MS} ms) — disabled for this session to keep the interview responsive.`,
+          );
+          return;
+        }
         isReadyRef.current = true;
         // Liveness watchdog — cleared by the first frame result.
         watchdogRef.current = setTimeout(() => {
@@ -445,14 +474,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
           const budget = isFirst ? MAX_FIRST_INFERENCE_MS : MAX_INFERENCE_MS;
           if (msg.inferenceMs > budget) {
             // Too slow for this GPU — stop before it freezes the machine again.
-            if (timerRef.current !== null) {
-              clearTimeout(timerRef.current);
-              timerRef.current = null;
-            }
-            try { worker.postMessage({ type: "dispose" }); worker.terminate(); } catch {}
-            workerRef.current = null;
-            isReadyRef.current = false;
-            markUnavailable(
+            shutDown(
               `GPU too slow for object detection: ${Math.round(msg.inferenceMs)} ms per frame ` +
               `(budget ${budget} ms) — disabled for this session to keep the interview responsive.`,
             );
@@ -585,15 +607,33 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         worker.terminate();
       } catch {}
       workerRef.current = null;
+      shutDownRef.current = null;
       classStateRef.current = {};
     };
   }, [active, lowTier]);
 
-  return {
+  /**
+   * Called when "Preparing your interview…" hits its time cap. A detector that
+   * has not warmed up by then would finish loading — and run its first,
+   * non-preemptible GPU frame — during Bina's intro / first question, which is
+   * exactly the freeze seen on 2026-10-23 (warm-up ~50 s, first frame 10.5 s).
+   * A GPU that slow fails the frame budget anyway, so stop it now instead.
+   */
+  const abandonIfNotWarm = useCallback((waitedMs: number) => {
+    if (warmedUpRef.current || isUnavailableRef.current) return;
+    shutDownRef.current?.(
+      `Object detection not ready after ${Math.round(waitedMs / 1000)} s of preparation — ` +
+      `disabled for this session so loading it cannot freeze the interview.`,
+    );
+  }, []);
+
+  // Memoised: refs + stable callbacks only (see InterviewFaceDetection).
+  return useMemo(() => ({
     isReadyRef,
     isUnavailableRef,
     lastDetectionsRef,
     warmedUpRef,
     setVideoElement,
-  };
+    abandonIfNotWarm,
+  }), [setVideoElement, abandonIfNotWarm]);
 }

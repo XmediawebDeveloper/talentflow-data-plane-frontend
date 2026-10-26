@@ -1,14 +1,16 @@
 /**
  * Create / Send at scale — the three backend APIs behind Job Details' Create /
  * Send popup when it lists the job's own candidates (AI Talent Match + Scored
- * Resumes): one server-paged, filterable list; one background send job; its
- * progress and per-candidate results.
+ * Resumes) or the tenant's resume database (My Resumes / Shared Database —
+ * the share step's "Select From"): one server-paged, filterable list; one
+ * background send job; its progress and per-candidate results.
  *
  * Backend: app/routers/bulk_invites.py (+ app/services/bulk_invite.py).
  */
 import api, { handleApiError } from './api';
 
-export type InviteCandidateSourceTab = 'talent-match' | 'score-resume';
+/** The picker's tabs: the job's two lists, then the resume database. */
+export type InviteCandidateSourceTab = 'talent-match' | 'score-resume' | 'my-resumes' | 'internal-db';
 export type BulkInviteKind = 'assessment' | 'interview';
 export type ServerMatchStatus = 'exact_match' | 'partial_match' | 'no_match';
 export type InviteCandidateSort = 'best' | 'score' | 'rating' | 'name' | 'recent';
@@ -22,6 +24,8 @@ export interface InviteCandidateFilters {
   min_score?: number;
   /** Leave out candidates this version already has an invitation for. */
   exclude_invited?: boolean;
+  /** My Resumes only: one of the user's folders. */
+  folder_id?: string;
   sort?: InviteCandidateSort;
 }
 
@@ -30,6 +34,8 @@ export interface ServerInviteCandidate {
   name: string;
   email: string;
   phone: string;
+  /** The resume's current title, when parsed. */
+  title?: string | null;
   source: InviteCandidateSourceTab;
   /** AI Talent Match rating 1–10, when matched. */
   rating: number | null;
@@ -53,11 +59,15 @@ export type BulkInviteSelection =
   | { mode: 'ids'; resume_ids: string[] }
   | ({ mode: 'filter'; source: InviteCandidateSourceTab; exclude_ids: string[] } & InviteCandidateFilters);
 
+/** A candidate typed in (or read from a sheet) on top of the selection. */
+export interface BulkExtraCandidate { name: string; email: string; phone?: string }
+
 export interface BulkInviteRequest {
   kind: BulkInviteKind;
   version_id: string;
   selection: BulkInviteSelection;
-  extra_candidates?: { name: string; email: string; phone?: string }[];
+  /** At most 500 per send (the backend's cap). */
+  extra_candidates?: BulkExtraCandidate[];
   delivery?: 'email' | 'link';
   message?: string;
   expiry_days?: number;

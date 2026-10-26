@@ -11,8 +11,9 @@ import VersionList, { VersionUsage } from './VersionList';
 import SendToPanel from './SendToPanel';
 import ResultsStep from './ResultsStep';
 import ServerCandidatePicker, { EMPTY_SELECTION, describeFilters, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
+import ExtraCandidatesInput from './ExtraCandidatesInput';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
-import { bulkInviteService, type BulkInviteJob } from '@/lib/services/bulkInviteService';
+import { bulkInviteService, type BulkInviteJob, type BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
@@ -167,6 +168,8 @@ export default function VersionInviteDialog({
   /* `bulk`: the picked rows or the filter — never the rows themselves — and
      the background send once it has started. */
   const [serverSelection, setServerSelection] = useState<PickerSelection>(EMPTY_SELECTION);
+  /* Bulk mode: candidates typed in or read from a sheet, on top of the picks. */
+  const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
   const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
   const bulkTracker = useOptionalBulkInviteProgress();
   const bulkReported = useRef(false);
@@ -356,7 +359,7 @@ export default function VersionInviteDialog({
   const selected = versions.find((v) => v.id === versionId) ?? null;
   const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
   /* How many the send goes to: the server selection's count in `bulk`. */
-  const recipientCount = bulk ? selectionCount(serverSelection) : recipients.length;
+  const recipientCount = bulk ? selectionCount(serverSelection) + extras.length : recipients.length;
   /* Next: someone ticked — or, where Next leads to the email step, always:
      that step adds candidates itself (Manual, Upload Excel, Resume Database),
      so an empty list here is not a dead end. */
@@ -518,6 +521,7 @@ export default function VersionInviteDialog({
       kind,
       version_id: selected.id,
       selection: toRequestSelection(serverSelection),
+      extra_candidates: extras.length ? extras : undefined,
       delivery: kind === 'interview' ? method : 'email',
       message: method === 'email' ? message : undefined,
       expiry_days: expiryDays,
@@ -813,14 +817,18 @@ export default function VersionInviteDialog({
                     candidatesOnly={handsOff}
                     addInNextStep={handsOff}
                     listSlot={bulk ? (
-                      <ServerCandidatePicker
-                        jdId={jdId}
-                        kind={kind}
-                        versionId={selected?.sendable ? selected.id : null}
-                        selection={serverSelection}
-                        onSelectionChange={setServerSelection}
-                        pickingDisabled={!selected?.sendable || !perms.canInvite || !!off}
-                      />
+                      <div className="space-y-4">
+                        <ServerCandidatePicker
+                          jdId={jdId}
+                          kind={kind}
+                          versionId={selected?.sendable ? selected.id : null}
+                          selection={serverSelection}
+                          onSelectionChange={setServerSelection}
+                          pickingDisabled={!selected?.sendable || !perms.canInvite || !!off}
+                        />
+                        {/* The share step's Manual / Upload Excel, kept on the bulk path. */}
+                        <ExtraCandidatesInput onChange={setExtras} disabled={!selected?.sendable || !perms.canInvite || !!off} />
+                      </div>
                     ) : undefined}
                   />
                 </section>

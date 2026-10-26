@@ -82,6 +82,23 @@ export default function BulkInviteProgressPanel({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const active = !!job && isBulkInviteActive(job);
 
+  /* A run that no worker has picked up for two minutes: say so, rather
+     than spin on "Waiting to start" (the background sender is down or is
+     running an older build). */
+  const [waitingLong, setWaitingLong] = useState(false);
+  const queuedSince = job?.status === 'queued' ? job.created_at : null;
+  useEffect(() => {
+    if (!queuedSince) {
+      const t = setTimeout(() => setWaitingLong(false), 0);
+      return () => clearTimeout(t);
+    }
+    const since = new Date(queuedSince).getTime();
+    const check = () => setWaitingLong(Number.isFinite(since) && Date.now() - since > 120_000);
+    const t0 = setTimeout(check, 0);
+    const t = setInterval(check, 5_000);
+    return () => { clearTimeout(t0); clearInterval(t); };
+  }, [queuedSince]);
+
   /* The job: polled while active. The host's callback is read through an
      effect event, so a new callback never restarts the poll. */
   const reportJob = useEffectEvent((fresh: BulkInviteJob) => {
@@ -98,7 +115,12 @@ export default function BulkInviteProgressPanel({
         setJob(fresh);
         setLoadError(null);
         reportJob(fresh);
-        if (isBulkInviteActive(fresh)) timer = setTimeout(load, POLL_MS);
+        if (isBulkInviteActive(fresh)) {
+          // Nobody has picked it up for two minutes: no point asking every 2s.
+          const since = fresh.status === 'queued' && fresh.created_at ? new Date(fresh.created_at).getTime() : NaN;
+          const stuck = Number.isFinite(since) && Date.now() - since > 120_000;
+          timer = setTimeout(load, stuck ? POLL_MS * 5 : POLL_MS);
+        }
       } catch (err) {
         if (cancelled) return;
         setLoadError((err as Error)?.message || 'Could not read the send’s progress.');
@@ -212,6 +234,11 @@ export default function BulkInviteProgressPanel({
             )}
           </div>
         </div>
+        {waitingLong && (
+          <p role="status" className="mt-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
+            Still waiting for the background sender to pick this up. Nothing has been sent yet. If this persists, the sender service is not running — ask your administrator to check it; the send will continue from here once it is back.
+          </p>
+        )}
         <div className="mt-2.5 h-2 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <div className={`h-full rounded-full transition-[width] duration-500 ${job.status === 'failed' ? 'bg-destructive' : job.status === 'cancelled' ? 'bg-warning-strong' : 'bg-brand-blue'}`} style={{ width: `${pct}%` }} />
         </div>

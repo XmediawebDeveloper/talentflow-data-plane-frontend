@@ -106,7 +106,7 @@ export default function UserPermissionsSummary({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter permissions"
             aria-label="Filter permissions"
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm max-sm:text-[13px] text-gray-900 outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           />
         </div>
         <div role="radiogroup" aria-label="Show permissions" className="relative grid h-9 shrink-0 grid-cols-2 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10">
@@ -151,7 +151,7 @@ export default function UserPermissionsSummary({
           ))}
         </div>
       ) : sections.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-900">
+        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm max-sm:text-[13px] text-gray-500 dark:border-slate-700 dark:bg-slate-900">
           {q ? `No permissions match “${query.trim()}”` : 'No permissions granted'}
         </p>
       ) : (
@@ -170,7 +170,7 @@ export default function UserPermissionsSummary({
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{section.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{section.name}</span>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums ${
                       section.grantedHere > 0

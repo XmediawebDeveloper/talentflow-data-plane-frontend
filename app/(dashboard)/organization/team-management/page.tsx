@@ -613,7 +613,7 @@ export default function TeamManagementPage() {
               <div
                 role="tablist"
                 aria-label="Team management views"
-                className="hidden overflow-x-auto scrollbar-hide border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
+                className="hidden overflow-x-auto scrollbar-hide tf-hide-native-scrollbar border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
               >
                 {innerTabs.map((t) => {
                   const Icon = t.icon;
@@ -641,7 +641,7 @@ export default function TeamManagementPage() {
                 })}
               </div>
 
-              <div className="p-4 sm:p-5">
+              <div className="p-3 sm:p-5">
             {activeTab === 'usage' ? (
               <TeamUsageAnalytics />
             ) : activeTab === 'analytics' ? (
@@ -780,11 +780,33 @@ export default function TeamManagementPage() {
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                           <UserCheck className="h-6 w-6 text-brand-blue" />
                         </div>
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
+                        <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
+                        <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto tf-table-shell">
+                      <>
+                      {/* Phones: one compact row per member. */}
+                      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+                        {sortedMembers.map((row) => (
+                          <li key={row.id} className="flex items-center gap-2.5 px-3 py-2.5">
+                            <NameAvatar name={row.name} fallback={row.email} size="sm" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
+                              <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
+                              <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
+                                {row.teamName}
+                                {row.role && <span className="capitalize"> · {row.role.replace(/_/g, ' ').toLowerCase()}</span>}
+                              </p>
+                            </div>
+                            {row.isLead && (
+                              <span className="shrink-0 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                Lead
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="hidden overflow-x-auto tf-table-shell md:block">
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                             <tr className="text-left">
@@ -809,13 +831,13 @@ export default function TeamManagementPage() {
                                   <div className="flex items-center gap-3">
                                     <NameAvatar name={row.name} fallback={row.email} size="md" />
                                     <div className="min-w-0">
-                                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
+                                      <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
                                       <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{row.teamName}</td>
-                                <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
+                                <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{row.teamName}</td>
+                                <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
                                   {row.role ? (
                                     <span className="capitalize">{row.role.replace(/_/g, ' ').toLowerCase()}</span>
                                   ) : (
@@ -836,6 +858,7 @@ export default function TeamManagementPage() {
                           </tbody>
                         </table>
                       </div>
+                      </>
                     )}
                   </section>
                 )}

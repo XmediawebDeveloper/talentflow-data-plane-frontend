@@ -145,10 +145,10 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base font-semibold text-gray-900">User Limit Exceeded</h3>
+              <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">User Limit Exceeded</h3>
               <Badge variant="destructive">Action required</Badge>
             </div>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm max-sm:text-[13px] text-gray-600 mt-1">
               You have {seatData.used} active users, but your plan allows only {seatData.limit}.
               Please deactivate {usersToDeactivate} user{usersToDeactivate > 1 ? 's' : ''} or upgrade your plan.
             </p>
@@ -192,7 +192,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-semibold text-gray-900">User Seats</h3>
+                <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">User Seats</h3>
                 <Badge variant="destructive">At limit</Badge>
               </div>
               <p className="text-xs text-gray-500 mt-0.5">{planName}</p>
@@ -200,9 +200,9 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           </div>
 
           <div className="text-right">
-            <div className="text-xl font-bold text-gray-900">
+            <div className="text-xl max-sm:text-lg font-bold text-gray-900">
               {seatData.used}
-              <span className="text-sm text-gray-400">/{seatData.limit === -1 ? '∞' : seatData.limit}</span>
+              <span className="text-sm max-sm:text-[13px] text-gray-400">/{seatData.limit === -1 ? '∞' : seatData.limit}</span>
             </div>
             <p className="text-xs text-gray-500">
               {seatData.total_remaining === -1 ? 'Unlimited' : `${seatData.total_remaining} available`}
@@ -212,7 +212,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
 
         {/* Progress Bar */}
         <div className="mb-3 sm:mb-4">
-          <div className="flex items-center justify-between text-sm mb-1.5">
+          <div className="flex items-center justify-between text-sm max-sm:text-[13px] mb-1.5">
             <span className="text-gray-500">Usage</span>
             <span className="font-semibold text-destructive">100%</span>
           </div>
@@ -227,7 +227,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-cyan/25">
               <Plus className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-sm text-brand-blue font-medium">
+            <span className="text-sm max-sm:text-[13px] text-brand-blue font-medium">
               +{seatData.addon_remaining} addon seat{seatData.addon_remaining > 1 ? 's' : ''} available
             </span>
           </div>
@@ -240,8 +240,8 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-destructive-strong">Quota Exhausted</p>
-              <p className="text-sm text-destructive mt-0.5">
+              <p className="text-sm max-sm:text-[13px] font-semibold text-destructive-strong">Quota Exhausted</p>
+              <p className="text-sm max-sm:text-[13px] text-destructive mt-0.5">
                 You have reached your user seat limit. Purchase additional seats to add more users.
               </p>
             </div>
@@ -256,14 +256,14 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-brand-orange-deep">Not available on Free Trial</p>
-              <p className="text-sm text-gray-600 mt-0.5">
+              <p className="text-sm max-sm:text-[13px] font-semibold text-brand-orange-deep">Not available on Free Trial</p>
+              <p className="text-sm max-sm:text-[13px] text-gray-600 mt-0.5">
                 Purchasing additional seats is only available for paid subscriptions.
               </p>
             </div>
             <button
               onClick={() => window.location.href = '/subscription/current-plan'}
-              className="flex-shrink-0 inline-flex items-center gap-1 bg-brand-orange hover:bg-brand-orange-deep text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+              className="flex-shrink-0 inline-flex items-center gap-1 bg-brand-orange hover:bg-brand-orange-deep text-white text-sm max-sm:text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
             >
               <TrendingUp className="w-3 h-3" />
               Upgrade

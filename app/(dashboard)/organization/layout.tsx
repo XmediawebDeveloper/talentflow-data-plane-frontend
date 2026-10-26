@@ -37,12 +37,14 @@ export default function OrganizationLayout({ children }: { children: React.React
 
   // Chat fills the viewport height (its message list scrolls inside), so the
   // frame becomes a flex column down to the content; it never scrolls the page,
-  // so its tab bar doesn't need to stick.
+  // so its tab bar doesn't need to stick. On short screens (phone landscape)
+  // that would leave the message list ~0px tall, so there the frame grows to
+  // its content and the page scrolls down to a screen-tall chat window.
   const isChat = pathname === '/organization/team-chat';
-  const fill = isChat ? 'flex flex-1 min-h-0 flex-col' : '';
+  const fill = isChat ? 'flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:flex-none' : '';
 
   return (
-    <main className={`flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col' : ''}`}>
+    <main className={`flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col [@media(max-height:500px)]:h-auto [@media(max-height:500px)]:flex-none' : ''}`}>
       <div className={`mx-auto w-full max-w-[1400px] ${fill}`}>
         {/* Phones get 12px instead of 16px around the content (all five tabs).
             OrganizationTabs' sticky band mirrors this padding. */}

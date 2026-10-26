@@ -1,7 +1,7 @@
 'use client';
 
 import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
-import { useState, useRef, useEffect, Fragment } from 'react';
+import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
 import {
   Search,
   Hash,
@@ -24,12 +24,16 @@ import {
   Menu,
   X,
   RefreshCw,
+  Copy,
+  Check,
+  PinOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import chatService, {
   ChatConnectionStatus,
   Channel,
   Message,
+  Reaction,
 } from '@/lib/services/chatService';
 import { getTokens } from '@/lib/services/api';
 import userService, { ApiUser } from '@/lib/services/userService';
@@ -41,6 +45,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import NameAvatar from '@/components/ui/name-avatar';
+import ChatAttachmentViewer, { type ChatAttachment } from '@/components/organization/ChatAttachmentViewer';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -61,6 +66,111 @@ export default function TeamChatPage() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showMembersSidebar, setShowMembersSidebar] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
+  // Tapped message — shows its time + actions row (touch has no hover).
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  // Image attachment open in the in-page viewer.
+  const [viewerAttachment, setViewerAttachment] = useState<ChatAttachment | null>(null);
+  const closeViewer = useCallback(() => setViewerAttachment(null), []);
+  // Selected messages (long-press on touch, double-click on desktop; once
+  // one is selected a tap/click adds or removes more). The header's pin
+  // button then pins/unpins them.
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [isPinning, setIsPinning] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
+  const isSelecting = selectedMessageIds.size > 0;
+
+  const clearSelection = () => setSelectedMessageIds(new Set());
+  const toggleSelectMessage = (messageId: string) => {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else next.add(messageId);
+      return next;
+    });
+    setShowEmojiPicker(null);
+    setShowPinnedPanel(false);
+  };
+  const startLongPress = (messageId: string) => {
+    longPressFiredRef.current = false;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true;
+      navigator.vibrate?.(15);
+      toggleSelectMessage(messageId);
+    }, 450);
+  };
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  // Esc clears the selection.
+  useEffect(() => {
+    if (!isSelecting) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedMessageIds(new Set()); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSelecting]);
+
+  // Any unpinned in the selection → pin those; all already pinned → unpin all.
+  const handleTogglePinSelected = async () => {
+    const selected = messages.filter((m) => selectedMessageIds.has(m.id) && !m.is_deleted);
+    if (selected.length === 0 || isPinning) return;
+    const unpinned = selected.filter((m) => !m.is_pinned);
+    const pin = unpinned.length > 0;
+    const targets = pin ? unpinned : selected;
+    setIsPinning(true);
+    try {
+      const results = await Promise.allSettled(
+        targets.map((m) => (pin ? chatService.pinMessage(m.id) : chatService.unpinMessage(m.id))),
+      );
+      const done = new Set(targets.filter((_, i) => results[i].status === 'fulfilled').map((m) => m.id));
+      if (done.size > 0) {
+        setMessages((prev) => prev.map((m) => (done.has(m.id) ? { ...m, is_pinned: pin } : m)));
+        const noun = done.size === 1 ? 'Message' : `${done.size} messages`;
+        toast.success(`${noun} ${pin ? 'pinned' : 'unpinned'}`);
+      }
+      const failed = targets.length - done.size;
+      if (failed > 0) {
+        toast.error(`Failed to ${pin ? 'pin' : 'unpin'} ${failed} message${failed === 1 ? '' : 's'}`);
+        // Keep only the failed ones selected so a retry is one tap.
+        setSelectedMessageIds(new Set(targets.filter((m) => !done.has(m.id)).map((m) => m.id)));
+      } else {
+        clearSelection();
+      }
+    } finally {
+      setIsPinning(false);
+    }
+  };
+
+  const [unpinningId, setUnpinningId] = useState<string | null>(null);
+  const handleUnpinMessage = async (messageId: string) => {
+    if (unpinningId) return;
+    setUnpinningId(messageId);
+    try {
+      await chatService.unpinMessage(messageId);
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, is_pinned: false } : m)));
+      toast.success('Message unpinned');
+    } catch (error) {
+      const detail = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail || 'Failed to unpin message');
+    } finally {
+      setUnpinningId(null);
+    }
+  };
+
+  const handleCopyMessage = async (message: Message) => {
+    try {
+      await navigator.clipboard.writeText(message.content ?? '');
+      setCopiedMessageId(message.id);
+      toast.success('Message copied');
+      setTimeout(() => setCopiedMessageId((id) => (id === message.id ? null : id)), 1500);
+    } catch {
+      toast.error('Could not copy message');
+    }
+  };
   const [permissions, setPermissions] = useState<{ can_create_channel: boolean; role: string }>({
     can_create_channel: false,
     role: '',
@@ -142,7 +252,13 @@ export default function TeamChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
+  // Scroll to the bottom only when a new message arrives (or a conversation
+  // opens) — not when an existing one changes (reaction, pin, edit).
+  const lastMessageIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
+    const lastId = messages[messages.length - 1]?.id;
+    if (lastId === lastMessageIdRef.current) return;
+    lastMessageIdRef.current = lastId;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -480,6 +596,7 @@ export default function TeamChatPage() {
     setListOpen(false);
     setShowPinnedPanel(false);
     setShowHeaderMenu(false);
+    clearSelection();
   };
 
   // Manual refresh of the chat only (open conversation + conversation list) —
@@ -565,15 +682,50 @@ export default function TeamChatPage() {
   };
 
   const handleAddReaction = async (messageId: string, emoji: string) => {
+    setShowEmojiPicker(null);
+    const me = currentUser?.id;
+    const myName = currentUser?.name || 'You';
+    // Optimistic: toggle my reaction in place — no loading skeleton, no scroll.
+    if (me) {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const existing = m.reactions.find((r) => r.emoji === emoji);
+          let reactions: Reaction[];
+          if (!existing) {
+            reactions = [...m.reactions, { emoji, count: 1, users: [myName], user_ids: [me] }];
+          } else if (existing.user_ids?.includes(me)) {
+            reactions = m.reactions
+              .map((r) =>
+                r.emoji === emoji
+                  ? {
+                      ...r,
+                      count: r.count - 1,
+                      user_ids: r.user_ids.filter((id) => id !== me),
+                      users: r.users.filter((_, i) => r.user_ids[i] !== me),
+                    }
+                  : r,
+              )
+              .filter((r) => r.count > 0);
+          } else {
+            reactions = m.reactions.map((r) =>
+              r.emoji === emoji
+                ? { ...r, count: r.count + 1, users: [...r.users, myName], user_ids: [...(r.user_ids ?? []), me] }
+                : r,
+            );
+          }
+          return { ...m, reactions };
+        }),
+      );
+    }
     try {
       await chatService.addReaction(messageId, emoji);
-      if (selectedChannel) {
-        await fetchMessages(selectedChannel.id);
-      }
     } catch (error) {
       console.error('Error adding reaction:', error);
+      toast.error('Failed to add reaction');
     }
-    setShowEmojiPicker(null);
+    // Reconcile with the server quietly (also undoes the optimistic change on failure).
+    if (selectedChannel) void fetchMessages(selectedChannel.id, { silent: true });
   };
 
   const handleCreateChannel = async () => {
@@ -685,6 +837,9 @@ export default function TeamChatPage() {
   const onlineMembersCount = selectedChannel?.members?.filter((m) => m.is_online).length || 0;
   const isMuted = selectedChannel ? mutedChannels.has(selectedChannel.id) : false;
   const pinnedMessages = messages.filter((m) => m.is_pinned && !m.is_deleted);
+  const selectedMessages = messages.filter((m) => selectedMessageIds.has(m.id) && !m.is_deleted);
+  // The pin button unpins only when everything selected is already pinned.
+  const selectionAllPinned = selectedMessages.length > 0 && selectedMessages.every((m) => m.is_pinned);
 
   // Composer grows with its text, up to ~5 lines, then scrolls.
   useEffect(() => {
@@ -825,7 +980,7 @@ export default function TeamChatPage() {
   return (
     // Card, breadcrumb, organization tabs and the tab panel come from
     // app/(dashboard)/organization/layout.tsx — this renders the panel's content.
-    <div className="flex flex-1 min-h-0 flex-col">
+    <div className="flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:h-[calc(100dvh-4.5rem)] [@media(max-height:500px)]:flex-none">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
         <div className="relative flex flex-1 min-h-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700 dark:bg-slate-900">
@@ -843,7 +998,7 @@ export default function TeamChatPage() {
         >
           <div className="space-y-3 border-b border-gray-100 p-3 dark:border-slate-700/60">
             <div className="flex items-center gap-2 px-1">
-              <h1 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Chat</h1>
+              <h1 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Team Chat</h1>
               {totalUnread > 0 && (
                 <span className="rounded-full bg-brand-blue px-2 py-0.5 text-xs font-semibold text-white" title={`${totalUnread} unread`}>
                   {totalUnread}
@@ -869,7 +1024,7 @@ export default function TeamChatPage() {
                 placeholder="Search conversations"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm text-gray-900 outline-none focus-visible:!outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 
@@ -947,7 +1102,7 @@ export default function TeamChatPage() {
         <section className="flex min-w-0 flex-1 flex-col">
           {selectedChannel ? (
             <>
-              <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-2 sm:px-4 dark:border-slate-700">
+              <div className="relative flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-2 sm:px-4 dark:border-slate-700">
                 <div className="flex min-w-0 items-center gap-2.5">
                   {/* Conversations drawer toggle — tablet/phone only, top-left
                       corner (where the drawer slides in from). */}
@@ -976,7 +1131,7 @@ export default function TeamChatPage() {
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h2 className="truncate text-base font-semibold text-gray-900 dark:text-slate-50">{selectedChannel.name}</h2>
+                      <h2 className="truncate text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedChannel.name}</h2>
                       {isMuted && <BellOff className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Muted" />}
                     </div>
                     <p className="truncate text-xs text-gray-500 dark:text-slate-400">
@@ -995,6 +1150,18 @@ export default function TeamChatPage() {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-0.5">
+                  {/* Clear the message selection */}
+                  {isSelecting && (
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="inline-flex h-7 items-center gap-1 rounded-full bg-brand-blue/10 px-2 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/15"
+                      aria-label="Clear selection"
+                      title="Clear selection (Esc)"
+                    >
+                      {selectedMessageIds.size} <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   {/* Refresh this chat */}
                   <button
                     type="button"
@@ -1007,17 +1174,34 @@ export default function TeamChatPage() {
                     <RefreshCw className={`h-4 w-4 ${isRefreshingChat ? 'animate-spin text-brand-blue' : ''}`} />
                   </button>
 
-                  {/* Pinned messages */}
-                  <div className="relative">
+                  {/* Pinned messages — the panel anchors to the button from sm up,
+                      and to the full header width on phones. */}
+                  <div className="sm:relative">
                     <button
                       type="button"
-                      onClick={() => { setShowPinnedPanel((v) => !v); setShowHeaderMenu(false); }}
-                      className={`relative ${iconButtonClass(showPinnedPanel)}`}
-                      aria-label="Pinned messages"
-                      title="Pinned messages"
+                      onClick={() => {
+                        if (isSelecting) { void handleTogglePinSelected(); return; }
+                        setShowPinnedPanel((v) => !v);
+                        setShowHeaderMenu(false);
+                      }}
+                      disabled={isPinning}
+                      className={`relative ${iconButtonClass(showPinnedPanel || isSelecting)} disabled:cursor-wait`}
+                      aria-label={isSelecting ? `${selectionAllPinned ? 'Unpin' : 'Pin'} ${selectedMessageIds.size} selected` : 'Pinned messages'}
+                      title={isSelecting ? `${selectionAllPinned ? 'Unpin' : 'Pin'} selected (${selectedMessageIds.size})` : 'Pinned messages'}
                     >
-                      <Pin className="h-4 w-4" />
-                      {pinnedMessages.length > 0 && (
+                      {/* Tilts while a message is selected — the button now pins it. */}
+                      <Pin
+                        className={`h-4 w-4 transition-transform duration-300 ${isSelecting ? 'rotate-45 text-brand-blue' : ''} ${
+                          selectionAllPinned ? 'fill-brand-blue/20' : ''
+                        }`}
+                      />
+                      {/* Badge: selection count while selecting, else the pinned count. */}
+                      {isSelecting && (
+                        <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-orange px-1 text-2xs font-semibold text-white">
+                          {selectedMessageIds.size}
+                        </span>
+                      )}
+                      {!isSelecting && pinnedMessages.length > 0 && (
                         <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-blue px-1 text-2xs font-semibold text-white">
                           {pinnedMessages.length}
                         </span>
@@ -1026,21 +1210,34 @@ export default function TeamChatPage() {
                     {showPinnedPanel && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowPinnedPanel(false)} />
-                        <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-80 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                        <div className="absolute top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl max-sm:inset-x-2 sm:right-0 sm:mt-2 sm:max-h-96 sm:w-80 dark:border-slate-700 dark:bg-slate-900">
                           <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
                             <Pin className="h-3.5 w-3.5" /> Pinned messages
                           </div>
                           {pinnedMessages.length === 0 ? (
-                            <p className="px-3 py-6 text-center text-sm text-gray-400">No pinned messages yet</p>
+                            <p className="px-3 py-6 text-center text-sm max-sm:text-[13px] text-gray-400">No pinned messages yet</p>
                           ) : (
                             <div className="space-y-0.5">
                               {pinnedMessages.map((m) => (
-                                <div key={m.id} className="rounded-lg px-3 py-2 hover:bg-gray-50 dark:hover:bg-slate-800/60">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
-                                    <span className="shrink-0 text-xs text-gray-400">{formatISTTime(m.created_at)}</span>
+                                <div key={m.id} className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-gray-50 sm:px-3 dark:hover:bg-slate-800/60">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
+                                    <p className="mt-0.5 line-clamp-2 break-words text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{m.content}</p>
                                   </div>
-                                  <p className="mt-0.5 line-clamp-2 text-sm text-gray-700 dark:text-slate-300">{m.content}</p>
+                                  {/* Time, with Unpin under it */}
+                                  <div className="flex shrink-0 flex-col items-end gap-1">
+                                    <span className="text-xs text-gray-400">{formatISTTime(m.created_at)}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUnpinMessage(m.id)}
+                                      disabled={unpinningId === m.id}
+                                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue disabled:cursor-wait"
+                                      aria-label="Unpin message"
+                                      title="Unpin"
+                                    >
+                                      {unpinningId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PinOff className="h-3.5 w-3.5" />}
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -1082,7 +1279,7 @@ export default function TeamChatPage() {
                           <button
                             type="button"
                             onClick={() => { toggleMute(); setShowHeaderMenu(false); }}
-                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
                           >
                             {isMuted ? <Bell className="h-4 w-4 text-gray-400" /> : <BellOff className="h-4 w-4 text-gray-400" />}
                             {isMuted ? 'Unmute notifications' : 'Mute notifications'}
@@ -1092,7 +1289,7 @@ export default function TeamChatPage() {
                               <button
                                 type="button"
                                 onClick={handleLeaveChannel}
-                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
                               >
                                 <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
                               </button>
@@ -1127,7 +1324,7 @@ export default function TeamChatPage() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30">
+              <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30">
                 {isLoadingMessages ? (
                   <div className="flex flex-col gap-4">
                     {/* Mirrors the message list: received (avatar + bubble, left)
@@ -1148,8 +1345,8 @@ export default function TeamChatPage() {
                     <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                       <MessageCircle className="h-6 w-6 text-brand-blue" />
                     </div>
-                    <p className="text-base font-semibold text-gray-900 dark:text-slate-50">No messages yet</p>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No messages yet</p>
+                    <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
                       {selectedChannel.type === 'channel'
                         ? `Start the conversation in #${selectedChannel.name}.`
                         : `Say hello to ${selectedChannel.name}.`}
@@ -1167,7 +1364,8 @@ export default function TeamChatPage() {
                       const groupStart = showDateSeparator || !prev || prev.user_id !== message.user_id;
                       const groupEnd =
                         !next || formatISTDate(next.created_at) !== dayLabel || next.user_id !== message.user_id;
-                      const showMeta = groupEnd || message.is_pinned || message.is_edited;
+                      const showMeta = groupEnd || message.is_pinned || message.is_edited || activeMessageId === message.id;
+                      const actionsOpen = activeMessageId === message.id || showEmojiPicker === message.id;
                       const isImage = message.message_type === 'file' && !message.is_deleted && message.metadata?.file_url;
                       const bubbleRadius = isSender
                         ? `rounded-2xl${groupStart ? ' rounded-tr-md' : ''}`
@@ -1207,59 +1405,53 @@ export default function TeamChatPage() {
                                 </span>
                               )}
 
-                              <div className={`flex items-center gap-1 ${isSender ? 'flex-row-reverse' : ''}`}>
-                                <div className={bubbleClass}>
-                                  {isImage ? (
-                                    <a href={message.metadata!.file_url} target="_blank" rel="noopener noreferrer">
-                                      <img
-                                        src={message.metadata!.file_url}
-                                        alt={message.metadata!.file_name || 'Image attachment'}
-                                        className="block max-h-64 max-w-full object-contain"
-                                      />
-                                    </a>
-                                  ) : (
-                                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                                      {message.is_deleted ? 'This message was deleted' : message.content}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* React — on every message, revealed on hover/focus. */}
-                                {!message.is_deleted && (
-                                  <div className="relative shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
-                                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition-opacity hover:bg-white hover:text-brand-blue focus-visible:opacity-100 group-hover:opacity-100 dark:hover:bg-slate-800 ${
-                                        showEmojiPicker === message.id ? 'opacity-100' : 'opacity-0'
-                                      }`}
-                                      aria-label="Add reaction"
-                                      title="Add reaction"
-                                    >
-                                      <Smile className="h-4 w-4" />
-                                    </button>
-                                    {showEmojiPicker === message.id && (
-                                      <>
-                                        <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
-                                        <div
-                                          className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900 ${
-                                            isSender ? 'right-0' : 'left-0'
-                                          }`}
-                                        >
-                                          {quickEmojis.map((emoji) => (
-                                            <button
-                                              key={emoji}
-                                              type="button"
-                                              onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
-                                              className="rounded-md p-1.5 text-lg transition-transform hover:scale-110 hover:bg-brand-blue/[0.06]"
-                                            >
-                                              {emoji}
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </>
-                                    )}
-                                  </div>
+                              <div
+                                className={`${bubbleClass} max-w-full transition-shadow [@media(hover:none)]:select-none [-webkit-touch-callout:none] ${
+                                  selectedMessageIds.has(message.id) ? 'ring-2 ring-brand-blue/50 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-950' : ''
+                                }`}
+                                aria-selected={selectedMessageIds.has(message.id)}
+                                onTouchStart={() => { if (!message.is_deleted) startLongPress(message.id); }}
+                                onTouchEnd={cancelLongPress}
+                                onTouchMove={cancelLongPress}
+                                onContextMenu={(e) => { if (longPressFiredRef.current) e.preventDefault(); }}
+                                // Stop the double-click from highlighting text.
+                                onMouseDown={(e) => { if (e.detail > 1) e.preventDefault(); }}
+                                onDoubleClick={() => { if (!isSelecting && !message.is_deleted) toggleSelectMessage(message.id); }}
+                                onClick={(e) => {
+                                  if (longPressFiredRef.current) { longPressFiredRef.current = false; return; }
+                                  // Selecting: a tap/click adds or removes this message.
+                                  if (isSelecting) {
+                                    e.preventDefault();
+                                    if (!message.is_deleted) toggleSelectMessage(message.id);
+                                    return;
+                                  }
+                                  if ((e.target as HTMLElement).closest('a')) return;
+                                  setActiveMessageId((id) => (id === message.id ? null : message.id));
+                                }}
+                              >
+                                {isImage ? (
+                                  // Opens the in-page viewer (download / open in new tab live there).
+                                  <button
+                                    type="button"
+                                    className="block cursor-zoom-in"
+                                    aria-label={`View ${message.metadata!.file_name || 'image attachment'}`}
+                                    onClick={(e) => {
+                                      // Long-press or selection mode: let the bubble handle the tap.
+                                      if (longPressFiredRef.current || isSelecting) return;
+                                      e.stopPropagation();
+                                      setViewerAttachment({ url: message.metadata!.file_url!, name: message.metadata!.file_name });
+                                    }}
+                                  >
+                                    <img
+                                      src={message.metadata!.file_url}
+                                      alt={message.metadata!.file_name || 'Image attachment'}
+                                      className="block max-h-64 max-w-full object-contain"
+                                    />
+                                  </button>
+                                ) : (
+                                  <p className="whitespace-pre-wrap break-words text-sm max-sm:text-[13px] leading-relaxed">
+                                    {message.is_deleted ? 'This message was deleted' : message.content}
+                                  </p>
                                 )}
                               </div>
 
@@ -1270,7 +1462,7 @@ export default function TeamChatPage() {
                                       key={rIdx}
                                       type="button"
                                       onClick={() => handleAddReaction(message.id, reaction.emoji)}
-                                      className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-sm ring-1 ring-gray-200 transition-colors hover:ring-brand-blue/40 dark:bg-slate-800 dark:ring-slate-700"
+                                      className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-sm max-sm:text-[13px] ring-1 ring-gray-200 transition-colors hover:ring-brand-blue/40 dark:bg-slate-800 dark:ring-slate-700"
                                       title={reaction.users.join(', ')}
                                     >
                                       <span>{reaction.emoji}</span>
@@ -1288,6 +1480,65 @@ export default function TeamChatPage() {
                                     <span className="inline-flex items-center gap-0.5 text-xs text-brand-blue">
                                       · <Pin className="h-3 w-3" /> Pinned
                                     </span>
+                                  )}
+
+                                  {/* React + Copy — on the inner side of the time (after it for
+                                      received, before it for sent, so the time stays flush with the
+                                      bubble); on hover/focus, always on touch screens or once tapped. */}
+                                  {!message.is_deleted && (
+                                    <div
+                                      className={`flex items-center gap-0.5 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${
+                                        isSender ? 'order-first flex-row-reverse' : ''
+                                      } ${actionsOpen ? 'opacity-100' : 'opacity-0'}`}
+                                    >
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Add reaction"
+                                          title="Add reaction"
+                                        >
+                                          <Smile className="h-3.5 w-3.5" />
+                                        </button>
+                                        {showEmojiPicker === message.id && (
+                                          <>
+                                            <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
+                                            <div
+                                              className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg sm:p-1.5 dark:border-slate-700 dark:bg-slate-900 ${
+                                                isSender ? 'right-0' : 'left-0'
+                                              }`}
+                                            >
+                                              {quickEmojis.map((emoji) => (
+                                                <button
+                                                  key={emoji}
+                                                  type="button"
+                                                  onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
+                                                  className="rounded-md p-1 text-base max-sm:text-sm transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
+                                                >
+                                                  {emoji}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                      {!isImage && message.content && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyMessage(message)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Copy message"
+                                          title="Copy"
+                                        >
+                                          {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </button>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
                               )}
@@ -1351,7 +1602,7 @@ export default function TeamChatPage() {
                     onKeyDown={handleKeyDown}
                     placeholder={`Message ${selectedChannel.type === 'channel' ? '#' : ''}${selectedChannel.name}`}
                     rows={1}
-                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
+                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
                   />
                   <div className="relative shrink-0">
                     <button
@@ -1374,7 +1625,7 @@ export default function TeamChatPage() {
                               key={emoji}
                               type="button"
                               onClick={() => insertEmoji(emoji)}
-                              className="rounded-md p-1.5 text-lg transition-transform hover:scale-110 hover:bg-brand-blue/[0.06]"
+                              className="rounded-md p-1.5 text-lg max-sm:text-base transition-transform hover:scale-110 hover:bg-brand-blue/[0.06]"
                             >
                               {emoji}
                             </button>
@@ -1417,8 +1668,8 @@ export default function TeamChatPage() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <MessageCircle className="h-6 w-6 text-brand-blue" />
                 </div>
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Welcome to Team Chat</h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Welcome to Team Chat</h2>
+                <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
                   {channels.length === 0
                     ? 'No channels yet. Create one to bring your team into the conversation.'
                     : 'Pick a channel or direct message to start the conversation.'}
@@ -1448,7 +1699,7 @@ export default function TeamChatPage() {
           <aside className="hidden w-64 shrink-0 flex-col border-l border-gray-200 lg:flex xl:w-72 dark:border-slate-700">
             <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 dark:border-slate-700">
               <div className="min-w-0">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Members</h3>
+                <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Members</h3>
                 <p className="text-xs text-gray-500">
                   {selectedChannel.member_count} total · {onlineMembersCount} online
                 </p>
@@ -1476,7 +1727,7 @@ export default function TeamChatPage() {
                     />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-100">
+                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-100">
                       {member.name}
                       {member.user_id === currentUser?.id && <span className="font-normal text-gray-400"> (You)</span>}
                     </p>
@@ -1511,7 +1762,7 @@ export default function TeamChatPage() {
           ]}
         >
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">
                     Channel name <span className="text-brand-orange">*</span>
                   </span>
                   <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 transition-all focus-within:border-brand-blue/30 focus-within:ring-4 focus-within:ring-brand-blue/10">
@@ -1521,24 +1772,24 @@ export default function TeamChatPage() {
                       value={newChannelName}
                       onChange={(e) => setNewChannelName(e.target.value)}
                       placeholder="e.g. engineering-team"
-                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
+                      className="flex-1 bg-transparent text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
                     />
                   </div>
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Description</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Description</span>
                   <textarea
                     value={newChannelDescription}
                     onChange={(e) => setNewChannelDescription(e.target.value)}
                     placeholder="What's this channel about?"
                     rows={2}
-                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus-visible:!outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                   />
                 </label>
 
                 <div>
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Visibility</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Visibility</span>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setNewChannelPrivate(false)}
@@ -1550,7 +1801,7 @@ export default function TeamChatPage() {
                     >
                       <Globe className="h-4 w-4" />
                       <div className="text-left">
-                        <div className="text-sm font-semibold">Public</div>
+                        <div className="text-sm max-sm:text-[13px] font-semibold">Public</div>
                         <div className={`text-xs ${!newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Anyone can join
                         </div>
@@ -1566,7 +1817,7 @@ export default function TeamChatPage() {
                     >
                       <Lock className="h-4 w-4" />
                       <div className="text-left">
-                        <div className="text-sm font-semibold">Private</div>
+                        <div className="text-sm max-sm:text-[13px] font-semibold">Private</div>
                         <div className={`text-xs ${newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Invite only
                         </div>
@@ -1576,7 +1827,7 @@ export default function TeamChatPage() {
                 </div>
 
                 <div>
-                  <span className="mb-2 block text-sm font-medium text-gray-700">Add members (optional)</span>
+                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Add members (optional)</span>
                   {availableUsers.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center">
                       <Users className="mx-auto mb-2 h-6 w-6 text-gray-300" />
@@ -1606,7 +1857,7 @@ export default function TeamChatPage() {
                             </span>
                             <NameAvatar name={user.name} fallback={user.email} size="sm" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
+                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
                           </button>
@@ -1642,7 +1893,7 @@ export default function TeamChatPage() {
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
                     <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                    <p className="text-sm text-gray-500">No teammates left to add.</p>
+                    <p className="text-sm max-sm:text-[13px] text-gray-500">No teammates left to add.</p>
                   </div>
                 ) : (
                   <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white">
@@ -1670,7 +1921,7 @@ export default function TeamChatPage() {
                             </span>
                             <NameAvatar name={user.name} fallback={user.email} size="md" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
+                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
                           </button>
@@ -1708,7 +1959,7 @@ export default function TeamChatPage() {
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="px-4 py-10 text-center text-gray-500">
                       <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                      <p className="text-sm">No team members found</p>
+                      <p className="text-sm max-sm:text-[13px]">No team members found</p>
                     </div>
                   ) : (
                     <div className="max-h-80 overflow-y-auto">
@@ -1723,7 +1974,7 @@ export default function TeamChatPage() {
                           >
                             <NameAvatar name={user.name} fallback={user.email} size="lg" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
+                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
                             <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-600 sm:inline-flex">
@@ -1735,6 +1986,8 @@ export default function TeamChatPage() {
                   )}
                 </div>
         </AppModal>
+
+      <ChatAttachmentViewer attachment={viewerAttachment} onClose={closeViewer} />
     </div>
   );
 }

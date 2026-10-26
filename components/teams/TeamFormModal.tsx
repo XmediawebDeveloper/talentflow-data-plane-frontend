@@ -36,7 +36,7 @@ export interface TeamFormData {
 }
 
 const fieldClassName =
-  'w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
+  'w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10';
 
 export default function TeamFormModal({
   isOpen,
@@ -118,7 +118,7 @@ export default function TeamFormModal({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="space-y-5">
             <div>
-              <label htmlFor="team-name" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+              <label htmlFor="team-name" className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
                 Team Name <span className="text-brand-blue">*</span>
               </label>
               <input
@@ -134,7 +134,7 @@ export default function TeamFormModal({
             </div>
 
             <div>
-              <label htmlFor="team-description" className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+              <label htmlFor="team-description" className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
                 Description
               </label>
               <textarea
