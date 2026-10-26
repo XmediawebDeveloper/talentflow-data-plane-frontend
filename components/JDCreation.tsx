@@ -6789,6 +6789,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       savedContentKeyRef.current = currentContentKeyRef.current;
       markStepSaveCheckpoint(savedJd, 'the version saved when you finished Step 2 (Extract)');
+
+      // The backend's write-time guard (`JDService._validate_skill_lists_for_write`)
+      // can drop a semantic duplicate `reviewData`/`finalLists` above did not catch
+      // (e.g. a synonym with no shared token) - `savedJd` is the authoritative,
+      // post-dedup list. Without this, Review kept showing the pre-save `reviewData`
+      // snapshot set above, so a duplicate the backend DID strip at save time stayed
+      // visible on screen until the next full reload.
+      setExtractedData(prev => ({
+        ...prev,
+        mustHaveSkills: savedJd.must_have_skills ?? prev.mustHaveSkills,
+        niceToHaveSkills: savedJd.nice_to_have_skills ?? prev.niceToHaveSkills,
+        mustHaveComments: savedJd.must_have_comments ?? prev.mustHaveComments,
+        niceToHaveComments: savedJd.nice_to_have_comments ?? prev.niceToHaveComments,
+      }));
+
       if (jdId) {
         ensureJDCreationUrl(jdId, 'review');
       }
