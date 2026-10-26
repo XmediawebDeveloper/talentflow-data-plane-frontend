@@ -262,15 +262,17 @@ export default function InternalHelpDesk() {
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk' }]} />
       {/* Header */}
+      {/* No inner padding: the page panel already insets content 16/32px
+          (px-8/p-8 here doubled it to 48px). */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between">
+        <div className="pb-4 sm:pb-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
                 <Headphones className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Help Desk</h1>
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Help Desk</h1>
                 <p className="text-sm text-gray-600">Request help from your administrator</p>
               </div>
             </div>
@@ -289,13 +291,13 @@ export default function InternalHelpDesk() {
       </div>
 
       {/* Content */}
-      <div className="p-8">
+      <div className="pt-4 sm:pt-6">
         {/* Overview */}
         {view === 'overview' && (
           <div className="space-y-6">
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Open Requests</span>
                   <Circle className="w-5 h-5 text-gray-800" />
@@ -304,7 +306,7 @@ export default function InternalHelpDesk() {
                 <div className="text-xs text-gray-500">Awaiting response</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">In Progress</span>
                   <Clock3 className="w-5 h-5 text-yellow-600" />
@@ -313,7 +315,7 @@ export default function InternalHelpDesk() {
                 <div className="text-xs text-gray-500">Being reviewed</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Resolved</span>
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -322,7 +324,7 @@ export default function InternalHelpDesk() {
                 <div className="text-xs text-gray-500">Successfully handled</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Total Requests</span>
                   <Ticket className="w-5 h-5 text-gray-600" />

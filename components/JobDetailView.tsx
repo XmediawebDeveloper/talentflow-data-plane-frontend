@@ -895,6 +895,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [versionMenuError, setVersionMenuError] = useState<string | null>(null);
   const [lineageVersions, setLineageVersions] = useState<JDLineageVersion[]>([]);
   const versionMenuRef = useRef<HTMLDivElement>(null);
+  /* The version pill wraps to wherever the facts row puts it, so a menu hung
+     at its `left-0` ran off the right edge on phones (414px: 319→543).
+     Measured on open: the menu is shifted left by just the overhang (≤ 0px),
+     so it stays under the pill whenever it already fits. */
+  const [versionMenuShift, setVersionMenuShift] = useState(0);
   const sortedLineageVersions = useMemo(
     () => [...lineageVersions].sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1)),
     [lineageVersions]
@@ -2238,6 +2243,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
   const toggleVersionMenu = async () => {
     const opening = !showVersionMenu;
+    if (opening && versionMenuRef.current) {
+      const menuWidth = Math.min(224, window.innerWidth - 24); // w-56, capped like max-w below
+      const left = versionMenuRef.current.getBoundingClientRect().left;
+      // 20px: clear of the job card's edge, which clips (it sits ~16px in).
+      setVersionMenuShift(Math.min(0, window.innerWidth - 20 - (left + menuWidth)));
+    }
     setShowVersionMenu(opening);
     if (!opening || versionMenuLoaded || versionMenuLoading) return;
 
@@ -3002,7 +3013,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       <PageBreadcrumb
         barRef={breadcrumbBarRef}
         items={jobBreadcrumbItems}
-        className="mb-3"
+        className="mb-4 md:mb-6"
         // Previous / Next rides inside the breadcrumb bar instead of sitting on
         // its own row below it, so it stays reachable while the sticky crumb is
         // pinned. Uses the shared RecordPager rather than the hand-rolled grey
@@ -3170,6 +3181,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <div
                         role="menu"
                         aria-label="Available job versions"
+                        style={{ left: versionMenuShift }}
                         className="absolute left-0 top-full mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
                       >
                         {versionMenuLoading ? (
@@ -3747,8 +3759,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </div>
           )}
 
-          {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Internal Recruiter Notes & Assessment Guidance - Side by Side.
+              One column below `sm`, as in JDOverviewSections: two ~160px
+              cards on a phone broke their headings across lines. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Internal Recruiter Notes */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
               <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
@@ -4884,10 +4898,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
                       {draftTitle}
                     </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-gray-500 dark:text-slate-400">
                       <span className="inline-flex items-center gap-1.5">
                         <Clock className="w-4 h-4 flex-shrink-0" />
                         {draftAssessment.duration_minutes || 30} min
@@ -4926,7 +4940,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
                       {readyToPublish ? 'Ready to publish' : 'Setup incomplete'}
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
                       {readyToPublish
                         ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
                             assessment live for {job.title}.</>
@@ -5027,10 +5041,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
                       {draftTitle}
                     </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-gray-500 dark:text-slate-400">
                       <span className="inline-flex items-center gap-1.5">
                         <Clock className="w-4 h-4 flex-shrink-0" />
                         {draftAIInterview.duration_minutes || 30} min
@@ -5069,7 +5083,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
                       {readyToPublish ? 'Ready to publish' : 'Setup incomplete'}
                     </p>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
                       {readyToPublish
                         ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
                             interview live for {job.title}.</>

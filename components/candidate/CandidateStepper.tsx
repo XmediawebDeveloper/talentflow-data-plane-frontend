@@ -136,7 +136,7 @@ export default function CandidateStepper({ current: currentProp, steps: stepsPro
                   {isCurrent && <CurrentPulse />}
                 </div>
                 <span
-                  className={`mt-1.5 text-2xs sm:text-xs leading-tight line-clamp-2 break-words ${
+                  className={`mt-1.5 text-xs leading-tight line-clamp-2 break-words ${
                     isCurrent ? 'font-semibold text-brand-blue' : isCompleted ? 'font-medium text-gray-700' : 'font-medium text-gray-400'
                   }`}
                 >

@@ -169,7 +169,7 @@ function DetailsContent() {
   const breadcrumb = (
     <>
       <PageBreadcrumb
-        className="mb-3"
+        className="mb-4 md:mb-6"
         // Previous / Next rides inside the breadcrumb bar, as on job-details,
         // so it stays reachable while the sticky crumb is pinned.
         actions={showRecordPagerRow ? (

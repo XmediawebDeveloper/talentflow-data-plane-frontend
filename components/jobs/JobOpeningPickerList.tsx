@@ -361,7 +361,7 @@ export default function JobOpeningPickerList({
     <div>
       {/* Job Search */}
       <div className="mb-4">
-        <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
           <input
@@ -381,7 +381,7 @@ export default function JobOpeningPickerList({
       {/* Job Selection */}
       <div className="mb-4">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
+          <label className="text-sm font-medium text-gray-700 dark:text-slate-300">
             Select a Job Opening
             {/* The published-job count — the Job Openings page's own
                 derivation, via getPublishedJobs. No total beside it and
@@ -760,7 +760,7 @@ export default function JobOpeningPickerList({
         ) : (
           <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
             <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
-            <p className="text-xs sm:text-sm">
+            <p className="text-sm">
               {showAllStatuses || excludeDraftsOnly
                 ? (searchQuery ? 'No jobs found matching your search' : 'No jobs available')
                 : (searchQuery ? 'No published jobs found matching your search' : 'No published jobs available')}

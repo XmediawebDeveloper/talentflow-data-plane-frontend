@@ -107,7 +107,7 @@ export default function AssessmentConfigureModal({
                   Configure Assessment
                 </h2>
                 {readOnly && (
-                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
                     <Eye className="w-3 h-3" />
                     View only
                   </span>
@@ -119,7 +119,7 @@ export default function AssessmentConfigureModal({
                     not say. */}
                 {readOnly && typeof assessment.proctoring_enabled === 'boolean' && (
                   <span
-                    className={`px-2 py-0.5 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap ring-1 ${
+                    className={`px-2 py-0.5 rounded text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap ring-1 ${
                       assessment.proctoring_enabled
                         ? 'bg-success-subtle text-success ring-success-line'
                         : 'bg-slate-100 text-gray-600 ring-gray-200'
@@ -133,7 +133,7 @@ export default function AssessmentConfigureModal({
               {/* The job as JD ID · role · version, from the record's own
                   binding — the same row the Configure page's subtitle shows.
                   Wraps instead of truncating, so the version is never cut. */}
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0 break-words">
+              <p className="text-sm text-gray-600 dark:text-slate-400 min-w-0 break-words">
                 {readOnly ? 'Duration, section distribution, and topics for ' : 'Set duration, section distribution, and topics for '}
                 {assessment.jd_short_id || assessment.jd_title || assessment.job?.title || assessment.jd_version != null ? (
                   <AssessmentJobBinding

@@ -962,7 +962,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div>
               {/* JD ID, then the job title — one line. The subtitle that
                   repeated the title underneath is gone. */}
-              <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold text-gray-900 tracking-tight">
+              <h1 className="flex flex-wrap items-center gap-3 text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
                 {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                 <span className="min-w-0 break-words">{jdTitle || configTitle || 'AI Interview'}</span>
                 {/* One version's results: the table has no version columns, so
@@ -2141,7 +2141,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
           <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="text-xs sm:text-sm text-gray-600">
+              <span className="text-sm text-gray-600">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates

@@ -194,7 +194,7 @@ export default function JDFullViewModal({
             <button
               type="button"
               onClick={onOpenFullPage}
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
             >
               Open full JD page
               <ExternalLink className="w-3.5 h-3.5" />

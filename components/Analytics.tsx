@@ -66,7 +66,7 @@ export default function Analytics() {
               <BarChart3 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-gray-900 dark:text-slate-50">My Recruitment Analytics</h1>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">My Recruitment Analytics</h1>
               <p className="text-sm text-gray-600 dark:text-slate-400">Track your personal recruitment performance and insights</p>
             </div>
           </div>

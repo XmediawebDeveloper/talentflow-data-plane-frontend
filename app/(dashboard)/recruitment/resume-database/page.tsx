@@ -17,7 +17,7 @@
  * that view's white card, above its title row.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Database, FolderOpen, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -59,6 +59,23 @@ export default function ResumeDatabasePage() {
   const [requestedTab, setRequestedTab] = useState<ResumeTab>(() =>
     searchParams.get('tab') === 'internal-db' ? 'internal-db' : 'my-resumes',
   );
+
+  /* Both views pin their search bar as a second sticky layer under this
+     page's sticky breadcrumb. Its real height (it can wrap on a phone) is
+     published as --crumb-h so the search pins just below it instead of
+     sliding underneath and being covered. A callback ref, so it re-measures
+     when the tab swaps the view (and the breadcrumb) out. */
+  const [crumbHeight, setCrumbHeight] = useState(0);
+  const crumbObserver = useRef<ResizeObserver | null>(null);
+  const crumbRef = useCallback((el: HTMLElement | null) => {
+    crumbObserver.current?.disconnect();
+    crumbObserver.current = null;
+    if (!el) return;
+    const measure = () => setCrumbHeight(el.getBoundingClientRect().height);
+    measure();
+    crumbObserver.current = new ResizeObserver(measure);
+    crumbObserver.current.observe(el);
+  }, []);
 
   const permissions = user?.permissions;
   const hasAnyPerm = (keys: readonly string[]): boolean =>
@@ -134,7 +151,7 @@ export default function ResumeDatabasePage() {
 
   const header = (
     <>
-      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={CRUMBS} />
+      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={CRUMBS} barRef={crumbRef} />
       {showTabs && (
         <Tabs value={activeTab ?? undefined} onValueChange={handleTabChange} className="mb-5 md:mb-6">
           {/* Sized to its labels and visibly grooved, so the selected pool reads
@@ -142,7 +159,10 @@ export default function ResumeDatabasePage() {
               the row (flex-1), which left two near-identical full-width slabs. */}
           <TabsList
             aria-label="Resume pool"
-            className="h-auto w-auto max-w-full gap-1 overflow-x-auto rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm dark:bg-slate-900 dark:ring-slate-700"
+            /* Below sm a two-column grid: side by side at their natural width
+               the two pools overflowed a phone and "Shared Database" scrolled
+               out of view. From sm it sizes to its labels again. */
+            className="grid h-auto w-full max-w-full grid-cols-2 gap-1 overflow-x-auto rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm sm:inline-flex sm:w-auto dark:bg-slate-900 dark:ring-slate-700"
           >
             {(['my-resumes', 'internal-db'] as const).map((tab) => {
               const Icon = tab === 'my-resumes' ? FolderOpen : Database;
@@ -160,8 +180,8 @@ export default function ResumeDatabasePage() {
                   aria-disabled={locked || undefined}
                   className={
                     locked
-                      ? 'h-9 flex-none gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-sm font-medium text-gray-400 cursor-not-allowed opacity-60 dark:text-slate-500'
-                      : 'h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 sm:gap-2 sm:px-4 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800'
+                      ? 'h-auto min-h-9 min-w-0 flex-none gap-1.5 whitespace-normal rounded-lg px-2.5 text-sm font-medium text-gray-400 cursor-not-allowed opacity-60 sm:h-9 sm:whitespace-nowrap dark:text-slate-500'
+                      : 'h-auto min-h-9 min-w-0 flex-none gap-1.5 whitespace-normal rounded-lg px-2 text-sm sm:h-9 sm:whitespace-nowrap font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 sm:gap-2 sm:px-4 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800'
                   }
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${locked ? 'text-gray-400' : iconColor}`} />
@@ -220,9 +240,15 @@ export default function ResumeDatabasePage() {
     );
   }
 
-  return activeTab === 'my-resumes' ? (
-    <MyResumesView header={header} />
-  ) : (
-    <InternalDatabaseView header={header} />
+  // display:contents — the wrapper only carries --crumb-h down to the views;
+  // it generates no box, so the views stay direct flex children of the layout.
+  return (
+    <div className="contents" style={{ '--crumb-h': `${crumbHeight}px` } as CSSProperties}>
+      {activeTab === 'my-resumes' ? (
+        <MyResumesView header={header} />
+      ) : (
+        <InternalDatabaseView header={header} />
+      )}
+    </div>
   );
 }

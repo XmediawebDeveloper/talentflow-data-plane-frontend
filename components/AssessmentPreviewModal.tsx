@@ -77,12 +77,12 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 truncate">Assessment Preview</h2>
-                <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+                <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
                   <Sparkles className="w-3 h-3" />
                   Configuration View
                 </span>
               </div>
-              <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 Preview of assessment configuration and scoring
               </p>
             </div>
@@ -107,7 +107,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                 ? assessment.version
                 : parseAssessmentTitle(assessment.title || '').version;
               return (
-                <div className="-mt-1 sm:-mt-2 mb-3 sm:mb-4 flex items-center gap-2 flex-wrap min-w-0 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                <div className="-mt-1 sm:-mt-2 mb-3 sm:mb-4 flex items-center gap-2 flex-wrap min-w-0 text-sm text-gray-600 dark:text-slate-400">
                   {assessmentVersion ? <VersionPill kind="assessment" version={assessmentVersion} label="Assessment" /> : null}
                   {assessment.jd_short_id && <JobIdBadge>{assessment.jd_short_id}</JobIdBadge>}
                   {assessment.jd_title && <span className="min-w-0 [overflow-wrap:anywhere]">{assessment.jd_title}</span>}
@@ -117,15 +117,15 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
             })()}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg flex sm:block items-center justify-between">
-                <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 sm:mb-1">Total Duration</div>
+                <div className="text-sm text-gray-700 dark:text-slate-300 sm:mb-1">Total Duration</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50">{assessment.duration_minutes || assessment.duration || 30} min</div>
               </div>
               <div className="p-3 sm:p-4 bg-brand-cyan/5 ring-1 ring-brand-cyan/15 rounded-lg flex sm:block items-center justify-between">
-                <div className="text-xs sm:text-sm text-brand-cyan sm:mb-1">Sections</div>
+                <div className="text-sm text-brand-cyan sm:mb-1">Sections</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50">{sections.length}</div>
               </div>
               <div className="p-3 sm:p-4 bg-brand-orange/10 rounded-lg flex sm:block items-center justify-between">
-                <div className="text-xs sm:text-sm text-brand-orange-deep sm:mb-1">Status</div>
+                <div className="text-sm text-brand-orange-deep sm:mb-1">Status</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50">
                   {/* The Assessments list maps the backend's lowercase status
                       ('published' / 'draft' / 'closed' / 'archived') into UI
@@ -149,13 +149,13 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                 `*_enabled` flags, so a coding round is never assumed. */}
             {jobContext && (
               <div className="mt-3 sm:mt-4 flex items-center gap-2 flex-wrap">
-                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Rounds:</span>
+                <span className="text-sm text-gray-700 dark:text-slate-300">Rounds:</span>
                 {ROUNDS.map((round) => {
                   const configured = !!assessment[`${round.key}_enabled`];
                   return (
                     <span
                       key={round.key}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs sm:text-xs font-semibold ring-1 whitespace-nowrap ${
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ring-1 whitespace-nowrap ${
                         configured
                           ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
                           : 'bg-slate-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 ring-gray-200 dark:ring-slate-700'
@@ -181,7 +181,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                     <span className="font-semibold text-brand-blue text-sm sm:text-base">Proctoring Enabled</span>
                     <Video className="w-4 h-4 text-brand-blue flex-shrink-0" />
                   </div>
-                  <p className="text-xs sm:text-sm text-brand-blue-2">
+                  <p className="text-sm text-brand-blue-2">
                     Webcam monitoring, screen recording, and AI cheating prevention active
                   </p>
                 </div>
@@ -195,7 +195,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
               <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
               <div className="min-w-0">
                 <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base mb-1 tracking-tight">Evaluation & Scoring Logic</h3>
-                <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <p className="text-sm text-gray-700 dark:text-slate-300">
                   How candidates will be evaluated when taking this assessment
                 </p>
               </div>
@@ -207,12 +207,12 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                 <div className="bg-white dark:bg-slate-900 rounded-lg p-3 sm:p-4 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">HR Section</h4>
-                    <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">HR Section</h4>
+                    <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs font-medium whitespace-nowrap flex-shrink-0">
                       Not Scored
                     </span>
                   </div>
-                  <p className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300">
+                  <p className="text-xs text-gray-700 dark:text-slate-300">
                     Responses recorded and displayed in reports for review, but <strong>NOT included in PASS/FAIL decision</strong>
                   </p>
                 </div>
@@ -224,19 +224,19 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     {assessment.technical_enabled && <Brain className="w-4 h-4 text-brand-blue flex-shrink-0" />}
                     {assessment.coding_enabled && <Code className="w-4 h-4 text-brand-cyan flex-shrink-0" />}
-                    <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
                       {assessment.technical_enabled && assessment.coding_enabled
                         ? 'Technical + Coding'
                         : assessment.technical_enabled
                           ? 'Technical'
                           : 'Coding'}
                     </h4>
-                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0">
+                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-medium whitespace-nowrap flex-shrink-0">
                       Scored
                     </span>
                   </div>
-                  <p className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300 mb-2">Each question scored 0-10. <strong>Pass requires:</strong></p>
-                  <ul className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300 space-y-1">
+                  <p className="text-xs text-gray-700 dark:text-slate-300 mb-2">Each question scored 0-10. <strong>Pass requires:</strong></p>
+                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li>• ≥70% of questions scoring ≥7 <strong>OR</strong></li>
                     <li>• Section average ≥7.0</li>
                   </ul>
@@ -246,7 +246,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
 
             {/* Final Result Logic */}
             <div className="mt-3 sm:mt-4 bg-brand-cyan/10 ring-1 ring-brand-cyan/20 rounded-lg p-2.5 sm:p-3 text-center">
-              <span className="text-xs sm:text-sm text-brand-cyan">
+              <span className="text-sm text-brand-cyan">
                 <strong>Final Result:</strong> PASS/FAIL determined by{' '}
                 {assessment.technical_enabled && assessment.coding_enabled
                   ? 'Technical + Coding sections only'
@@ -272,11 +272,11 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base">{section.name} Section</h3>
                         {section.scoringType === 'informational' ? (
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded text-2xs sm:text-xs font-medium whitespace-nowrap">
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded text-xs font-medium whitespace-nowrap">
                             Informational Only
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium whitespace-nowrap">
+                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs font-medium whitespace-nowrap">
                             Scored (0-10 scale)
                           </span>
                         )}
@@ -286,7 +286,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                   <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1 flex-shrink-0">
                     <div className="text-xl sm:text-2xl font-semibold text-brand-blue">{section.percentage}%</div>
                     {section.scoringType === 'scored' && (
-                      <span className="text-2xs sm:text-xs text-brand-cyan">Counts to PASS/FAIL</span>
+                      <span className="text-xs text-brand-cyan">Counts to PASS/FAIL</span>
                     )}
                   </div>
                 </div>
@@ -296,10 +296,10 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                     visible text so we don't trigger React error #31. */}
                 {section.topics && section.topics.length > 0 && (
                   <div className="mb-3 sm:mb-4">
-                    <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Topics Covered:</div>
+                    <div className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Topics Covered:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {section.topics.map((topic: any, tidx: number) => (
-                        <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm max-w-full [overflow-wrap:anywhere]">
+                        <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg text-sm max-w-full [overflow-wrap:anywhere]">
                           {typeof topic === 'string' ? topic : (topic?.text || topic?.name || '')}
                         </span>
                       ))}
@@ -310,10 +310,10 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                 {/* Coding Languages */}
                 {section.name === 'Coding' && section.languages && section.languages.length > 0 && (
                   <div className="mb-3 sm:mb-4">
-                    <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Programming Languages:</div>
+                    <div className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Programming Languages:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {section.languages.map((lang: string, lidx: number) => (
-                        <span key={lidx} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm max-w-full [overflow-wrap:anywhere]">
+                        <span key={lidx} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-sm max-w-full [overflow-wrap:anywhere]">
                           <LanguageLogo language={logoLabelForId(lang, lang)} size="sm" />
                           {lang}
                         </span>
@@ -324,7 +324,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
 
                 {/* Dynamic Generation Note */}
                 <div className="bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
-                  <div className="text-xs sm:text-sm text-gray-800 dark:text-slate-100">
+                  <div className="text-sm text-gray-800 dark:text-slate-100">
                     <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>
                 </div>

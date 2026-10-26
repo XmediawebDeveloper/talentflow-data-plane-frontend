@@ -93,16 +93,17 @@ function SectionCard({
   children: React.ReactNode;
   titleAfter?: React.ReactNode;
 }) {
+  // p-4 below sm: the standard card inset on phones (was a flat p-5).
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 bg-gray-50">
+      <div className="flex items-center gap-2.5 px-4 sm:px-5 py-3.5 border-b border-gray-100 bg-gray-50">
         <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <Icon className="w-4 h-4 text-brand-blue" />
         </div>
         <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
         {titleAfter}
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </div>
   );
 }
@@ -133,8 +134,10 @@ function HRQuestionStageBadge({ stage }: { stage?: string }) {
 
 function PriorityBadge({ p }: { p: number }) {
   const { label, color } = getPriorityLabel(p);
+  // nowrap + no shrink: beside a long cluster name on a phone the pill was
+  // squeezed into a 3-line "P3 / – / Low" stack.
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full border ${color}`}>
+    <span className={`inline-flex items-center flex-shrink-0 whitespace-nowrap px-2 py-0.5 text-2xs font-medium rounded-full border ${color}`}>
       {label}
     </span>
   );
@@ -286,6 +289,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
      (`siblingConfigsByJdId` below) — otherwise there is nothing to open, the
      same rule the Total Jobs tab's View Versions panel applies. */
   const [showJobVersionMenu, setShowJobVersionMenu] = useState(false);
+  /** Leftward nudge (px, <= 0) so the left-anchored menu stays on screen when
+   *  the pill wraps to the right half of a phone-width header card. */
+  const [jobVersionMenuShift, setJobVersionMenuShift] = useState(0);
   const jobVersionMenuRef = useRef<HTMLDivElement | null>(null);
   const [jobVersions, setJobVersions] = useState<JDLineageVersion[]>([]);
   const [jobVersionsLoading, setJobVersionsLoading] = useState(false);
@@ -852,15 +858,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {mode === 'fixed' && enabledRounds.length > 0 && (
                 <SectionCard title="Time Allocation" icon={Clock}>
                   {/* No .tf-table-shell — a fixed, at-most-3-row table that
-                      should size to its content, not the shell's 400px min-height. */}
+                      should size to its content, not the shell's 400px min-height.
+                      Below sm the 420px floor is dropped, the cells tighten and
+                      nothing wraps, so the four short columns fit (or barely
+                      scroll) on a phone instead of breaking "Must-To-/Have". */}
                   <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
-                    <table className="w-full min-w-[420px] text-sm">
+                    <table className="w-full sm:min-w-[420px] text-sm whitespace-nowrap">
                       <thead>
                         <tr className="bg-slate-50 text-left border-b border-gray-100">
-                          <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
-                          <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
-                          <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
-                          <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600">Round</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -873,22 +882,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
                           return (
                             <tr key={r.type} className="hover:bg-brand-blue/5 transition-colors">
-                              <td className="px-4 py-2.5 text-gray-900">{label}</td>
-                              <td className="px-4 py-2.5 text-gray-700 text-right">{questions}</td>
-                              <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
-                              <td className="px-4 py-2.5 text-gray-700 text-right">{mins} min</td>
+                              <td className="px-2 sm:px-4 py-2.5 text-gray-900">{label}</td>
+                              <td className="px-2 sm:px-4 py-2.5 text-gray-700 text-right">{questions}</td>
+                              <td className="px-2 sm:px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
+                              <td className="px-2 sm:px-4 py-2.5 text-gray-700 text-right">{mins} min</td>
                             </tr>
                           );
                         })}
                       </tbody>
                       <tfoot>
                         <tr className="bg-slate-50 font-semibold border-t border-gray-100">
-                          <td className="px-4 py-2.5 text-gray-900">Total</td>
-                          <td className="px-4 py-2.5 text-gray-900 text-right">
+                          <td className="px-2 sm:px-4 py-2.5 text-gray-900">Total</td>
+                          <td className="px-2 sm:px-4 py-2.5 text-gray-900 text-right">
                             {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
                           </td>
-                          <td className="px-4 py-2.5 text-gray-900 text-right">{mthClusters.length + nthClusters.length}</td>
-                          <td className="px-4 py-2.5 text-gray-900 text-right">
+                          <td className="px-2 sm:px-4 py-2.5 text-gray-900 text-right">{mthClusters.length + nthClusters.length}</td>
+                          <td className="px-2 sm:px-4 py-2.5 text-gray-900 text-right">
                             {enabledRounds.reduce((s, r) => s + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0)} min
                           </td>
                         </tr>
@@ -1142,8 +1151,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-blue/20 transition-shadow">
                               <div className="flex items-center gap-2 mb-2">
                                 <PriorityBadge p={cluster.priority} />
-                                <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
-                                <span className="text-xs text-gray-400 ml-auto">{cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}</span>
+                                <span className="min-w-0 text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{cluster.name}</span>
+                                <span className="text-xs text-gray-400 ml-auto flex-shrink-0 whitespace-nowrap">{cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {cluster.skills.map(skill => (
@@ -1166,8 +1175,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-cyan/20 transition-shadow">
                               <div className="flex items-center gap-2 mb-2">
                                 <PriorityBadge p={cluster.priority} />
-                                <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
-                                <span className="text-xs text-gray-400 ml-auto">{cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}</span>
+                                <span className="min-w-0 text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{cluster.name}</span>
+                                <span className="text-xs text-gray-400 ml-auto flex-shrink-0 whitespace-nowrap">{cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
                                 {cluster.skills.map(skill => (
@@ -1349,7 +1358,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 {config.jd_short_id && (
                   <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
                 )}
-                <h1 className="min-w-0 font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                <h1 className="min-w-0 font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate">
                   {config.jd_title || config.position || 'Untitled'}
                 </h1>
                 <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
@@ -1409,6 +1418,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       type="button"
                       onClick={() => {
                         const opening = !showJobVersionMenu;
+                        if (opening && jobVersionMenuRef.current) {
+                          // Same measure as JobDetailView's version menu: w-72,
+                          // capped like max-w below; 20px clear of the card edge.
+                          const menuWidth = Math.min(288, window.innerWidth - 32);
+                          const left = jobVersionMenuRef.current.getBoundingClientRect().left;
+                          setJobVersionMenuShift(Math.min(0, window.innerWidth - 20 - (left + menuWidth)));
+                        }
                         setShowJobVersionMenu(opening);
                         if (opening) ensureJobVersionsLoaded();
                       }}
@@ -1428,6 +1444,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <div
                         role="menu"
                         aria-label="Job versions"
+                        style={{ left: jobVersionMenuShift }}
                         className="absolute left-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden">
                         <div className="flex items-baseline justify-between gap-2 px-3 py-2">
                           <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">Job Versions</span>
@@ -1590,7 +1607,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   aria-disabled={jdDisabled || !canUpdateAIInterviews}
                   title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${jdDisabled || !canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-sm ${jdDisabled || !canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''} ${draftLocked ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
@@ -1794,7 +1811,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       role="tab"
                       aria-selected={isActive}
                       onClick={() => setDetailsSubTab(tab.key)}
-                      className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
+                      className={`rounded-lg px-3 py-1.5 text-sm whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
                         isActive
                           ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
                           : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
@@ -1837,7 +1854,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         </div>
                         <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">AI Interview Info</h3>
                       </div>
-                      <p className="text-xs sm:text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
+                      <p className="text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
                     </div>
                     <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
                       {/* Key Metadata Cards */}
@@ -2206,13 +2223,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           isThis ? 'border-brand-blue/40 bg-brand-blue/5' : 'border-gray-100 bg-white'
                         }`}
                       >
-                        <div className="flex items-start gap-4">
-                          <div className="w-12 h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+                        {/* Below sm: a smaller badge and gap, and the title and
+                            facts wrap instead of truncating — between the V-badge
+                            and the eye button the text column is ~150px on a
+                            phone, which cut every line to a few characters. */}
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                             <span className="text-white font-bold text-sm">V{versionNumber}</span>
                           </div>
                           <div className="@container flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
-                              <h4 className="min-w-0 text-base font-semibold text-gray-900 tracking-tight truncate">
+                              <h4 className="min-w-0 text-base font-semibold text-gray-900 tracking-tight [overflow-wrap:anywhere] sm:truncate">
                                 {version.jd_title || version.position || 'Interview'} - Version {versionNumber}
                               </h4>
                               <div className="flex items-center gap-1.5 flex-wrap">
@@ -2228,22 +2249,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             </div>
 
                             <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700 mt-2">
-                              <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 min-w-0">
                                 <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                                 <span className="shrink-0">Created by</span>
-                                <span className="font-medium truncate">{version.created_by_name || 'Unknown'}</span>
+                                <span className="font-medium min-w-0 [overflow-wrap:anywhere] sm:truncate">{version.created_by_name || 'Unknown'}</span>
                               </div>
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <Calendar className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                                <span className="truncate">{version.created_at ? formatIST(version.created_at) : '—'}</span>
+                                <span className="min-w-0 sm:truncate">{version.created_at ? formatIST(version.created_at) : '—'}</span>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <Clock className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                                 <span>{version.duration_minutes || 30} min · {mode}</span>
                               </div>
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <FileText className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                                <span className="truncate">{rounds}</span>
+                              <div className="flex items-start sm:items-center gap-1.5 min-w-0">
+                                <FileText className="w-3.5 h-3.5 mt-0.5 sm:mt-0 text-gray-500 flex-shrink-0" />
+                                <span className="min-w-0 sm:truncate">{rounds}</span>
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
@@ -2311,7 +2332,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <div className="flex justify-end">
                     <button
                       onClick={() => router.push(jobDetailsHref(jdFullData.id))}
-                      className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
+                      className="inline-flex items-center gap-1.5 text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
                     >
                       Open full JD page
                       <ExternalLink className="w-3.5 h-3.5" />

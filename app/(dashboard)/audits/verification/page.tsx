@@ -206,7 +206,7 @@ export default function LogVerificationPage() {
                 className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 rounded-xl bg-white/10 ring-1 ring-white/15 backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-white/15"
               >
                 <RefreshCw className="w-4 h-4 text-white" />
-                <span className="text-xs sm:text-sm font-medium text-white">Refresh</span>
+                <span className="text-sm font-medium text-white">Refresh</span>
               </button>
             </div>
           </div>
@@ -221,9 +221,9 @@ export default function LogVerificationPage() {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Pending</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-slate-500">Pending</p>
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.pending}</p>
-                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
                   <Clock className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">Awaiting verification</span>
                 </p>
@@ -240,9 +240,9 @@ export default function LogVerificationPage() {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Verified / Match</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-slate-500">Verified / Match</p>
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-brand-teal mt-1 sm:mt-2">{stats.match}</p>
-                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
                   <CheckCircle2 className="w-3 h-3 text-success flex-shrink-0" />
                   <span className="truncate">Audit logs confirmed</span>
                 </p>
@@ -259,9 +259,9 @@ export default function LogVerificationPage() {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Mismatches</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-slate-500">Mismatches</p>
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-destructive mt-1 sm:mt-2">{stats.mismatch}</p>
-                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
                   <XCircle className="w-3 h-3 text-destructive flex-shrink-0" />
                   <span className="truncate">Field discrepancies found</span>
                 </p>
@@ -278,9 +278,9 @@ export default function LogVerificationPage() {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Not Found</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-slate-500">Not Found</p>
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-warning mt-1 sm:mt-2">{stats.notFound}</p>
-                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
                   <AlertTriangle className="w-3 h-3 text-warning flex-shrink-0" />
                   <span className="truncate">{stats.error > 0 ? `+ ${stats.error} errors` : 'No matching audit entry'}</span>
                 </p>

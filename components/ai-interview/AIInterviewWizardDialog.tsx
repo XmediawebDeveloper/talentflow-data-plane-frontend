@@ -86,7 +86,7 @@ export default function AIInterviewWizardDialog({
               <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 truncate">
                 Configure AI Interview
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0 flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm text-gray-600 dark:text-slate-400 min-w-0 flex items-center gap-1.5 flex-wrap">
                 {jdCode && <JobIdBadge className="flex-shrink-0">{jdCode}</JobIdBadge>}
                 <span className="min-w-0 break-words">{jdTitle || 'this job'}</span>
               </p>

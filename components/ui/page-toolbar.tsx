@@ -123,7 +123,7 @@ function ToolbarTabs<T extends string>({ value, onChange, options, className }: 
             type="button"
             onClick={() => onChange(opt.value)}
             className={cn(
-              'shrink-0 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-colors',
+              'shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
               active
                 ? 'bg-brand-blue text-white shadow-sm'
                 : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800',

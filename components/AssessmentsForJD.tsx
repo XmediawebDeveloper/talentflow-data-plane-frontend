@@ -278,7 +278,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           </div>
           <div className="min-w-0">
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Assessment Results</h2>
-            <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">
+            <p className="text-sm text-gray-500 mt-1 truncate">
               {jdTitle ? `Assessments for "${jdTitle}"` : 'Assessments for this job'}
             </p>
           </div>
@@ -306,7 +306,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 shrink-0 transition-colors ${
+            className={`pb-2.5 sm:pb-3 text-sm font-medium border-b-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 shrink-0 transition-colors ${
               activeTab === tab.id
                 ? 'text-brand-blue border-brand-blue'
                 : 'text-gray-600 border-transparent hover:text-brand-blue'
@@ -466,7 +466,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                       handleViewDetails(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                   >
                                     <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     View Details
@@ -477,7 +477,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         handlePublish(assessment);
                                         setOpenMenuId(null);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                     >
                                       <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                       Publish
@@ -488,7 +488,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                       handleEdit(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                   >
                                     <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Edit
@@ -499,7 +499,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         handleArchive(assessment);
                                         setOpenMenuId(null);
                                       }}
-                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                                     >
                                       <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                       Archive
@@ -519,7 +519,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         }}
                                         disabled={hasCandidates}
                                         title={hasCandidates ? 'Cannot delete — candidates have already been invited to this assessment' : ''}
-                                        className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm ${
+                                        className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-sm ${
                                           hasCandidates
                                             ? 'text-gray-400 cursor-not-allowed opacity-60'
                                             : 'text-destructive hover:bg-destructive-subtle'

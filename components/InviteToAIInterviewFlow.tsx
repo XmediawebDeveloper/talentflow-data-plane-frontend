@@ -383,7 +383,7 @@ export default function InviteToAIInterviewFlow({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
             {/* Same footer sentence as the job dialog: what is missing, then
                 what is about to happen. */}
-            <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+            <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
               {noPresetCandidates
                 ? (pickedCount === 0
                     ? (jobScoped ? 'Select an interview version to continue' : multiple ? 'Select at least one AI interview to continue' : 'Select one AI interview to continue')

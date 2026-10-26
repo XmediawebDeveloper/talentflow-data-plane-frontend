@@ -107,13 +107,13 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
         return (
           <div className="space-y-3">
             <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 sm:p-4">
-              <div className="text-xs sm:text-sm font-semibold tracking-wide text-blue-700 mb-1">Scenario</div>
+              <div className="text-sm font-semibold tracking-wide text-blue-700 mb-1">Scenario</div>
               <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-6 text-gray-800 m-0">
                 {scenarioBody}
               </div>
             </div>
             <div>
-              <div className="text-xs sm:text-sm font-semibold tracking-wide text-gray-600 mb-1">Question</div>
+              <div className="text-sm font-semibold tracking-wide text-gray-600 mb-1">Question</div>
               <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-relaxed italic text-gray-900 m-0">
                 {questionBody}
               </div>

@@ -150,7 +150,7 @@ export default function SelectedCandidatesPanel({
   return (
     <div className="mb-4 sm:mb-6 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h3 className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-gray-800 dark:text-slate-100">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-slate-100">
           <Users className="w-4 h-4 text-brand-blue" />
           {/* Counts the ticked ones, so it tracks unticking. */}
           {includedCount} Candidate{includedCount === 1 ? '' : 's'} Selected

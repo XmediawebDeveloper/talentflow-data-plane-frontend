@@ -749,7 +749,7 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 sm:mt-1.5 text-sm sm:text-sm text-slate-500 dark:text-slate-500">
+                <p className="mt-1 sm:mt-1.5 text-sm text-slate-500 dark:text-slate-500">
                   Streamline your entire recruitment journey with AI-powered talent solutions.
                 </p>
               </div>

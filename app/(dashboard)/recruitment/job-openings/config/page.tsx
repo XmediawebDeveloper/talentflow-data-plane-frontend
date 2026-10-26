@@ -84,7 +84,7 @@ function JobOpeningsConfigContent() {
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
                 Job Description Configuration
               </h1>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
                 The lists every job description is built from. Pick a section to add, edit or
                 reorder its options.
               </p>

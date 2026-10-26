@@ -255,7 +255,7 @@ export default function ResumeVersionsModal({
               {canChoose && (
                 <div className="flex items-start gap-2 rounded-lg bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2">
                   <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  <p className="text-sm text-gray-700 dark:text-slate-300">
                     <span className="font-semibold">Tip:</span> The latest version is selected by default. Choose
                     another version if needed.
                   </p>

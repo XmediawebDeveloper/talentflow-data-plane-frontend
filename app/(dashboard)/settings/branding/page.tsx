@@ -149,7 +149,7 @@ export default function BrandingPage() {
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             {/* Hero */}
-            <section className="relative mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white p-5 sm:p-6 lg:p-7">
+            <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="flex items-start gap-3">
                   <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -164,7 +164,7 @@ export default function BrandingPage() {
             </section>
             {/* Section cards: header + fields, mirroring Logo / Colors / Domain */}
             {[2, 2, 1].map((fields, s) => (
-              <div key={s} className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+              <div key={s} className="mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white">
                 <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
                   <Skeleton className="h-10 w-10 rounded-xl" />
                   <div className="space-y-1.5">
@@ -172,7 +172,7 @@ export default function BrandingPage() {
                     <Skeleton className="h-3 w-56 max-w-full" />
                   </div>
                 </div>
-                <div className="p-5 sm:p-6">
+                <div className="p-4 sm:p-6">
                   <div className={`grid grid-cols-1 gap-4 sm:gap-6 ${fields > 1 ? 'sm:grid-cols-2' : ''}`}>
                     {Array.from({ length: fields }).map((_, i) => (
                       <div key={i} className="space-y-2">
@@ -197,7 +197,7 @@ export default function BrandingPage() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Branding & White Label' }]} />
 
         {/* SaaS Hero Header */}
-        <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
+        <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-brand-orange/15 blur-3xl" />
           <div className="pointer-events-none absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
@@ -212,7 +212,7 @@ export default function BrandingPage() {
                   White-label studio
                 </div>
                 <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Branding & White Label</h1>
-                <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Customize your portal&apos;s look — logo, colors, custom domain.</p>
+                <p className="mt-2 max-w-2xl text-sm text-white/80">Customize your portal&apos;s look — logo, colors, custom domain.</p>
               </div>
             </div>
             <Button
@@ -232,7 +232,7 @@ export default function BrandingPage() {
           </div>
         </section>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        <div className="mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
               <ImageIcon className="h-5 w-5 text-brand-blue" />
@@ -242,7 +242,7 @@ export default function BrandingPage() {
               <p className="text-xs text-gray-500 dark:text-slate-500">Visual identity used across the portal.</p>
             </div>
           </div>
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
             <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-slate-700 flex-shrink-0 relative overflow-hidden">
               {branding.logo_url ? (
@@ -271,7 +271,7 @@ export default function BrandingPage() {
                   }}
                   disabled={isUploadingLogo}
                   aria-disabled={!canManage}
-                  className={`text-xs sm:text-sm ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`text-sm ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
                   title={!canManage ? 'You do not have permission to manage branding' : ''}
                 >
                   {isUploadingLogo ? (
@@ -298,13 +298,13 @@ export default function BrandingPage() {
                   </button>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
+              <p className="text-sm text-gray-600 dark:text-slate-400 mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
             </div>
           </div>
           </div>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        <div className="mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue-2/15 shadow-sm shadow-brand-blue/10">
               <Palette className="h-5 w-5 text-brand-blue-2" />
@@ -314,8 +314,8 @@ export default function BrandingPage() {
               <p className="text-xs text-gray-500 dark:text-slate-500">Primary and secondary color used throughout your portal.</p>
             </div>
           </div>
-          <div className="p-5 sm:p-6">
-          <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Color Presets</p>
+          <div className="p-4 sm:p-6">
+          <p className="text-sm text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Color Presets</p>
           <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 sm:mb-6">
             {colorPresets.map((preset) => (
               <button
@@ -327,13 +327,13 @@ export default function BrandingPage() {
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full" style={{ backgroundColor: preset.primary }} />
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full -ml-1.5 sm:-ml-2" style={{ backgroundColor: preset.secondary }} />
                 </div>
-                <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">{preset.name}</span>
+                <span className="text-sm text-gray-700 dark:text-slate-300">{preset.name}</span>
               </button>
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Primary Color</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Primary Color</label>
               <div className="flex items-center gap-2 sm:gap-3">
                 <input
                   type="color"
@@ -345,12 +345,12 @@ export default function BrandingPage() {
                   type="text"
                   value={branding.primary_color}
                   onChange={(e) => setBranding({ ...branding, primary_color: e.target.value })}
-                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Secondary Color</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Secondary Color</label>
               <div className="flex items-center gap-2 sm:gap-3">
                 <input
                   type="color"
@@ -362,7 +362,7 @@ export default function BrandingPage() {
                   type="text"
                   value={branding.secondary_color}
                   onChange={(e) => setBranding({ ...branding, secondary_color: e.target.value })}
-                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
                 />
               </div>
             </div>
@@ -370,7 +370,7 @@ export default function BrandingPage() {
           </div>
         </div>
 
-        <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        <div className="mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
               <Globe className="h-5 w-5 text-brand-teal" />
@@ -390,8 +390,8 @@ export default function BrandingPage() {
               </span>
             )}
           </div>
-          <div className="p-5 sm:p-6">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Domain URL</label>
+          <div className="p-4 sm:p-6">
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Domain URL</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -403,14 +403,14 @@ export default function BrandingPage() {
                   setCloudflareProxied(false);
                 }}
                 placeholder="careers.yourcompany.com"
-                className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue placeholder-gray-400"
+                className="min-w-0 flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue placeholder-gray-400"
               />
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={handleVerifyDomain}
                 disabled={isVerifyingDomain || !branding.custom_domain?.trim() || !canManage}
-                className="text-xs sm:text-sm"
+                className="shrink-0 text-sm"
               >
                 {isVerifyingDomain ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" />Checking...</>
@@ -485,14 +485,14 @@ export default function BrandingPage() {
             </div>
             <button
               onClick={() => setShowPreviewModal(true)}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 font-semibold"
+              className="flex items-center gap-1.5 sm:gap-2 text-sm text-brand-blue hover:text-brand-blue-2 font-semibold"
             >
               <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
               <span className="hidden sm:inline">Open Full Preview</span>
               <span className="sm:hidden">Preview</span>
             </button>
           </div>
-          <div className="p-5 sm:p-6">
+          <div className="p-4 sm:p-6">
           <div className="bg-slate-100 rounded-xl p-4 sm:p-6 flex items-center justify-center h-36 sm:h-48">
             <div className="text-center">
               <div
@@ -502,7 +502,7 @@ export default function BrandingPage() {
                 <span className="text-white text-xl sm:text-2xl font-bold">{branding.company_name?.[0] || 'T'}</span>
               </div>
               <p className="font-semibold text-sm sm:text-base text-gray-900 dark:text-slate-50">{branding.company_name || 'TalentFlow'}</p>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Your branded career portal</p>
+              <p className="text-sm text-gray-600 dark:text-slate-400">Your branded career portal</p>
             </div>
           </div>
           </div>

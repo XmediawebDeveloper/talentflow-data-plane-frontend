@@ -14,7 +14,7 @@ import { STEP2_CARD_CLASS, STEP2_SECTION_TONES, Step2SectionHeader } from '@/com
  * the default export, passing their own data and labels.
  */
 
-export const SUMMARY_FIELD_LABEL = 'text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2';
+export const SUMMARY_FIELD_LABEL = 'text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2';
 export const SUMMARY_FIELD_VALUE = 'text-sm sm:text-base text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]';
 export const SUMMARY_EMPTY_VALUE = 'text-sm text-gray-500 dark:text-slate-500 italic';
 export const SUMMARY_TILE = 'min-w-0 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg';

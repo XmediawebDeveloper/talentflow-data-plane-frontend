@@ -16,7 +16,7 @@ export default function Loading() {
           </div>
 
           {/* Hero Header */}
-          <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
+          <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="space-y-2">

@@ -263,7 +263,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               </Button>
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload Details</h2>
-                <p className="text-xs sm:text-sm text-gray-600 truncate">
+                <p className="text-sm text-gray-600 truncate">
                   {fileName} • {formatDate(uploadDate)}
                 </p>
               </div>
@@ -291,7 +291,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-success rounded-lg flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Completed</span>
+                <span className="text-xs lg:text-sm text-gray-700 truncate">Completed</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-success">{completed.length}</div>
             </div>
@@ -306,7 +306,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-warning rounded-lg flex items-center justify-center flex-shrink-0">
                   <Copy className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Duplicates</span>
+                <span className="text-xs lg:text-sm text-gray-700 truncate">Duplicates</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-warning">{duplicated.length}</div>
             </div>
@@ -321,7 +321,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <GitBranch className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Versioned</span>
+                <span className="text-xs lg:text-sm text-gray-700 truncate">Versioned</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-purple-700">{versioned.length}</div>
             </div>
@@ -336,7 +336,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-destructive rounded-lg flex items-center justify-center flex-shrink-0">
                   <AlertCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Errors</span>
+                <span className="text-xs lg:text-sm text-gray-700 truncate">Errors</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-destructive">{errors.length}</div>
             </div>
@@ -351,7 +351,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Pending</span>
+                <span className="text-xs lg:text-sm text-gray-700 truncate">Pending</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-gray-700">{pending.length}</div>
             </div>
@@ -361,7 +361,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Success Rate</span>
+                <span className="text-xs lg:text-sm text-gray-700 truncate">Success Rate</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-blue-700">{successRate}%</div>
             </div>
@@ -405,9 +405,9 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 mb-4 sm:mb-6 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-50 border border-blue-200 rounded-xl">
                   <div className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm text-blue-700">Estimating time remaining...</span>
+                    <span className="text-sm text-blue-700">Estimating time remaining...</span>
                   </div>
-                  <span className="text-2xs sm:text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
+                  <span className="text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
                 </div>
               );
             }
@@ -422,9 +422,9 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1.5 sm:gap-2 mb-4 sm:mb-6 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-50 border border-blue-200 rounded-xl">
                 <div className="flex items-center gap-2">
                   <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium text-blue-700">{etaText}</span>
+                  <span className="text-sm font-medium text-blue-700">{etaText}</span>
                 </div>
-                <span className="text-2xs sm:text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
+                <span className="text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
               </div>
             );
           })()}
@@ -471,14 +471,14 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-2xs sm:text-xs text-success px-2 sm:px-3 py-0.5 sm:py-1 bg-success-subtle rounded-full">
+                        <span className="text-xs text-success px-2 sm:px-3 py-0.5 sm:py-1 bg-success-subtle rounded-full">
                           {getStatusText(item.status)}
                         </span>
                         <Button variant="secondary" size="sm" aria-label="View" className="px-2">
@@ -530,19 +530,19 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
-                            <div className="text-2xs sm:text-xs text-warning mt-1 truncate">
+                            <div className="text-xs text-warning mt-1 truncate">
                               Existing location: {item.existingLocation}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-2xs sm:text-xs text-warning px-2 sm:px-3 py-0.5 sm:py-1 bg-warning-subtle rounded-full">
+                        <span className="text-xs text-warning px-2 sm:px-3 py-0.5 sm:py-1 bg-warning-subtle rounded-full">
                           {getStatusText(item.status)}
                         </span>
                         <Button variant="secondary" size="sm" aria-label="View" className="px-2">
@@ -594,24 +594,24 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
-                            <div className="text-2xs sm:text-xs text-purple-700 mt-1 truncate">
+                            <div className="text-xs text-purple-700 mt-1 truncate">
                               Existing location: {item.existingLocation}
                             </div>
                           )}
                           {item.versionInfo && (
-                            <div className="text-2xs sm:text-xs text-purple-700 mt-1 truncate">
+                            <div className="text-xs text-purple-700 mt-1 truncate">
                               {item.versionInfo}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-2xs sm:text-xs text-purple-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 rounded-full">
+                        <span className="text-xs text-purple-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 rounded-full">
                           {getStatusText(item.status)}
                         </span>
                         <Button variant="secondary" size="sm" aria-label="View" className="px-2">
@@ -652,13 +652,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.errorMessage && (
-                            <div className="text-2xs sm:text-xs text-destructive mt-1">{item.errorMessage}</div>
+                            <div className="text-xs text-destructive mt-1">{item.errorMessage}</div>
                           )}
                         </div>
                       </div>
-                      <span className="text-2xs sm:text-xs text-destructive px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive-subtle rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="text-xs text-destructive px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive-subtle rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -695,13 +695,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
-                      <span className="text-2xs sm:text-xs text-gray-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="text-xs text-gray-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -720,7 +720,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     </div>
                     <div className="min-w-0">
                       <h4 className="text-sm sm:text-base text-gray-900 font-medium">Retry Failed or Pending Uploads</h4>
-                      <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
+                      <p className="text-sm text-gray-600 mt-0.5">
                         {errors.length > 0 && pending.length > 0
                           ? `${errors.length} failed and ${pending.length} pending upload${pending.length > 1 ? 's' : ''}`
                           : errors.length > 0
@@ -868,7 +868,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
         {/* Footer */}
         <div className="border-t border-gray-200 px-4 sm:px-6 lg:px-8 py-3 sm:py-5 bg-white">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0">
-            <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
+            <p className="text-sm text-gray-600 text-center sm:text-left">
               Showing detailed status for <span className="text-gray-900">{totalProcessed}</span> file{totalProcessed !== 1 ? 's' : ''}
             </p>
           </div>
