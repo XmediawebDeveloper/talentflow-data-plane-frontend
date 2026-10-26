@@ -19,7 +19,14 @@ import { Button } from './button';
  *   lg  ~896px  permission grids and other wide read/edit views
  * On phones every size is full width minus an 8px gutter, and footer buttons
  * stack full-width with the primary action on top.
+ *
+ * Tone: `brand` (default) is the brand-blue header. `warning` is the white
+ * header with a brand-orange icon disc and an orange primary button — the
+ * warning confirm's look (ConfirmationDialog type="warning"), for "leave /
+ * discard?" prompts.
  */
+
+export type AppModalTone = 'brand' | 'warning';
 
 export type AppModalSize = 'sm' | 'md' | 'lg';
 
@@ -38,6 +45,16 @@ export const MODAL_FOOTER_BUTTON_CLASS = 'w-full sm:min-w-[128px]';
  *  as wide as the widest action button. */
 export const MODAL_FOOTER_ROW_CLASS =
   'flex flex-col-reverse gap-2 sm:ml-auto sm:grid sm:w-fit sm:auto-cols-fr sm:grid-flow-col sm:gap-3';
+
+/** `compactFooter`: small buttons sized to their labels, one right-aligned row
+ *  (primary rightmost). On a narrow phone the row wraps and each line's buttons
+ *  grow to fill it, so nothing overflows. */
+const MODAL_FOOTER_COMPACT_ROW_CLASS = 'flex flex-wrap items-center justify-end gap-2 sm:ml-auto';
+const MODAL_FOOTER_COMPACT_BUTTON_CLASS = 'max-sm:grow';
+
+/** The warning tone's primary button: ConfirmationDialog's warning confirm. */
+const WARNING_PRIMARY_BUTTON_CLASS =
+  'bg-brand-orange! hover:bg-brand-orange-deep! shadow-brand-orange/25!';
 
 export interface AppModalAction {
   label: ReactNode;
@@ -78,6 +95,10 @@ interface AppModalProps {
    *  Cancel. The footer is dropped unless `actions`, `footerStart` or `footer`
    *  give it content. */
   closeButton?: boolean;
+  /** Header and primary-button colours; see the file header. */
+  tone?: AppModalTone;
+  /** Small, label-width footer buttons in one row; see MODAL_FOOTER_COMPACT_ROW_CLASS. */
+  compactFooter?: boolean;
   /** Overrides the `size` width (e.g. `sm:max-w-[840px]`). Rare — prefer `size`. */
   widthClassName?: string;
   /** Phones (below sm): full-screen sheet that slides up, instead of a
@@ -92,17 +113,21 @@ export function AppModalFooterButtons({
   cancelDisabled,
   actions = [],
   hideCancel = false,
-}: Pick<AppModalProps, 'onCancel' | 'cancelLabel' | 'cancelDisabled' | 'actions'> & { hideCancel?: boolean }) {
+  tone = 'brand',
+  compactFooter = false,
+}: Pick<AppModalProps, 'onCancel' | 'cancelLabel' | 'cancelDisabled' | 'actions' | 'tone' | 'compactFooter'> & { hideCancel?: boolean }) {
+  const buttonSize = compactFooter ? 'sm' : 'md';
+  const buttonClass = compactFooter ? MODAL_FOOTER_COMPACT_BUTTON_CLASS : MODAL_FOOTER_BUTTON_CLASS;
   return (
-    <div className={MODAL_FOOTER_ROW_CLASS}>
+    <div className={compactFooter ? MODAL_FOOTER_COMPACT_ROW_CLASS : MODAL_FOOTER_ROW_CLASS}>
       {!hideCancel && (
         <Button
           type="button"
           variant="secondary"
-          size="md"
+          size={buttonSize}
           onClick={onCancel}
           disabled={cancelDisabled}
-          className={MODAL_FOOTER_BUTTON_CLASS}
+          className={buttonClass}
         >
           {cancelLabel}
         </Button>
@@ -113,13 +138,13 @@ export function AppModalFooterButtons({
           type={action.type ?? 'button'}
           form={action.form}
           variant={action.variant ?? 'primary'}
-          size="md"
+          size={buttonSize}
           onClick={action.onClick}
           disabled={action.disabled}
           loading={action.loading}
           icon={action.icon}
           title={action.title}
-          className={MODAL_FOOTER_BUTTON_CLASS}
+          className={`${buttonClass} ${tone === 'warning' && (action.variant ?? 'primary') === 'primary' ? WARNING_PRIMARY_BUTTON_CLASS : ''}`}
         >
           {action.label}
         </Button>
@@ -146,9 +171,12 @@ export default function AppModal({
   zIndexClass = 'z-[60]',
   ariaLabel,
   closeButton = false,
+  tone = 'brand',
+  compactFooter = false,
   widthClassName,
   mobileSheet = false,
 }: AppModalProps) {
+  const warning = tone === 'warning';
   const showFooter = !closeButton || !!footer || !!footerStart || (actions?.length ?? 0) > 0;
   useEffect(() => {
     if (!open) return;
@@ -172,16 +200,40 @@ export default function AppModal({
         className={`tf-round-edges flex max-h-[calc(100dvh-1rem)] w-full max-w-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)] ${widthClassName ?? APP_MODAL_WIDTH[size]} ${mobileSheet ? "max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none max-sm:border-0 max-sm:animate-in max-sm:slide-in-from-bottom max-sm:duration-300 motion-reduce:animate-none" : ""}`}
       >
         {/* Header — no close button unless `closeButton`; otherwise Cancel in the footer is the way out. */}
-        <div className="flex shrink-0 items-center justify-between gap-3 bg-brand-blue px-4 py-4 sm:px-6">
+        <div
+          className={`flex shrink-0 items-center justify-between gap-3 px-4 py-4 sm:px-6 ${
+            warning ? 'border-b border-gray-100 bg-white dark:border-slate-700/60 dark:bg-slate-900' : 'bg-brand-blue'
+          }`}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {icon && (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm [&>svg]:h-5 [&>svg]:w-5">
+              <div
+                className={`flex h-10 w-10 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5 ${
+                  warning
+                    ? 'rounded-full bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15 dark:bg-orange-500/15 dark:text-orange-300'
+                    : 'rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm'
+                }`}
+              >
                 {icon}
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="line-clamp-2 break-words text-base font-bold leading-snug text-white sm:text-lg">{title}</h2>
-              {subtitle && <p className="truncate text-xs text-white/80 sm:text-sm">{subtitle}</p>}
+              <h2
+                className={`line-clamp-2 break-words text-base font-bold leading-snug sm:text-lg ${
+                  warning ? 'text-gray-900 dark:text-slate-50' : 'text-white'
+                }`}
+              >
+                {title}
+              </h2>
+              {subtitle && (
+                <p
+                  className={`text-xs sm:text-sm ${
+                    warning ? 'text-gray-600 dark:text-slate-400' : 'truncate text-white/80'
+                  }`}
+                >
+                  {subtitle}
+                </p>
+              )}
             </div>
           </div>
           {headerExtra && <div className="shrink-0">{headerExtra}</div>}
@@ -210,6 +262,8 @@ export default function AppModal({
               cancelDisabled={cancelDisabled}
               actions={actions}
               hideCancel={closeButton}
+              tone={tone}
+              compactFooter={compactFooter}
             />
           </div>
         ))}

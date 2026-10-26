@@ -9,6 +9,8 @@ import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel'
 import SelectSourceModal from '@/components/SelectSourceModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
+import { Button } from '@/components/ui/button';
+import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -28,8 +30,6 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
@@ -1039,15 +1039,23 @@ export default function JobOpeningsPage() {
             </div>
           </div>
 
-          <AlertDialogFooter className="mt-5 flex gap-2 sm:justify-end">
+          {/* Buttons match the Archive / Disable / AI Talent Match confirms: the
+              shared Button (secondary + primary, px-6), slotted into Radix's own
+              Cancel / Action so closing and initial focus are unchanged. */}
+          <AlertDialogFooter className="mt-5 gap-3">
             {/* Cancel just dismisses (onOpenChange above) — nothing is deleted. */}
-            <AlertDialogCancel className="w-full sm:w-auto text-sm">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
-              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"
-            >
-              I Understand
-            </AlertDialogAction>
+            <AlertDialogPrimitive.Cancel asChild>
+              <Button variant="secondary" className="px-6">Cancel</Button>
+            </AlertDialogPrimitive.Cancel>
+            <AlertDialogPrimitive.Action asChild>
+              <Button
+                variant="primary"
+                onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
+                className="px-6"
+              >
+                I Understand
+              </Button>
+            </AlertDialogPrimitive.Action>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

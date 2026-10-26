@@ -2,12 +2,13 @@
 
 import { AlertTriangle, RotateCcw, Save, Trash2, Undo2 } from 'lucide-react';
 import AppModal from '@/components/ui/app-modal';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
 
 export interface LeaveJDDialogProps {
   open: boolean;
-  /** Human-readable code (JD-076) once the job has a record; null before. */
+  /** Human-readable code (JD-076) once the job has a record; null before.
+   *  Accepted but not shown — the prompt carries only the four actions. */
   jobCode?: string | null;
+  /** Accepted but not shown, like `jobCode`. */
   jobTitle?: string;
   /** Lineage version (1, 2, ...). A v2+ draft is its own row: Delete removes that
    *  version only, and the job's earlier versions stay. */
@@ -51,8 +52,6 @@ export interface LeaveJDDialogProps {
  */
 export default function LeaveJDDialog({
   open,
-  jobCode,
-  jobTitle,
   versionNumber = 1,
   discardTarget,
   nothingSavedYet,
@@ -83,7 +82,9 @@ export default function LeaveJDDialog({
       open={open}
       onCancel={onCancel}
       cancelDisabled={busy !== null}
-      size="lg"
+      size="md"
+      tone="warning"
+      compactFooter
       zIndexClass="z-[10000]"
       icon={<AlertTriangle />}
       title="Leave this job description?"
@@ -120,19 +121,12 @@ export default function LeaveJDDialog({
         },
       ]}
     >
-      {(jobCode || jobTitle) && (
-        <div className="mb-4 flex min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
-          {jobCode && <JobIdBadge className="flex-shrink-0">{jobCode}</JobIdBadge>}
-          {jobTitle && (
-            <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{jobTitle}</span>
-          )}
-        </div>
-      )}
-
       <ul className="space-y-3 text-sm">
         <li className="flex gap-3">
-          <Save className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-          <p className="text-gray-700 dark:text-slate-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15 dark:bg-orange-500/15 dark:text-orange-300">
+            <Save className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">Save as Draft</span> —{' '}
             {isPublishedJD
               ? 'save everything you changed to this JD (it stays Published) and leave.'
@@ -140,31 +134,37 @@ export default function LeaveJDDialog({
           </p>
         </li>
         <li className="flex gap-3">
-          <Undo2 className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-400" />
-          <p className="text-gray-700 dark:text-slate-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+            <Undo2 className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">Cancel</span> — stay on this page and keep working.
           </p>
         </li>
         {canDiscard && (
           <li className="flex gap-3">
-            <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-            <p className="text-gray-700 dark:text-slate-300">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-brand-teal/10 text-brand-teal ring-brand-teal/15 dark:bg-brand-teal/15">
+              <RotateCcw className="h-4 w-4" />
+            </span>
+            <p className="pt-1 text-gray-700 dark:text-slate-300">
               <span className="font-semibold text-gray-900 dark:text-slate-100">Discard current changes</span> — {discardHint}
             </p>
           </li>
         )}
         {!hideDelete && <li className={`flex gap-3 ${deleteBlockedReason ? 'opacity-60' : ''}`}>
-          <Trash2 className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-          <p className="text-gray-700 dark:text-slate-300">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ring-1 bg-red-50 text-red-600 ring-red-100 dark:bg-red-500/15 dark:text-red-400 dark:ring-red-500/20">
+            <Trash2 className="h-4 w-4" />
+          </span>
+          <p className="pt-1 text-gray-700 dark:text-slate-300">
             <span className="font-semibold text-gray-900 dark:text-slate-100">{deleteLabel}</span> —{' '}
             {deleteBlockedReason ?? (isLaterVersion ? (
               <>
-                permanently remove only V{versionNumber}. The earlier versions of {jobCode ?? 'this job'} and everything
+                permanently remove only V{versionNumber}. The earlier versions of this job and everything
                 they were used in are kept. This cannot be undone.
               </>
             ) : (
               <>
-                permanently remove this JD{jobCode ? ` (${jobCode})` : ''} and all its steps. It will not appear under
+                permanently remove this JD and all its steps. It will not appear under
                 Draft in Job Descriptions. This cannot be undone.
               </>
             ))}

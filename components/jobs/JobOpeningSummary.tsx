@@ -25,6 +25,7 @@ import {
   formatLastUpdated,
   getCreationMethodConfig,
   getDisplayStatus,
+  getPublishedDate,
   getStatusConfig,
 } from '@/lib/utils/jobOpeningDisplay';
 
@@ -91,6 +92,15 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
           Openings cards (showIcons=false) they switch to an icon-less
           "Label: value" pair — bolder label, lighter value — via
           <MetaLabelValue>. */}
+      {/* Job Openings cards: Created (never moved by publishing) always, Posted
+          only once the job was published — the same pair, in the same order,
+          as the job details header. */}
+      {!showIcons && job.created_at && (
+        <MetaLabelValue label="Created" value={formatISTDate(job.created_at)} />
+      )}
+      {!showIcons && getPublishedDate(job) && (
+        <MetaLabelValue label="Posted" value={formatISTDate(getPublishedDate(job))} />
+      )}
       {job.postedBy && (
         showIcons ? (
           <span className="flex items-center gap-1.5">
@@ -101,15 +111,11 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
           <MetaLabelValue label="By" value={job.postedBy} />
         )
       )}
-      {job.postedDate && (
-        showIcons ? (
-          <span className="flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            Posted {formatISTDate(job.postedDate)}
-          </span>
-        ) : (
-          <MetaLabelValue label="Posted" value={formatISTDate(job.postedDate)} />
-        )
+      {showIcons && job.postedDate && (
+        <span className="flex items-center gap-1.5">
+          <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          Posted {formatISTDate(job.postedDate)}
+        </span>
       )}
       {job.updated_at && (
         showIcons ? (
