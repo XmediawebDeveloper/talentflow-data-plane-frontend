@@ -52,6 +52,7 @@ e2e/data/*.json
 junit-*.xml
 report.json
 qa-cases-*.json
+package-lock.json
 
 # Playwright
 test-results/
