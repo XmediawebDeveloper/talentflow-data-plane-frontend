@@ -9901,7 +9901,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div ref={invitePickerScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 {/* Search first, then the list — the reference's order and its
                     labelled, icon-led field, rather than a bare input. */}
-                <div className="mb-4">
+                {/* Sticky: stays at the top of the scroll area while the list
+                    scrolls. The negative margins + matching padding stretch
+                    its background over the area's own padding so rows don't
+                    show around it. Only Preview stays pinned in the table
+                    below; Select scrolls with the row. */}
+                <div className="sticky -top-4 sm:-top-6 z-[8] -mx-4 -mt-4 px-4 pt-4 pb-4 mb-0 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 bg-white dark:bg-slate-900">
                   <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -9989,7 +9994,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <table className="w-full text-sm border-collapse">
                                 <thead className="sticky top-0 z-[6]">
                                   <tr className="border-b border-gray-200 dark:border-slate-700">
-                                    <th className={`${PICKER_TH} w-14 tf-sticky-col-left !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
+                                    <th className={`${PICKER_TH} w-14 !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Name</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
@@ -10030,7 +10035,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
                                         }`}
                                       >
-                                        <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
+                                        <td className="px-3 py-2.5 align-middle">
                                           <input
                                             type="radio"
                                             name="assessment-invite-picker-selection"

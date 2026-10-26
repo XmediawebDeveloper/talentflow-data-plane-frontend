@@ -7801,7 +7801,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
          border, the same footprint as AI Interview's unclipped indicator)
          without moving the steps, and the Y axis is hidden explicitly. */
       <div className="overflow-x-auto overflow-y-hidden -my-6 py-6 -mx-3 px-3 sm:-mx-5 sm:px-5">
-        <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-2">
+        {/* Phones: labels are hidden, so the four circles fit — the row
+            spans the card (`w-full`, no `min-w-max`) and the connectors
+            stretch (`flex-1`) to share what is left, so nothing scrolls. */}
+        <div className="flex w-fit min-w-max max-sm:w-full max-sm:min-w-0 mx-auto items-center gap-2 sm:gap-4 px-1 sm:px-2">
           {stepLabels.map((label, index) => {
             const stepNumber = index + 1;
             const isCurrent = displayStep === stepNumber;
@@ -7816,13 +7819,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     creation flows read as one component. */}
                 {index > 0 && (
                   <div
-                    className={`w-6 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
+                    className={`w-6 max-sm:w-auto max-sm:flex-1 max-sm:min-w-3 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
                       displayStep > index ? 'bg-brand-blue' : 'bg-gray-200'
                     }`}
                   />
                 )}
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <div className="relative">
                     <div
                       className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 transition-all duration-300 z-10 relative ${
@@ -8307,7 +8310,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse || isTitleLocked}
                         title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
@@ -8348,7 +8351,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Describe the role - responsibilities, must-have skills, experience, location, work mode, salary. e.g., 'Shift supervisor for a 200-bed hospital ward, 5+ years, night rotation, Chennai' or 'Senior full-stack developer with React and Node.js, 5+ years, remote, leading a team of 3'"
                         rows={12}
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black placeholder-gray-500 ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max || Boolean(aiPromptValidationError)
@@ -8480,7 +8483,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse || isTitleLocked}
                         title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
@@ -8515,7 +8518,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.MANUAL_JD.max}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black placeholder-gray-500 ${
                           manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))
                             ? 'border-destructive-line bg-destructive-subtle'
                             : 'border-gray-200'

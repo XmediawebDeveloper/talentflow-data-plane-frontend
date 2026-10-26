@@ -256,7 +256,9 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
 
           {/* Row 2: Location + Salary + Department + Industry + Employment
               Type + Work Mode + Posted On / By + Version */}
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+          {/* Phones: the "•" separators are hidden (a wrapped line began with
+              one) and the items get an even gap instead. */}
+          <div className="flex flex-wrap items-center gap-x-1.5 max-sm:gap-x-2 gap-y-1 max-sm:gap-y-1.5 text-xs text-gray-600 dark:text-slate-400">
             {/* Location */}
             <span className="inline-flex items-center gap-1 min-w-0">
               <MapPin className="w-3 h-3 text-purple-600 shrink-0" />
@@ -264,7 +266,7 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
                 {version.location || 'Not specified'}
               </span>
             </span>
-            <span className="text-gray-300">•</span>
+            <span className="text-gray-300 max-sm:hidden">•</span>
 
             {/* Salary */}
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
@@ -297,16 +299,16 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
             )}
             {/* Location and Salary always precede this, so the dot never
                 opens the row on its own. */}
-            <span className="text-gray-300">•</span>
+            <span className="text-gray-300 max-sm:hidden">•</span>
 
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap">
               <Calendar className="w-3 h-3" />
               Posted {formatVersionDate(versionDate(version))}
             </span>
-            <span className="text-gray-300">•</span>
+            <span className="text-gray-300 max-sm:hidden">•</span>
 
-            <span>By {version.created_by_name || 'Unknown'}</span>
-            <span className="text-gray-300">•</span>
+            <span className="whitespace-nowrap">By {version.created_by_name || 'Unknown'}</span>
+            <span className="text-gray-300 max-sm:hidden">•</span>
 
             {/* Version badge — the Job Details card's purple pill, static here:
                 this popup IS the version picker, so it has no menu to drop. */}
@@ -490,6 +492,27 @@ export default function JDVersionHistoryModal({
     jdService.logVersionDownload(jdId, version.id);
   };
 
+  /* A version row's title and meta line (date · status · author). Drawn beside
+     the tile from sm, and under the row on phones — one definition for both. */
+  const renderVersionDetails = (version: JDHistoryVersion) => (
+    <>
+      <p className="text-sm text-gray-600 dark:text-slate-400 [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
+      <div className="flex items-center gap-3 max-sm:gap-x-3 max-sm:gap-y-1 text-sm max-sm:text-xs text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
+        <span className="flex items-center gap-1 whitespace-nowrap">
+          <Clock className="w-3.5 h-3.5" />
+          {formatVersionDate(versionDate(version))}
+        </span>
+        <span className="whitespace-nowrap">{versionStatusLabel(version)}</span>
+        {version.created_by_name && (
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <User className="w-3.5 h-3.5" />
+            {version.created_by_name}
+          </span>
+        )}
+      </div>
+    </>
+  );
+
   if (!isOpen) return null;
 
   return (
@@ -667,7 +690,7 @@ export default function JDVersionHistoryModal({
                 return (
                   <div
                     key={version.id}
-                    className={`border rounded-lg p-4 transition-all ${
+                    className={`border rounded-lg p-4 max-sm:p-3 transition-all ${
                       isCurrentPage
                         ? 'bg-brand-blue/[0.06] border-brand-blue/40 ring-1 ring-brand-blue/15'
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
@@ -684,7 +707,11 @@ export default function JDVersionHistoryModal({
                             aria-label={`Select version ${version.version_number} to compare`}
                           />
                         )}
-                        <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${
+                        {/* Phones: the tile is dropped, and the title + meta
+                            lines move under the row at full width (below), so
+                            they are not squeezed between the tile and the
+                            buttons. */}
+                        <div className={`w-10 h-10 shrink-0 rounded-lg max-sm:hidden flex items-center justify-center ${
                           isLatest
                             ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15'
                             : 'bg-gray-100 dark:bg-slate-800 ring-1 ring-gray-200/60'
@@ -707,20 +734,7 @@ export default function JDVersionHistoryModal({
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
-                          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" />
-                              {formatVersionDate(versionDate(version))}
-                            </span>
-                            <span>{versionStatusLabel(version)}</span>
-                            {version.created_by_name && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-3.5 h-3.5" />
-                                {version.created_by_name}
-                              </span>
-                            )}
-                          </div>
+                          <div className="max-sm:hidden">{renderVersionDetails(version)}</div>
                         </div>
                       </div>
 
@@ -752,6 +766,9 @@ export default function JDVersionHistoryModal({
                         </Button>
                       </div>
                     </div>
+                    {/* Phones: the title and meta at the card's full width,
+                        lined up under the checkbox. */}
+                    <div className="sm:hidden mt-2">{renderVersionDetails(version)}</div>
                   </div>
                 );
               })}
@@ -769,9 +786,9 @@ export default function JDVersionHistoryModal({
           )}
         </div>
 
-        <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-4 bg-gray-50 dark:bg-slate-800/50">
+        <div className="border-t border-gray-200 dark:border-slate-700 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-center gap-3">
-            <p className="text-sm text-gray-600 dark:text-slate-400">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
               {selectedVersion
                 ? `Viewing version ${selectedVersion.version_number}`
                 : compareChecked.length > 0

@@ -90,9 +90,12 @@ export default function AssessmentConfigureModal({
         {/* Header — the house dialog header: tile, title, one line of context,
             close. It names the step and the job, which is what the page's own
             heading says, so the body does not repeat it. */}
-        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-3 flex-shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-3 flex-shrink-0 relative">
+          {/* Phones: the tile is dropped and the close button floats in the
+              corner (below), so the title, chips and job line get the whole
+              width instead of a narrow column between them. */}
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 hidden sm:flex items-center justify-center flex-shrink-0">
               <Sliders className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
@@ -103,7 +106,7 @@ export default function AssessmentConfigureModal({
                   cannot change anything here" is stated rather than left to be
                   discovered by pressing a control that does not respond. */}
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 truncate">
+                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 sm:truncate max-sm:basis-full max-sm:pr-10">
                   Configure Assessment
                 </h2>
                 {readOnly && (
@@ -133,7 +136,7 @@ export default function AssessmentConfigureModal({
               {/* The job as JD ID · role · version, from the record's own
                   binding — the same row the Configure page's subtitle shows.
                   Wraps instead of truncating, so the version is never cut. */}
-              <p className="text-sm text-gray-600 dark:text-slate-400 min-w-0 break-words">
+              <p className="text-sm text-gray-600 dark:text-slate-400 min-w-0 break-words max-sm:mt-2 max-sm:leading-relaxed">
                 {readOnly ? 'Duration, section distribution, and topics for ' : 'Set duration, section distribution, and topics for '}
                 {assessment.jd_short_id || assessment.jd_title || assessment.job?.title || assessment.jd_version != null ? (
                   <AssessmentJobBinding
@@ -153,7 +156,7 @@ export default function AssessmentConfigureModal({
             type="button"
             onClick={() => assessmentCreationRef.current?.requestClose()}
             aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
-            className="px-2 flex-shrink-0"
+            className="px-2 flex-shrink-0 max-sm:absolute max-sm:top-2.5 max-sm:right-3"
           >
             <X className="w-5 h-5" />
           </Button>
