@@ -22,7 +22,6 @@ import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { draftVersionEditorUrl, openDraftVersionForEdit } from '@/lib/utils/jdDraftVersion';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   AlertDialog,
@@ -462,22 +461,9 @@ export default function JobOpeningsPage() {
       // If the usage check fails, carry on - the backend validates again.
     }
 
-    // JD not in use: edit its DRAFT VERSION, never the live row. The editor saves
-    // at every step, so opening it on the published JD put half-finished edits live
-    // before Republish. The job's existing open draft is reused if there is one.
-    await openPublishedJDForEdit(job.id);
-  };
-
-  const openPublishedJDForEdit = async (publishedJdId: string) => {
-    try {
-      const draft = await openDraftVersionForEdit(publishedJdId);
-      router.push(draftVersionEditorUrl(draft));
-    } catch (error) {
-      console.error('Failed to open a draft version for editing:', error);
-      toast.error('Could not open this JD for editing', {
-        description: error instanceof Error ? error.message : 'Please try again.',
-      });
-    }
+    // JD not in use: Edit changes THIS JD (no new version). The editor opens it
+    // through a working copy, so the live row changes only when it is republished.
+    router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
   };
 
   // Version control: editing an in-use JD forks it into a NEW independent version

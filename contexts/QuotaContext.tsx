@@ -122,6 +122,8 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
   const [hasPermission, setHasPermission] = useState(true);
   const [lastFetchTime, setLastFetchTime] = useState<number | null>(null);
   const fetchingRef = useRef(false);
+  // One automatic retry per run of network failures (see the catch below).
+  const networkRetriedRef = useRef(false);
   /* A forced refresh (refetch / units consumed) that arrived mid-fetch. The
      in-flight request may predate the change it was asked to pick up, so one
      more fetch runs when it settles; the callers awaiting it resolve then. */
@@ -217,6 +219,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       // Update previous plan ref
       prevPlanRef.current = { name: newPlanName, tier: newPlanTier };
 
+      networkRetriedRef.current = false;
       setQuotaData(data);
       setLastFetchTime(Date.now());
       // Ahead of the effect that syncs it, so refetch() can hand it back now.
@@ -224,6 +227,19 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       console.log('[QuotaContext] Quota data fetched successfully');
     } catch (err: any) {
       const statusCode = err?.response?.status;
+
+      // No response at all (offline, VPN drop, request cut off by a reload or
+      // a dev-server restart): transient, so warn instead of console.error —
+      // which raises the Next.js dev error overlay — and retry once shortly.
+      if (!err?.response) {
+        console.warn('[QuotaContext] Quota fetch got no response (network); retrying in 5s:', err?.message);
+        if (!networkRetriedRef.current) {
+          networkRetriedRef.current = true;
+          setTimeout(() => { void fetchQuotaData(true); }, 5000);
+        }
+        return;
+      }
+      networkRetriedRef.current = false;
       console.error('[QuotaContext] Error fetching quota:', statusCode, err);
 
       if (statusCode === 401) {

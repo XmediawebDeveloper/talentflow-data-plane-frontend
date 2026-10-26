@@ -3958,6 +3958,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (isPublished || discardedRef.current) return false;
     if (!editingId) return hasUnsavedChanges;
     if (editingId === createdInSessionIdRef.current && !userSavedDraftRef.current) return true;
+    // A new JD's working copy reopened by a refresh: this mount did not create it
+    // (createdInSessionIdRef is empty again), but it is still a never-saved new JD,
+    // so leaving must keep prompting until the recruiter saves it themselves.
+    if (isUnsavedNewCopy && !userSavedDraftRef.current) return true;
     const textChanged = checkpointContentKeyRef.current !== null
       && currentContentKeyRef.current !== checkpointContentKeyRef.current;
     return textChanged || editedSinceCheckpointRef.current;

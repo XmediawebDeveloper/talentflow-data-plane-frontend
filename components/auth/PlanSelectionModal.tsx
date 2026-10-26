@@ -307,6 +307,10 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   return (
     <div
       onClick={handleOverlayClick}
+      /* aria-modal: its tint is an inline style, so this is what lets the
+         background scroll lock in globals.css see it as a modal. */
+      role="dialog"
+      aria-modal="true"
       className="tf-auth-scope fixed inset-0 flex items-center justify-center p-2 sm:p-4"
       style={{
         backgroundColor: 'rgba(16, 24, 40, 0.55)',

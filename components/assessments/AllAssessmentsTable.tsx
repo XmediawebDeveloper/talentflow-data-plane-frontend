@@ -6,6 +6,7 @@ import {
   X, ClipboardList, MoreVertical, Eye, Pencil,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
+  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { assessmentJobLockMessage, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
@@ -34,6 +35,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
    renders in place exactly as before. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
+import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { DateField } from '@/components/ui/date-field';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
@@ -42,6 +44,9 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
+import ExportColumnsModal from '@/components/ExportColumnsModal';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
@@ -201,7 +206,7 @@ export function VersionPill({ kind, version, label }: {
    edge without inventing data. */
 function CreatedBy({ name }: { name: string }) {
   return (
-    <span className="inline-flex items-center gap-2 min-w-0 max-w-[12rem]">
+    <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
       <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
         {name}
@@ -246,8 +251,8 @@ const COMPARATORS: Record<SortKey, (a: AssessmentRow, b: AssessmentRow) => numbe
 interface ColumnDef {
   key: SortKey;
   label: string;
-  /** Right-aligned for the one numeric column, so digits line up on the ones place. */
-  align?: 'left' | 'right';
+  /** Column alignment; version and count columns are centred. */
+  align?: 'left' | 'center' | 'right';
   /** Hidden below this breakpoint. The nine columns do not all fit a tablet. */
   hideBelow?: 'sm' | 'md' | 'lg' | 'xl';
 }
@@ -256,15 +261,15 @@ interface ColumnDef {
    and Assessment Version are four separate columns on purpose — a combined
    "Job (V3)" cell cannot be sorted or filtered by version. */
 const COLUMNS: ColumnDef[] = [
-  { key: 'jobId', label: 'Job ID' },
+  { key: 'jobId', label: 'JD ID' },
   { key: 'jobName', label: 'Job Name' },
-  { key: 'jobVersion', label: 'Job Version' },
-  { key: 'assessmentVersion', label: 'Assessment Version' },
+  { key: 'jobVersion', label: 'Job Version', align: 'center' },
+  { key: 'assessmentVersion', label: 'Assessment Version', align: 'center' },
   { key: 'status', label: 'Status' },
-  { key: 'invitations', label: 'Invitations Sent', align: 'right' },
-  { key: 'completed', label: 'Completed', align: 'right' },
-  { key: 'createdAt', label: 'Created On' },
-  { key: 'createdBy', label: 'Created By', hideBelow: 'lg' },
+  { key: 'invitations', label: 'Invitations Sent', align: 'center' },
+  { key: 'completed', label: 'Completed', align: 'center' },
+  /* Created On + Created By in one column: date, with who underneath. */
+  { key: 'createdAt', label: 'Created' },
 ];
 
 const HIDE_CLASS: Record<string, string> = {
@@ -327,6 +332,12 @@ interface AllAssessmentsTableProps {
    *  Delete) succeeds, so the host can re-read what that action moved — its
    *  stat cards and tab counts — rather than keep the pre-action figures. */
   onMutated?: () => void;
+  /** The host page's List/Card choice, shared by every tab. 'list' (the
+   *  default) is the table; 'grid' is one card per row. */
+  displayMode?: ListDisplayMode;
+  /** When passed, the List/Card switch shows at the end of this table's
+   *  toolbar row. */
+  onDisplayModeChange?: (mode: ListDisplayMode) => void;
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
@@ -341,11 +352,14 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
 const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated, displayMode = 'list', onDisplayModeChange }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
-  const { isTenantAdmin, user } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
+  // `assessments:export` by permission code — not the legacy `canExport` flag,
+  // which is shared with internal_db:export.
+  const canExport = isTenantAdmin || hasPermissionCode('assessments:export');
   const { confirmArchive, archiveConfirmModal } = useArchiveAssessmentConfirm();
   const { confirmDelete, deleteConfirmModal } = useDeleteRecordConfirm('Assessment');
   const fixedLabel = fixedStatusLabel(fixedStatus);
@@ -645,6 +659,38 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
+  /* ── Row selection ─────────────────────────────────────────────────────
+     The AI Interviews All / Active / Draft / Archived table's checkbox
+     column, and what it is for: the Actions (N) menu below — Export,
+     Archive, Unarchive, Delete — over the ticked rows. Selection survives
+     paging; it is pruned to the rows that still exist after a reload or a
+     narrower filter. */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(sorted.map((row) => row.id));
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [sorted]);
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allOnPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id));
+  const toggleAllOnPage = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageRows.forEach((row) => next.delete(row.id));
+      else pageRows.forEach((row) => next.add(row.id));
+      return next;
+    });
+  const selectedRows = useMemo(() => sorted.filter((row) => selectedIds.has(row.id)), [sorted, selectedIds]);
+
   const isNarrowed = !!appliedSearch.trim() || hasAnyFilter(filters);
 
   /* Every action that can shrink the result set also returns to page 1.
@@ -837,6 +883,229 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     void runStatusAction(row, 'delete', () => assessmentService.delete(row.id), 'Assessment deleted');
   };
 
+  /* ── Bulk Archive / Unarchive / Delete ─────────────────────────────────
+     Per row, the SAME rule the row's ⋮ menu applies (permission, Disabled /
+     Archived job version, drafts have no Archive, nobody invited for Delete,
+     archived rows delete from the Archived tab). A row that fails it is
+     skipped and named in the confirm. There is no bulk endpoint: each
+     eligible row gets the row action's own call, four at a time. */
+  type BulkVerb = 'archive' | 'unarchive' | 'delete';
+  const bulkSkipReason = (row: AssessmentRow, verb: BulkVerb): string => {
+    if (!canDeleteAssessment) return `You do not have permission to ${verb} assessments`;
+    const jobLock = assessmentJobLockMessage(jobVersionStatusById[row.jdId]);
+    if (jobLock) return jobLock;
+    if (verb === 'archive') {
+      if (row.rawStatus === 'archived') return 'Already archived';
+      if (row.rawStatus === 'draft') return 'Drafts cannot be archived — delete them instead';
+      return '';
+    }
+    if (verb === 'unarchive') return row.rawStatus === 'archived' ? '' : 'Not archived';
+    if (row.invitations > 0 || row.completed > 0) return 'Candidates have already been invited';
+    if (row.rawStatus === 'archived' && fixedStatus !== 'archived') return 'Archived — delete it from the Archived tab';
+    return '';
+  };
+  const bulkPlan = (verb: BulkVerb) => {
+    const eligible: AssessmentRow[] = [];
+    const skipped = new Map<string, number>();
+    for (const row of selectedRows) {
+      const reason = bulkSkipReason(row, verb);
+      if (reason) skipped.set(reason, (skipped.get(reason) ?? 0) + 1);
+      else eligible.push(row);
+    }
+    return { eligible, skipped, skippedCount: selectedRows.length - eligible.length };
+  };
+  const BULK_COPY: Record<BulkVerb, { label: string; title: string; past: string; ing: string }> = {
+    archive: { label: 'Archive', title: 'Archive assessments', past: 'archived', ing: 'Archiving' },
+    unarchive: { label: 'Unarchive', title: 'Unarchive assessments', past: 'restored', ing: 'Restoring' },
+    delete: { label: 'Delete', title: 'Delete assessments', past: 'deleted', ing: 'Deleting' },
+  };
+  const [bulkVerb, setBulkVerb] = useState<BulkVerb | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const runBulk = async () => {
+    if (!bulkVerb) return;
+    const verb = bulkVerb;
+    const { eligible, skippedCount } = bulkPlan(verb);
+    const call = (row: AssessmentRow) =>
+      verb === 'archive' ? assessmentService.update(row.id, { status: 'archived' })
+        : verb === 'unarchive' ? assessmentService.update(row.id, { status: 'published' })
+          : assessmentService.delete(row.id);
+    setBulkRunning(true);
+    let done = 0;
+    let failed = 0;
+    const queue = [...eligible];
+    const worker = async () => {
+      while (queue.length) {
+        const row = queue.shift()!;
+        try {
+          await call(row);
+          done += 1;
+        } catch (err) {
+          console.error(`Bulk ${verb} failed for assessment ${row.id}:`, err);
+          failed += 1;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+    setBulkRunning(false);
+    setBulkVerb(null);
+    setSelectedIds(new Set());
+    const parts = [`${done} ${BULK_COPY[verb].past}`];
+    if (skippedCount) parts.push(`${skippedCount} skipped`);
+    if (failed) parts.push(`${failed} failed`);
+    (failed ? toast.error : done ? toast.success : toast.warning)(parts.join(' · '));
+    refreshRows();
+    onMutated?.();
+  };
+
+  /* ── Bulk Export ── The ticked rows, the columns picked in the popup. */
+  const EXPORT_COLUMNS = [
+    { id: 'jobId', label: 'JD ID' },
+    { id: 'jobName', label: 'Job Name' },
+    { id: 'jobVersion', label: 'Job Version' },
+    { id: 'assessmentVersion', label: 'Assessment Version' },
+    { id: 'status', label: 'Status' },
+    { id: 'invitations', label: 'Invitations Sent' },
+    { id: 'completed', label: 'Completed' },
+    { id: 'created', label: 'Created' },
+  ];
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
+  const handleExport = (ids: string[]) => {
+    if (!canExport) return;
+    if (selectedRows.length === 0) {
+      toast.warning('No assessments to export');
+      return;
+    }
+    const cols = EXPORT_COLUMNS.filter((c) => ids.includes(c.id));
+    // Created splits into its two parts, so each lands in its own column.
+    const headers = cols.flatMap((c) => (c.id === 'created' ? ['Created On', 'Created By'] : [c.label]));
+    const data = selectedRows.map((row) => cols.flatMap((c): string[] => {
+      switch (c.id) {
+        case 'jobId': return [row.jobId];
+        case 'jobName': return [row.jobName];
+        case 'jobVersion': return [`V${row.jobVersion}`];
+        case 'assessmentVersion': return [`V${row.assessmentVersion}`];
+        case 'status': return [row.status];
+        case 'invitations': return [String(row.invitations)];
+        case 'completed': return [String(row.completed)];
+        case 'created': return [row.createdAt ? formatISTStamp(row.createdAt) : '', row.createdBy];
+        default: return [''];
+      }
+    }));
+    const baseName = `Assessments_${fixedLabel || 'All'}_${new Date().toISOString().slice(0, 10)}`;
+    let blob: Blob;
+    let fileName: string;
+    if (exportFormat === 'csv') {
+      const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const csv = [headers.map(q).join(','), ...data.map((cells) => cells.map(q).join(','))].join('\n');
+      blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      fileName = `${baseName}.csv`;
+    } else {
+      const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background:#f0f0f0;font-weight:bold}</style></head><body><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${data.map((cells) => `<tr>${cells.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+      blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      fileName = `${baseName}.xls`;
+    }
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedRows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
+    setShowExportModal(false);
+    // Audit trail for the export — best-effort, after the file is on its way.
+    void assessmentService.logListExport({
+      format: exportFormat,
+      record_count: selectedRows.length,
+      export_type: 'assessment_list',
+      tab: fixedStatus || 'all',
+      ids: selectedRows.map((row) => row.id),
+    });
+  };
+
+  /* Which bulk items this tab offers: All → every one; Active / Draft →
+     Archive + Delete; Archived → Unarchive + Delete. */
+  const bulkVerbs: BulkVerb[] =
+    fixedStatus === 'archived' ? ['unarchive', 'delete']
+      : fixedStatus ? ['archive', 'delete']
+        : ['archive', 'unarchive', 'delete'];
+  const bulkActionsMenu = selectedRows.length > 0 ? (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+            aria-label={`Actions for ${selectedRows.length} selected`}
+          >
+            <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+            </span>
+            {bulkRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Actions ({selectedRows.length})
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+            {selectedRows.length.toLocaleString()} selected
+          </div>
+          <DropdownMenuItem
+            aria-disabled={!canExport || undefined}
+            title={canExport ? undefined : 'You do not have permission to export assessments'}
+            onSelect={(e) => {
+              if (!canExport) { e.preventDefault(); return; }
+              setShowExportModal(true);
+            }}
+            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+          >
+            <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+            <span>Export</span>
+          </DropdownMenuItem>
+          {bulkVerbs.map((verb) => {
+            const { eligible, skipped } = bulkPlan(verb);
+            const n = eligible.length;
+            const total = selectedRows.length;
+            /* RBAC rule: nothing hidden — with no eligible row the item stays,
+               greyed, its reason on hover, and the click does nothing. */
+            const reason = n === 0 ? [...skipped.keys()].join(' · ') : undefined;
+            const Icon = verb === 'archive' ? Archive : verb === 'unarchive' ? ArchiveRestore : Trash2;
+            return (
+              <DropdownMenuItem
+                key={verb}
+                aria-disabled={n === 0 || bulkRunning || undefined}
+                title={reason}
+                onSelect={(e) => {
+                  if (n === 0 || bulkRunning) { e.preventDefault(); return; }
+                  setBulkVerb(verb);
+                }}
+                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
+                  n === 0 ? 'text-gray-400 cursor-not-allowed opacity-60' : verb === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${n === 0 ? 'text-gray-300' : verb === 'delete' ? 'text-destructive' : 'text-menu-icon-archive'}`} />
+                <span>{BULK_COPY[verb].label} ({n === total ? n : `${n} of ${total}`})</span>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setSelectedIds(new Set())}
+        icon={<X className="w-4 h-4" />}
+        className="whitespace-nowrap !h-[38px] !text-sm"
+      >
+        Clear
+      </Button>
+    </>
+  ) : null;
+
   type RowAction = AssessmentRowAction;
 
   /* Opens an assessment's details page, whose Prev / Next then walks THIS
@@ -1018,7 +1287,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      the All tab, which has no View Assessment (see `rowActions`). */
   const opensView = (row: AssessmentRow) => !!fixedStatus || row.rawStatus !== 'draft';
 
-  const columnCount = COLUMNS.length + 1; // + Actions
+  const columnCount = COLUMNS.length + 2; // + Select + Actions
   /* Whether the table has data rows to lay out — and so whether its header
      belongs on screen at all.
      With none, the header is the only thing left forcing a width: its cells are
@@ -1027,6 +1296,103 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      one — the message drifts off the side behind a horizontal scrollbar that
      exists only to reach it. Nothing to label means nothing to be wide for.
      See `TABLE_EMPTY_PANEL_CLASS`. */
+  /* ── 9. Error ── and ── 7. Empty ── panels, shared by the table (as one
+     row in its body, so the header and toolbar survive) and the card view.
+     Empty distinguishes "nothing matched your filters" from "you have no
+     assessments yet": the first needs Clear Filters, the second has nothing
+     to clear. */
+  const errorPanel = (
+    <div className={TABLE_EMPTY_PANEL_CLASS}>
+      <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
+        <AlertTriangle className="w-7 h-7 text-destructive" />
+      </div>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+        Unable to load assessments
+      </h3>
+      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+        Something went wrong while loading the assessment list. Please try again.
+      </p>
+      <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
+        Retry
+      </Button>
+    </div>
+  );
+  const emptyPanel = (
+    <div className={TABLE_EMPTY_PANEL_CLASS}>
+      <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+        <ClipboardList className="w-7 h-7 text-brand-blue" />
+      </div>
+      {/* The "nothing here yet" wording is the one place the
+          pinned status shows through. Archived is the reason:
+          the shared line, "Assessments you create will be
+          listed here", is true of Draft and of All, and false
+          of Archived — a new assessment lands in Draft, never
+          in Archived, so on that tab it described something
+          that cannot happen. Both archived strings are
+          carried over verbatim from the empty state the
+          Archived tab used before it moved into this table,
+          so the tab reads exactly as it did. */}
+      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+        {isNarrowed
+          ? 'No assessments found'
+          : fixedStatus === 'archived'
+            ? 'No archived assessments found.'
+            : 'No assessments yet'}
+      </h3>
+      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+        {isNarrowed
+          ? 'No assessments match your current search or filter criteria.'
+          : fixedStatus === 'archived'
+            ? 'Assessments you archive will appear here.'
+            : 'Assessments you create will be listed here.'}
+      </p>
+      {isNarrowed && (
+        <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
+          Clear Filters
+        </Button>
+      )}
+    </div>
+  );
+
+  /* ── Actions ── one kebab, not a row of buttons. Radix's DropdownMenu (the
+     same control the AI Interview invite table uses) so it escapes the
+     table's scroll containers instead of being clipped by them. Shared by the
+     table's Actions cell and the card's corner. */
+  const actionsCell = (row: AssessmentRow) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+          aria-label={`Actions for ${row.title}`}
+          title="Actions"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run, destructive, disabled, title }) => (
+          /* A disabled action (permission or state) stays listed,
+             greyed, and keeps its reason on hover: aria-disabled
+             rather than Radix `disabled`, whose pointer-events:none
+             swallowed the title tooltip. The click is a no-op. */
+          <DropdownMenuItem
+            key={key}
+            onClick={disabled ? undefined : run}
+            onSelect={disabled ? (e) => e.preventDefault() : undefined}
+            disabled={busyRowId === row.id}
+            aria-disabled={disabled || undefined}
+            title={title}
+            className={`gap-2${disabled ? ' text-gray-400 cursor-not-allowed opacity-60' : destructive ? ' text-destructive focus:text-destructive' : ''}`}
+          >
+            <Icon className={`w-4 h-4 ${disabled ? 'text-gray-300' : iconClassName}`} />
+            <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const hasBodyRows = isLoading || (!error && pageRows.length > 0);
 
   return (
@@ -1103,6 +1469,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               filtersApplied={hasAnyFilter(filters)}
               onClearFilters={clearAll}
               className="mb-0"
+              afterFiltersActions={bulkActionsMenu}
+              trailing={onDisplayModeChange ? <ListViewToggle value={displayMode} onChange={onDisplayModeChange} /> : undefined}
             />
 
             {/* The six filter controls. A panel rather than an always-open row:
@@ -1220,12 +1588,117 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               Actions column to the right edge so a kebab is always reachable
               however far the table is scrolled sideways. Both are defined once
               in globals.css and used by the app's other data tables. */}
+          {/* ── Card view ── the Candidate Results tab's card grid: one card
+              per row, carrying the same fields the table shows. */}
+          {displayMode === 'grid' ? (
+          <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={`skeleton-${i}`} className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 flex flex-col gap-3">
+                    <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    <div className="h-3 w-1/2 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    <div className="h-3 w-3/4 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              errorPanel
+            ) : pageRows.length === 0 ? (
+              emptyPanel
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                {pageRows.map((row) => {
+                  const openable = opensView(row);
+                  const isSelected = selectedIds.has(row.id);
+                  return (
+                    /* A div, not a <button>: the Actions menu is a button and
+                       must not nest inside one. Opens on the same rule as the
+                       table row. */
+                    <div
+                      key={row.id}
+                      role={openable ? 'button' : undefined}
+                      tabIndex={openable ? 0 : undefined}
+                      onClick={openable ? () => openAssessmentDetails(row) : undefined}
+                      onKeyDown={openable ? (e) => { if (e.key === 'Enter') openAssessmentDetails(row); } : undefined}
+                      className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 flex flex-col gap-3 ${
+                        openable ? 'cursor-pointer hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5' : ''
+                      } ${gridCardSelectedClass(isSelected)}`}
+                    >
+                      <GridCardSelect
+                        selected={isSelected}
+                        onToggle={() => toggleSelected(row.id)}
+                        label={row.jobName}
+                        selectionActive={selectedIds.size > 0}
+                      />
+                      <div className="flex items-start justify-between gap-2">
+                        <span
+                          className="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-slate-50"
+                          title={row.jobName}
+                        >
+                          {row.jobName}
+                        </span>
+                        <div className="shrink-0 -mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
+                          {actionsCell(row)}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {row.jobId && <JobIdBadge>{row.jobId}</JobIdBadge>}
+                        <span title="Job version"><VersionPill kind="job" version={row.jobVersion} /></span>
+                        <span title="Assessment version"><VersionPill kind="assessment" version={row.assessmentVersion} /></span>
+                      </div>
+
+                      <div className="flex items-center flex-wrap gap-y-1"><StatusBadge status={row.status} /></div>
+
+                      <div className="flex items-center gap-4 text-sm">
+                        <span>
+                          <span className="tabular-nums text-gray-900 dark:text-slate-100">{row.invitations.toLocaleString()}</span>
+                          <span className="text-xs text-gray-400 ml-1">sent</span>
+                        </span>
+                        <span>
+                          <span className="tabular-nums text-gray-900 dark:text-slate-100">{row.completed.toLocaleString()}</span>
+                          <span className="text-xs text-gray-400 ml-1">Completed</span>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs">
+                        <span className="text-gray-500 dark:text-slate-500 tabular-nums">{formatISTStamp(row.createdAt)}</span>
+                        <CreatedBy name={row.createdBy} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          ) : (
           <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
             <div ref={scrollRef} className="tf-table-shell">
               <table className="w-full text-sm border-collapse">
                 {hasBodyRows && (
                 <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
+                    {/* Select All — this page's rows. */}
+                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle">
+                      {isLoading ? (
+                        <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={toggleAllOnPage}
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
+                          aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                          title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                        >
+                          {allOnPageSelected ? (
+                            <CheckSquare className="w-4 h-4 text-brand-blue" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-400" />
+                          )}
+                        </button>
+                      )}
+                    </th>
                     {COLUMNS.map((col) => {
                       const isSorted = sortKey === col.key;
                       const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
@@ -1234,34 +1707,42 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           key={col.key}
                           scope="col"
                           aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider ${
-                            col.align === 'right' ? 'text-right' : 'text-left'
+                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider ${
+                            col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                           } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
                         >
+                          {/* Loading: the header is skeleton bars too, as in the
+                              shared TableSkeleton — no real labels until the rows
+                              arrive. */}
+                          {isLoading ? (
+                            <div className={`h-3.5 w-16 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse ${col.align === 'right' ? 'ml-auto' : col.align === 'center' ? 'mx-auto' : ''}`} />
+                          ) : (
                           <button
                             type="button"
                             onClick={() => toggleSort(col.key)}
                             disabled={!!error}
-                            className={`inline-flex items-center gap-1.5 group uppercase tracking-wider transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
+                            className={`inline-flex items-center gap-1.5 group uppercase uppercase tracking-wider transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
                               col.align === 'right' ? 'flex-row-reverse' : ''
                             } ${isSorted ? 'text-brand-blue' : ''}`}
                             title={`Sort by ${col.label}`}
                           >
-                            {col.label}
+                            {/* A long title (Invitations Sent, Interview Version…) wraps to two lines past 8rem. */}
+                            <span className={`inline-block w-max max-w-[8rem] whitespace-normal leading-tight ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}>{col.label}</span>
                             <SortIcon
                               className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
                                 isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'
                               }`}
                             />
                           </button>
+                          )}
                         </th>
                       );
                     })}
                     <th
                       scope="col"
-                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"
                     >
-                      Actions
+                      {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                     </th>
                   </tr>
                 </thead>
@@ -1274,6 +1755,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   {isLoading &&
                     Array.from({ length: 8 }).map((_, i) => (
                       <tr key={`skeleton-${i}`}>
+                        <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10">
+                          <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                        </td>
                         {COLUMNS.map((col) => (
                           <td
                             key={col.key}
@@ -1295,21 +1779,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       toolbar above it survive the failure. */}
                   {!isLoading && error && (
                     <tr>
-                      <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
-                        <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
-                          <AlertTriangle className="w-7 h-7 text-destructive" />
-                        </div>
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                          Unable to load assessments
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
-                          Something went wrong while loading the assessment list. Please try again.
-                        </p>
-                        <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
-                          Retry
-                        </Button>
-                        </div>
-                      </td>
+                      <td colSpan={columnCount} className="p-0">{errorPanel}</td>
                     </tr>
                   )}
 
@@ -1318,41 +1788,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       Filters, the second has nothing to clear. */}
                   {!isLoading && !error && pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
-                        <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                          <ClipboardList className="w-7 h-7 text-brand-blue" />
-                        </div>
-                        {/* The "nothing here yet" wording is the one place the
-                            pinned status shows through. Archived is the reason:
-                            the shared line, "Assessments you create will be
-                            listed here", is true of Draft and of All, and false
-                            of Archived — a new assessment lands in Draft, never
-                            in Archived, so on that tab it described something
-                            that cannot happen. Both archived strings are
-                            carried over verbatim from the empty state the
-                            Archived tab used before it moved into this table,
-                            so the tab reads exactly as it did. */}
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                          {isNarrowed
-                            ? 'No assessments found'
-                            : fixedStatus === 'archived'
-                              ? 'No archived assessments found.'
-                              : 'No assessments yet'}
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
-                          {isNarrowed
-                            ? 'No assessments match your current search or filter criteria.'
-                            : fixedStatus === 'archived'
-                              ? 'Assessments you archive will appear here.'
-                              : 'Assessments you create will be listed here.'}
-                        </p>
-                        {isNarrowed && (
-                          <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-                            Clear Filters
-                          </Button>
-                        )}
-                        </div>
-                      </td>
+                      <td colSpan={columnCount} className="p-0">{emptyPanel}</td>
                     </tr>
                   )}
 
@@ -1362,8 +1798,23 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       <tr
                         key={row.id}
                         onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
-                        className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10`}
+                        className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedIds.has(row.id) ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : ''}`}
                       >
+                        {/* 0. Select — its own click, never the row's open. */}
+                        <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => toggleSelected(row.id)}
+                            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                            aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
+                          >
+                            {selectedIds.has(row.id) ? (
+                              <CheckSquare className="w-4 h-4 text-brand-blue" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-400" />
+                            )}
+                          </button>
+                        </td>
                         {/* 1. Job ID — secondary by design: the chip is the
                             house Job Openings badge, which reads as a
                             reference rather than as the row's headline. */}
@@ -1379,11 +1830,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             weight. The job name only, truncated with the full
                             name in `title`. */}
                         <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
-                          {/* The cap sits on the span: a table cell's own
-                              max-width is ignored, so on the td it let a long
-                              job name widen the column uncut. */}
+                          {/* Fixed width on the span (a table cell's own
+                              max-width is ignored): same column width on every
+                              row, longer names end in "…", full name on hover. */}
                           <span
-                            className="block max-w-[12rem] sm:max-w-[16rem] truncate font-medium text-gray-900 dark:text-slate-50"
+                            className="block w-[10rem] sm:w-[12rem] truncate font-medium text-gray-900 dark:text-slate-50"
                             title={row.jobName}
                           >
                             {row.jobName}
@@ -1391,12 +1842,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 3. Job Version — its own column, blue chip. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
                           <VersionPill kind="job" version={row.jobVersion} />
                         </td>
 
                         {/* 4. Assessment Version — its own column, cyan chip. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
                           <VersionPill kind="assessment" version={row.assessmentVersion} />
                         </td>
 
@@ -1405,39 +1856,32 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           <StatusBadge status={row.status} />
                         </td>
 
-                        {/* 6. Invitations Sent — right-aligned and tabular, so
-                            the digits line up down the column; "sent" stays
-                            muted so the number is what is scanned. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right">
+                        {/* 6. Invitations Sent — the number alone (the header
+                            names it), centred, tabular figures. */}
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.invitations.toLocaleString()}
                           </span>
-                          <span className="text-xs text-gray-400 ml-1">sent</span>
                         </td>
 
                         {/* 7. Completed — candidates who completed this
                             assessment (`completed_count`), in the same
-                            right-aligned tabular figures as Invitations Sent
-                            beside it, with "Completed" muted after the
-                            number — whatever the count — the way "sent"
-                            follows that one. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right whitespace-nowrap">
+                            centred tabular figures as Invitations Sent
+                            beside it — the number alone. */}
+                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center whitespace-nowrap">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.completed.toLocaleString()}
                           </span>
-                          <span className="text-xs text-gray-400 ml-1">Completed</span>
                         </td>
 
-                        {/* 7. Created On — date AND time, fixed width. */}
+                        {/* 7. Created — date and time, with who created it underneath. */}
                         <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
-                          <span className="text-gray-600 dark:text-slate-400 tabular-nums">
-                            {formatISTStamp(row.createdAt)}
-                          </span>
-                        </td>
-
-                        {/* 8. Created By */}
-                        <td className={`px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle ${HIDE_CLASS.lg}`}>
-                          <CreatedBy name={row.createdBy} />
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <span className="text-gray-600 dark:text-slate-400 tabular-nums">
+                              {formatISTStamp(row.createdAt)}
+                            </span>
+                            <CreatedBy name={row.createdBy} />
+                          </div>
                         </td>
 
                         {/* 9. Actions — one kebab, not a row of buttons.
@@ -1450,38 +1894,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right tf-sticky-col"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                type="button"
-                                className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
-                                aria-label={`Actions for ${row.title}`}
-                                title="Actions"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run, destructive, disabled, title }) => (
-                                /* A disabled action (permission or state) stays listed,
-                                   greyed, and keeps its reason on hover: aria-disabled
-                                   rather than Radix `disabled`, whose pointer-events:none
-                                   swallowed the title tooltip. The click is a no-op. */
-                                <DropdownMenuItem
-                                  key={key}
-                                  onClick={disabled ? undefined : run}
-                                  onSelect={disabled ? (e) => e.preventDefault() : undefined}
-                                  disabled={busyRowId === row.id}
-                                  aria-disabled={disabled || undefined}
-                                  title={title}
-                                  className={`gap-2${disabled ? ' text-gray-400 cursor-not-allowed opacity-60' : destructive ? ' text-destructive focus:text-destructive' : ''}`}
-                                >
-                                  <Icon className={`w-4 h-4 ${disabled ? 'text-gray-300' : iconClassName}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {actionsCell(row)}
                         </td>
                       </tr>
                     ))}
@@ -1489,6 +1902,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </table>
             </div>
           </div>
+          )}
 
           {/* ── 6. Pagination ── The shared control, on this screen's ladder.
               Hidden while loading and on failure: a pager over skeletons
@@ -1508,6 +1922,64 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       </div>
       {archiveConfirmModal}
       {deleteConfirmModal}
+
+      {/* Bulk Archive / Unarchive / Delete — one confirm for the ticked rows:
+          how many will change, and which are skipped and why. */}
+      {bulkVerb && (() => {
+        const { eligible, skipped } = bulkPlan(bulkVerb);
+        const copy = BULK_COPY[bulkVerb];
+        return (
+          <AppModal
+            open
+            size="sm"
+            onCancel={() => { if (!bulkRunning) setBulkVerb(null); }}
+            cancelDisabled={bulkRunning}
+            title={copy.title}
+            icon={bulkVerb === 'delete' ? <Trash2 className="w-5 h-5 text-destructive" /> : bulkVerb === 'archive' ? <Archive className="w-5 h-5 text-brand-blue" /> : <ArchiveRestore className="w-5 h-5 text-brand-blue" />}
+            actions={[{
+              label: bulkRunning ? `${copy.ing}…` : `${copy.label} ${eligible.length}`,
+              onClick: () => void runBulk(),
+              variant: bulkVerb === 'delete' ? 'destructive' : 'primary',
+              loading: bulkRunning,
+              disabled: bulkRunning || eligible.length === 0,
+            }]}
+          >
+            <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
+              <p>
+                <span className="font-semibold">{eligible.length}</span> assessment{eligible.length === 1 ? '' : 's'} will be {copy.past}.
+                {bulkVerb === 'delete' && ' This cannot be undone.'}
+              </p>
+              {skipped.size > 0 && (
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700 p-3">
+                  <p className="text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1.5">Skipped</p>
+                  <ul className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
+                    {[...skipped.entries()].map(([reason, count]) => (
+                      <li key={reason}>{count} — {reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </AppModal>
+        );
+      })()}
+
+      {showExportModal && (
+        <ExportColumnsModal<'csv' | 'xls'>
+          title="Export Assessments"
+          recordCount={selectedRows.length}
+          formats={[
+            { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+            { key: 'xls', title: 'Excel Format (.xls)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+          ]}
+          format={exportFormat}
+          onFormatChange={setExportFormat}
+          columns={EXPORT_COLUMNS}
+          initialColumnIds={EXPORT_COLUMNS.map((c) => c.id)}
+          onExport={handleExport}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
     </div>
   );
 }

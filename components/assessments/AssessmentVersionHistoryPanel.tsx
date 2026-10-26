@@ -1130,7 +1130,7 @@ export default function AssessmentVersionHistoryPanel({
                          on every screen. */
                       className={`sticky top-0 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
                     >
-                      {label}
+                      <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                     </th>
                   ))}
                 </tr>
@@ -1428,7 +1428,7 @@ export default function AssessmentVersionHistoryPanel({
                                                 key={label}
                                                 className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
                                               >
-                                                {label}
+                                                <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                                               </th>
                                             ))}
                                           </tr>
