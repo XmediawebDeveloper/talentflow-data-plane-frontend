@@ -31,6 +31,14 @@ import { useEffect } from 'react';
 
 const SHELL_SELECTOR = '.tf-table-shell';
 /** Open dropdown menus / popovers, which are portalled over the table. */
+/** A dimmed full-screen modal overlay — the same list globals.css's
+ *  background scroll lock uses (keep them in step) — the Radix dialog overlay,
+ *  or any `aria-modal` dialog. */
+const MODAL_OVERLAY_SELECTOR =
+  '.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"]';
+/** A table inside any of these is part of the popup, not behind it. */
+const POPUP_CONTAINER_SELECTOR =
+  '.fixed, [role="dialog"], [role="alertdialog"], [data-slot="dialog-content"]';
 const OPEN_POPOVER_SELECTOR =
   '[role="menu"][data-state="open"], [data-radix-popper-content-wrapper], [data-tf-popover]';
 /**
@@ -439,6 +447,7 @@ export default function TableScrollbars() {
        cached, so a resized column, a filtered row set or a theme switch
        needs no invalidation step. */
     const sync = () => {
+      const modalOpen = !!document.querySelector(MODAL_OVERLAY_SELECTOR);
       entries.forEach(({ y, x }, shell) => {
         /* Re-assert the suppression before measuring. Nothing should be able to
            strip it now that it is a data attribute React does not own, but a
@@ -482,6 +491,13 @@ export default function TableScrollbars() {
            The menu is modal and blocks scrolling, so hiding until it closes
            loses nothing. Same for every tab - they share one table. */
         if (document.querySelector(OPEN_POPOVER_SELECTOR)) return hideBoth();
+
+        /* A modal overlay open and this table is behind it (not inside it):
+           stand down too. The overlay root sits at z-index 10000, over every
+           dialog, so a background table's bar showed through the dimmed
+           backdrop beside the Score Table / View Resume popups. globals.css
+           locks that table's scrolling while the overlay is open anyway. */
+        if (modalOpen && !shell.closest(POPUP_CONTAINER_SELECTOR)) return hideBoth();
 
         const rect = shell.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return hideBoth();
