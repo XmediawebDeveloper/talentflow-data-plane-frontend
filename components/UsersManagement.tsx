@@ -1312,7 +1312,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-base sm:text-xl font-bold text-white truncate">{viewingRole.name}</h2>
-                  <p className="text-blue-100 text-xs sm:text-sm truncate">{viewingRole.description}</p>
+                  <p className="text-blue-100 text-sm truncate">{viewingRole.description}</p>
                 </div>
               </div>
               <button
@@ -1327,20 +1327,20 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             <div className="p-3 sm:p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                 <div>
-                  <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
-                  <div className="font-medium text-gray-900 dark:text-slate-50 text-xs sm:text-base truncate">{viewingRole.code}</div>
+                  <div className="text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="font-medium text-gray-900 dark:text-slate-50 text-base truncate">{viewingRole.code}</div>
                 </div>
                 <div>
-                  <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
-                  <div className="font-medium text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRole.user_count}</div>
+                  <div className="text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="font-medium text-gray-900 dark:text-slate-50 text-base">{viewingRole.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                  <div className="font-medium text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePermissions.length}</div>
+                  <div className="text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="font-medium text-gray-900 dark:text-slate-50 text-base">{viewingRolePermissions.length}</div>
                 </div>
               </div>
 
-              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 uppercase tracking-wide mb-3 sm:mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 uppercase tracking-wide mb-3 sm:mb-4">
                 Allocated Permissions ({viewingRolePermissions.length})
               </h3>
 
@@ -1365,7 +1365,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   ).map(([module, perms]) => (
                     <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                       <div className="bg-gray-100 dark:bg-slate-800 px-3 sm:px-4 py-2 border-b border-gray-200 dark:border-slate-700">
-                        <h4 className="font-semibold text-gray-900 dark:text-slate-50 capitalize text-xs sm:text-sm">
+                        <h4 className="font-semibold text-gray-900 dark:text-slate-50 capitalize text-sm">
                           {module.replace(/_/g, ' ')} ({perms.length})
                         </h4>
                       </div>
@@ -1382,10 +1382,10 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                               perm.action === 'delete' ? 'bg-red-100 text-red-600' :
                               'bg-purple-100 text-purple-600'
                             }`}>
-                              <span className="text-2xs sm:text-xs font-bold uppercase">{perm.action[0]}</span>
+                              <span className="text-xs font-bold uppercase">{perm.action[0]}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-xs sm:text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
+                              <div className="font-medium text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
                             </div>
                           </div>
                         ))}
@@ -1400,7 +1400,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             <div className="bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
               <div className="text-sm text-gray-500 dark:text-slate-500">
                 {viewingRole.is_system && (
-                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-full text-2xs sm:text-xs font-medium">
+                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-full text-xs font-medium">
                     <Lock className="w-3 h-3" />
                     System Role (Read-Only)
                   </span>

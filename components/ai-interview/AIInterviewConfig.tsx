@@ -673,7 +673,9 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           <span />
         )}
         {mode === 'flexible' && (
-          <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
+          /* Own right-aligned line below sm: beside the title the Weight label
+             crowded into the subtitle column on a phone. */
+          <div className="flex flex-wrap items-center justify-end gap-1.5 flex-shrink-0 w-full sm:w-auto">
             <label className="text-xs text-gray-500">Weight</label>
             <div className="flex items-center">
               <input
@@ -3674,7 +3676,10 @@ export default function AIInterviewConfig() {
                 />
               </div>
 
-              <div role="tablist" aria-label="Additional settings" className="mt-3 px-4 flex items-center gap-1 border-b border-gray-100 overflow-x-auto scrollbar-hide">
+              {/* Below sm the tabs share the row equally, icon over a wrapping
+                  label: in one nowrap line the second tab was cut off at
+                  "Candidate Langua" with the scrollbar hidden. */}
+              <div role="tablist" aria-label="Additional settings" className="mt-3 px-4 flex items-stretch sm:items-center gap-1 border-b border-gray-100 overflow-x-auto scrollbar-hide">
                 {ADDITIONAL_SETTING_TABS.map(tab => {
                   const active = additionalTab === tab.key;
                   return (
@@ -3684,13 +3689,13 @@ export default function AIInterviewConfig() {
                       role="tab"
                       aria-selected={active}
                       onClick={() => setAdditionalTab(tab.key)}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                      className={`flex-1 sm:flex-none flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-2 text-sm font-medium text-center sm:whitespace-nowrap border-b-2 -mb-px transition-colors ${
                         active
                           ? 'border-brand-blue text-brand-blue'
                           : 'border-transparent text-gray-500 hover:text-brand-blue hover:border-brand-blue/30'
                       }`}
                     >
-                      <tab.icon className="w-4 h-4" />
+                      <tab.icon className="w-4 h-4 flex-shrink-0" />
                       {tab.label}
                     </button>
                   );

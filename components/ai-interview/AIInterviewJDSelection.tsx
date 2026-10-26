@@ -197,7 +197,7 @@ export default function AIInterviewJDSelection() {
 
           <div className="w-full">
             <div className="mb-6 sm:mb-8">
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 dark:text-slate-50 mb-2 tracking-tight">Create New AI Interview</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-2 tracking-tight">Create New AI Interview</h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400">
                 Select a Job Description to create an AI-powered interview
               </p>
@@ -206,8 +206,8 @@ export default function AIInterviewJDSelection() {
             <div className="bg-gray-50 dark:bg-slate-800/40 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 flex items-start gap-2 sm:gap-3">
               <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
               <div>
-                <div className="text-xs sm:text-sm text-brand-blue font-medium mb-1">AI-Powered Interview</div>
-                <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <div className="text-sm text-brand-blue font-medium mb-1">AI-Powered Interview</div>
+                <div className="text-sm text-gray-700 dark:text-slate-300">
                   The AI interviewer builds its rounds from the JD&apos;s must-have and nice-to-have skills, then runs a <strong>timed or conversational interview</strong> with each candidate and scores every round.
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function AIInterviewJDSelection() {
                 ) : (
                   <div className="space-y-3" ref={jdListRef}>
                     <div className="mb-4">
-                      <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
@@ -304,7 +304,7 @@ export default function AIInterviewJDSelection() {
                     )}
 
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
+                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
                         Select a Job Opening
                         {lineageJobs.length > 0 && (
                           <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
@@ -610,7 +610,7 @@ export default function AIInterviewJDSelection() {
                               ? 'No jobs available for a new AI interview'
                               : 'No published jobs available'}
                         </p>
-                        <p className="text-xs sm:text-sm mt-1">
+                        <p className="text-sm mt-1">
                           {availableJobs.length > 0
                             ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
                             : allConfigured

@@ -99,7 +99,7 @@ function Reveal({
 /** One measure for every section: gutters grow with the viewport, and the
  *  column widens past 1200px only on genuinely large displays. */
 const SHELL =
-  "container mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 xl:max-w-[1320px] 2xl:max-w-[1480px]";
+  "container mx-auto w-full max-w-[1200px] px-4 md:px-8 xl:max-w-[1320px] 2xl:max-w-[1480px]";
 
 /** Vertical rhythm, shared so sections can't drift apart. */
 const SECTION_Y = "py-10 sm:py-14 2xl:py-20";
@@ -108,7 +108,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     // Semibold: at 11px, uppercase and widely tracked, Inter needs the extra
     // weight to hold the line the mono face used to hold on its own.
-    <span className="text-2xs sm:text-xs font-semibold uppercase tracking-[0.22em] text-mkt-accent">
+    <span className="text-xs font-semibold uppercase tracking-[0.22em] text-mkt-accent">
       {children}
     </span>
   );

@@ -87,7 +87,7 @@ export default function AssignAssessmentModal({
             <div className="flex items-start gap-2 sm:gap-3">
               <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
                 </h3>
                 <div className="text-xs text-gray-900 dark:text-slate-50 space-y-1">
@@ -109,7 +109,7 @@ export default function AssignAssessmentModal({
 
           {/* Assessment Selection */}
           <div className="mb-4 sm:mb-6">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">
               Select Assessment to Assign
             </label>
 
@@ -169,7 +169,7 @@ export default function AssignAssessmentModal({
             {assessments.filter(assessment => assessment.status === 'Active' && !assessment.is_archived).length === 0 && (
               <div className="text-center py-6 sm:py-8 text-gray-500 dark:text-slate-500">
                 <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
-                <p className="text-xs sm:text-sm font-medium">No active assessments available.</p>
+                <p className="text-sm font-medium">No active assessments available.</p>
                 <p className="text-xs mt-1">Please create and publish an assessment first.</p>
               </div>
             )}
@@ -181,7 +181,7 @@ export default function AssignAssessmentModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">What Happens Next?</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">What Happens Next?</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li className="flex items-start gap-2">
                       <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />

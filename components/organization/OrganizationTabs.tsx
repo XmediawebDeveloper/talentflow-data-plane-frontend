@@ -54,10 +54,10 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
       style={stickyTop !== undefined ? { top: stickyTop } : undefined}
       className={
         stickyTop !== undefined
-          // Negative margins = the page card's padding (p-3 sm:p-4 md:p-8, set in
+          // Negative margins = the page card's padding (p-4 md:p-8, set in
           // organization/layout.tsx), so the band spans the card and nothing
           // shows through at its sides.
-          ? 'sticky z-20 -mx-3 sm:-mx-4 md:-mx-8 px-3 sm:px-4 md:px-8 pt-1 mb-3 lg:mb-5 bg-white dark:bg-slate-900'
+          ? 'sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 pt-1 mb-3 lg:mb-5 bg-white dark:bg-slate-900'
           : 'mb-3 lg:mb-5'
       }
     >
@@ -122,7 +122,7 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
       >
         {tabs.map((tab) => {
           const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
-          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm font-medium transition-colors';
+          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm max-sm:text-[13px] font-medium transition-colors';
           if (tab.planLocked) {
             return (
               <span

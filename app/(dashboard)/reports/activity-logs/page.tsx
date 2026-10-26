@@ -103,8 +103,8 @@ export default function ActivityLogsPage() {
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
               </div>
             </div>
             <button
@@ -162,11 +162,11 @@ export default function ActivityLogsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{log.action}</p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
-                        <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
                   </div>

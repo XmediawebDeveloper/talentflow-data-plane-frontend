@@ -1453,7 +1453,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
                 )}
               </div>
               {checksNotStarted && (
-                <p className="-mt-1 mb-3 text-xs sm:text-sm font-medium text-brand-blue">
+                <p className="-mt-1 mb-3 text-sm font-medium text-brand-blue">
                   Click &quot;Run Checks&quot; to test your camera, microphone and connection.
                 </p>
               )}
@@ -1553,7 +1553,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
                       <p className="text-sm text-destructive-strong mb-3">{cameraInUseError}</p>
                       <div className="bg-white rounded-lg p-3 border border-destructive-line">
                         <p className="text-sm font-semibold text-destructive-strong mb-1.5">How to fix this:</p>
-                        <ol className="list-decimal list-inside space-y-1 text-destructive-strong text-xs sm:text-sm">
+                        <ol className="list-decimal list-inside space-y-1 text-destructive-strong text-sm">
                           <li>Close any apps using your camera (Zoom, Teams, Skype, FaceTime, Google Meet)</li>
                           <li>Close other browser tabs that may be using your camera</li>
                           {isIOS && (

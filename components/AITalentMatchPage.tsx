@@ -4297,8 +4297,10 @@ export default function AITalentMatchPage({
 
         {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
         {historyPageView === 'candidates' && (
-          /* One card around the whole view, as View by Job (Resume Scoring's shell). */
-          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
+          /* No card around the view: it sat inside the page panel with the
+             bordered job/candidate cards inside it — a frame in a frame.
+             Matches Resume Scoring, which dropped the same shell. */
+          <div>
             <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
             <div className="mb-4">
@@ -4921,9 +4923,11 @@ export default function AITalentMatchPage({
                             )}
                           </button>
                           <div className="min-w-0 flex-1">
+                            {/* max-w-full: a button sizes to its text, so without it `truncate`
+                                never engaged and a long name ran past the card on a phone. */}
                             <button
                               onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate"
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
                             >
                               {row.name || 'Candidate'}
                             </button>
@@ -5186,7 +5190,7 @@ export default function AITalentMatchPage({
                     type="button"
                     onClick={() => { setCandidateRatingBand(null); void view.open(); }}
                     aria-pressed={view.active}
-                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
                       view.active
                         ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                         : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -5209,7 +5213,7 @@ export default function AITalentMatchPage({
                       void openAllResumesView();
                     }}
                     aria-pressed={candidateRatingBand === band.id}
-                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
                       candidateRatingBand === band.id
                         ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                         : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -5842,9 +5846,10 @@ export default function AITalentMatchPage({
         )}
 
         {historyPageView === 'list' && (
-        /* One card around the whole job view — search bar, job rows and
-           pagination — as on Resume Scoring. */
-        <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
+        /* No card around the job view (search bar, job rows, pagination):
+           inside the page panel it was a frame in a frame. Matches Resume
+           Scoring, which dropped the same shell. */
+        <div>
         <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
         {/* Row 1 — Resume Scoring's View by Job toolbar: Search (fills the
@@ -7886,19 +7891,24 @@ export default function AITalentMatchPage({
           />
 
           {/* SaaS Header */}
+          {/* Title block and actions sit side by side only from lg: at tablet
+              width the two buttons beside it truncated the job name to two
+              words and wrapped "New AI Match" onto two lines. */}
           <div className="mb-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
               <div className="flex items-start gap-3 min-w-0">
                 <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                   <Sparkles className="h-4 w-4 text-brand-blue" />
                 </div>
                 <div className="min-w-0">
                   {/* JD ID badge before the title — the same badge the job list rows use. */}
-                  <div className="flex items-center gap-2 mb-1 min-w-0">
+                  {/* Wraps below sm (the pills drop under the name) and the name
+                      wraps too — on one line a phone showed "Senior Full…". */}
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 mb-1 min-w-0">
                     {resultsJobCode && (
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate min-w-0">{resultsJobTitle}</h1>
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 [overflow-wrap:anywhere] sm:truncate">{resultsJobTitle}</h1>
                     {/* JD version — a dropdown once the job has more than one
                         version to pick from, else the same pill as the
                         table's Job Version column. */}
@@ -8034,7 +8044,7 @@ export default function AITalentMatchPage({
                     setMatchError(null);
                     router.push('/recruitment/ai-talent-match', { scroll: false });
                   }}
-                  className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                  className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium whitespace-nowrap"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>New AI Match</span>

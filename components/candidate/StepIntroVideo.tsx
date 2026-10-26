@@ -134,7 +134,7 @@ export default function StepIntroVideo({
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className={`absolute top-3 right-3 min-h-10 flex items-center gap-1.5 text-white text-xs sm:text-sm font-semibold px-4 py-1.5 rounded-full transition-colors ${
+                    className={`absolute top-3 right-3 min-h-10 flex items-center gap-1.5 text-white text-sm font-semibold px-4 py-1.5 rounded-full transition-colors ${
                       isMuted ? 'bg-black/70 hover:bg-black/90' : 'bg-black/40 hover:bg-black/70'
                     }`}
                   >

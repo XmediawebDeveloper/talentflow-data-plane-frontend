@@ -1674,7 +1674,7 @@ export default function UserManagement() {
         value={roleFilter}
         onChange={(e) => setRoleFilter(e.target.value)}
         aria-label="Filter by role"
-        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors max-sm:!text-xs hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
+        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
           roleFilter === 'all'
             ? 'border-gray-200 text-gray-700 dark:border-slate-700 dark:text-slate-300'
             : 'border-brand-blue/40 text-brand-blue'
@@ -2864,7 +2864,7 @@ export default function UserManagement() {
       className="flex items-center gap-2 p-2 sm:p-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 opacity-60 cursor-not-allowed select-none"
     >
       <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-      <span className="text-sm font-medium text-gray-500 dark:text-slate-400 flex-1 min-w-0 truncate">{name}</span>
+      <span className="text-sm max-sm:text-[13px] font-medium text-gray-500 dark:text-slate-400 flex-1 min-w-0 truncate">{name}</span>
       <span className="text-xs font-medium text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded whitespace-nowrap">Not in plan</span>
     </div>
   );
@@ -2917,7 +2917,7 @@ export default function UserManagement() {
               icon={<Plus className="w-4 h-4" />}
               aria-disabled={!canCreateUser}
               title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
-              className={`max-sm:h-8 max-sm:px-3 max-sm:text-xs ${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
+              className={`${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
                 if (!canCreateUser) return;
                 if (isAtLimit) {
@@ -2954,7 +2954,7 @@ export default function UserManagement() {
           click) and seat usage. Bottom row: search and the result count. */}
       <div className="mb-4 sm:mb-5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div role="group" aria-label="Filter users by status" className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <div role="group" aria-label="Filter users by status" className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             {([
               { key: 'all', label: 'All users', Icon: UsersIcon, count: totalUsersCount, of: null },
               { key: 'active', label: 'Active', Icon: UserCheck, count: activeUsersCount, of: limits?.max_users === -1 ? '∞' : (limits?.max_users ?? null) },
@@ -2980,7 +2980,7 @@ export default function UserManagement() {
                   <Icon className="hidden h-4 w-4 sm:block" />
                   {key === 'all' ? <><span className="sm:hidden">All</span><span className="hidden sm:inline">{label}</span></> : label}
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums sm:px-2 sm:text-xs ${
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
                       active ? 'bg-white/20 text-white' : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
                     }`}
                   >
@@ -3008,7 +3008,7 @@ export default function UserManagement() {
                     style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
                   />
                 </div>
-                <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                <span className="text-sm max-sm:text-[13px] font-semibold tabular-nums text-gray-900 dark:text-slate-50">
                   {Math.min(limits.usage_percentage, 100)}%
                 </span>
               </div>
@@ -3210,7 +3210,7 @@ export default function UserManagement() {
                         <NameAvatar name={user.name} fallback={user.email} size="md" />
                         <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
+                            <span className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
                             {renderYouTag(user)}
                           </div>
                           {user.email && (
@@ -3323,7 +3323,7 @@ export default function UserManagement() {
                   <NameAvatar name={user.name} fallback={user.email} size="sm" className="sm:h-9 sm:w-9 sm:text-sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-                      <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
+                      <span className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
                       {renderYouTag(user)}
                       {user.user_display_id && (
                         <button
@@ -3465,7 +3465,7 @@ export default function UserManagement() {
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                  <div className="mt-2 flex items-center gap-2 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     <span>Validating email...</span>
                   </div>
@@ -3476,7 +3476,7 @@ export default function UserManagement() {
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm text-destructive-strong font-medium">
+                        <p className="text-sm max-sm:text-[13px] text-destructive-strong font-medium">
                           {emailCheckResult.error}
                         </p>
                       </div>
@@ -3485,9 +3485,9 @@ export default function UserManagement() {
                 )}
               </div>
               {/* Password is auto-generated — user receives invite email */}
-              <div className="flex items-start gap-2.5 p-3 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/20 rounded-lg text-sm text-brand-blue ring-1 ring-brand-blue/10">
+              <div className="flex items-start gap-2.5 p-3 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/20 rounded-lg text-sm max-sm:text-[13px] text-brand-blue ring-1 ring-brand-blue/10">
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-blue" />
-                <span className="text-sm">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
+                <span className="text-sm max-sm:text-[13px]">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
               </div>
               <div>
                 <Label className="mb-2">
@@ -3512,7 +3512,7 @@ export default function UserManagement() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className={`font-semibold truncate text-sm ${isSelected ? 'text-brand-blue' : 'text-gray-800 dark:text-slate-100'}`}>
+                            <span className={`font-semibold truncate text-sm max-sm:text-[13px] ${isSelected ? 'text-brand-blue' : 'text-gray-800 dark:text-slate-100'}`}>
                               {role.name}
                             </span>
                             {isSystemRole && (
@@ -3560,7 +3560,7 @@ export default function UserManagement() {
                   })}
                 </div>
                 {availableRoles.length === 0 && (
-                  <div className="text-center py-6 px-4 text-gray-500 dark:text-slate-500 text-sm border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <div className="text-center py-6 px-4 text-gray-500 dark:text-slate-500 text-sm max-sm:text-[13px] border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                     No roles available. Create roles in Role Management first.
                   </div>
                 )}
@@ -3570,7 +3570,7 @@ export default function UserManagement() {
               {false && selectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">
+                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
                       Role Permissions
                     </label>
                     <span className="text-xs text-gray-500 dark:text-slate-500">
@@ -3580,11 +3580,11 @@ export default function UserManagement() {
                   {isLoadingPermissions ? (
                     <div className="flex items-center justify-center py-3 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-800/50">
                       <Loader2 className="w-4 h-4 animate-spin text-gray-500 dark:text-slate-500" />
-                      <span className="ml-2 text-sm text-gray-500 dark:text-slate-500">Loading...</span>
+                      <span className="ml-2 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">Loading...</span>
                     </div>
                   ) : (
                     selectedPermissionCodes.size === 0 ? (
-                      <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm">
+                      <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm max-sm:text-[13px]">
                         No permissions assigned to this role yet.
                         <br />
                         <span className="text-xs">Configure permissions in Role Management.</span>
@@ -3640,7 +3640,7 @@ export default function UserManagement() {
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name</label>
+                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name</label>
                   <Input
                     type="text"
                     value={editingUser.name}
@@ -3648,7 +3648,7 @@ export default function UserManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">Email</label>
+                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Email</label>
                   <Input
                     type="email"
                     value={editingUser.email}
@@ -3660,7 +3660,7 @@ export default function UserManagement() {
               {identityChanges.length > 0 ? (
                 <div className="flex gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3 sm:p-4">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
-                  <div className="space-y-1 text-sm text-gray-700 dark:text-slate-300">
+                  <div className="space-y-1 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
                     <p className="font-semibold text-gray-900 dark:text-slate-50">
                       Changing the {identityChanges.map(c => c.field.toLowerCase()).join(' and ')}{' '}needs the user&apos;s confirmation
                     </p>
@@ -3680,7 +3680,7 @@ export default function UserManagement() {
 
               {/* Role Selection - Compact Pills */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Role</label>
+                <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-2">Role</label>
                 <div className="flex flex-wrap gap-2">
                   {availableRoles.map(role => {
                     const isSelected = editSelectedRoleId === role.id;
@@ -3904,7 +3904,7 @@ export default function UserManagement() {
                                   />
                                 )}
                                 <div>
-                                  <h4 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                                  <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
                                     {category.name}
                                   </h4>
                                   <p className="text-xs text-gray-500 dark:text-slate-500">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
@@ -3954,7 +3954,7 @@ export default function UserManagement() {
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                                      <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">
                                         View {category.name}
                                         {isMandatory && (
                                           <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
@@ -3982,7 +3982,7 @@ export default function UserManagement() {
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
+                                      <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
                                         {action.label}
                                         {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
                                       </div>
@@ -4109,7 +4109,7 @@ export default function UserManagement() {
                                             <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">View {sub.name}</div>
+                                            <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">View {sub.name}</div>
                                           </div>
                                         </div>
                                       );
@@ -4157,7 +4157,7 @@ export default function UserManagement() {
                                             <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
+                                            <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
                                           </div>
                                         </div>
                                       );
@@ -4227,7 +4227,7 @@ export default function UserManagement() {
                     <div className="flex items-center gap-3">
                       <Mail className="w-5 h-5 text-warning flex-shrink-0" />
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm">Email a temporary password</p>
+                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Email a temporary password</p>
                         <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Sends a temp password to the user and forces a reset on next login. You never see it.</p>
                       </div>
                     </div>
@@ -4241,7 +4241,7 @@ export default function UserManagement() {
                     <div className="flex items-center gap-3">
                       <KeyRound className="w-5 h-5 text-brand-blue flex-shrink-0" />
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm">Set a password directly</p>
+                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Set a password directly</p>
                         <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">You type a new password and hand it to the user. No email, no OTP.</p>
                       </div>
                     </div>
@@ -4250,7 +4250,7 @@ export default function UserManagement() {
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
+                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
                     <div className="relative">
                       <Input
                         type={directPwShow ? 'text' : 'password'}
@@ -4266,7 +4266,7 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
+                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
                     <Input
                       type={directPwShow ? 'text' : 'password'}
                       value={directPwConfirm}
@@ -4281,7 +4281,7 @@ export default function UserManagement() {
                       onCheckedChange={(v) => setDirectPwForceChange(!!v)}
                       className="mt-0.5"
                     />
-                    <span className="text-sm text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
+                    <span className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
                   </label>
                 </>
               )}
@@ -4357,15 +4357,15 @@ export default function UserManagement() {
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
-                  <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{viewingRolePopup.code}</div>
+                  <div className="font-semibold text-brand-blue text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingRolePopup.user_count}</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl max-sm:text-lg">{viewingRolePopup.user_count}</div>
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
-                  <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl">{viewingRolePopupShownCount}</div>
+                  <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl max-sm:text-lg">{viewingRolePopupShownCount}</div>
                 </div>
               </div>
 
@@ -4394,13 +4394,13 @@ export default function UserManagement() {
           },
         ]}
       >
-        <div className="space-y-4 text-sm text-gray-700 dark:text-slate-300">
+        <div className="space-y-4 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
           {identityChanges.length > 0 && (
             <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
               <div className="space-y-1.5">
                 {identityChanges.map(c => (
-                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-sm">
+                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-sm max-sm:text-[13px]">
                     <span className="font-medium text-gray-500 dark:text-slate-400">{c.field}</span>
                     <span className="min-w-0 break-words">
                       <span className="text-gray-400 line-through dark:text-slate-500">{c.from}</span>
@@ -4432,7 +4432,7 @@ export default function UserManagement() {
           </ol>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-slate-300">6-digit code</label>
+            <label className="mb-1.5 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">6-digit code</label>
             <Input
               autoFocus
               inputMode="numeric"
@@ -4446,7 +4446,7 @@ export default function UserManagement() {
                   handleUpdateUser({ code: identityOtpCode.trim(), requestId: identityOtp.requestId });
                 }
               }}
-              className="text-center tracking-[0.5em] font-mono text-lg"
+              className="text-center tracking-[0.5em] font-mono text-lg max-sm:text-base"
             />
             {identityOtpError && <p className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{identityOtpError}</p>}
           </div>

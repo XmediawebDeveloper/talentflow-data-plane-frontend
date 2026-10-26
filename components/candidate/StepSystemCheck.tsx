@@ -2751,7 +2751,7 @@ export default function StepSystemCheck({
                         value={selectedMicId}
                         onChange={(e) => switchMicrophone(e.target.value)}
                         disabled={isSwitchingDevice}
-                        className="w-full text-base sm:text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                        className="w-full text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                       >
                         <option value="" disabled>Select your microphone…</option>
                         {micDevices.map((d, i) => (
@@ -2880,7 +2880,7 @@ export default function StepSystemCheck({
                           value={selectedCameraId}
                           onChange={(e) => switchCamera(e.target.value)}
                           disabled={isSwitchingDevice || checksRunning}
-                          className="w-full text-base sm:text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                          className="w-full text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                         >
                           {cameraDevices.length === 0 && <option value="">System Default</option>}
                           {cameraDevices.map((d, i) => (
@@ -2910,7 +2910,7 @@ export default function StepSystemCheck({
                           value={selectedMicId}
                           onChange={(e) => switchMicrophone(e.target.value)}
                           disabled={isSwitchingDevice || checksRunning}
-                          className="w-full text-base sm:text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                          className="w-full text-sm min-h-11 sm:min-h-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                         >
                           <option value="" disabled>Select your microphone…</option>
                           {micDevices.map((d, i) => (

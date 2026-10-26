@@ -44,7 +44,7 @@ export default function AIInterviewConfigSummaryCard({
         </p>
         <p className="mt-0.5 text-sm sm:text-base font-bold text-gray-900 dark:text-slate-100 truncate">{title}</p>
         {metaParts.length > 0 && (
-          <p className="mt-1 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+          <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
             {metaParts.map((part, i) => (
               <span key={part}>
                 {i > 0 && <span className="mx-1.5 text-gray-300 dark:text-slate-600">|</span>}

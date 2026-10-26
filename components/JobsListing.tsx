@@ -113,6 +113,12 @@ interface JobsListingProps {
    * until the panel was reopened. See JobVersionHistoryPanel.statusOverrides.
    */
   versionStatusOverrides?: Record<string, string>;
+  /**
+   * Version ids the host has successfully deleted since the lineage was
+   * fetched. Dropped from the View Versions table so a deleted version
+   * disappears at once instead of lingering until a page refresh.
+   */
+  deletedVersionIds?: Set<string>;
   onPublishJob?: (job: Job) => void;
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
@@ -187,7 +193,7 @@ const StatVersionsPlaceholder = () => (
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
+export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -1504,14 +1510,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             {/* Sort by — pushed to the row's end */}
             {sortedJobs.length > 0 && (
               <div className="flex items-center gap-2 sm:ml-auto">
-                <span className="text-xs sm:text-sm text-gray-700">Sort by</span>
+                <span className="text-sm text-gray-700">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
-                    the sort control belongs to the same pill system. */}
-                {/* Phones get a 28px control (p-0.5 + h-6, 12px text) so the sort
-                    sits at the same scale as the tab pills; `sm` and up are as before.
-                    `max-sm:!text-xs` because globals.css forces every <select>
-                    to 16px below 640px, unlayered, which outranks a plain utility. */}
-                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-0.5 sm:p-1 transition-all">
+                    the sort control belongs to the same pill system. One size at
+                    every width (36px, 14px text) — the toolbar type standard. */}
+                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                   <div className="relative">
                     <select
                       value={sortBy}
@@ -1519,7 +1522,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                         const value = e.target.value as JobSortBy;
                         setSortBy(value);
                       }}
-                      className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 cursor-pointer"
+                      className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 cursor-pointer"
                     >
                       <option value="date">Date Posted</option>
                       <option value="applicants">Scored</option>
@@ -1529,7 +1532,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       <option value="status">Status</option>
                       <option value="industry">Industry Type</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                   </div>
                   <button
                     type="button"
@@ -1537,7 +1540,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       e.stopPropagation();
                       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                     }}
-                    className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
+                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
                     title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   >
                     <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
@@ -1555,6 +1558,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             <div className="space-y-3">
               {currentJobs.map(job => {
                 const versionKey = job.job_id || job.id;
+                /* The cached lineage minus versions deleted since it was fetched. */
+                const liveLineage = deletedVersionIds?.size
+                  ? versionLineage.lineages[versionKey]?.filter((v) => !deletedVersionIds.has(v.id))
+                  : versionLineage.lineages[versionKey];
                 /* A Draft only opens in the JD editor, so without Edit permission
                    the card and its View icon are greyed and do nothing (RBAC:
                    tooltip only) — the user stays on this list. */
@@ -1662,19 +1669,19 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     {hasCountBadges && (
                       <div className="flex basis-full md:basis-auto flex-nowrap gap-1 md:flex-col md:items-stretch md:gap-1.5 flex-shrink-0">
                         {applicantsCount != null && (
-                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-info-subtle text-info-strong">
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-info-subtle text-info-strong">
                             <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
-                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-success-subtle text-success-strong">
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-success-subtle text-success-strong">
                             <ClipboardCheck className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {assessedCount} Assessed
                           </span>
                         )}
                         {interviewedCount != null && (
-                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
                             <Video className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {interviewedCount} Interviewed
                           </span>
@@ -1981,8 +1988,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           job={job}
                           versions={
                             statusFilter === 'all'
-                              ? versionLineage.lineages[versionKey]
-                              : versionLineage.lineages[versionKey]?.filter(
+                              ? liveLineage
+                              : liveLineage?.filter(
                                   /* The cached lineage can be older than the status tab
                                      being viewed — e.g. this version was archived just now,
                                      but the lineage fetched before that still says
@@ -2232,7 +2239,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
-                <span className="text-xs sm:text-sm text-gray-600">
+                <span className="text-sm text-gray-600">
                   Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
                 </span>
               </div>
@@ -2241,7 +2248,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
                 {/* Go to page */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}

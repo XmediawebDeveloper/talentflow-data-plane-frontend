@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { bulkInviteService, isBulkInviteActive, type BulkInviteJob } from '@/lib/services/bulkInviteService';
 
 /**
@@ -39,6 +39,16 @@ interface BulkInviteProgressContextType {
 const STORAGE_KEY = 'bulk_invite_progress_state';
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 const POLL_MS = 2500;
+/* A run still 'queued' after this long has no worker on it: poll it every
+   STALE_POLL_MS instead, so two stuck jobs do not keep hitting the API. */
+const STALE_AFTER_MS = 2 * 60 * 1000;
+const STALE_POLL_MS = 30 * 1000;
+
+const isStale = (j: BulkInviteJob) => {
+  if (j.status !== 'queued' || !j.created_at) return false;
+  const t = new Date(j.created_at).getTime();
+  return Number.isFinite(t) && Date.now() - t > STALE_AFTER_MS;
+};
 
 const BulkInviteProgressContext = createContext<BulkInviteProgressContextType | undefined>(undefined);
 
@@ -114,6 +124,16 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
      newest snapshot wins either way. */
   const activeIds = activeJobs.map((j) => j.job_id).join(',');
   const polling = useRef(false);
+  const lastPolled = useRef<Record<string, number>>({});
+  /* Read through an effect event: the latest jobs, without restarting the
+     poll loop on every snapshot. */
+  const shouldPoll = useEffectEvent((id: string) => {
+    const known = jobs.find((j) => j.job_id === id);
+    const now = Date.now();
+    if (known && isStale(known) && now - (lastPolled.current[id] ?? 0) < STALE_POLL_MS) return false;
+    lastPolled.current[id] = now;
+    return true;
+  });
   useEffect(() => {
     if (!activeIds) return;
     let cancelled = false;
@@ -122,6 +142,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
       polling.current = true;
       try {
         await Promise.all(activeIds.split(',').map(async (id) => {
+          if (!shouldPoll(id)) return;
           try {
             const fresh = await bulkInviteService.get(id);
             if (!cancelled) upsert(fresh);

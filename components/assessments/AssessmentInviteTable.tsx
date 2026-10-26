@@ -126,7 +126,7 @@ export const isValidInviteEmail = (email: string) => isValidEmailFormat(email);
  *  status with a chip beside it. */
 export const InviteStatusBadge = ({ inv }: { inv: any }) => {
   const s = inv.status;
-  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
+  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
   if (isInviteExpired(inv)) {
     return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
   }
@@ -247,7 +247,7 @@ export default function AssessmentInviteTable({
       ) : invitations.length === 0 ? (
         <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
           <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/40" />
-          <p className="text-xs sm:text-sm">
+          <p className="text-sm">
             {hasActiveFilters ? 'No invitations match the current filters.' : emptyMessage}
           </p>
         </div>

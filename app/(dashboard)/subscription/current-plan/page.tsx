@@ -2265,7 +2265,7 @@ function CurrentPlanContent() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
                 {isLocked
                   ? 'Your account is locked. Please select a plan and complete payment.'
                   : isOnTrial
@@ -2308,7 +2308,7 @@ function CurrentPlanContent() {
 
           {/* Billing cycle — start / end dates with elapsed-cycle progress */}
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-600 dark:text-slate-400">
                 <span>
                   {isOnTrial ? 'Trial Started' : 'Plan Start'}:{' '}
@@ -2344,7 +2344,7 @@ function CurrentPlanContent() {
                         <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive flex-shrink-0" />
                         <div>
                           <h4 className="font-medium text-destructive-strong text-sm sm:text-base">Plan Expired</h4>
-                          <p className="text-xs sm:text-sm text-destructive">
+                          <p className="text-sm text-destructive">
                             Your {planName} plan has expired. Please renew to continue using all features.
                           </p>
                         </div>
@@ -2398,7 +2398,7 @@ function CurrentPlanContent() {
                           }`}>
                             {isExpired ? 'Plan Expired' : 'Plan Expiring Soon'}
                           </h4>
-                          <p className={`text-xs sm:text-sm ${
+                          <p className={`text-sm ${
                             isExpired ? 'text-destructive' : 'text-warning'
                           }`}>
                             {isExpired
@@ -2422,7 +2422,7 @@ function CurrentPlanContent() {
                             setError(null);
                             setShowPaymentModal(true);
                           }}
-                          className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0 ${
+                          className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm w-full sm:w-auto justify-center flex-shrink-0 ${
                             isExpired
                               ? 'bg-destructive hover:bg-destructive text-white'
                               : 'bg-warning hover:opacity-90 text-white'
@@ -2669,7 +2669,7 @@ function CurrentPlanContent() {
             </span>
             <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-semibold text-destructive-strong">Account Locked</h3>
-              <p className="mt-0.5 text-xs sm:text-sm text-destructive">Your trial has ended and payment was not completed. Please select a plan and complete payment to continue.</p>
+              <p className="mt-0.5 text-sm text-destructive">Your trial has ended and payment was not completed. Please select a plan and complete payment to continue.</p>
             </div>
           </div>
         )}
@@ -2683,7 +2683,7 @@ function CurrentPlanContent() {
               </span>
               <div className="min-w-0">
                 <h3 className="text-sm sm:text-base font-semibold text-warning-strong">Payment Pending</h3>
-                <p className="mt-0.5 text-xs sm:text-sm text-warning">
+                <p className="mt-0.5 text-sm text-warning">
                   Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}
                 </p>
               </div>
@@ -2734,7 +2734,7 @@ function CurrentPlanContent() {
               <h3 className={`text-sm sm:text-base font-semibold ${purchaseHold.needsSupport ? 'text-destructive-strong' : 'text-warning-strong'}`}>
                 {purchaseHold.needsSupport ? 'Plan activation needs attention' : 'Your new plan is being set up'}
               </h3>
-              <p className={`text-xs sm:text-sm mt-1 ${purchaseHold.needsSupport ? 'text-destructive' : 'text-warning'}`}>
+              <p className={`text-sm mt-1 ${purchaseHold.needsSupport ? 'text-destructive' : 'text-warning'}`}>
                 {purchaseHold.message}
               </p>
               {purchaseHold.paymentReference && (
@@ -2746,7 +2746,7 @@ function CurrentPlanContent() {
             <button
               type="button"
               onClick={() => fetchPurchaseStatus()}
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue flex-shrink-0"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue flex-shrink-0"
               title="Check again"
             >
               <RefreshCw className="w-4 h-4" />
@@ -2764,7 +2764,7 @@ function CurrentPlanContent() {
               </span>
               <div className="min-w-0">
                 <h3 className="text-sm sm:text-base font-semibold text-warning-strong">Pending Plan Changes</h3>
-                <p className="mt-0.5 text-xs sm:text-sm text-warning">
+                <p className="mt-0.5 text-sm text-warning">
                   You have {queuedUpgrades.length} queued plan change{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
                 </p>
               </div>
@@ -2790,7 +2790,7 @@ function CurrentPlanContent() {
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-sm">
                         {upgrade.payment_amount !== undefined && (
                           <div>
                             <span className="text-gray-500 dark:text-slate-500">Amount Paid:</span>
@@ -2842,7 +2842,7 @@ function CurrentPlanContent() {
                           setTcAccepted(false);
                           setShowTCModal(true);
                         }}
-                        className="flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-xs sm:text-sm font-medium text-white shadow-sm transition-colors hover:bg-success"
+                        className="flex items-center gap-1.5 rounded-lg bg-success px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-success"
                       >
                         <Zap className="h-4 w-4" />
                         Apply Now
@@ -2855,7 +2855,7 @@ function CurrentPlanContent() {
                             setShowCancelModal(true);
                           }}
                           disabled={isCancellingUpgrade}
-                          className="flex items-center gap-1.5 rounded-lg border border-destructive-line bg-destructive-subtle px-4 py-2 text-xs sm:text-sm font-medium text-destructive transition-colors hover:bg-destructive-subtle disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg border border-destructive-line bg-destructive-subtle px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive-subtle disabled:opacity-50"
                         >
                           <XCircle className="h-4 w-4" />
                           Cancel
@@ -2886,7 +2886,7 @@ function CurrentPlanContent() {
                   Pick the plan that fits your team. Switch between monthly and yearly billing.
                 </p>
                 {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
-                  <p className="mt-1.5 text-xs sm:text-sm text-warning">
+                  <p className="mt-1.5 text-sm text-warning">
                     You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
                       ? 'Cancel it above or apply it now to select a different plan.'
                       : 'Apply it now to select a different plan.'}
@@ -2988,7 +2988,7 @@ function CurrentPlanContent() {
                     )}
 
                     <h3 className="pt-1 text-base font-bold text-gray-900 dark:text-slate-50">{plan.name}</h3>
-                    <p className="mt-0.5 min-h-[36px] text-xs sm:text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>
+                    <p className="mt-0.5 min-h-[36px] text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>
 
                     <div className="my-4">
                       {(plan.monthlyPrice || plan.annualPrice) ? (
@@ -3113,7 +3113,7 @@ function CurrentPlanContent() {
                             {displayFeatures.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
                               <li key={idx} className="flex items-start gap-2">
                                 <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-teal" />
-                                <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">{feature}</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{feature}</span>
                               </li>
                             ))}
                           </ul>
@@ -3123,7 +3123,7 @@ function CurrentPlanContent() {
                                 e.stopPropagation();
                                 setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
                               }}
-                              className="mt-2 pl-6 text-left text-xs sm:text-sm font-medium text-brand-blue hover:underline"
+                              className="mt-2 pl-6 text-left text-sm font-medium text-brand-blue hover:underline"
                             >
                               {expandedFeaturesPlan === plan.id
                                 ? 'Show less'

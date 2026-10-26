@@ -9,7 +9,7 @@ export default function Loading() {
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
-          <section className="mb-6 rounded-xl border border-gray-100 bg-gray-50 p-5 sm:p-6">
+          <section className="mb-4 sm:mb-6 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="flex-1 space-y-2">

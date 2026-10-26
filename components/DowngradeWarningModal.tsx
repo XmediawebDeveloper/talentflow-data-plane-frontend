@@ -48,7 +48,7 @@ export default function DowngradeWarningModal({
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">
                 Downgrade Warning
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
+              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">
                 {currentPlanName} → {targetPlanName}
               </p>
             </div>
@@ -74,7 +74,7 @@ export default function DowngradeWarningModal({
                     <h3 className="text-sm sm:text-base font-semibold text-brand-orange-deep mb-1">
                       Current Usage Exceeds Target Plan Limits
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-gray-700 dark:text-slate-300">
                       Your current usage exceeds the limits of the <strong>{targetPlanName}</strong> plan.
                       You must reduce your usage before downgrading.
                     </p>
@@ -94,14 +94,14 @@ export default function DowngradeWarningModal({
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h5 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">{overage.quotaLabel}</h5>
-                        <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1">
+                        <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
                           You need to reduce your usage to fit within the new plan limit
                         </p>
                       </div>
                       <Trash2 className="w-5 h-5 text-red-600 flex-shrink-0" />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
+                    <div className="grid grid-cols-3 gap-2 sm:gap-4 text-sm">
                       <div>
                         <p className="text-gray-600 dark:text-slate-400">Current Usage</p>
                         <p className="font-semibold text-gray-900 dark:text-slate-50 text-base sm:text-lg">
@@ -136,11 +136,11 @@ export default function DowngradeWarningModal({
                     <h4 className="text-sm sm:text-base font-semibold text-yellow-900 mb-1">
                       Read-Only Mode Will Be Activated
                     </h4>
-                    <p className="text-xs sm:text-sm text-yellow-800 mb-2">
+                    <p className="text-sm text-yellow-800 mb-2">
                       After downgrading, your account will be placed in <strong>read-only mode</strong> until
                       you reduce your usage to fit within the new plan limits.
                     </p>
-                    <ul className="text-xs sm:text-sm text-yellow-800 space-y-1 ml-4 list-disc">
+                    <ul className="text-sm text-yellow-800 space-y-1 ml-4 list-disc">
                       <li>You will <strong>not be able to upload new resumes</strong></li>
                       <li>You will <strong>not be able to run new resume scores</strong></li>
                       <li>You can view existing data and delete items</li>
@@ -155,7 +155,7 @@ export default function DowngradeWarningModal({
                 <h4 className="text-sm sm:text-base font-semibold text-brand-blue mb-2">
                   Action Required Before Downgrading
                 </h4>
-                <ol className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 space-y-2 ml-4 list-decimal">
+                <ol className="text-sm text-gray-700 dark:text-slate-300 space-y-2 ml-4 list-decimal">
                   <li>
                     <strong>Delete excess resumes:</strong> Go to "My Resumes" and remove{' '}
                     {overages.find(o => o.quotaType === 'resume_storage')?.overage.toLocaleString() || 'excess'} resumes
@@ -179,7 +179,7 @@ export default function DowngradeWarningModal({
                     <h3 className="text-sm sm:text-base font-semibold text-brand-blue mb-1">
                       Confirm Downgrade
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-gray-700 dark:text-slate-300">
                       You are about to downgrade from <strong>{currentPlanName}</strong> to{' '}
                       <strong>{targetPlanName}</strong>. Please review the changes below.
                     </p>
@@ -187,7 +187,7 @@ export default function DowngradeWarningModal({
                 </div>
               </div>
 
-              <div className="space-y-3 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+              <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
                 <p className="flex items-start gap-2">
                   <span className="text-gray-400 dark:text-slate-500">•</span>
                   Your billing will be adjusted to the lower plan rate

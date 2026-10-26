@@ -63,7 +63,7 @@ export default function PlanChangeAcceptPage() {
                   {status === 'success' && 'Changes Accepted'}
                   {status === 'error' && 'Acceptance Failed'}
                 </h1>
-                <p className="text-white/80 text-xs sm:text-sm mt-0.5">Plan Change Acceptance</p>
+                <p className="text-white/80 text-sm mt-0.5">Plan Change Acceptance</p>
               </div>
             </div>
           </div>

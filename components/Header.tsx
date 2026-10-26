@@ -740,7 +740,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
-      <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-3 sm:px-4 md:px-8">
+      {/* px-4 / md:px-8: the same 16px / 32px gutter as every page panel, so
+          the header's edges line up with the content under it. */}
+      <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-4 md:px-8">
       {/* Hamburger Menu Button - Only on Mobile */}
       {onMenuClick && (
         <button
@@ -764,7 +766,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           alt="TalentFlow"
           width={brandLogo.width}
           height={brandLogo.height}
-          className="h-7 sm:h-10 lg:h-12 w-auto"
+          // h-6 below 360px: at 320 the icon cluster on the right was
+          // clipped by a few px.
+          className="h-6 min-[360px]:h-7 sm:h-10 lg:h-12 w-auto"
         />
       </Link>
 
@@ -876,7 +880,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">{planName}</h3>
+                        <h3 className="text-sm font-bold text-gray-900 truncate">{planName}</h3>
                         <div className="flex items-center gap-1 flex-wrap text-2xs text-gray-500 mt-0.5">
                           {planPeriodLabel && (
                             <span className="flex items-center gap-1">
@@ -940,7 +944,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <RowIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{meta.label}</div>
+                            <div className="text-sm font-semibold text-gray-900 truncate">{meta.label}</div>
                             {!isUnlimited && limit != null && limit > 0 && (
                               <div className="mt-1 h-1.5 max-w-[140px] bg-gray-100 rounded-full overflow-hidden">
                                 <div
@@ -951,14 +955,14 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             )}
                           </div>
                           {isUnlimited ? (
-                            <span className="text-2xs sm:text-xs font-semibold text-success-strong">Unlimited</span>
+                            <span className="text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="text-2xs sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-200 flex-shrink-0" />
-                              <span className={`text-2xs sm:text-xs font-bold tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right ${meta.left}`}>
+                              <span className={`text-xs font-bold tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right ${meta.left}`}>
                                 Left {(remaining ?? 0).toLocaleString()}
                               </span>
                             </>
@@ -983,17 +987,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs sm:text-sm font-semibold text-gray-900">Users</div>
+                            <div className="text-sm font-semibold text-gray-900">Users</div>
                           </div>
                           {isUnlimited ? (
-                            <span className="text-2xs sm:text-xs font-semibold text-success-strong">Unlimited</span>
+                            <span className="text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="text-2xs sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-300 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right">
+                              <span className="text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right">
                                 Left {(remaining ?? 0).toLocaleString()}
                               </span>
                             </>
@@ -1009,7 +1013,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     <div className="w-7 h-7 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                       <Info className="w-3.5 h-3.5" />
                     </div>
-                    <span className="flex-1 min-w-0 text-xs sm:text-sm font-medium text-gray-900">Need extra units right away?</span>
+                    <span className="flex-1 min-w-0 text-sm font-medium text-gray-900">Need extra units right away?</span>
                     <Button
                       variant="primary"
                       size="sm"

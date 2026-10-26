@@ -362,11 +362,17 @@ async function init(msg) {
   // One warm-up pass. The first WebGPU run pays shader compilation (hundreds of
   // ms); doing it at init keeps it out of the first real detection window.
   let labelSpace = 'unknown';
+  // Timed so the main thread can refuse a GPU that is already too slow here,
+  // BEFORE any real frame lands on Bina's speech (a WebGPU run can't be
+  // preempted — a 10 s frame freezes the whole machine).
+  let warmupMs = null;
   try {
     const zeros = new ortLib.Tensor(
       'float32', new Float32Array(3 * inputSize * inputSize), [1, 3, inputSize, inputSize],
     );
+    const _w0 = performance.now();
     const out = await session.run({ [inputName]: zeros });
+    warmupMs = performance.now() - _w0;
     const { logits } = findOutputs(out);
     if (logits) {
       const resolved = resolveLabelSpace(logits.dims[2]);
@@ -380,7 +386,7 @@ async function init(msg) {
 
   self.postMessage({
     type: 'ready', backend: 'webgpu', inputSize, labelSpace,
-    ortUrl: loadedFrom, shaderF16: hasF16,
+    ortUrl: loadedFrom, shaderF16: hasF16, warmupMs,
   });
 }
 

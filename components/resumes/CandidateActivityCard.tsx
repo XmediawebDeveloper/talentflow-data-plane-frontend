@@ -53,7 +53,7 @@ const ITEM_LABEL: Record<TabKey, string> = {
   interviews: 'interviews',
 };
 
-const BADGE = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap ring-1';
+const BADGE = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1';
 
 /* Assessment invite status in the Assessments tracker's words and colours
    (Assessments.tsx badge): the backend already resolved the precedence. */
@@ -107,14 +107,16 @@ const PassFail = ({ passed }: { passed: boolean | null | undefined }) =>
    carries: Details | <the tab's value columns> | View, each a fixed width. A
    missing value shows a dash instead of letting the row's badges slide over.
    Headings and values are centred. On a phone the cells simply wrap under the
-   title. Grid classes are written out in full so Tailwind picks them up. */
+   title. Grid classes are written out in full so Tailwind picks them up.
+   The table grid starts at lg, not md: on a 768px tablet the fixed value
+   columns left the Details column ~80px, wrapping it a word per line. */
 const COLUMNS: Record<TabKey, { heads: string[]; grid: string }> = {
-  scores: { heads: ['Score out of 10', 'Match'], grid: 'md:grid-cols-[minmax(0,1fr)_8rem_9rem_7rem]' },
-  talent_matches: { heads: ['Rating', 'Scored Status'], grid: 'md:grid-cols-[minmax(0,1fr)_6rem_9rem_7rem]' },
-  assessments: { heads: ['Tech %', 'Coding %', 'Result', 'Status'], grid: 'md:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem_8.5rem_7rem]' },
-  interviews: { heads: ['Match Score', 'Result', 'Status'], grid: 'md:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_8.5rem_7rem]' },
+  scores: { heads: ['Score out of 10', 'Match'], grid: 'lg:grid-cols-[minmax(0,1fr)_8rem_9rem_7rem]' },
+  talent_matches: { heads: ['Rating', 'Scored Status'], grid: 'lg:grid-cols-[minmax(0,1fr)_6rem_9rem_7rem]' },
+  assessments: { heads: ['Tech %', 'Coding %', 'Result', 'Status'], grid: 'lg:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_5.5rem_8.5rem_7rem]' },
+  interviews: { heads: ['Match Score', 'Result', 'Status'], grid: 'lg:grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_8.5rem_7rem]' },
 };
-const gridFor = (tab: TabKey) => `md:grid ${COLUMNS[tab].grid} md:items-center md:gap-x-3`;
+const gridFor = (tab: TabKey) => `lg:grid ${COLUMNS[tab].grid} lg:items-center lg:gap-x-3`;
 
 const NoValue = () => <span className="text-sm text-gray-400">—</span>;
 
@@ -154,11 +156,11 @@ function Row({
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-900">{title}</div>
         <div className="mt-0.5 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 md:contents">
+      <div className="flex flex-wrap items-center gap-2 lg:contents">
         {cells.map((cell, i) => (
-          <div key={i} className="md:flex md:justify-center md:text-center">{cell ?? <NoValue />}</div>
+          <div key={i} className="lg:flex lg:justify-center lg:text-center">{cell ?? <NoValue />}</div>
         ))}
-        <div className="md:flex md:justify-center">
+        <div className="lg:flex lg:justify-center">
           {onOpen && (
             <button
               onClick={onOpen}

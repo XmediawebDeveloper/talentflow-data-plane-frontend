@@ -73,7 +73,7 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
       </div>
 
       {/* Mobile cards — matches the real card layout */}
-      <div className="md:hidden space-y-3 px-2">
+      <div className="md:hidden space-y-3 py-3">
         {Array.from({ length: Math.min(rows, 4) }).map((_, i) => (
           <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 space-y-2">
             <div className="flex items-center gap-3">
@@ -275,6 +275,10 @@ interface ResumeTableProps {
    *  dialog: `.tf-table-shell`'s own `min-height: 400px` would otherwise push
    *  the shell past the dialog body and float its scrollbar over the footer. */
   tableShellClassName?: string;
+  /** Phone card list without side padding, for a list that sits straight on
+   *  a page panel (Resume Database) so the cards line up with the panel's
+   *  content inset. Default keeps the 8px gutter dialogs rely on. */
+  flushCards?: boolean;
 }
 
 // Helper function to highlight matching text
@@ -343,6 +347,7 @@ export default function ResumeTable({
   emptyState,
   containerClassName = 'flex-1',
   tableShellClassName = '',
+  flushCards = false,
 }: ResumeTableProps) {
   const router = useRouter();
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
@@ -1115,7 +1120,7 @@ export default function ResumeTable({
       </div>
 
       {/* FIX-008: Mobile Card View - visible only on mobile */}
-      <div className="md:hidden space-y-3 px-2">
+      <div className={`md:hidden space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
         {paginatedItems.map((resume) => (
           <div
             key={resume.id}
@@ -1157,7 +1162,10 @@ export default function ResumeTable({
               {resume.experience && (
                 <div className="flex items-center gap-2 text-gray-600">
                   <Briefcase className="w-4 h-4 flex-shrink-0" />
-                  <span>{resume.experience} years exp.</span>
+                  {/* Already formatted with its units ("6 years 3 months", "N/A")
+                      — the table cell shows it as-is; appending "years exp."
+                      here read "6 years 3 months years exp." on phones. */}
+                  <span>{resume.experience}</span>
                 </div>
               )}
               {getDisplaySkills(resume).length > 0 && (

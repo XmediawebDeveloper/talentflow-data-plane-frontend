@@ -33,6 +33,9 @@ interface JDVersionHistoryModalProps {
    * Match. Omitted, it opens the page's default tab.
    */
   goToJdTab?: string;
+  /** Swap the header's Close (X) icon for a Cancel button in the footer.
+   *  Both just close the popup. */
+  cancelInFooter?: boolean;
 }
 
 interface JDHistoryVersion {
@@ -235,7 +238,8 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
               </span>
             )}
             <h3
-              className="font-normal text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate min-w-0"
+              // Wraps below sm: truncated, a phone showed only "Senior Backe…".
+              className="font-normal text-gray-900 dark:text-slate-50 text-base [overflow-wrap:anywhere] sm:truncate min-w-0"
               title={version.title}
             >
               {version.title}
@@ -328,6 +332,7 @@ export default function JDVersionHistoryModal({
   initialVersionNumber,
   showGoToJd = false,
   goToJdTab,
+  cancelInFooter = false,
 }: JDVersionHistoryModalProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -555,21 +560,28 @@ export default function JDVersionHistoryModal({
                 size="sm"
                 onClick={compareSelected}
                 disabled={compareChecked.length !== 2}
-                className="hidden lg:inline-flex"
+                /* `max-lg:hidden`, not `hidden lg:inline-flex`: Button joins
+                   its classes without tailwind-merge, so its own base
+                   `inline-flex` beat `hidden` and this showed on phones too,
+                   crushing the title beside it. The footer Compare covers
+                   narrow screens. */
+                className="max-lg:hidden"
               >
                 {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={closeModal}
-              className="px-2"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            {!cancelInFooter && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={closeModal}
+                className="px-2"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -695,7 +707,7 @@ export default function JDVersionHistoryModal({
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{version.title}</p>
+                          <p className="text-sm text-gray-600 dark:text-slate-400 [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
                           <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3.5 h-3.5" />
@@ -767,6 +779,15 @@ export default function JDVersionHistoryModal({
                   : `${versions.length} version${versions.length !== 1 ? 's' : ''}`}
             </p>
             <div className="flex items-center gap-2">
+              {cancelInFooter && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={closeModal}
+                >
+                  Cancel
+                </Button>
+              )}
               {!selectedVersion && versions.length > 1 && (
                 <Button
                   type="button"

@@ -129,7 +129,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
-        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
         <input
           type="number"
           min={1}
@@ -461,6 +461,16 @@ export default function AssessmentDetailsView({
      button that opened the menu, and Arrow/Home/End walk the rows. */
   const versionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const versionItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  /* From `sm` up, each version popover hangs off its own pill at `left-0`. On a
+     tablet the pills wrap to the right end of the facts row, where a
+     left-anchored menu ran off the screen (768px: 536→856). Measured on open:
+     when the room right of the pill is shorter than the menu, it opens
+     leftward from the pill's right edge instead. Below `sm` the menus anchor to
+     the full-width row and this has no effect. */
+  const [versionMenuOpensLeft, setVersionMenuOpensLeft] = useState(false);
+  const [assessmentVersionMenuOpensLeft, setAssessmentVersionMenuOpensLeft] = useState(false);
+  const menuOverflowsRight = (anchor: HTMLElement | null, menuWidthPx: number) =>
+    !!anchor && anchor.getBoundingClientRect().left + menuWidthPx > window.innerWidth - 12;
 
   /* WHO AUTHORED EACH JOB VERSION, by version id.
    *
@@ -749,6 +759,7 @@ export default function AssessmentDetailsView({
 
   const toggleAssessmentVersionMenu = () => {
     const opening = !showAssessmentVersionMenu;
+    if (opening) setAssessmentVersionMenuOpensLeft(menuOverflowsRight(assessmentVersionMenuRef.current, 256));
     setShowAssessmentVersionMenu(opening);
     if (!opening || assessmentVersionRows || assessmentVersionsLoading) return;
     /* No `jd_id`, no lineage to ask about: an assessment with no job behind it
@@ -1539,7 +1550,7 @@ export default function AssessmentDetailsView({
           undefined when there is no list to page through, which leaves the bar
           exactly as it was. */}
       <PageBreadcrumb
-        className="mb-4"
+        className="mb-4 md:mb-6"
         items={breadcrumbItems ?? [
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'AI Assessments', href: '/recruitment/assessments' },
@@ -1600,7 +1611,9 @@ export default function AssessmentDetailsView({
                     the fallback for rows with no `jd_title`, and only removes
                     a "Version N" suffix baked into an old stored title; it
                     does not touch the API value. */}
-                <h1 className="min-w-0 max-w-full font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                {/* Same size/weight as the Job Details title (and the app's
+                    page-title standard, 18px phone / 20px tablet+). */}
+                <h1 className="min-w-0 max-w-full font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate">
                   {assessment.jd_title || stripVersionFromTitle(assessment.title)}
                 </h1>
                 {assessment.status && (
@@ -1670,6 +1683,7 @@ export default function AssessmentDetailsView({
                       ref={versionTriggerRef}
                       onClick={() => {
                         const opening = !showVersionMenu;
+                        if (opening) setVersionMenuOpensLeft(menuOverflowsRight(versionMenuRef.current, 320));
                         setShowVersionMenu(opening);
                         if (opening) ensureJobVersionAuthors(sortedJobVersions);
                       }}
@@ -1696,7 +1710,7 @@ export default function AssessmentDetailsView({
                         role="menu"
                         aria-label="Job versions"
                         onKeyDown={handleVersionMenuKeyDown}
-                        className="absolute left-0 top-full mt-2 w-80 max-w-full sm:max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden"
+                        className={`absolute left-0 ${versionMenuOpensLeft ? 'sm:left-auto sm:right-0' : ''} top-full mt-2 w-80 max-w-full sm:max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden`}
                       >
                         {/* Header - what the list is, and how long it is. */}
                         <div className="flex items-baseline justify-between gap-2 px-3 py-2">
@@ -1864,7 +1878,7 @@ export default function AssessmentDetailsView({
                       <div
                         role="menu"
                         aria-label="Assessment versions"
-                        className="absolute left-0 top-full mt-2 w-64 max-w-full sm:max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden"
+                        className={`absolute left-0 ${assessmentVersionMenuOpensLeft ? 'sm:left-auto sm:right-0' : ''} top-full mt-2 w-64 max-w-full sm:max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden`}
                       >
                         {/* Names the job version these belong to, because that
                             is the whole rule this menu now follows: the list is
@@ -1994,7 +2008,7 @@ export default function AssessmentDetailsView({
                   aria-label="Continue editing this draft assessment"
                   title={!canEditAssessment ? 'You do not have permission to edit assessments' : 'Continue editing this draft assessment'}
                   icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm flex-shrink-0 whitespace-nowrap ${canEditAssessment ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : 'opacity-50 cursor-not-allowed'}`}
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-sm flex-shrink-0 whitespace-nowrap ${canEditAssessment ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
@@ -2207,7 +2221,7 @@ export default function AssessmentDetailsView({
                       Omitted when the record does not say. */}
                   {typeof assessment.proctoring_enabled === 'boolean' && (
                     <span
-                      className={`px-2 py-0.5 rounded text-2xs sm:text-xs font-normal flex items-center gap-1 flex-shrink-0 whitespace-nowrap ring-1 ${
+                      className={`px-2 py-0.5 rounded text-xs font-normal flex items-center gap-1 flex-shrink-0 whitespace-nowrap ring-1 ${
                         assessment.proctoring_enabled
                           ? 'bg-success-subtle text-success ring-success-line'
                           : 'bg-slate-100 text-gray-600 ring-gray-200'
@@ -2248,7 +2262,7 @@ export default function AssessmentDetailsView({
                         role="tab"
                         aria-selected={isActive}
                         onClick={() => setDetailsSubTab(sub.id)}
-                        className={`rounded-lg px-3 py-1.5 text-xs sm:text-sm whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
+                        className={`rounded-lg px-3 py-1.5 text-sm whitespace-nowrap transition-colors inline-flex items-center gap-1.5 ${
                           isActive
                             ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
                             : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
@@ -2503,7 +2517,7 @@ export default function AssessmentDetailsView({
                           </div>
                           <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
                         </div>
-                        <p className="text-xs sm:text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
+                        <p className="text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
                       </div>
 
                       {!hasData ? (
@@ -2943,7 +2957,7 @@ export default function AssessmentDetailsView({
                 <button
                   type="button"
                   onClick={toggleInviteSelectAll}
-                  className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                 >
                   <span
                     role="checkbox"
@@ -3015,7 +3029,7 @@ export default function AssessmentDetailsView({
                   className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
                   aria-live="polite"
                 >
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                     <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                     Refreshing invite statuses...
                   </span>
@@ -3026,7 +3040,7 @@ export default function AssessmentDetailsView({
             {/* The popup's footer, less its Close button — a tab has nothing
                 to close. */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0 rounded-b-xl">
-              <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+              <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                 {inviteResultsLabel}
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -3129,7 +3143,7 @@ export default function AssessmentDetailsView({
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-600 mb-1 text-sm">No activity recorded yet</p>
-                <p className="text-xs sm:text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
+                <p className="text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
               </div>
             ) : (() => {
               const totalPages = Math.max(1, Math.ceil(activityFeed.length / ACTIVITY_PAGE_SIZE));
@@ -3225,26 +3239,26 @@ export default function AssessmentDetailsView({
                                        not a candidate: the event leads, then
                                        who did it. */
                                     <>
-                                      <span className="font-medium text-gray-900 text-xs sm:text-sm">{info.label}</span>
+                                      <span className="font-medium text-gray-900 text-sm">{info.label}</span>
                                       {activity.actor_name && (
-                                        <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm [overflow-wrap:anywhere]">by {activity.actor_name}</span>
+                                        <span className="text-gray-500 ml-1 sm:ml-2 text-sm [overflow-wrap:anywhere]">by {activity.actor_name}</span>
                                       )}
                                     </>
                                   ) : (
                                     <>
-                                      <span className="font-medium text-gray-900 text-xs sm:text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
-                                      <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
+                                      <span className="font-medium text-gray-900 text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
+                                      <span className="text-gray-500 ml-1 sm:ml-2 text-sm">{info.label}</span>
                                     </>
                                   )}
                                 </div>
-                                <span className="text-xs sm:text-sm text-gray-500 sm:shrink-0">{formattedDate}</span>
+                                <span className="text-sm text-gray-500 sm:shrink-0">{formattedDate}</span>
                               </div>
                               {activity._lifecycle ? (
                                 activity.actor_email && (
-                                  <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
+                                  <p className="text-sm text-gray-600 mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
                                 )
                               ) : (
-                                <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
+                                <p className="text-sm text-gray-600 mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
                               )}
                               {showScores && (
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
@@ -3276,7 +3290,7 @@ export default function AssessmentDetailsView({
 
                   {/* Pagination — 10 events per page. */}
                   {activityFeed.length > ACTIVITY_PAGE_SIZE && (
-                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs sm:text-sm text-gray-600">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-gray-600">
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, activityFeed.length)} of {activityFeed.length}
                       </span>
@@ -3303,7 +3317,7 @@ export default function AssessmentDetailsView({
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
+              <p className="text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
             </div>
 
             {versionsLoading ? (
@@ -3337,7 +3351,7 @@ export default function AssessmentDetailsView({
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Clock className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-600 mb-1 text-sm">No version history available</p>
-                <p className="text-xs sm:text-sm text-gray-500">Version history will appear when the assessment is edited</p>
+                <p className="text-sm text-gray-500">Version history will appear when the assessment is edited</p>
               </div>
             ) : (
               <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
@@ -3350,7 +3364,7 @@ export default function AssessmentDetailsView({
                       {/* Version Header */}
                       <div className="flex items-start gap-2 sm:gap-3 lg:gap-4">
                         <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-white font-bold text-xs sm:text-sm">V{version.version}</span>
+                          <span className="text-white font-bold text-sm">V{version.version}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
@@ -3363,30 +3377,30 @@ export default function AssessmentDetailsView({
                               </span>
                             )}
                           </div>
-                          <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
+                          <p className="text-sm text-gray-600 mb-2 sm:mb-3">
                             {version.version === 1 ? 'Initial assessment created and published' : (version.change_summary || 'Assessment configuration updated')}
                           </p>
 
                           {/* User & Date Info */}
-                          <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 mb-1 flex-wrap">
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-700 mb-1 flex-wrap">
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span className="font-medium min-w-0 [overflow-wrap:anywhere]">{version.changed_by_name || 'Unknown User'}</span>
                             <span className="text-gray-400">•</span>
                             <span className="text-gray-600">Lead Recruiter</span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 flex-wrap">
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 mb-3 sm:mb-4 flex-wrap">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span>Published on {versionDate} IST (UTC+5:30)</span>
                           </div>
 
                           {/* Configuration Details */}
                           <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-2.5 sm:p-3 lg:p-4">
-                            <div className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-3 tracking-tight">
+                            <div className="text-sm font-medium text-gray-900 mb-2 sm:mb-3 tracking-tight">
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
                             <ul className="space-y-1.5 sm:space-y-2">
-                              <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                              <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Assessment type: {[
                                   version.hr_enabled && 'HR',
@@ -3394,17 +3408,17 @@ export default function AssessmentDetailsView({
                                   version.coding_enabled && 'Coding'
                                 ].filter(Boolean).join(', ')}</span>
                               </li>
-                              <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                              <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Duration set to {assessment.duration_minutes || 60} min</span>
                               </li>
                               {assessment.title && (
-                                <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                                <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                   <span className="text-brand-blue mt-0.5">•</span>
                                   <span className="min-w-0 [overflow-wrap:anywhere]">Linked to job posting: {stripVersionFromTitle(assessment.title)}</span>
                                 </li>
                               )}
-                              <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                              <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Proctoring {assessment.proctoring_enabled ? 'enabled' : 'disabled'} with AI monitoring</span>
                               </li>
@@ -3446,7 +3460,7 @@ export default function AssessmentDetailsView({
                   </span>
                 )}
               </div>
-              <p className="text-xs sm:text-sm text-gray-600">
+              <p className="text-sm text-gray-600">
                 {selectedJobVersionNumber != null
                   ? `Every assessment version created for Job V${selectedJobVersionNumber} (V1 is the original; V2 onwards are duplicates, up to 5).`
                   : 'All versions of this assessment (V1 is the original; V2 onwards are duplicates, up to 5).'}
@@ -3478,7 +3492,7 @@ export default function AssessmentDetailsView({
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Layers className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
                 <p className="text-gray-600 mb-1 text-sm">No additional versions yet</p>
-                <p className="text-xs sm:text-sm text-gray-500">Duplicate this assessment to create additional versions</p>
+                <p className="text-sm text-gray-500">Duplicate this assessment to create additional versions</p>
               </div>
             ) : (
               <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
@@ -3511,7 +3525,7 @@ export default function AssessmentDetailsView({
                     >
                       <div className="flex items-start gap-3 sm:gap-4">
                         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-brand-cyan shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
-                          <span className="text-white font-bold text-xs sm:text-sm">V{sibling.version || 1}</span>
+                          <span className="text-white font-bold text-sm">V{sibling.version || 1}</span>
                         </div>
                         <div className="@container flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
@@ -3531,7 +3545,7 @@ export default function AssessmentDetailsView({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-700 mt-2">
+                          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700 mt-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                               <span className="shrink-0">Created by</span>
@@ -3658,7 +3672,7 @@ export default function AssessmentDetailsView({
               <div className="flex justify-end">
                 <button
                   onClick={() => router.push(jobDetailsHref(jdData.id))}
-                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
                 >
                   Open full JD page
                   <ExternalLink className="w-3.5 h-3.5" />

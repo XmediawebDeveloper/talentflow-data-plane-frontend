@@ -273,7 +273,7 @@ export default function ApplyToJobModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     {nextSteps ? (
                       <>
@@ -307,7 +307,7 @@ export default function ApplyToJobModal({
 
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
-          <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+          <div className="text-sm text-gray-700 dark:text-slate-300">
             {jobOnly
               ? !selection
                 ? 'Select one job to continue'

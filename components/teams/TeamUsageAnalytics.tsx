@@ -101,7 +101,7 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
         </p>
         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
           {sorted.map(e => (
-            <div key={e.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3 text-sm">
+            <div key={e.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3 text-sm max-sm:text-[13px]">
               <span className={`shrink-0 text-xs font-bold px-2 py-1 rounded-md ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
                 {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
               </span>
@@ -228,7 +228,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
             </div>
             <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
+              <p className="text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
               <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
             </div>
           </div>
@@ -340,7 +340,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
       {/* Empty */}
       {expanded && !loading && entries !== null && entries.length === 0 && (
         <tr>
-          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
+          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
             No consumption entries for this member in the selected period.
           </td>
         </tr>
@@ -389,7 +389,7 @@ function TeamRow({
               <Users className="w-4 h-4 text-brand-blue" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{team.team_name || 'Unnamed Team'}</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
               {(team.jds_created > 0 || team.assessments_created > 0) && (
                 <div className="flex items-center gap-3 mt-0.5">
                   {team.jds_created > 0 && (
@@ -411,11 +411,11 @@ function TeamRow({
           <td key={key} className="px-4 py-4 whitespace-nowrap">
             {val > 0
               ? <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{val}</span>
-              : <span className="text-gray-300 dark:text-slate-500 text-sm">—</span>}
+              : <span className="text-gray-300 dark:text-slate-500 text-sm max-sm:text-[13px]">—</span>}
           </td>
         ))}
         <td className="px-4 py-4 whitespace-nowrap">
-          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+          <span className={`text-sm max-sm:text-[13px] font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
             {total > 0 ? total : '—'}
           </span>
         </td>
@@ -504,7 +504,7 @@ function TeamRow({
                   </table>
                 </div>
               ) : (
-                <p className="px-6 py-4 text-sm text-gray-400 dark:text-slate-500 italic">
+                <p className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic">
                   No members with usage in this period.
                 </p>
               )}
@@ -581,7 +581,7 @@ function MobileMemberCard({ member, fromDate }: { member: TeamMemberUsage; fromD
         </span>
         <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</span>
+          <span className="block truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</span>
           <span className="block truncate text-xs text-gray-400 dark:text-slate-500">{member.user_email}</span>
         </span>
       </button>
@@ -591,7 +591,7 @@ function MobileMemberCard({ member, fromDate }: { member: TeamMemberUsage; fromD
             key={label}
             className={`rounded-md px-2 py-1 text-center ${active ? 'bg-brand-blue/5 ring-1 ring-brand-blue/10' : 'bg-gray-50 dark:bg-slate-800/50'}`}
           >
-            <p className={`text-sm font-semibold tabular-nums ${active ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>{value}</p>
+            <p className={`text-sm max-sm:text-[13px] font-semibold tabular-nums ${active ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>{value}</p>
             <p className="text-2xs text-gray-500 dark:text-slate-500">{label}</p>
           </div>
         ))}
@@ -647,13 +647,13 @@ function MobileTeamCard({
           <Users className="h-4 w-4 text-brand-blue" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</span>
+          <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</span>
           <span className="block truncate text-xs text-gray-400 dark:text-slate-500">
             {team.jds_created} JDs · {team.assessments_created} Assessments
           </span>
         </span>
         <span className="shrink-0 text-right">
-          <span className={`block text-sm font-bold tabular-nums ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+          <span className={`block text-sm max-sm:text-[13px] font-bold tabular-nums ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
             {total > 0 ? total : '—'}
           </span>
           <span className="block text-2xs text-gray-400 dark:text-slate-500">total</span>
@@ -707,7 +707,7 @@ function StatCard({ label, value, dot, loading }: {
         <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{label}</p>
         {loading
           ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
-          : <p className="text-lg sm:text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
+          : <p className="text-lg max-sm:text-base sm:text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
       </div>
     </div>
   );
@@ -834,12 +834,12 @@ export default function TeamUsageAnalytics() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
+              <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
                 {isTenantAdmin ? 'All Teams' : 'Your Teams'}
               </span>
             </div>
-            <p className="hidden sm:block text-sm text-gray-600 dark:text-slate-400">Consumption across teams and members for the selected period.</p>
+            <p className="hidden sm:block text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">Consumption across teams and members for the selected period.</p>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center">
@@ -850,7 +850,7 @@ export default function TeamUsageAnalytics() {
               value={fromDate}
               max={toDate}
               onChange={setFromDate}
-              className="w-full lg:w-[150px]"
+              className="w-full lg:w-[150px] max-sm:px-2 max-sm:!text-xs"
             />
             <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500 self-start lg:self-auto max-sm:self-center">to</span>
             <DateField
@@ -859,7 +859,7 @@ export default function TeamUsageAnalytics() {
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={setToDate}
-              className="w-full lg:w-[150px]"
+              className="w-full lg:w-[150px] max-sm:px-2 max-sm:!text-xs"
             />
           </div>
           <div className="relative" ref={exportMenuRef}>
@@ -883,14 +883,14 @@ export default function TeamUsageAnalytics() {
                 <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
                     onClick={() => { setExportScope('team'); setShowExportMenu(false); }}
-                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"
+                    className="group w-full text-left px-4 py-2.5 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300 flex items-center gap-2"
                   >
                     <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
                   </button>
                   <button
                     onClick={() => { setExportScope('user'); setShowExportMenu(false); }}
-                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"
+                    className="group w-full text-left px-4 py-2.5 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300 flex items-center gap-2"
                   >
                     <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
@@ -979,7 +979,7 @@ export default function TeamUsageAnalytics() {
           ) : teams.length === 0 ? (
             <div className={TABLE_EMPTY_PANEL_CLASS}>
               <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-              <p className="text-sm text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+              <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
             </div>
           ) : (
             <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1051,7 +1051,7 @@ export default function TeamUsageAnalytics() {
                       the same height and padding every other table's uses. */}
                   <div className={TABLE_EMPTY_PANEL_CLASS}>
                     <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-                    <p className="text-sm text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+                    <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
                   </div>
                 </td>
               </tr>

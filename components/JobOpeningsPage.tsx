@@ -289,7 +289,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Total Jobs</p>
+                <p className="text-sm text-gray-500 leading-tight">Total Jobs</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
                 </div>
@@ -301,7 +301,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Active</p>
+                <p className="text-sm text-gray-500 leading-tight">Active</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-success-subtle rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-success" />
                 </div>
@@ -313,7 +313,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Drafts</p>
+                <p className="text-sm text-gray-500 leading-tight">Drafts</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-warning-subtle rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-warning" />
                 </div>
@@ -325,7 +325,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Applicants</p>
+                <p className="text-sm text-gray-500 leading-tight">Applicants</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <Users className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
                 </div>
@@ -356,7 +356,7 @@ export default function JobOpeningsPage() {
                 <button
                   key={filter.key}
                   onClick={() => { setActiveFilter(filter.key); setCurrentPage(1); }}
-                  className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 sm:px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                     activeFilter === filter.key
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
@@ -480,28 +480,28 @@ export default function JobOpeningsPage() {
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       <button
                         onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                        className="font-medium text-xs sm:text-sm text-gray-900 hover:text-gray-800 transition-colors text-left"
+                        className="font-medium text-sm text-gray-900 hover:text-gray-800 transition-colors text-left"
                       >
                         {job.title}
                       </button>
                     </td>
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 hidden sm:table-cell">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-600 hidden sm:table-cell">
                       {job.department || '-'}
                     </td>
                     {/* Location column hidden for now */}
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-600 hidden md:table-cell">
                       {getExperienceText(job.experience_min, job.experience_max)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       {getStatusBadge(job.status, job.republished_at)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600">
+                      <div className="flex items-center gap-1.5 text-sm text-gray-600">
                         <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                         <span>{job.applicants_count || 0}</span>
                       </div>
                     </td>
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-500 hidden lg:table-cell">
                       {formatISTDate(job.created_at)}
                     </td>
                     <td className="px-2 sm:px-6 py-3 sm:py-4 text-right tf-sticky-col">
@@ -516,7 +516,7 @@ export default function JobOpeningsPage() {
                             router.push(`/recruitment/jd-creation?id=${job.id}`);
                           }}
                           aria-disabled={!canUpdateJd}
-                          className={`flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-xs sm:text-sm rounded transition-colors border ${
+                          className={`flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-sm rounded transition-colors border ${
                             canUpdateJd
                               ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
                               : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
@@ -529,7 +529,7 @@ export default function JobOpeningsPage() {
                         {/* View Button */}
                         <button
                           onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                          className="flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-xs sm:text-sm text-gray-600 hover:bg-gray-100 rounded transition-colors border border-gray-200"
+                          className="flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded transition-colors border border-gray-200"
                           aria-label="View" title="View"
                         >
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -646,12 +646,12 @@ export default function JobOpeningsPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
-            <p className="text-xs sm:text-sm text-gray-600">
+            <p className="text-sm text-gray-600">
               Showing {(currentPage - 1) * 12 + 1} to {Math.min(currentPage * 12, total)} of {total} jobs
             </p>
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}

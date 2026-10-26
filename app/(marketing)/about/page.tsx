@@ -12,10 +12,10 @@ const stats = [
 export default function AboutPage() {
   return (
     <div className="py-10 sm:py-14 md:py-20">
-      <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
+      <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
         {/* Hero */}
         <div className="text-center mb-8 sm:mb-12 md:mb-16">
-          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-xs sm:text-sm">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-sm">
             About Us
           </Badge>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4 px-2 sm:px-0">
@@ -38,7 +38,7 @@ export default function AboutPage() {
                   <div className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white sm:mb-1">
                     {stat.value}
                   </div>
-                  <div className="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400">
+                  <div className="text-base text-gray-600 dark:text-gray-400">
                     {stat.label}
                   </div>
                 </div>
@@ -49,7 +49,7 @@ export default function AboutPage() {
 
         {/* Story */}
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-5 md:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-5 md:mb-6">
             Our Story
           </h2>
           <div className="prose prose-sm sm:prose-base md:prose-lg dark:prose-invert">

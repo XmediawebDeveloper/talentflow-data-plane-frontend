@@ -180,7 +180,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Edit Assessment</h2>
-              <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 Modify assessment details and configuration
               </p>
             </div>

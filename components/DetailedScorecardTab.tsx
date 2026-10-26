@@ -708,14 +708,21 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       {/* Status summary sentence for the Overall Rating, per the client's
           10-point rating document (section 9 UI guidance). */}
       {resume.ratingSummaryText && (
-        <p className="text-xs text-gray-500 italic">{resume.ratingSummaryText}</p>
+        <p className="text-xs text-gray-500 italic break-words">{resume.ratingSummaryText}</p>
       )}
 
       {/* AI Analysis */}
       {aiReasoning && (
         <div className="bg-white border border-gray-200 rounded-lg p-4">
           <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-2">AI Analysis</h4>
-          <p className="text-gray-900 text-sm leading-relaxed">{aiReasoning}</p>
+          {/* `aiReasoning` is LLM-generated free text — it has no guarantee of
+              word-breakable spacing (a long URL, a run-on technical term). Without
+              `break-words` a single such run doesn't wrap, and since this sits
+              inside `.score-table-modal-body` (overflow-y-auto with no explicit
+              overflow-x), CSS's overflow interaction rule computes that axis to
+              `auto` too — turning one long word into a sideways-scrollable modal
+              with everything else left looking stranded in a narrow column. */}
+          <p className="text-gray-900 text-sm leading-relaxed break-words">{aiReasoning}</p>
         </div>
       )}
 

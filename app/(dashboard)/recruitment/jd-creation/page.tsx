@@ -165,7 +165,7 @@ function AccessBlockedError({
         {/* Show unit details if insufficient units */}
         {errorCode === 'INSUFFICIENT_UNITS' && accessCheck?.units && (
           <div className="bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:ring-brand-blue/30 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
-            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
             <div className="space-y-1 text-sm text-gray-600 dark:text-slate-300">
               <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Resume Storage: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
