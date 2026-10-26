@@ -4330,8 +4330,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                    viewport the pager's sm: breakpoint assumes (≈460px on a
                    768px tablet), so its one row crushed the summary onto four
                    lines and pushed Next past the card. Let it wrap instead;
-                   from xl the column is wide enough for the single row. */
-                <div className="[&>div]:flex-wrap [&>div]:justify-center xl:[&>div]:flex-nowrap xl:[&>div]:justify-between">
+                   from xl the column is wide enough for the single row.
+                   mt-auto: the column stretches to the folder panel's
+                   height, so with only a few rows (or none) the pager is
+                   pushed to the bottom instead of sitting under the last row. */
+                <div className="mt-auto [&>div]:flex-wrap [&>div]:justify-center xl:[&>div]:flex-nowrap xl:[&>div]:justify-between">
                   <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
