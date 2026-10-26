@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 import { toast } from 'sonner';
 import {
   FileCheck,
@@ -196,32 +197,36 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               <span className="text-sm font-medium text-gray-700">Filters:</span>
             </div>
 
-            <select
+            <FilterSelect
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Types</option>
-              <option value="TERMS_OF_SERVICE">Terms of Service</option>
-              <option value="PRIVACY_POLICY">Privacy Policy</option>
-              <option value="DATA_PROCESSING">Data Processing</option>
-              <option value="SUBSCRIPTION_AGREEMENT">Subscription Agreement</option>
-              <option value="SLA">SLA</option>
-              <option value="ACCEPTABLE_USE">Acceptable Use</option>
-              <option value="GDPR_CONSENT">GDPR Consent</option>
-              <option value="BILLING_TERMS">Billing Terms</option>
-            </select>
+              onChange={(v) => setTypeFilter(v)}
+              ariaLabel="Agreement type"
+              options={[
+                { value: '', label: 'All Types' },
+                { value: 'TERMS_OF_SERVICE', label: 'Terms of Service' },
+                { value: 'PRIVACY_POLICY', label: 'Privacy Policy' },
+                { value: 'DATA_PROCESSING', label: 'Data Processing' },
+                { value: 'SUBSCRIPTION_AGREEMENT', label: 'Subscription Agreement' },
+                { value: 'SLA', label: 'SLA' },
+                { value: 'ACCEPTABLE_USE', label: 'Acceptable Use' },
+                { value: 'GDPR_CONSENT', label: 'GDPR Consent' },
+                { value: 'BILLING_TERMS', label: 'Billing Terms' },
+              ]}
+              className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+            />
 
-            <select
+            <FilterSelect
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Status</option>
-              <option value="ACCEPT">Accepted</option>
-              <option value="DECLINE">Declined</option>
-              <option value="REVOKE">Revoked</option>
-            </select>
+              onChange={(v) => setStatusFilter(v)}
+              ariaLabel="Status"
+              options={[
+                { value: '', label: 'All Status' },
+                { value: 'ACCEPT', label: 'Accepted' },
+                { value: 'DECLINE', label: 'Declined' },
+                { value: 'REVOKE', label: 'Revoked' },
+              ]}
+              className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+            />
 
             <input
               type="text"

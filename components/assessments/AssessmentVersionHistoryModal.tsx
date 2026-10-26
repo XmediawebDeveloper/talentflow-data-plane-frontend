@@ -13,6 +13,7 @@ import { loadJobAssessmentHierarchy } from '@/lib/utils/jobAssessmentHierarchy';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 import NameAvatar from '@/components/ui/name-avatar';
 
 /* ── Status palette for the results donut ─────────────────────────────
@@ -251,7 +252,7 @@ export default function AssessmentVersionHistoryModal({
 
   if (!open) return null;
 
-  const fieldClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40';
+  const fieldClass = 'w-full sm:w-full py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-gray-900 dark:text-slate-100';
 
   return (
     <>
@@ -324,27 +325,45 @@ export default function AssessmentVersionHistoryModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <label className="block">
                 <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Version</span>
-                <select value={versionFilter} onChange={(e) => setVersionFilter(e.target.value)} className={fieldClass}>
-                  <option value="">All Versions</option>
-                  {versions.map((c) => <option key={c.id} value={c.id}>{labelOf(c)}{multiJobVersions ? ` · Job V${jobVersionOf(c)}` : ''} ({pillFor(c.status).label})</option>)}
-                </select>
+                <FilterSelect
+                  value={versionFilter}
+                  onChange={setVersionFilter}
+                  ariaLabel="Version"
+                  options={[
+                    { value: '', label: 'All Versions' },
+                    ...versions.map((c) => ({
+                      value: String(c.id),
+                      label: `${labelOf(c)}${multiJobVersions ? ` · Job V${jobVersionOf(c)}` : ''} (${pillFor(c.status).label})`,
+                    })),
+                  ]}
+                  className={fieldClass}
+                />
               </label>
               <label className="block">
                 <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Status</span>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={fieldClass}>
-                  <option value="">All Status</option>
-                  <option value="published">Active</option>
-                  <option value="draft">Draft</option>
-                  <option value="closed">Completed</option>
-                  <option value="archived">Archived</option>
-                </select>
+                <FilterSelect
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  ariaLabel="Status"
+                  options={[
+                    { value: '', label: 'All Status' },
+                    { value: 'published', label: 'Active' },
+                    { value: 'draft', label: 'Draft' },
+                    { value: 'closed', label: 'Completed' },
+                    { value: 'archived', label: 'Archived' },
+                  ]}
+                  className={fieldClass}
+                />
               </label>
               <label className="block">
                 <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Created By</span>
-                <select value={creatorFilter} onChange={(e) => setCreatorFilter(e.target.value)} className={fieldClass}>
-                  <option value="">All Users</option>
-                  {creators.map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
+                <FilterSelect
+                  value={creatorFilter}
+                  onChange={setCreatorFilter}
+                  ariaLabel="Created By"
+                  options={[{ value: '', label: 'All Users' }, ...creators.map((n) => ({ value: String(n), label: String(n) }))]}
+                  className={fieldClass}
+                />
               </label>
               <div>
                 <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Date Range</span>
@@ -526,15 +545,16 @@ export default function AssessmentVersionHistoryModal({
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center"><BarChart3 className="w-4 h-4" /></div>
                       <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Version Wise Results</span>
                     </div>
-                    <select
-                      value={showAll ? ALL_VERSIONS : selected?.id || ''}
-                      onChange={(e) => setSelectedId(e.target.value)}
-                      aria-label="Version"
-                      className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                    >
-                      <option value={ALL_VERSIONS}>All Versions</option>
-                      {versions.map((c) => <option key={c.id} value={c.id}>{labelOf(c)} ({pillFor(c.status).label})</option>)}
-                    </select>
+                    <FilterSelect
+                      value={showAll ? ALL_VERSIONS : String(selected?.id || '')}
+                      onChange={(v) => setSelectedId(v)}
+                      ariaLabel="Version"
+                      options={[
+                        { value: ALL_VERSIONS, label: 'All Versions' },
+                        ...versions.map((c) => ({ value: String(c.id), label: `${labelOf(c)} (${pillFor(c.status).label})` })),
+                      ]}
+                      className="w-auto sm:w-auto py-1.5 sm:py-1.5 pl-2 sm:pl-2 pr-2 sm:pr-2 gap-1 rounded-lg sm:rounded-lg text-xs text-gray-900 dark:text-slate-100"
+                    />
                   </div>
 
                   {!sel ? (

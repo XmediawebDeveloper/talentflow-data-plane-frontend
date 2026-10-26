@@ -17,6 +17,7 @@ import {
 import notificationService, { Notification } from '@/lib/services/notificationService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -248,17 +249,12 @@ export default function NotificationsPage() {
 
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-gray-500 flex-shrink-0" />
-          <select
+          <FilterSelect
             value={categoryFilter || ''}
-            onChange={(e) => setCategoryFilter(e.target.value || undefined)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full sm:w-auto text-black"
-          >
-            {categories.map(cat => (
-              <option key={cat.value || 'all'} value={cat.value || ''}>
-                {cat.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setCategoryFilter(v || undefined)}
+            options={categories.map(cat => ({ value: cat.value || '', label: cat.label }))}
+            className="px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black"
+          />
         </div>
       </div>
 

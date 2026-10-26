@@ -33,6 +33,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import {
   Permission,
   Role,
@@ -516,14 +517,16 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                 </div>
                 <div>
                   <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Copy permissions from</label>
-                  <select
-                    value={role.parent_role_id || ''}
-                    onChange={(e) => handleParentRoleChange(e.target.value)}
-                    className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/40 focus:ring-2 focus:ring-brand-blue/20"
-                  >
-                    <option value="">None</option>
-                    {roles.filter((r) => r.id !== role.id).map((r) => (<option key={r.id} value={r.id}>{r.name}</option>))}
-                  </select>
+                  <FilterSelect
+                    value={String(role.parent_role_id || '')}
+                    onChange={(v) => handleParentRoleChange(v)}
+                    ariaLabel="Copy permissions from"
+                    options={[
+                      { value: '', label: 'None' },
+                      ...roles.filter((r) => r.id !== role.id).map((r) => ({ value: String(r.id), label: r.name })),
+                    ]}
+                    className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 w-full sm:w-full rounded-lg sm:rounded-lg px-3 sm:px-3 text-sm max-sm:text-[13px]"
+                  />
                 </div>
               </div>
               {renderPermissionCategories()}
@@ -674,20 +677,18 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
                 <label className="block">
                   <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Copy permissions from</span>
-                  <select
-                    value={role.parent_role_id || ''}
-                    onChange={(e) => handleParentRoleChange(e.target.value)}
-                    className={fieldClassName}
-                  >
-                    <option value="">None</option>
-                    {roles
-                      .filter((roleOption) => roleOption.id !== role.id)
-                      .map((roleOption) => (
-                        <option key={roleOption.id} value={roleOption.id}>
-                          {roleOption.name}
-                        </option>
-                      ))}
-                  </select>
+                  <FilterSelect
+                    value={String(role.parent_role_id || '')}
+                    onChange={(v) => handleParentRoleChange(v)}
+                    ariaLabel="Copy permissions from"
+                    options={[
+                      { value: '', label: 'None' },
+                      ...roles
+                        .filter((roleOption) => roleOption.id !== role.id)
+                        .map((roleOption) => ({ value: String(roleOption.id), label: roleOption.name })),
+                    ]}
+                    className={`${fieldClassName} sm:w-full sm:px-4 sm:py-3 sm:rounded-xl`}
+                  />
                   <span className="mt-2 block text-xs text-gray-500">Replaces this role&apos;s current permissions with a copy of that role&apos;s. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>

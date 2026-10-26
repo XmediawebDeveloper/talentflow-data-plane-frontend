@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface PaginationProps {
   currentPage: number;
@@ -52,16 +53,13 @@ export default function Pagination({
       {showItemsPerPage && (
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Show</span>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="h-8 px-2 sm:px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+          <FilterSelect
+            value={String(itemsPerPage)}
+            onChange={(v) => onItemsPerPageChange(Number(v))}
+            ariaLabel="Items per page"
+            options={[10, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
+            className="w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 pl-2 sm:pl-3 pr-2 sm:pr-2 rounded-lg sm:rounded-lg text-sm"
+          />
           <span className="text-sm text-gray-600">per page</span>
         </div>
       )}

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, X, HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle, FileText, Upload, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface SupportTicket {
   id: string;
@@ -373,30 +374,24 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   <label className="block text-sm text-gray-700 mb-1.5">
                     Category <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <FilterSelect
                     value={category}
-                    onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  >
-                    {categories.map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setCategory(v as SupportTicket['category'])}
+                    options={categories.map(cat => ({ value: cat.value, label: cat.label }))}
+                    className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-sm text-gray-700 mb-1.5">
                     Priority <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <FilterSelect
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  >
-                    {priorities.map(p => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setPriority(v as SupportTicket['priority'])}
+                    options={priorities.map(p => ({ value: p.value, label: p.label }))}
+                    className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                  />
                 </div>
 
                 <div>

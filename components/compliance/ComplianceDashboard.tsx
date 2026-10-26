@@ -28,6 +28,7 @@ import complianceService, {
   getTableDisplayName,
 } from '@/lib/services/complianceService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface ComplianceDashboardProps {
   showFullReport?: boolean;
@@ -100,16 +101,18 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <select
+              <FilterSelect
                 value={selectedRegulation}
-                onChange={(e) => setSelectedRegulation(e.target.value)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">All Regulations</option>
-                <option value="GDPR">GDPR (EU)</option>
-                <option value="DPDP">DPDP (India)</option>
-                <option value="CCPA">CCPA (California)</option>
-              </select>
+                onChange={(v) => setSelectedRegulation(v)}
+                ariaLabel="Regulation"
+                options={[
+                  { value: '', label: 'All Regulations' },
+                  { value: 'GDPR', label: 'GDPR (EU)' },
+                  { value: 'DPDP', label: 'DPDP (India)' },
+                  { value: 'CCPA', label: 'CCPA (California)' },
+                ]}
+                className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+              />
               <button
                 onClick={loadDashboardData}
                 disabled={isLoading}
