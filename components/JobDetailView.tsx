@@ -1713,11 +1713,22 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      date when there is no status history for this JD (the `job` prop can
      arrive without `updated_at`, which left that row "N/A" at the bottom). */
   const [jdLastUpdatedAt, setJdLastUpdatedAt] = useState<string | undefined>(undefined);
+  /* Who created this JD row and when — Recent Activity's "Created as Draft"
+     entry. Every JD is created as a draft working copy and only becomes
+     Published through /jd/{id}/publish, so created_by_name + created_at
+     always name the draft's author, never whoever published it (that comes
+     from /jd/{id}/versions). A new lineage version is its own JD row, hence
+     the version number. */
+  const [jdCreation, setJdCreation] = useState<{ at?: string; by?: string; version?: number } | null>(null);
   useEffect(() => {
     if (!job.id) return;
     let cancelled = false;
     jdService.get(job.id)
-      .then((jd) => { if (!cancelled) setJdLastUpdatedAt(jd.updated_at); })
+      .then((jd) => {
+        if (cancelled) return;
+        setJdLastUpdatedAt(jd.updated_at);
+        setJdCreation({ at: jd.created_at, by: jd.created_by_name, version: jd.version_number });
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [job.id, job.status]);
@@ -4224,7 +4235,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   carries no version of its own).
                 - Job Disabled / Re-enabled / Archived / Unarchived: one row
                   per audited status transition from /jd/{id}/status-history,
-                  with the user who made it and when. */}
+                  with the user who made it and when.
+                - Job Created as Draft: one row from the JD's own
+                  created_by_name + created_at — the draft's author, kept
+                  separate from whoever later published it. */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Recent Activity</h3>
             <div className="space-y-3">
@@ -4244,13 +4258,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   });
                 } else {
                   // Lineage fetch hasn't landed (or failed) — fall back to the
-                  // JD's own creator/updated fields so Published/Republished
-                  // still show something rather than vanishing entirely.
+                  // JD's own published/updated dates so Published/Republished
+                  // still show something rather than vanishing entirely. No
+                  // name: `job.postedBy` is the CREATOR, not the publisher.
                   if (job.status === 'Published' && job.postedDate) {
-                    events.push({ key: 'jd-published', dot: 'bg-success', title: 'Job Published', date: job.postedDate, by: job.postedBy });
+                    events.push({ key: 'jd-published', dot: 'bg-success', title: 'Job Published', date: job.postedDate });
                   }
                   if (job.currentVersion && job.currentVersion > 1) {
-                    events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at, by: job.postedBy });
+                    events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at });
+                  }
+                }
+                /* JD creation — always as a draft (see `jdCreation`), credited
+                   to its own author, so a draft one user wrote and another
+                   published shows both names. Falls back to the `job` prop's
+                   created_at / postedBy (created_by_name) until the fetch lands;
+                   a bare user id (uuid) is not shown as a name. */
+                {
+                  const createdAt = jdCreation?.at || job.created_at;
+                  const createdBy = jdCreation?.by || job.postedBy;
+                  const version = jdCreation?.version ?? job.versionNumber ?? 1;
+                  if (createdAt) {
+                    events.push({
+                      key: 'jd-created',
+                      dot: 'bg-gray-400',
+                      title: version > 1 ? `Job Version Created as Draft (V${version})` : 'Job Created as Draft',
+                      date: createdAt,
+                      by: createdBy && !/^[0-9a-f-]{32,36}$/i.test(createdBy) ? createdBy : undefined,
+                    });
                   }
                 }
                 /* JD status changes — every Disabled / Re-enabled / Archived /
