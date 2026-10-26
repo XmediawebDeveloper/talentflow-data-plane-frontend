@@ -2461,6 +2461,54 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    select larger than the text around it, so inputs now keep their own
    Tailwind size (text-sm) at every width. */
 
+/* ── No background scroll behind a modal overlay ─────────────
+   Dashboard pages scroll inside `.tf-page-scroll` (app/(dashboard)/layout.tsx),
+   not <body>, so the `body.style.overflow` locks some modals set never reached
+   it: the page behind Score Table / View Resume kept scrolling and showing its
+   scrollbar. Any open full-screen dimmed overlay locks both. That covers every
+   backdrop this app uses: `fixed inset-0` + a dark tint (`bg-black…`,
+   `bg-gray-900/…`, `bg-gray-800/…`, `bg-slate-900/…`, `bg-slate-950/…` — the
+   shadcn dialog overlay — or `bg-gray-500 bg-opacity-75`), the Radix
+   `dialog-overlay` slot, and any `aria-modal` dialog. Click-away layers with no
+   tint (dropdown dismissers) are not modals and lock nothing, and neither does
+   a backdrop kept mounted but `hidden` (SelectSourceModal while its bulk
+   progress is minimised). The same list is
+   MODAL_OVERLAY_SELECTOR in components/TableScrollbars.tsx — keep them in step.
+   `scrollbar-gutter` keeps the page from shifting sideways when its scrollbar
+   goes. Wheel/touch inside the modal's own scroller no longer chains out to the
+   page either. */
+.tf-page-scroll {
+  scrollbar-gutter: stable;
+}
+html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"])),
+html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"])) body,
+html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"])) .tf-page-scroll {
+  overflow: hidden;
+}
+/* Pages also scroll inside their own boxes — a `.tf-table-shell` caps its
+   height and scrolls, and the Score Table modal is rendered from inside one —
+   so lock every scroller that is not part of an overlay, a portalled popover
+   (Radix wrappers are `position: fixed` inline) or a dialog. */
+html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gray-900/"], [class*="bg-gray-800/"], [class*="bg-slate-900/"], [class*="bg-slate-950/"], [class*="bg-opacity-"]), [data-slot="dialog-overlay"], [aria-modal="true"]))
+  :is(.tf-table-shell, .overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-scroll):not(
+    .fixed, .fixed *, [style*="position: fixed"] *, [data-radix-popper-content-wrapper] *,
+    [role="dialog"], [role="dialog"] *, [role="alertdialog"] *, [data-slot="dialog-content"] *
+  ) {
+  overflow: hidden;
+}
+.fixed.inset-0 :where(.overflow-y-auto, .overflow-auto) {
+  overscroll-behavior: contain;
+}
+/* A modal rendered from inside a table cell inherits the cell's
+   `white-space: nowrap` (.tf-table-shell td), which kept the Score Table's
+   AI Analysis on one line, running past the card. Overlays start fresh;
+   anything inside that wants nowrap still sets it itself. */
+@layer base {
+  .fixed.inset-0 {
+    white-space: normal;
+  }
+}
+
 /* ── Page containers clip sideways with `overflow-x: clip`, never `hidden` ──
    House rule, and the reason every page shell in this app reads
    `overflow-x-clip` (see `components/ui/section-container.tsx`, the shared one)

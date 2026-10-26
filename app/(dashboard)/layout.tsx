@@ -409,7 +409,9 @@ export default function DashboardLayout({
               <TermsReminderBanner />
               <PlanChangeReviewBanner />
               <AdminAssignedPlanBanner />
-              <div className="flex-1 overflow-y-auto flex flex-col">
+              {/* tf-page-scroll: the page's real scroller (not <body>), so
+                  globals.css locks it while a modal overlay is open. */}
+              <div className="tf-page-scroll flex-1 overflow-y-auto flex flex-col">
                 <RouteGuard>{children}</RouteGuard>
               </div>
             </div>
