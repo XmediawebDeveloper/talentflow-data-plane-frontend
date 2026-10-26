@@ -27,7 +27,7 @@ export function TeamAvatar({ team, className }: { team: Pick<Team, 'id' | 'name'
       aria-hidden
       className={cn(
         // Same brand-blue tile as the PageHeader icon.
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-sm font-semibold text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-200 dark:ring-brand-blue/30',
+        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-sm max-sm:text-[13px] font-semibold text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-200 dark:ring-brand-blue/30',
         className,
       )}
     >
@@ -102,7 +102,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
       <div className="flex items-start gap-3">
         <TeamAvatar team={team} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+          <h3 className="truncate text-base max-sm:text-sm font-semibold tracking-tight text-gray-900 dark:text-slate-50">
             {/* Stretched button: the whole card opens the Team popup, while Add
                 members sits above it (z-10) and keeps its own click. */}
             <button
@@ -131,10 +131,10 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
       </div>
 
       {team.description && (
-        <p className="mt-3 line-clamp-2 text-sm text-gray-600 dark:text-slate-400">{team.description}</p>
+        <p className="mt-3 line-clamp-2 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{team.description}</p>
       )}
 
-      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-gray-500 dark:text-slate-400">
+      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
         {metrics.map(({ icon: Icon, value, label }) => (
           <li key={label} className="inline-flex items-center gap-1.5">
             <Icon className="h-4 w-4 text-gray-400 dark:text-slate-500" />
@@ -153,13 +153,13 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
           <button
             type="button"
             onClick={() => onManageTeam(team.id)}
-            className="relative z-10 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+            className="relative z-10 inline-flex items-center gap-1.5 rounded-md text-sm max-sm:text-[13px] font-medium text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
           >
             <UserPlus className="h-4 w-4" />
             Add members
           </button>
         ) : (
-          <span className="text-sm italic text-gray-400 dark:text-slate-500">No members yet</span>
+          <span className="text-sm max-sm:text-[13px] italic text-gray-400 dark:text-slate-500">No members yet</span>
         )}
         {created && <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500">Created {created}</span>}
       </div>

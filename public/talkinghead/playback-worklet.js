@@ -11,8 +11,12 @@ class PlaybackWorklet extends AudioWorkletProcessor {
     this._sampleRate = options?.processorOptions?.sampleRate || sampleRate;
     this._scale = 1 / 32768; // PCM16 -> float
 
-    // Silence detection threshold (1 second) as a fallback safety net
-    const silenceDurationSeconds = 0.3;
+    // Underrun tolerance before playback is treated as ended. This is only a
+    // safety net — a normal end is the explicit "no-more-data" (audio_end).
+    // At 0.3 s, a short TTS gap or main-thread jank while chunks were in
+    // flight (the first seconds of the interview, while detectors load) ended
+    // Bina's audio early and forced a stop/re-arm mid-sentence.
+    const silenceDurationSeconds = 1.5;
     this._silenceThresholdBlocks = Math.ceil((this._sampleRate * silenceDurationSeconds) / 128);
 
     // Metrics configuration via options

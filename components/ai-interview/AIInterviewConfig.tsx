@@ -50,6 +50,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
+import { useJdLocations } from '@/hooks/useJdLocations';
 import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import {
   closestDuplicate,
@@ -1403,6 +1404,7 @@ export default function AIInterviewConfig() {
   const inviteOriginQuery = inviteOrigin?.query ?? '';
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
+  const selectedJdLocations = useJdLocations(selectedJd?.id);
   const [loadingJd, setLoadingJd] = useState(true);
   // Set when loadJD decides to navigate elsewhere, so the loader stays on screen
   // through the handoff instead of flashing an empty page.
@@ -3322,7 +3324,7 @@ export default function AIInterviewConfig() {
               squeezed the summary beside it. */}
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <JobOpeningSummary job={publishedJdToJob(selectedJd)} mergeInfoRows />
+              <JobOpeningSummary job={{ ...publishedJdToJob(selectedJd), locations: selectedJdLocations ?? undefined }} mergeInfoRows />
             </div>
             <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
               {jdId && (
@@ -4031,7 +4033,7 @@ export default function AIInterviewConfig() {
                   {selectedJd.location && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
-                      <SummaryLocation value={selectedJd.location} />
+                      <SummaryLocation value={selectedJd.location} locations={selectedJdLocations} />
                     </div>
                   )}
                   {selectedJd.employment_type && (

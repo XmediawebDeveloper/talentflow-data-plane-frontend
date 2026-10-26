@@ -34,6 +34,7 @@ import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
+import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface ScoredResume {
@@ -893,8 +894,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   })();
 
   // Header-card values, mapped the same way the published JD page maps them.
-  const jdLocation: string = jdDetails?.location
-    || (jdDetails?.locations?.length ? jdDetails.locations.map((l: any) => l.city).filter(Boolean).join(', ') : '');
+  // `location` is a single legacy string (first city only), so read every saved
+  // location from `locations` and fall back to it only when there is no array.
+  const jdLocationGroups: string[] = formatLocationGroups(jdDetails?.locations, jdDetails?.location);
+  const jdLocation: string = jdLocationGroups.join(' • ');
   const jdExperienceBadge = formatJobExperienceBadge({
     jobLevel: jdDetails?.experience_level || jdDetails?.job_level,
     experienceText: formatJobExperienceText({
@@ -2965,12 +2968,14 @@ Best regards`);
                     </div>
 
                     <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
-                      {jdLocation && (
+                      {jdLocationGroups.length > 0 && (
                         <>
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="w-4 h-4 text-purple-600" />
-                            <span>{jdLocation}</span>
-                          </div>
+                          {jdLocationGroups.map((label) => (
+                            <div key={label} className="flex items-center gap-1.5">
+                              <MapPin className="w-4 h-4 text-purple-600" />
+                              <span>{label}</span>
+                            </div>
+                          ))}
                           <span className="text-gray-300">•</span>
                         </>
                       )}
@@ -3088,6 +3093,7 @@ Best regards`);
                       ? criterionScoringLabel(jdDetails.industry_type, jdDetails.industry_mandatory, { isIndustry: true })
                       : undefined}
                     location={jdLocation || null}
+                    locations={jdDetails?.locations}
                     locationNote={jdLocation ? criterionScoringLabel(jdLocation, jdDetails.location_mandatory) : undefined}
                     employmentType={employmentTypeLabel(jdDetails.employment_type)}
                     workMode={workModeLabel(jdDetails.remote_type)}
@@ -3742,9 +3748,9 @@ Best regards`);
                   </div>
 
                   {/* Resume content — document style */}
-                  <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 p-4 sm:p-6">
                     {versionPreview.text ? (
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full">
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
                         {lines.map((line, idx) => {
                           const trimmed = line.trim();
                           if (!trimmed) return <div key={idx} className="h-3" />;
@@ -3756,7 +3762,7 @@ Best regards`);
 
                           if (isHeader) {
                             return (
-                              <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
+                              <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
                                 {trimmed}
                               </h3>
                             );
@@ -3764,12 +3770,12 @@ Best regards`);
 
                           // The first line of a CV is almost always the name.
                           if (idx === firstNonEmpty) {
-                            return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>;
+                            return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1 break-words [overflow-wrap:anywhere]">{trimmed}</h2>;
                           }
 
                           const isBullet = /^[•\-*]\s?/.test(trimmed);
                           return (
-                            <p key={idx} className={`text-sm text-gray-700 leading-relaxed mb-0.5 ${isBullet ? 'pl-4' : ''}`}>
+                            <p key={idx} className={`text-sm text-gray-700 leading-relaxed mb-0.5 break-words [overflow-wrap:anywhere] ${isBullet ? 'pl-4' : ''}`}>
                               {trimmed}
                             </p>
                           );

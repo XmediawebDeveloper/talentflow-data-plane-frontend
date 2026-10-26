@@ -75,7 +75,7 @@ export function DateField({ id, value, onChange, min, max, placeholder = 'dd-mm-
             className,
           )}
         >
-          <span className={selected ? 'text-gray-900 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500'}>
+          <span className={cn('truncate whitespace-nowrap', selected ? 'text-gray-900 dark:text-slate-100' : 'text-gray-400 dark:text-slate-500')}>
             {selected ? formatDMY(selected) : placeholder}
           </span>
           <CalendarIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />

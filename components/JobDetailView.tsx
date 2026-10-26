@@ -1048,7 +1048,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /* The AI Talent Match tab's "Create / Send Assessment | AI Interview"
      popups (VersionInviteDialog — one per type): null = closed; else which
      popup and the candidates ticked in the table. */
-  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[]; preselect?: boolean } | null>(null);
+  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[]; preselect?: boolean; bulk?: boolean } | null>(null);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
   const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
@@ -1420,46 +1420,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      Assessment with nobody preset — candidates are chosen in its email step. */
   const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [] });
   /* Quick Actions › Create / Send: the popup lists this job's AI Talent Match
-     candidates, then its Scored Resumes candidates (the two tabs' tables),
-     unticked — the recruiter picks who to send. A resume on both tabs is
+     candidates, then its Scored Resumes candidates — read from the SERVER a
+     page at a time (search, filters, 50 more on scroll, tab counts), never
+     this page's own 1,000 / 100-row reads, so a job with 10,000 candidates
+     opens at once and every score badge is right. A resume on both tabs is
      listed once, under AI Talent Match, with its score chip; Score Resume
-     lists only resumes scored outside Talent Match. Each row carries its
-     latest score (the list is newest first), or "Not scored". */
-  const openCreateSendFromTile = (kind: InviteKind) => {
-    const latestScore = new Map<string, any>();
-    for (const r of scoredResumes) {
-      const id = r.resumeId || r.id;
-      if (id && !latestScore.has(id)) latestScore.set(id, r);
-    }
-    const scoreOf = (id: string): InviteCandidate['score'] => {
-      const r = latestScore.get(id);
-      return r ? { percent: r.scorePercentage, matchStatus: r.matchStatus } : 'unscored';
-    };
-    const candidates: InviteCandidate[] = aiMatchCandidates.map((c) => ({
-      id: c.resumeId,
-      name: c.name,
-      email: c.email,
-      phone: c.phone,
-      rating: c.rank,
-      resumeId: c.resumeId,
-      source: 'talent-match' as const,
-      score: scoreOf(c.resumeId),
-    }));
-    const listed = new Set(candidates.map((c) => c.id));
-    for (const [id, r] of latestScore) {
-      if (listed.has(id)) continue;
-      candidates.push({
-        id,
-        name: r.candidateName,
-        email: r.email,
-        phone: r.phone || undefined,
-        resumeId: r.resumeId || undefined,
-        source: 'score-resume',
-        score: scoreOf(id),
-      });
-    }
-    setInviteDialog({ kind, candidates, preselect: false });
-  };
+     lists only resumes scored outside Talent Match. Send runs as a
+     background job that outlives the popup (see VersionInviteDialog `bulk`). */
+  const openCreateSendFromTile = (kind: InviteKind) =>
+    setInviteDialog({ kind, candidates: [], preselect: false, bulk: true });
 
   const handleAIInterviewStatus = () => {
     // Open the AI Interview Result tab on this page rather than navigating.
@@ -2807,6 +2776,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
           candidates={inviteDialog.candidates}
           preselect={inviteDialog.preselect}
+          bulk={inviteDialog.bulk}
           /* Create / Send AI Interview: no Duplicate in the version ⋯ menu. */
           hideDuplicate={inviteDialog.kind === 'interview'}
           disabledReason={
@@ -5300,6 +5270,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           /* Turns on the popup's Job Version picker: score against any
              published version of this job, starting on this page's own. */
           job={job}
+          cancelInFooter
           onClose={() => setShowSelectSourceModal(false)}
           onScoringFinished={() => {
             // Run settled, popup still up: bring Scored Resumes in behind it.
@@ -5326,6 +5297,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         onClose={() => setShowJDHistory(false)}
         jdId={job.id}
         jdTitle={job.title}
+        cancelInFooter
       />
 
       {/* Resume Detail View Modal */}

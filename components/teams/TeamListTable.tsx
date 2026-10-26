@@ -29,7 +29,39 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
   const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
-      <div className="overflow-x-auto tf-table-shell">
+      {/* Phones: compact rows instead of the 820px-wide table. Sorting stays
+          on the toolbar's Sort dropdown. */}
+      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+        {teams.map((team) => (
+          <li key={team.id}>
+            <button
+              type="button"
+              onClick={() => onViewDetails(team.id)}
+              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
+            >
+              <TeamAvatar team={team} className="h-9 w-9 rounded-lg text-xs" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
+                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                  {team.team_lead ? (
+                    <>
+                      <Crown className="h-3 w-3 shrink-0 text-brand-blue/60 dark:text-blue-300/70" />
+                      <span className="truncate">{team.team_lead.name}</span>
+                    </>
+                  ) : (
+                    <span className="italic text-gray-400 dark:text-slate-500">No lead</span>
+                  )}
+                </span>
+                <span className="mt-0.5 block truncate text-2xs text-gray-400 dark:text-slate-500">
+                  {team.member_count} members · {team.active_jobs_count.toLocaleString()} jobs · {team.resumes_count.toLocaleString()} resumes
+                </span>
+              </span>
+              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-600" />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto tf-table-shell md:block">
         <table className="w-full min-w-[820px]">
           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
             <tr className="text-left">
@@ -71,7 +103,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                           e.stopPropagation();
                           onViewDetails(team.id);
                         }}
-                        className="block truncate text-left text-sm font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
+                        className="block truncate text-left text-sm max-sm:text-[13px] font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
                       >
                         {team.name}
                       </button>
@@ -81,7 +113,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm">
+                <td className="px-4 py-3 text-sm max-sm:text-[13px]">
                   {team.team_lead ? (
                     <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
                       <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
@@ -95,16 +127,16 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                   {team.member_count > 0 ? (
                     <MemberStack members={team.members} total={team.member_count} max={3} size="sm" />
                   ) : (
-                    <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                    <span className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">—</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900 dark:text-slate-100">
+                <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">
                   {team.active_jobs_count.toLocaleString()}
                 </td>
-                <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900 dark:text-slate-100">
+                <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">
                   {team.resumes_count.toLocaleString()}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500 dark:text-slate-400">
+                <td className="whitespace-nowrap px-4 py-3 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
                   {formatTeamDate(team.created_at) || '—'}
                 </td>
                 <td className="py-3 pl-4 pr-5 text-right">

@@ -352,18 +352,20 @@ export default function ResumeViewPage() {
       : storedTitle || fallback;
 
   /* My Resumes and the Shared Database are tabs of one Resume Database page:
-     Resume Database › <the tab the resume was opened from>. The two crumbs go
-     to different places — the page, then that tab (`?tab=`) — instead of both
-     to the tab. A pool the user cannot see is never named, and a resume not
-     opened from a pool (search, an upload, a scoring screen) gets the page
-     alone rather than a guessed tab. */
+     Resume Database › <the tab the resume was opened from>. Both crumbs open
+     that tab (`?tab=`): the page without one lands on My Resumes, which sent a
+     Shared Database user to the wrong pool. A pool the user cannot see is never
+     named or linked, and a resume not opened from a pool (search, an upload, a
+     scoring screen) gets the page alone rather than a guessed tab. */
   const canSeePool = (pool: ResumeTab) =>
     isTenantAdmin ||
     (pool === 'my-resumes' ? MY_RESUMES_PERMISSIONS : INTERNAL_DB_PERMISSIONS).some((k) => hasPermission(k));
   const resumeDatabaseCrumb = { label: 'Resume Database', href: '/recruitment/resume-database' };
   const sourceCrumbs =
     crumbPool ? [
-      resumeDatabaseCrumb,
+      canSeePool(crumbPool)
+        ? { ...resumeDatabaseCrumb, href: resumeDatabaseTabHref(crumbPool) }
+        : resumeDatabaseCrumb,
       ...(canSeePool(crumbPool)
         ? [{ label: RESUME_TAB_LABEL[crumbPool], href: resumeDatabaseTabHref(crumbPool) }]
         : []),

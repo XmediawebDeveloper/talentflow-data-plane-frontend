@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ModalProvider } from "@/components/providers/ModalProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ScoringProgressProvider } from "@/contexts/ScoringProgressContext";
+import { BulkInviteProgressProvider } from "@/contexts/BulkInviteProgressContext";
 import { Toaster } from "sonner";
 import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
 import SessionExpiredModal from "@/components/SessionExpiredModal";
@@ -142,6 +143,7 @@ export default function RootLayout({
             <ModalProvider>
               <GlobalDialogProvider>
                 <ScoringProgressProvider>
+                <BulkInviteProgressProvider>
                   {children}
                   <Toaster
                     position="top-right"
@@ -182,6 +184,7 @@ export default function RootLayout({
                   {/* Sizes every data table to header + 10 rows, then scroll.
                       Renders nothing itself; finds tables by class. */}
                   <TableRowCap />
+                </BulkInviteProgressProvider>
                 </ScoringProgressProvider>
               </GlobalDialogProvider>
             </ModalProvider>

@@ -341,6 +341,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // popup must NOT terminate the interview (it would block the evaluation).
   const interviewClosingRef = useRef(false);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
+  // InterviewUI reports its timers every second. Only the staging
+  // "Fullscreen Required" overlay displays them, so keep the latest value in
+  // a ref and copy it into state only while that overlay is up — otherwise
+  // every tick re-rendered this portal and, through it, the whole interview.
+  const timerSnapshotRef = useRef<InterviewTimerSnapshot | null>(null);
+  const timerOverlayVisible = !IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive;
+  const timerOverlayVisibleRef = useRef(timerOverlayVisible);
+  timerOverlayVisibleRef.current = timerOverlayVisible;
+  const handleTimerChange = useCallback((s: InterviewTimerSnapshot) => {
+    timerSnapshotRef.current = s;
+    if (timerOverlayVisibleRef.current) setTimerSnapshot(s);
+  }, []);
+  useEffect(() => {
+    if (timerOverlayVisible) setTimerSnapshot(timerSnapshotRef.current);
+  }, [timerOverlayVisible]);
   // Device tier + feature flags — detected once during the system check so the
   // interview runs the heavy/accurate path only on capable machines and a
   // lightweight path on old/low-end systems. See lib/utils/deviceCapability.
@@ -1334,10 +1349,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   };
 
-  /** Preferred audio-aware mimeTypes — vp9/vp8 + opus gives the best results in Chrome/Edge. */
+  /** Preferred audio-aware mimeTypes. VP8 FIRST: the screen is captured at
+   *  1080p (needed by the vision checks) and VP9's real-time software encode of
+   *  that costs roughly twice VP8's CPU at the same capped 300 kbps — a steady
+   *  load on exactly the low-end machines that hung during the interview. VP8
+   *  WebM plays everywhere VP9 does. */
   const SCREEN_MIME_TYPES = [
-    'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9,opus',
     'video/webm',
   ];
 
@@ -1688,7 +1707,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // Bina's TTS audio never plays, and the interview looks stuck ("speaks only
     // after a refresh"). resume() here, in the click handler, unlocks it.
     try {
-      const ctx = new AudioContext({ sampleRate: 24000 });
+      // Reuse the context pre-created earlier (mount / resume paths) — the old
+      // code always made a new one and overwrote the global, orphaning the
+      // previous context (and its audio thread) for the rest of the session.
+      // resume() below still runs inside this gesture, which is what unlocks it.
+      const existing = (window as any).__interviewAudioContext as AudioContext | undefined;
+      const ctx = existing && existing.state !== 'closed' ? existing : new AudioContext({ sampleRate: 24000 });
       ctx.resume().then(
         () => console.log('[Portal] AudioContext resumed in gesture, state:', ctx.state),
         (e) => console.warn('[Portal] AudioContext resume failed:', e),
@@ -3772,7 +3796,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}
-          onTimerChange={setTimerSnapshot}
+          onTimerChange={handleTimerChange}
           deviceCapability={deviceCapability}
           candidatePhotoUrl={candidatePhotoUrl}
           approvedCameraDeviceId={approvedCameraDeviceId}

@@ -61,6 +61,11 @@ interface Props {
    *  (headRef stays null → streamStart/streamAudio use fbPlayChunk). The parent
    *  shows the static Bina image. onReady + onFallback fire immediately. */
   audioOnly?: boolean;
+  /** Fired when Bina's voice actually starts playing for a turn (worklet
+   *  `playback-started`, or the first chunk on the Web Audio fallback). The
+   *  parent shows "Bina is speaking" from here — not from when the backend
+   *  merely announced a turn, which can be seconds earlier. */
+  onAudible?: () => void;
 }
 
 /**
@@ -94,6 +99,73 @@ async function fetchAvatarWithRetry(url: string, attempts = 3): Promise<string> 
   throw lastErr;
 }
 
+/** Per-viseme morph targets for the phoneme lip sync (subtle intensities). */
+const LIP_SHAPES: Record<string, Record<string, number>> = {
+  "sil": {},
+  "PP":  { viseme_PP: 0.30 },
+  "FF":  { viseme_FF: 0.22, jawOpen: 0.04 },
+  "TH":  { viseme_TH: 0.18, jawOpen: 0.06 },
+  "DD":  { viseme_DD: 0.20, jawOpen: 0.10 },
+  "kk":  { viseme_kk: 0.18, jawOpen: 0.10 },
+  "CH":  { viseme_CH: 0.20, jawOpen: 0.06 },
+  "SS":  { viseme_SS: 0.22, jawOpen: 0.03 },
+  "nn":  { viseme_nn: 0.18, jawOpen: 0.06 },
+  "RR":  { viseme_RR: 0.20, jawOpen: 0.10 },
+  "aa":  { viseme_aa: 0.28, jawOpen: 0.18 },
+  "E":   { viseme_E:  0.24, jawOpen: 0.12 },
+  "I":   { viseme_I:  0.20, jawOpen: 0.08 },
+  "O":   { viseme_O:  0.26, jawOpen: 0.15 },
+  "U":   { viseme_U:  0.22, jawOpen: 0.10 },
+};
+const NO_SHAPE: Record<string, number> = {};
+/** Lip easing time constants (ms): open into a shape, relax out of it, and
+ *  close at end of speech. Larger = slower, softer mouth movement. */
+const LIP_ATTACK_MS = 90;
+const LIP_RELEASE_MS = 110;
+const LIP_CLOSE_MS = 60;
+const LIP_MORPHS = [
+  "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
+  "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
+  "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",  "jawOpen",
+];
+
+/** Same URL TalkingHead resolves (`./playback-worklet.js` next to the module),
+ *  so its own lazy addModule is a cached no-op if it ever runs. */
+const PLAYBACK_WORKLET_URL = "/talkinghead/playback-worklet.js";
+const workletPreloads = new WeakMap<AudioContext, Promise<boolean>>();
+
+/** Register the playback worklet on `ctx` once (shared by StrictMode's double
+ *  mount). Resolves false on failure — TalkingHead then loads it itself. */
+function preloadPlaybackWorklet(ctx: AudioContext): Promise<boolean> {
+  let p = workletPreloads.get(ctx);
+  if (!p) {
+    const t0 = performance.now();
+    p = ctx.audioWorklet
+      .addModule(PLAYBACK_WORKLET_URL)
+      .then(() => {
+        console.log(`[TalkingHead] playback worklet preloaded in ${Math.round(performance.now() - t0)}ms`);
+        return true;
+      })
+      .catch((e) => {
+        console.warn("[TalkingHead] playback worklet preload failed — will load on first turn:", e);
+        workletPreloads.delete(ctx);
+        return false;
+      });
+    workletPreloads.set(ctx, p);
+  }
+  return p;
+}
+
+/** ctx.resume() can hang indefinitely without a user activation (e.g. a reload
+ *  straight into the interview). Never let it block a turn's audio setup. */
+const RESUME_TIMEOUT_MS = 1500;
+function resumeWithTimeout(ctx: AudioContext): Promise<void> {
+  return Promise.race([
+    ctx.resume().catch(() => {}),
+    new Promise<void>((r) => setTimeout(r, RESUME_TIMEOUT_MS)),
+  ]);
+}
+
 /** Sanity ceiling on a measured audible-onset delay (ms). Anything larger is a
  *  stalled worklet / suspended context, not a real buffering delay — clamp it
  *  so one bad turn can't push the caption timeline wildly out. */
@@ -110,8 +182,10 @@ function contextOutputLatencyMs(ctx: AudioContext | null | undefined): number {
 }
 
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
-  function TalkingHeadAvatar({ avatarUrl, className, style, onReady, onFallback, audioOnly }, ref) {
+  function TalkingHeadAvatar({ avatarUrl, className, style, onReady, onFallback, audioOnly, onAudible }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const onAudibleRef = useRef(onAudible);
+    onAudibleRef.current = onAudible;
     const headRef      = useRef<any>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
@@ -128,6 +202,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const fbPendingRef     = useRef(0);     // scheduled-but-not-finished buffers
     const fbNoMoreDataRef  = useRef(false);
     const fbActiveRef      = useRef(false); // fallback mode is active this session
+    const fbSourcesRef     = useRef<Set<AudioBufferSourceNode>>(new Set()); // scheduled, not yet ended
     // ── Measured audible onset (caption↔voice sync) ─────────────────────
     // InterviewUI paces its caption reveal against the audio clock, offset by
     // the delay between a PCM chunk ARRIVING and that audio actually becoming
@@ -184,6 +259,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       let mounted = true;
       let rafId: number | null = null;
+      let workletPreload: Promise<void> = Promise.resolve();
       // Track head locally so cleanup can stop it even before headRef is set.
       // Without this, React StrictMode's double-invoke creates two TalkingHead
       // instances on the same canvas and the first one is never stopped.
@@ -274,6 +350,13 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
               head.workletLoaded    = false;
               head.streamWorkletNode = null;
+              // Load the playback worklet NOW, in parallel with the GLB, instead
+              // of lazily inside the first streamStart. Lazily, it landed on
+              // Bina's very first line (the intro): its chunks queued behind the
+              // module load and the caption timeline had no measured delay yet.
+              workletPreload = preloadPlaybackWorklet(preCreated).then((ok) => {
+                if (ok && head.audioCtx === preCreated) head.workletLoaded = true;
+              });
               console.log("[TalkingHead] Pre-injected 24kHz AudioContext with correct graph, state:", preCreated.state);
             }
           } catch (e) {
@@ -321,10 +404,24 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // ══════════════════════════════════════════════════════════
 
           try {
-            // 1) Force straight pose (hands down, relaxed — NEVER hip)
-            head.poseName = "straight";
-            head.poseCurrentTemplate = head.poseTemplates["straight"];
-            head.setPoseFromTemplate(head.poseTemplates["straight"], 0);
+            // 1) Force straight pose (hands down, relaxed — NEVER hip) and keep
+            // it from ever MIRRORING. TalkingHead's setPoseFromTemplate mirrors
+            // the pose (weight onto the other leg) whenever the same template is
+            // applied again, and on a null "refresh" (end of any animation) when
+            // the weight isn't on the left. Pre-setting poseCurrentTemplate (the
+            // old code) made the very first call a "same template" call, so Bina
+            // started mirrored and then flipped side-to-side on later re-applies
+            // — the reported "suddenly moved to the other side, then normal".
+            const straightT = head.poseTemplates["straight"];
+            const origSetPose = head.setPoseFromTemplate.bind(head);
+            head.setPoseFromTemplate = (template: unknown, ms?: number) => {
+              head.poseWeightOnLeft = true;          // never take the mirror branch
+              head.poseName = "straight";
+              // Already straight → re-applying would only restart the transition.
+              if (template && head.poseCurrentTemplate === straightT && head.poseTarget?.template === straightT) return;
+              origSetPose(template ? straightT : null, ms);
+            };
+            head.setPoseFromTemplate(straightT, 0);
 
             // 2) Replace ALL pose animation alternatives with straight-only
             // (Don't touch poseBase/poseTarget/poseTemplates directly — causes clone errors)
@@ -437,6 +534,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             "eyeLookOutLeft", "eyeLookOutRight",
           ];
 
+          // The worklet has normally finished long before the GLB; never let
+          // it hold the interview start for more than a moment.
+          await Promise.race([workletPreload, new Promise((r) => setTimeout(r, 3000))]);
+          if (!mounted) return;
+
           headRef.current = head;
           setStatus("ready");
           onReady?.();
@@ -451,9 +553,14 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           } catch {}
 
           // ── Per-frame: eye contact + behavior guard + amplitude lip sync ──
+          let lastLipFrameAt = performance.now();
           const enforce = () => {
             if (!mounted || !headRef.current) return;
             const h = headRef.current;
+            const frameNow = performance.now();
+            // Clamp so a background-tab pause doesn't make one giant step.
+            const lipDt = Math.min(100, frameNow - lastLipFrameAt);
+            lastLipFrameAt = frameNow;
 
             try {
               const mt = h.mtAvatar;
@@ -496,9 +603,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               }
 
               // ── Ensure pose stays straight (never hip) ──
-              if (h.poseName !== "straight") {
-                h.poseName = "straight";
-                h.poseCurrentTemplate = h.poseTemplates["straight"];
+              // (Through the setup wrapper — a direct poseCurrentTemplate write
+              // here is what set up the mirror flip.)
+              if (h.poseName !== "straight" || h.poseCurrentTemplate !== h.poseTemplates["straight"]) {
+                h.setPoseFromTemplate(h.poseTemplates["straight"], 800);
               }
 
               // ══════════════════════════════════════════════════════════
@@ -511,29 +619,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               // 5. Subtle, controlled intensity — no exaggerated mouth opening
               // ══════════════════════════════════════════════════════════
 
-              const SHAPES: Record<string, Record<string, number>> = {
-                "sil": {},
-                "PP":  { viseme_PP: 0.30 },
-                "FF":  { viseme_FF: 0.22, jawOpen: 0.04 },
-                "TH":  { viseme_TH: 0.18, jawOpen: 0.06 },
-                "DD":  { viseme_DD: 0.20, jawOpen: 0.10 },
-                "kk":  { viseme_kk: 0.18, jawOpen: 0.10 },
-                "CH":  { viseme_CH: 0.20, jawOpen: 0.06 },
-                "SS":  { viseme_SS: 0.22, jawOpen: 0.03 },
-                "nn":  { viseme_nn: 0.18, jawOpen: 0.06 },
-                "RR":  { viseme_RR: 0.20, jawOpen: 0.10 },
-                "aa":  { viseme_aa: 0.28, jawOpen: 0.18 },
-                "E":   { viseme_E:  0.24, jawOpen: 0.12 },
-                "I":   { viseme_I:  0.20, jawOpen: 0.08 },
-                "O":   { viseme_O:  0.26, jawOpen: 0.15 },
-                "U":   { viseme_U:  0.22, jawOpen: 0.10 },
-              };
-
-              const ALL_MORPHS = [
-                "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
-                "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
-                "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",  "jawOpen",
-              ];
+              // SHAPES / ALL_MORPHS are module constants (LIP_SHAPES /
+              // LIP_MORPHS) — rebuilt here they were two fresh allocations
+              // per frame, ~60×/s for the whole interview.
 
               // Rebuild viseme timeline when text changes
               const curText = fullTextRef.current;
@@ -582,7 +670,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                   const tlTotal = timelineTotalMsRef.current;
                   const audioTotal = totalAudioMsRef.current;
 
-                  let targetShape: Record<string, number> = {};
+                  let targetShape: Record<string, number> = NO_SHAPE;
 
                   if (tl.length > 0 && tlTotal > 0 && audioTotal > 0) {
                     // Scale timeline to match actual audio duration
@@ -595,34 +683,44 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                     let found = false;
                     for (let ti = tl.length - 1; ti >= 0; ti--) {
                       if (timelinePos >= tl[ti].startMs && timelinePos < tl[ti].startMs + tl[ti].durMs) {
-                        targetShape = SHAPES[tl[ti].viseme] || {};
+                        targetShape = LIP_SHAPES[tl[ti].viseme] || NO_SHAPE;
                         found = true;
                         break;
                       }
                     }
-                    if (!found) targetShape = {};
+                    if (!found) targetShape = NO_SHAPE;
                   } else if (tl.length === 0) {
                     // No timeline yet — subtle fallback
-                    targetShape = SHAPES["DD"];
+                    targetShape = LIP_SHAPES["DD"];
                   }
 
-                  // Instant articulation — no easing, direct viseme snap
-                  for (const morph of ALL_MORPHS) {
+                  // Eased articulation. The old direct snap jumped between
+                  // viseme shapes every ~70 ms, which read as fast/jittery lips.
+                  // Each morph now glides toward its target (frame-rate
+                  // independent): ~LIP_ATTACK_MS to open, ~LIP_RELEASE_MS to relax.
+                  for (const morph of LIP_MORPHS) {
                     const target = targetShape[morph] || 0;
-                    currentMorphsRef.current[morph] = target;
+                    const cur = currentMorphsRef.current[morph] || 0;
+                    const tau = target > cur ? LIP_ATTACK_MS : LIP_RELEASE_MS;
+                    const next = cur + (target - cur) * (1 - Math.exp(-lipDt / tau));
+                    currentMorphsRef.current[morph] = Math.abs(next - target) < 0.002 ? target : next;
                     if (mt[morph]) {
                       mt[morph].realtime = currentMorphsRef.current[morph];
                       mt[morph].needsUpdate = true;
                     }
                   }
                 } else {
-                  // Audio stopped — IMMEDIATELY zero all lip morphs (no decay)
+                  // Audio stopped — close the mouth quickly (LIP_CLOSE_MS), not a
+                  // one-frame snap; never a trailing "still talking" animation.
                   speechStartRef.current = null;
-                  for (const morph of ALL_MORPHS) {
-                    if (currentMorphsRef.current[morph]) {
-                      currentMorphsRef.current[morph] = 0;
+                  const k = 1 - Math.exp(-lipDt / LIP_CLOSE_MS);
+                  for (const morph of LIP_MORPHS) {
+                    const cur = currentMorphsRef.current[morph];
+                    if (cur) {
+                      const next = cur < 0.01 ? 0 : cur * (1 - k);
+                      currentMorphsRef.current[morph] = next;
                       if (mt[morph]) {
-                        mt[morph].realtime = 0;
+                        mt[morph].realtime = next;
                         mt[morph].needsUpdate = true;
                       }
                     }
@@ -763,10 +861,22 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       return () => {
         mounted = false;
         if (rafId !== null) cancelAnimationFrame(rafId);
-        // Stop via localHead (set immediately after construction) so we can
+        // Release via localHead (set immediately after construction) so we can
         // clean up even if showAvatar() is still in-flight and headRef isn't set yet.
-        try { localHead?.stop?.(); } catch {}
-        try { headRef.current?.stop?.(); } catch {}
+        // dispose(), not just stop(): stop() left the Three.js scene, the GLB's
+        // geometry/textures and the WebGL context alive — tens of MB of GPU
+        // memory leaked on every remount (StrictMode, audio-only switch).
+        const heads = new Set([localHead, headRef.current].filter(Boolean));
+        for (const h of heads) {
+          // TalkingHead.stop() (called by dispose) SUSPENDS h.audioCtx — which
+          // is the shared interview AudioContext we injected. Put it back so
+          // the recording mix / audio fallback aren't silenced.
+          const ctx = h.audioCtx as AudioContext | undefined;
+          const wasRunning = ctx?.state === "running";
+          try { h.dispose(); } catch { try { h.stop?.(); } catch {} }
+          // (dispose() changed ctx.state behind TypeScript's narrowing.)
+          if (wasRunning && ctx && (ctx.state as AudioContextState) === "suspended") ctx.resume().catch(() => {});
+        }
         headRef.current = null;
         localHead = null;
       };
@@ -829,7 +939,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       src.start(startAt);
       fbNextTimeRef.current = startAt + buf.duration;
       fbPendingRef.current++;
+      fbSourcesRef.current.add(src);
       src.onended = () => {
+        fbSourcesRef.current.delete(src);
         fbPendingRef.current--;
         if (fbPendingRef.current <= 0 && fbNoMoreDataRef.current) {
           fbPendingRef.current = 0;
@@ -881,8 +993,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             // Reuse or create fallback AudioContext
             const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
             if (preCreated && preCreated.state !== "closed") {
+              // Shared, never closed by us (see streamStop) — so it stays the
+              // global the recording mix and caption clock are built on.
               fbCtxRef.current = preCreated;
-              (window as any).__interviewAudioContext = null;
             } else if (!fbCtxRef.current || fbCtxRef.current.state === "closed") {
               fbCtxRef.current = new AudioContext({ sampleRate: 24000 });
             }
@@ -920,7 +1033,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         const preResumeCtx = async () => {
           const ctx = head.audioCtx as AudioContext | undefined;
           if (ctx && ctx.state !== "running") {
-            try { await ctx.resume(); } catch { /* ignore */ }
+            await resumeWithTimeout(ctx);
           }
         };
 
@@ -939,6 +1052,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               // i.e. Bina is (about to become) audible. This is the measurement
               // that replaces the old TALKING_HEAD_BUFFER_MS guess.
               () => {
+                onAudibleRef.current?.();
                 if (onsetMeasuredRef.current) return;
                 const arrivedAt = firstChunkAtRef.current;
                 if (arrivedAt === null) return;   // no chunk seen yet — nothing to measure against
@@ -1002,6 +1116,8 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             pendingRef.current.push(pcmData);
           } else {
             fbPlayChunk(pcmData);
+            // Scheduled at ~now — audible immediately on this path.
+            onAudibleRef.current?.();
           }
           return;
         }
@@ -1070,8 +1186,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           fbActiveRef.current = false;
           fbNoMoreDataRef.current = false;
           fbPendingRef.current = 0;
-          try { fbCtxRef.current?.close(); } catch {}
-          fbCtxRef.current = null;
+          // Stop what is scheduled — do NOT close the context. Closing it (the
+          // old behaviour) forced a new AudioContext every interrupted turn,
+          // and Bina's voice then could no longer reach the recording mix
+          // (__interviewRecordingDest lives on the original context, so the
+          // cross-context connect threw silently).
+          for (const src of fbSourcesRef.current) {
+            try { src.onended = null; src.stop(); src.disconnect(); } catch {}
+          }
+          fbSourcesRef.current.clear();
+          fbNextTimeRef.current = 0;
           return;
         }
 

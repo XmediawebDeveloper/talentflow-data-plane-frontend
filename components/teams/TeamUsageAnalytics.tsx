@@ -25,6 +25,8 @@ import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import NameAvatar from '@/components/ui/name-avatar';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort } from '@/components/ui/sortable-header';
+import { useIsMobile } from '@/components/ui/use-mobile';
+import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -99,7 +101,7 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
         </p>
         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
           {sorted.map(e => (
-            <div key={e.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3 text-sm">
+            <div key={e.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3 text-sm max-sm:text-[13px]">
               <span className={`shrink-0 text-xs font-bold px-2 py-1 rounded-md ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
                 {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
               </span>
@@ -146,9 +148,10 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
   );
 }
 
-// ─── Single member row ────────────────────────────────────────────────────────
+// ─── Data hooks (shared by the desktop rows and the phone cards) ─────────────
 
-function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: string }) {
+/** A member's consumption log, fetched on first expand. */
+function useMemberLog(member: TeamMemberUsage, fromDate: string) {
   const [expanded, setExpanded] = useState(false);
   const [entries, setEntries] = useState<ConsumptionLogEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -178,6 +181,34 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
   // Reset on date change
   useEffect(() => { setEntries(null); setExpanded(false); }, [fromDate]);
 
+  return { expanded, toggle, entries, loading };
+}
+
+/** A team's member usage, fetched while the team is expanded. */
+function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toDate: string) {
+  const [members, setMembers] = useState<TeamMemberUsage[] | null>(null);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  useEffect(() => {
+    if (!expanded) return;
+    let cancelled = false;
+    setLoadingMembers(true);
+    setMembers(null);
+    teamService.getTeamMembersUsage(teamId, fromDate, toDate)
+      .then(res => { if (!cancelled) setMembers(res.members); })
+      .catch(() => { if (!cancelled) setMembers([]); })
+      .finally(() => { if (!cancelled) setLoadingMembers(false); });
+    return () => { cancelled = true; };
+  }, [expanded, teamId, fromDate, toDate]);
+
+  return { members, loadingMembers };
+}
+
+// ─── Single member row ────────────────────────────────────────────────────────
+
+function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: string }) {
+  const { expanded, toggle, entries, loading } = useMemberLog(member, fromDate);
+
   const rs   = getMCount(member, 'RS');
   const as_  = getMUnits(member, 'AS');   // float for assessments
   const aiu  = getMCount(member, 'AIU');
@@ -197,7 +228,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
             </div>
             <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
             <div>
-              <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
+              <p className="text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
               <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
             </div>
           </div>
@@ -309,7 +340,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
       {/* Empty */}
       {expanded && !loading && entries !== null && entries.length === 0 && (
         <tr>
-          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
+          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
             No consumption entries for this member in the selected period.
           </td>
         </tr>
@@ -333,20 +364,7 @@ function TeamRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const [members, setMembers] = useState<TeamMemberUsage[] | null>(null);
-  const [loadingMembers, setLoadingMembers] = useState(false);
-
-  useEffect(() => {
-    if (!expanded) return;
-    let cancelled = false;
-    setLoadingMembers(true);
-    setMembers(null);
-    teamService.getTeamMembersUsage(team.team_id, fromDate, toDate)
-      .then(res => { if (!cancelled) setMembers(res.members); })
-      .catch(() => { if (!cancelled) setMembers([]); })
-      .finally(() => { if (!cancelled) setLoadingMembers(false); });
-    return () => { cancelled = true; };
-  }, [expanded, team.team_id, fromDate, toDate]);
+  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
 
   const rs  = getCount(team, 'RS');
   const as_ = getCount(team, 'AS');
@@ -371,7 +389,7 @@ function TeamRow({
               <Users className="w-4 h-4 text-brand-blue" />
             </div>
             <div>
-              <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{team.team_name || 'Unnamed Team'}</p>
+              <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
               {(team.jds_created > 0 || team.assessments_created > 0) && (
                 <div className="flex items-center gap-3 mt-0.5">
                   {team.jds_created > 0 && (
@@ -393,11 +411,11 @@ function TeamRow({
           <td key={key} className="px-4 py-4 whitespace-nowrap">
             {val > 0
               ? <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{val}</span>
-              : <span className="text-gray-300 dark:text-slate-500 text-sm">—</span>}
+              : <span className="text-gray-300 dark:text-slate-500 text-sm max-sm:text-[13px]">—</span>}
           </td>
         ))}
         <td className="px-4 py-4 whitespace-nowrap">
-          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+          <span className={`text-sm max-sm:text-[13px] font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
             {total > 0 ? total : '—'}
           </span>
         </td>
@@ -486,7 +504,7 @@ function TeamRow({
                   </table>
                 </div>
               ) : (
-                <p className="px-6 py-4 text-sm text-gray-400 dark:text-slate-500 italic">
+                <p className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic">
                   No members with usage in this period.
                 </p>
               )}
@@ -498,19 +516,198 @@ function TeamRow({
   );
 }
 
+// ─── Phone cards (<md) — same data and drill-down as the tables above ────────
+
+function MobileLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
+  const sorted = [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  return (
+    <div className="border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
+      <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
+        History · {sorted.length} {sorted.length === 1 ? 'entry' : 'entries'}
+      </p>
+      <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-0.5">
+        {sorted.map(e => (
+          <li key={e.id} className="rounded-md bg-gray-50 px-2.5 py-2 dark:bg-slate-800/50">
+            <div className="flex items-center gap-2">
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
+                {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
+              </span>
+              <p className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800 dark:text-slate-100">
+                {e.unit_type === 'max_seats'
+                  ? 'Seat License'
+                  : (e.entity_name || UNIT_TYPE_NAMES[e.unit_type] || e.unit_type)}
+              </p>
+              <span className="shrink-0 text-xs font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                {e.units_consumed > 0 ? `−${e.units_consumed}` : '0'}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className={`rounded-full px-1.5 py-0.5 text-2xs font-medium ${STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                {e.status.replace(/_/g, ' ')}
+              </span>
+              <span className="truncate text-2xs text-gray-400 dark:text-slate-500">{formatIST(e.created_at)}</span>
+            </div>
+            {e.failure_reason && (
+              <p className="mt-1 text-2xs text-destructive">Reason: {e.failure_reason}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function MobileMemberCard({ member, fromDate }: { member: TeamMemberUsage; fromDate: string }) {
+  const { expanded, toggle, entries, loading } = useMemberLog(member, fromDate);
+  const stats: [string, string | number, boolean][] = [
+    ['RS', getMCount(member, 'RS'), getMCount(member, 'RS') > 0],
+    ['AS', getMUnits(member, 'AS').toFixed(1), getMUnits(member, 'AS') > 0],
+    ['AIU', getMCount(member, 'AIU'), getMCount(member, 'AIU') > 0],
+    ['RU', getMCount(member, 'RU'), getMCount(member, 'RU') > 0],
+    ['JDs', member.jds_created, member.jds_created > 0],
+    ['Assess.', member.assessments_created, member.assessments_created > 0],
+  ];
+
+  return (
+    <li className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 px-2.5 py-2.5 text-left"
+      >
+        <span className={expanded ? 'text-brand-blue' : 'text-gray-300 dark:text-slate-500'}>
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </span>
+        <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</span>
+          <span className="block truncate text-xs text-gray-400 dark:text-slate-500">{member.user_email}</span>
+        </span>
+      </button>
+      <div className="grid grid-cols-3 gap-1.5 px-2.5 pb-2.5">
+        {stats.map(([label, value, active]) => (
+          <div
+            key={label}
+            className={`rounded-md px-2 py-1 text-center ${active ? 'bg-brand-blue/5 ring-1 ring-brand-blue/10' : 'bg-gray-50 dark:bg-slate-800/50'}`}
+          >
+            <p className={`text-sm max-sm:text-[13px] font-semibold tabular-nums ${active ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>{value}</p>
+            <p className="text-2xs text-gray-500 dark:text-slate-500">{label}</p>
+          </div>
+        ))}
+      </div>
+      <p className="border-t border-gray-100 px-2.5 py-1.5 text-2xs text-gray-500 dark:border-slate-700/60 dark:text-slate-500">
+        Last active: {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
+      </p>
+      {expanded && loading && (
+        <div className="space-y-1.5 border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-11 w-full rounded-md" />
+          ))}
+        </div>
+      )}
+      {expanded && !loading && entries !== null && entries.length > 0 && <MobileLogEntries entries={entries} />}
+      {expanded && !loading && entries !== null && entries.length === 0 && (
+        <p className="border-t border-gray-100 px-2.5 py-2.5 text-xs italic text-gray-400 dark:border-slate-700/60 dark:text-slate-500">
+          No consumption entries in the selected period.
+        </p>
+      )}
+    </li>
+  );
+}
+
+function MobileTeamCard({
+  team,
+  fromDate,
+  toDate,
+  expanded,
+  onToggle,
+}: {
+  team: TeamUsageSummary;
+  fromDate: string;
+  toDate: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
+  const total = teamTotal(team);
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2.5 px-3 pb-2 pt-3 text-left"
+      >
+        <span className={expanded ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}>
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        </span>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
+          <Users className="h-4 w-4 text-brand-blue" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</span>
+          <span className="block truncate text-xs text-gray-400 dark:text-slate-500">
+            {team.jds_created} JDs · {team.assessments_created} Assessments
+          </span>
+        </span>
+        <span className="shrink-0 text-right">
+          <span className={`block text-sm max-sm:text-[13px] font-bold tabular-nums ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+            {total > 0 ? total : '—'}
+          </span>
+          <span className="block text-2xs text-gray-400 dark:text-slate-500">total</span>
+        </span>
+      </button>
+      <div className="flex flex-wrap gap-1.5 px-3 pb-3 pl-[3.25rem]">
+        {(['RS', 'AS', 'AIU', 'RU'] as const).map(k => {
+          const val = getCount(team, k);
+          return (
+            <span
+              key={k}
+              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-2xs font-semibold ${val > 0 ? UNIT_COLORS[k] : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500'}`}
+            >
+              {k} <span className="tabular-nums">{val}</span>
+            </span>
+          );
+        })}
+      </div>
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50 p-2 dark:border-slate-700/60 dark:bg-slate-800/50">
+          {loadingMembers ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-28 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : members && members.length > 0 ? (
+            <ul className="space-y-2">
+              {members.map(m => (
+                <MobileMemberCard key={m.user_id} member={m} fromDate={fromDate} />
+              ))}
+            </ul>
+          ) : (
+            <p className="px-2 py-2 text-xs italic text-gray-400 dark:text-slate-500">No members with usage in this period.</p>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
 // ─── Summary stat card ────────────────────────────────────────────────────────
 
 function StatCard({ label, value, dot, loading }: {
   label: string; value: number; dot: string; loading: boolean;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-5 py-4 flex items-center gap-4 text-left w-full">
-      <span className={`w-3 h-3 rounded-full shrink-0 ${dot}`} />
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-3.5 py-2.5 sm:px-5 sm:py-4 flex items-center gap-3 sm:gap-4 text-left w-full">
+      <span className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full shrink-0 ${dot}`} />
       <div className="min-w-0">
         <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{label}</p>
         {loading
           ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
-          : <p className="text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
+          : <p className="text-lg max-sm:text-base sm:text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
       </div>
     </div>
   );
@@ -576,6 +773,7 @@ export default function TeamUsageAnalytics() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   // Which export the format picker is open for — null while it's closed.
   const [exportScope, setExportScope] = useState<'team' | 'user' | null>(null);
+  const isMobile = useIsMobile();
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -629,38 +827,39 @@ export default function TeamUsageAnalytics() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-4 sm:mb-5 flex flex-col gap-3 sm:gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-            <BarChart3 className="w-5 h-5 text-brand-blue" />
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
+            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
+              <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Team Usage</h2>
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'}`}>
                 {isTenantAdmin ? 'All Teams' : 'Your Teams'}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-slate-400">Consumption across teams and members for the selected period.</p>
+            <p className="hidden sm:block text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">Consumption across teams and members for the selected period.</p>
           </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex flex-col gap-2 min-w-0 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center">
+          {/* Phones: From – to – To on one row. */}
+          <div className="flex flex-col gap-2 min-w-0 lg:flex-row lg:items-center max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] max-sm:items-center">
             <DateField
               aria-label="From date"
               value={fromDate}
               max={toDate}
               onChange={setFromDate}
-              className="w-full lg:w-[150px]"
+              className="w-full lg:w-[150px] max-sm:px-2 max-sm:!text-xs"
             />
-            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500 self-start lg:self-auto">to</span>
+            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500 self-start lg:self-auto max-sm:self-center">to</span>
             <DateField
               aria-label="To date"
               value={toDate}
               min={fromDate}
               max={new Date().toISOString().split('T')[0]}
               onChange={setToDate}
-              className="w-full lg:w-[150px]"
+              className="w-full lg:w-[150px] max-sm:px-2 max-sm:!text-xs"
             />
           </div>
           <div className="relative" ref={exportMenuRef}>
@@ -672,7 +871,7 @@ export default function TeamUsageAnalytics() {
                 disabled={canExport && (teams.length === 0 || loading)}
                 aria-disabled={!canExport || teams.length === 0 || loading}
                 title={!canExport ? 'You do not have permission to export team usage data' : ''}
-                className={`flex h-9 shrink-0 items-center gap-2 px-3 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`flex h-9 shrink-0 items-center gap-2 px-3 max-sm:w-full max-sm:justify-center bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
                   canExport ? 'hover:bg-gray-50 dark:hover:bg-slate-800' : 'text-gray-400 cursor-not-allowed opacity-60'
                 }`}
               >
@@ -684,14 +883,14 @@ export default function TeamUsageAnalytics() {
                 <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
                     onClick={() => { setExportScope('team'); setShowExportMenu(false); }}
-                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"
+                    className="group w-full text-left px-4 py-2.5 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300 flex items-center gap-2"
                   >
                     <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
                   </button>
                   <button
                     onClick={() => { setExportScope('user'); setShowExportMenu(false); }}
-                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"
+                    className="group w-full text-left px-4 py-2.5 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300 flex items-center gap-2"
                   >
                     <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
@@ -717,7 +916,7 @@ export default function TeamUsageAnalytics() {
       </div>
 
       {/* Summary stats — display only; the table below is always shown. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
         <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} />
         <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} />
         <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"    loading={loading} />
@@ -728,7 +927,27 @@ export default function TeamUsageAnalytics() {
       {/* justify-end, not justify-between: the Back to overview button that
           used to hold the left slot is gone, and the tally belongs on the
           right. */}
-      <div className="mb-4 flex items-center justify-end gap-2">
+      <div className="mb-3 sm:mb-4 flex items-center justify-end gap-2">
+        {/* Phones have no column headers, so sorting moves to a dropdown. */}
+        {isMobile && teams.length > 1 && (
+          <ToolbarFilterSelect
+            className="mr-auto"
+            ariaLabel="Sort teams"
+            value={teamSort.sortKey ?? ''}
+            onChange={(v) => {
+              if (!v) teamSort.clearSort?.();
+              else if (v !== teamSort.sortKey) teamSort.toggleSort(v as NonNullable<typeof teamSort.sortKey>);
+            }}
+          >
+            <option value="">Default order</option>
+            <option value="name">Team name</option>
+            <option value="total">Total</option>
+            <option value="RS">Resume Scoring</option>
+            <option value="AS">Assessment</option>
+            <option value="AIU">AI Interview</option>
+            <option value="RU">Resume Storage</option>
+          </ToolbarFilterSelect>
+        )}
         {/* Only while a column is sorted */}
         <ClearSortChip
           sort={teamSort}
@@ -740,7 +959,47 @@ export default function TeamUsageAnalytics() {
         </span>
       </div>
 
-      {/* Outer team table — 6 cols (Team, RS, AS, AIU, RU, Total) */}
+      {/* Phones: one card per team, members and their history open inline.
+          Rendered instead of the table (not alongside it) so an expanded team
+          fetches its members once. */}
+      {isMobile ? (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
+          {loading ? (
+            <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <li key={i} className="space-y-2 px-3 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <Skeleton className="ml-[2.625rem] h-5 w-44 rounded-md" />
+                </li>
+              ))}
+            </ul>
+          ) : teams.length === 0 ? (
+            <div className={TABLE_EMPTY_PANEL_CLASS}>
+              <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
+              <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
+              {sortedTeams.map(team => (
+                <MobileTeamCard
+                  key={team.team_id}
+                  team={team}
+                  fromDate={fromDate}
+                  toDate={toDate}
+                  expanded={expandedTeamId === team.team_id}
+                  onToggle={() => setExpandedTeamId(
+                    expandedTeamId === team.team_id ? null : team.team_id
+                  )}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : (
+      /* Outer team table — 6 cols (Team, RS, AS, AIU, RU, Total) */
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
@@ -792,7 +1051,7 @@ export default function TeamUsageAnalytics() {
                       the same height and padding every other table's uses. */}
                   <div className={TABLE_EMPTY_PANEL_CLASS}>
                     <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-                    <p className="text-sm text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+                    <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
                   </div>
                 </td>
               </tr>
@@ -813,9 +1072,12 @@ export default function TeamUsageAnalytics() {
           </tbody>
         </table>
       </div>
+      )}
 
       <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
-        Click a team to see its members · Click a member to see their full consumption history
+        {isMobile
+          ? 'Tap a team to see its members · Tap a member for their history'
+          : 'Click a team to see its members · Click a member to see their full consumption history'}
       </p>
     </div>
   );

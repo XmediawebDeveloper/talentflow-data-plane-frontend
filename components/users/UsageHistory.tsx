@@ -81,7 +81,7 @@ function UnitBreakdown({ values }: { values: Record<string, number | undefined> 
               <Icon className={`h-3 w-3 shrink-0 ${column.iconClass}`} />
               {column.key}
             </p>
-            <p className={`mt-0.5 truncate text-sm font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-600'}`}>
+            <p className={`mt-0.5 truncate text-sm max-sm:text-[13px] font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-600'}`}>
               {value ? value.toLocaleString() : '—'}
             </p>
           </div>
@@ -270,7 +270,7 @@ function Pagination({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Go to — tablets and up; phones page with ‹ › */}
         <div className="hidden items-center gap-1.5 sm:flex">
-          <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+          <span className="text-sm max-sm:text-[13px] text-gray-600 whitespace-nowrap">Go to</span>
           <Input
             type="number"
             min={1}
@@ -298,7 +298,7 @@ function Pagination({
             <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </Tooltip>
-        <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+        <span className="text-sm max-sm:text-[13px] font-medium text-gray-700 px-1 whitespace-nowrap">
           <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
         </span>
         <Tooltip content="Next page">
@@ -337,14 +337,14 @@ function ExportModal({
       icon={<Download />}
       title="Export Usage History"
       footerStart={isExporting ? (
-        <span className="flex items-center gap-2 text-sm text-brand-blue">
+        <span className="flex items-center gap-2 text-sm max-sm:text-[13px] text-brand-blue">
           <Loader2 className="w-4 h-4 animate-spin" />
           Preparing export…
         </span>
       ) : null}
     >
         <div className="space-y-3">
-          <p className="text-sm text-gray-500">Choose export format:</p>
+          <p className="text-sm max-sm:text-[13px] text-gray-500">Choose export format:</p>
           <button
             onClick={() => onExport('csv')}
             disabled={isExporting}
@@ -354,7 +354,7 @@ function ExportModal({
               <FileText className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-blue">CSV File</p>
+              <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 group-hover:text-brand-blue">CSV File</p>
               <p className="text-xs text-gray-500">Comma-separated values (.csv)</p>
             </div>
           </button>
@@ -367,7 +367,7 @@ function ExportModal({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-blue">Excel Spreadsheet</p>
+              <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 group-hover:text-brand-blue">Excel Spreadsheet</p>
               <p className="text-xs text-gray-500">Microsoft Excel format (.xlsx)</p>
             </div>
           </button>
@@ -403,7 +403,7 @@ function AnalyticsCards({
   };
 
   return (
-    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
       {/* Phones: a swipeable row (cards snap into place) instead of five
           stacked cards; sm and up: the grid. */}
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
@@ -429,19 +429,19 @@ function AnalyticsCards({
               </div>
               <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ${ringByType[type]} ${cfg.bg} ${cfg.color}`}>{type}</span>
             </div>
-            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">{cfg.label}</h3>
+            <h3 className="text-sm max-sm:text-[13px] font-semibold text-gray-500 mb-2 truncate">{cfg.label}</h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Purchased</p>
-                <p className="text-base font-semibold tabular-nums text-gray-900 truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
+                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-900 truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
               </div>
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Consumed</p>
-                <p className="text-base font-semibold tabular-nums text-gray-700 truncate">{consumed?.toLocaleString() ?? '—'}</p>
+                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-700 truncate">{consumed?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Remaining</p>
-                <p className={`text-base font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className={`text-base max-sm:text-sm font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {isUnlimited ? '∞' : (remaining?.toLocaleString() ?? '—')}
                 </p>
               </div>
@@ -472,21 +472,21 @@ function AnalyticsCards({
               </div>
               <span className="text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
             </div>
-            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">Resume Storage</h3>
+            <h3 className="text-sm max-sm:text-[13px] font-semibold text-gray-500 mb-2 truncate">Resume Storage</h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Limit</p>
-                <p className="text-base font-semibold tabular-nums text-gray-900 truncate">
+                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-900 truncate">
                   {ru ? (ru.is_unlimited ? '∞' : ru.limit.toLocaleString()) : '—'}
                 </p>
               </div>
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Used</p>
-                <p className="text-base font-semibold tabular-nums text-gray-700 truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
+                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-700 truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Available</p>
-                <p className={`text-base font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className={`text-base max-sm:text-sm font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {ru ? (ru.is_unlimited ? '∞' : ru.available.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -519,21 +519,21 @@ function AnalyticsCards({
               </div>
               <span className="text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ring-gray-200 bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300">MAX</span>
             </div>
-            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">User Seats</h3>
+            <h3 className="text-sm max-sm:text-[13px] font-semibold text-gray-500 mb-2 truncate">User Seats</h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Max Users</p>
-                <p className="text-base font-semibold tabular-nums text-gray-900 truncate">
+                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-900 truncate">
                   {userLimits ? (isUnlimited ? '∞' : userLimits.max_users.toLocaleString()) : '—'}
                 </p>
               </div>
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Active</p>
-                <p className="text-base font-semibold tabular-nums text-gray-700 truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
+                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-700 truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
                 <p className="truncate text-2xs text-gray-400">Available</p>
-                <p className={`text-base font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
+                <p className={`text-base max-sm:text-sm font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {userLimits ? (isUnlimited ? '∞' : userLimits.available_slots.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -591,7 +591,7 @@ function FeatureWiseTab({
   return (
     <div>
       <div className="overflow-x-auto tf-table-shell">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Feature</th>
@@ -615,13 +615,13 @@ function FeatureWiseTab({
                       <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-800 text-sm leading-tight">{entry.user_name || '—'}</p>
+                      <p className="font-medium text-gray-800 text-sm max-sm:text-[13px] leading-tight">{entry.user_name || '—'}</p>
                       <p className="text-gray-400 text-xs">{entry.user_email || '—'}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="text-gray-700 text-sm font-medium">{entry.entity_name || '—'}</p>
+                  <p className="text-gray-700 text-sm max-sm:text-[13px] font-medium">{entry.entity_name || '—'}</p>
                   {entry.entity_type && <p className="text-gray-400 text-xs capitalize">{entry.entity_type.replace(/_/g, ' ')}</p>}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -634,7 +634,7 @@ function FeatureWiseTab({
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className="text-gray-600 text-sm font-medium">{entry.balance_after?.toLocaleString() ?? '—'}</span>
+                  <span className="text-gray-600 text-sm max-sm:text-[13px] font-medium">{entry.balance_after?.toLocaleString() ?? '—'}</span>
                 </td>
                 <td className="px-4 py-3">
                   <p className="text-gray-700 text-xs">{formatISTDate(entry.created_at)}</p>
@@ -783,11 +783,11 @@ function UserWiseTab({
             <div className="flex items-center gap-2.5">
               <NameAvatar name={u.userName} fallback={u.userEmail} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{u.userName}</p>
+                <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{u.userName}</p>
                 <p className="truncate text-xs text-gray-400">{u.userEmail}</p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-base font-semibold leading-tight tabular-nums text-brand-blue">{u.total.toLocaleString()}</p>
+                <p className="text-base max-sm:text-sm font-semibold leading-tight tabular-nums text-brand-blue">{u.total.toLocaleString()}</p>
                 <p className="text-2xs text-gray-400">units</p>
               </div>
             </div>
@@ -816,7 +816,7 @@ function UserWiseTab({
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">#</th>
@@ -861,7 +861,7 @@ function UserWiseTab({
                   <div className="flex items-center gap-2">
                     <NameAvatar name={u.userName} fallback={u.userEmail} size="sm" />
                     <div>
-                      <p className="font-medium text-gray-800 text-sm">{u.userName}</p>
+                      <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{u.userName}</p>
                       <p className="text-gray-400 text-xs">{u.userEmail}</p>
                     </div>
                   </div>
@@ -987,13 +987,13 @@ function TeamWiseTab({
                     <Users className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</p>
+                    <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</p>
                     <p className="truncate text-xs text-gray-400">
                       {team.jds_created ?? 0} JDs · {team.assessments_created ?? 0} assessments
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-base font-semibold leading-tight tabular-nums text-brand-blue">{totalConsumed.toLocaleString()}</p>
+                    <p className="text-base max-sm:text-sm font-semibold leading-tight tabular-nums text-brand-blue">{totalConsumed.toLocaleString()}</p>
                     <p className="text-2xs text-gray-400">units</p>
                   </div>
                   <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-brand-blue' : ''}`} />
@@ -1028,7 +1028,7 @@ function TeamWiseTab({
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">#</th>
@@ -1090,7 +1090,7 @@ function TeamWiseTab({
                           <Users className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800 text-sm">{team.team_name || 'Unnamed Team'}</p>
+                          <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
                           <p className="text-gray-400 text-xs">{totalConsumed.toLocaleString()} units total</p>
                         </div>
                       </div>
@@ -1125,7 +1125,7 @@ function TeamWiseTab({
                 <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
               </td>
               {(['RS', 'AS', 'AIU', 'RU'] as const).map((key) => (
-                <td key={key} className="px-4 py-3 text-right text-sm font-semibold tabular-nums text-gray-900">
+                <td key={key} className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-semibold tabular-nums text-gray-900">
                   {grandTotals[key].toLocaleString()}
                 </td>
               ))}
@@ -1190,7 +1190,7 @@ function InlineTeamMembersUsage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 text-sm text-brand-blue tf-loader-center">
+      <div className="flex items-center justify-center gap-2 text-sm max-sm:text-[13px] text-brand-blue tf-loader-center">
         <Loader2 className="w-4 h-4 animate-spin" />
         Loading team users usage...
       </div>
@@ -1199,7 +1199,7 @@ function InlineTeamMembersUsage({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-3 text-sm text-destructive ring-1 ring-destructive-line">
+      <div className="rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-3 text-sm max-sm:text-[13px] text-destructive ring-1 ring-destructive-line">
         {error}
       </div>
     );
@@ -1219,7 +1219,7 @@ function InlineTeamMembersUsage({
 
   if (!members.length) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm">
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm max-sm:text-[13px] text-gray-500 shadow-sm">
         No usage found for users in {teamName} during the selected date range.
       </div>
     );
@@ -1233,7 +1233,7 @@ function InlineTeamMembersUsage({
             <Users className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-gray-900 sm:text-base">{teamName} Users</p>
+            <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 sm:text-base">{teamName} Users</p>
             <p className="hidden text-xs text-gray-500 sm:block">Usage details for team members</p>
           </div>
         </div>
@@ -1255,12 +1255,12 @@ function InlineTeamMembersUsage({
               <div className="flex items-center gap-2.5">
                 <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900">{member.user_name || 'Unknown User'}</p>
+                  <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900">{member.user_name || 'Unknown User'}</p>
                   <p className="truncate text-xs text-gray-400">
                     {member.last_activity ? `Last active ${formatIST(member.last_activity)}` : member.user_email || '—'}
                   </p>
                 </div>
-                <p className="shrink-0 text-sm font-semibold tabular-nums text-brand-blue">{total.toLocaleString()}</p>
+                <p className="shrink-0 text-sm max-sm:text-[13px] font-semibold tabular-nums text-brand-blue">{total.toLocaleString()}</p>
               </div>
               <UnitBreakdown values={values} />
             </div>
@@ -1275,7 +1275,7 @@ function InlineTeamMembersUsage({
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
@@ -1314,7 +1314,7 @@ function InlineTeamMembersUsage({
                     <div className="flex items-center gap-2">
                       <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
                       <div>
-                        <p className="font-medium text-gray-800 text-sm">{member.user_name || 'Unknown User'}</p>
+                        <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{member.user_name || 'Unknown User'}</p>
                         <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>
                       </div>
                     </div>
@@ -1393,7 +1393,7 @@ function RefundsTab({
   return (
     <div>
       <div className="overflow-x-auto tf-table-shell">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
@@ -1423,14 +1423,14 @@ function RefundsTab({
                       {isPositive ? '+' : '-'}{Math.abs(entry.units_amount).toLocaleString()}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-500 text-sm">{entry.balance_before.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-gray-700 text-sm font-medium">{entry.balance_after.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-gray-500 text-sm max-sm:text-[13px]">{entry.balance_before.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right text-gray-700 text-sm max-sm:text-[13px] font-medium">{entry.balance_after.toLocaleString()}</td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-700 text-sm">{entry.actor_name || entry.actor_email || '—'}</p>
+                    <p className="text-gray-700 text-sm max-sm:text-[13px]">{entry.actor_name || entry.actor_email || '—'}</p>
                     <p className="text-gray-400 text-xs capitalize">{entry.actor_type?.toLowerCase()}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-600 text-sm max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
+                    <p className="text-gray-600 text-sm max-sm:text-[13px] max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
                     {entry.notes && <p className="text-gray-400 text-xs truncate max-w-[200px]" title={entry.notes}>{entry.notes}</p>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatISTDate(entry.created_at)}</td>
@@ -1555,8 +1555,8 @@ export default function UsageHistory() {
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Shield className="w-8 h-8 text-brand-blue" />
         </div>
-        <h2 className="text-base font-semibold text-gray-900 mb-2">Access Restricted</h2>
-        <p className="text-sm text-gray-500 max-w-sm">Usage History is only accessible to Tenant Admins.</p>
+        <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 mb-2">Access Restricted</h2>
+        <p className="text-sm max-sm:text-[13px] text-gray-500 max-w-sm">Usage History is only accessible to Tenant Admins.</p>
       </div>
     );
   }
@@ -1789,7 +1789,7 @@ export default function UsageHistory() {
         <div className="flex flex-col gap-2.5 border-b border-gray-200 px-3 py-3 sm:gap-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
             {/* Quick Period */}
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+            <label className="flex items-center gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600">
               Period
               <select
                 value={quickPeriod}
@@ -1816,7 +1816,7 @@ export default function UsageHistory() {
                   setStartDateInput(start);
                   setEndDateInput(end);
                 }}
-                className="h-9 flex-1 sm:flex-none text-sm font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+                className="h-9 flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
               >
                 <option value="">All Time</option>
                 <option value="last_week">Last Week</option>
@@ -1827,7 +1827,7 @@ export default function UsageHistory() {
             </label>
 
             {/* Date Range */}
-            <div className="grid grid-cols-2 gap-2 text-sm font-medium text-gray-600 sm:flex sm:items-center">
+            <div className="grid grid-cols-2 gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600 sm:flex sm:items-center">
               <span className="hidden sm:inline">From</span>
               <DateField
                 aria-label="From date"
@@ -1849,12 +1849,12 @@ export default function UsageHistory() {
 
             {/* Status */}
             {(activeTab === 'feature') && (
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-600">
+              <label className="flex items-center gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600">
                 Status
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="h-9 flex-1 sm:flex-none text-sm font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
+                  className="h-9 flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
                 >
                   <option value="all">All Statuses</option>
                   <option value="SUCCESS">Success</option>
