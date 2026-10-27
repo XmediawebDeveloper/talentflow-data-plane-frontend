@@ -106,7 +106,7 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
 
 /**
  * The invite modal's Manual / Upload Excel entry, inside the bulk Create /
- * Send popup: candidate cards with Full Name, Email Address and Phone, "Add
+ * Send popup: candidate cards with Full Name and Email Address, "Add
  * Candidate" for another, and an .xlsx / .csv import that fills the same
  * cards. The valid rows are handed up as `extra_candidates`, sent on top of
  * whatever is ticked in the lists above; the backend applies the same skips
@@ -170,7 +170,7 @@ export default function ExtraCandidatesInput({
         }
       }
       if (!anyEmailColumn) {
-        toast.error('Could not find an "Email" column in the file. Expected headers: Name, Email, Phone (optional).');
+        toast.error('Could not find an "Email" column in the file. Expected headers: Name, Email.');
         return;
       }
       const have = new Set(rows.map(emailOf).filter(Boolean));
@@ -227,7 +227,7 @@ export default function ExtraCandidatesInput({
         >
           <FileSpreadsheet className="w-6 h-6 mx-auto mb-1.5 text-success" aria-hidden="true" />
           <span className="block text-sm font-medium text-gray-900 dark:text-slate-50">Choose an .xlsx, .xls or .csv file</span>
-          <span className="block text-xs text-gray-500 dark:text-slate-400 mt-0.5">Columns: Name, Email, Phone (optional). Every sheet is read.</span>
+          <span className="block text-xs text-gray-500 dark:text-slate-400 mt-0.5">Columns: Name, Email. Every sheet is read.</span>
         </button>
       )}
 
@@ -267,7 +267,7 @@ export default function ExtraCandidatesInput({
                     {row.origin === 'excel' ? 'Excel' : 'Manual'}
                   </span>
                   <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="min-w-0">
                         <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                         <input
@@ -294,17 +294,6 @@ export default function ExtraCandidatesInput({
                         />
                         {badEmail && <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>}
                         {dup && <p className="text-xs text-destructive mt-1">This email is already in the list</p>}
-                      </div>
-                      <div className="min-w-0">
-                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Phone</label>
-                        <input
-                          type="tel"
-                          value={row.phone}
-                          onChange={(e) => updateRow(row.id, 'phone', e.target.value)}
-                          placeholder="Optional"
-                          disabled={disabled}
-                          className={`${INPUT} ${INPUT_OK}`}
-                        />
                       </div>
                     </div>
                     <button
