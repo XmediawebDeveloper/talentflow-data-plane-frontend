@@ -220,6 +220,8 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  /** Human-readable assigned role ("Owner", or a custom role's name from User Management). */
+  roleDisplay?: string;
   tenantId: string;
   permissions: Permission;
   permissionCodes?: string[];

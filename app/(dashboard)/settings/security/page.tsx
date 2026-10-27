@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound, Sparkles } from 'lucide-react';
+import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound, Sparkles, ChevronDown, HelpCircle } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
@@ -581,6 +581,51 @@ export default function SecurityPage() {
               </button>
             )}
           </div>
+
+          {/* Expandable explainer. Native <details>: keyboard/screen-reader friendly, no state. */}
+          <details className="group rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50/70 dark:bg-slate-800/40">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 sm:px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-200 [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center gap-2">
+                <HelpCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                How does two-factor authentication work?
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180 flex-shrink-0" />
+            </summary>
+            <div className="space-y-4 border-t border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-3 sm:py-4 text-sm text-gray-600 dark:text-slate-400">
+              <div>
+                <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
+                <p>
+                  After your password, you also enter a 6-digit code from an authenticator app on your phone.
+                  The code changes every 30 seconds, so even if someone learns your password they can&apos;t sign in without your phone.
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">How to turn it on</h4>
+                <ol className="list-decimal pl-5 space-y-1">
+                  <li>Install an authenticator app, such as Google Authenticator, Microsoft Authenticator or Authy.</li>
+                  <li>Switch on the toggle above.</li>
+                  <li>Scan the QR code with the app, or type in the secret key shown below it.</li>
+                  <li>Enter the 6-digit code the app shows, then click <span className="font-medium text-gray-900 dark:text-slate-50">Verify and Enable</span>.</li>
+                </ol>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Signing in afterwards</h4>
+                <p>Enter your email and password as usual, then the current 6-digit code from the app.</p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Turning it off</h4>
+                <p>Switch the toggle off and confirm with a current code from the app.</p>
+              </div>
+              <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-subtle p-2.5 sm:p-3">
+                <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                <ul className="space-y-1 text-warning-strong">
+                  <li>There are no backup codes — if you lose access to the app, you can be locked out. Before changing phones, turn 2FA off and set it up again on the new phone.</li>
+                  <li>Each code is valid only for the time shown in the app (about 30 seconds). Once that time runs out the code expires, and an expired code will not be accepted — enter the new code the app shows instead.</li>
+                  <li>Codes depend on the time, so keep your phone&apos;s clock set automatically. If a code is rejected, wait for the next one.</li>
+                </ul>
+              </div>
+            </div>
+          </details>
 
           {settings.two_factor_enabled && !show2FASetup && (
             <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-success-subtle rounded-lg">
