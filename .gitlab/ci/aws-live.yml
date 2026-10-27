@@ -19,8 +19,9 @@
 #   AWS_SERVER_HOST         EC2 public IP / hostname
 #   AWS_SERVER_USER         SSH user, e.g. ubuntu
 #   AWS_SSH_KEY             EC2 private key (.pem) — type "File"
-#   NEXT_PUBLIC_*           baked into the bundle at build time — scope them
-#                           to environment "aws_live" (list in .gitlab-ci.yml)
+#   FRONTEND_ENV            type "File", environment "aws_live" — a .env with
+#                           all NEXT_PUBLIC_* values (baked in at build time).
+#                           Or set each NEXT_PUBLIC_* as its own variable.
 #
 # EC2 one-time setup:
 #   - Docker + compose plugin installed, SSH user in the `docker` group
@@ -67,6 +68,9 @@ variables:
     name: aws_live
     action: prepare   # pulls in the aws_live-scoped NEXT_PUBLIC_* values
   script:
+    # All NEXT_PUBLIC_* in one File variable FRONTEND_ENV (scoped to aws_live).
+    # Optional — individual NEXT_PUBLIC_* variables still work without it.
+    - if [ -n "${FRONTEND_ENV:-}" ]; then set -a; eval "$(tr -d '\r' < "$FRONTEND_ENV")"; set +a; fi
     - docker build --pull
         --build-arg NEXT_PUBLIC_ENVIRONMENT="$NEXT_PUBLIC_ENVIRONMENT"
         --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
