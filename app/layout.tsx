@@ -137,7 +137,8 @@ export default function RootLayout({
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
-          enableSystem={false}
+          // Light by default; only users who pick "Auto" follow the OS setting.
+          enableSystem
           disableTransitionOnChange
         >
           <AuthProvider>
