@@ -1603,7 +1603,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
   const [isLoadingProctoring, setIsLoadingProctoring] = useState(false);
-  const [isSavingProctoring, setIsSavingProctoring] = useState(false);
+  // Tracks which individual setting key(s) are currently being saved, so only
+  // the toggle/input the user actually touched shows a disabled/busy state
+  // instead of every control in the section.
+  const [savingProctoringKeys, setSavingProctoringKeys] = useState<Set<string>>(new Set());
   const [proctoringError, setProctoringError] = useState<string | null>(null);
   const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
   const [proctoringEventsTotal, setProctoringEventsTotal] = useState(0);
@@ -3665,7 +3668,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const updateProctoringSettings = async (updates: Partial<ProctoringSettings>) => {
     if (!proctoringSettings) return;
 
-    setIsSavingProctoring(true);
+    const keys = Object.keys(updates);
+    setSavingProctoringKeys(prev => new Set([...prev, ...keys]));
     setProctoringError(null);
 
     // Optimistically update local state
@@ -3681,7 +3685,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       // Rollback on error
       setProctoringSettings(previousSettings);
     } finally {
-      setIsSavingProctoring(false);
+      setSavingProctoringKeys(prev => {
+        const next = new Set(prev);
+        keys.forEach(k => next.delete(k));
+        return next;
+      });
     }
   };
 
@@ -9411,12 +9419,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                          {isSavingProctoring && (
-                            <span className="text-xs text-white/80 flex items-center gap-1">
-                              <RefreshCw className="w-3 h-3 animate-spin" />
-                              <span className="hidden sm:inline">Saving...</span>
-                            </span>
-                          )}
                           {flaggedCount > 0 && (
                             <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive text-white rounded-full text-xs font-medium whitespace-nowrap">
                               {flaggedCount} Flagged
@@ -9461,12 +9463,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </span>
                             <button
                               onClick={() => updateProctoringSettings({ proctoring_enabled: !proctoringSettings.proctoring_enabled })}
-                              disabled={isSavingProctoring}
+                              disabled={savingProctoringKeys.has('proctoring_enabled')}
                               className={`relative w-10 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                 proctoringSettings.proctoring_enabled
                                   ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                   : 'bg-gray-300'
-                              } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              } ${savingProctoringKeys.has('proctoring_enabled') ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                 proctoringSettings.proctoring_enabled
@@ -9523,12 +9525,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                               <button
                                 onClick={() => updateProctoringSettings({ [feature.key]: !isEnabled })}
-                                disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                                disabled={savingProctoringKeys.has(feature.key) || !proctoringSettings.proctoring_enabled}
                                 className={`relative w-9 sm:w-11 h-5 sm:h-6 rounded-full transition-colors flex-shrink-0 ${
                                   isEnabled && proctoringSettings.proctoring_enabled
                                     ? 'bg-success'
                                     : 'bg-gray-300'
-                                } ${isSavingProctoring || !proctoringSettings.proctoring_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${savingProctoringKeys.has(feature.key) || !proctoringSettings.proctoring_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   isEnabled ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0.5'
@@ -9558,10 +9560,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="flex flex-col items-center gap-1 shrink-0">
                           <button
                             onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
-                            disabled={isSavingProctoring}
+                            disabled={savingProctoringKeys.has('email_masking_enabled')}
                             className={`relative w-14 h-7 rounded-full transition-colors ${
                               proctoringSettings.email_masking_enabled ? 'bg-success' : 'bg-gray-300'
-                            } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            } ${savingProctoringKeys.has('email_masking_enabled') ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
                               proctoringSettings.email_masking_enabled ? 'translate-x-7' : 'translate-x-0.5'
@@ -9584,7 +9586,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             type="number"
                             value={proctoringSettings.max_tab_switches}
                             onChange={(e) => updateProctoringSettings({ max_tab_switches: parseInt(e.target.value) || 3 })}
-                            disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                            disabled={savingProctoringKeys.has('max_tab_switches') || !proctoringSettings.proctoring_enabled}
                             className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
                             min="1"
                             max="10"
@@ -9596,7 +9598,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             type="number"
                             value={proctoringSettings.max_violations_before_flag}
                             onChange={(e) => updateProctoringSettings({ max_violations_before_flag: parseInt(e.target.value) || 5 })}
-                            disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                            disabled={savingProctoringKeys.has('max_violations_before_flag') || !proctoringSettings.proctoring_enabled}
                             className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
                             min="1"
                             max="20"
@@ -9608,7 +9610,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             type="number"
                             value={proctoringSettings.recording_retention_days}
                             onChange={(e) => updateProctoringSettings({ recording_retention_days: parseInt(e.target.value) || 90 })}
-                            disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
+                            disabled={savingProctoringKeys.has('recording_retention_days') || !proctoringSettings.proctoring_enabled}
                             className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
                             min="7"
                             max="365"
@@ -10631,7 +10633,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 Only bulk-actionable rows (Invited/Expired) get a
                                 checkbox; the rest keep a fixed-width slot so the
                                 columns stay aligned. */}
-                            <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                            <td className="py-3 pl-4 pr-0 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                               {isBulkActionable(invitation) ? (
                                 <button
                                   type="button"

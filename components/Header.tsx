@@ -33,6 +33,22 @@ const MAX_BADGE_COUNT = 9;
    phone-width sheet and the desktop dropdown. */
 const VISIBLE_NOTIFICATIONS = 2;
 
+/* Chat messages have their own unread badges in Team Chat, so they're kept out
+   of the header popup. The backend has no dedicated chat category (they come in
+   under e.g. "team"), so match on anything that marks the row as chat. */
+const isChatNotification = (n: Pick<Notification, 'category' | 'entity_type' | 'action_url'> | null | undefined) =>
+  !!n && (
+    /chat/i.test(n.category || '') ||
+    /chat|channel/i.test(n.entity_type || '') ||
+    /team-chat|\/chat(\/|\?|$)/i.test(n.action_url || '')
+  );
+
+/* The API can't exclude a category, so the popup reads a full page (the API's
+   max) and drops chat rows itself. Counts are exact while the user has no more
+   than this many notifications; past that the badge reads "9+" anyway. */
+const NOTIFICATION_FETCH_LIMIT = 100;
+const NOTIFICATION_DISPLAY_LIMIT = 20;
+
 interface HeaderProps {
   onLogout: () => void;
   user: UserType | null;
@@ -182,14 +198,16 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     setNotificationsLoading(true);
     try {
       const response = await notificationService.getNotifications(
-        20, 0, activeNotificationTab === 'unread'
+        NOTIFICATION_FETCH_LIMIT, 0, activeNotificationTab === 'unread'
       );
       if (isStale()) return;
-      setNotifications(response.notifications);
-      setUnreadCount(response.unread_count);
+      const chat = response.notifications.filter(isChatNotification);
+      const chatUnread = chat.filter((n) => !n.is_read).length;
+      setNotifications(response.notifications.filter((n) => !isChatNotification(n)).slice(0, NOTIFICATION_DISPLAY_LIMIT));
+      setUnreadCount(Math.max(0, response.unread_count - chatUnread));
       // Only the All tab's response counts everything; the Unread tab's total
       // is the unread subset, and taking it would shrink the All tab's label.
-      if (activeNotificationTab === 'all') setTotalCount(response.total);
+      if (activeNotificationTab === 'all') setTotalCount(Math.max(0, response.total - chat.length));
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -202,9 +220,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     if (!user) return;
 
     try {
-      const response = await notificationService.getNotificationCounts();
-      setUnreadCount(response.unread);
-      setTotalCount(response.total);
+      // Not /notifications/count — its totals include chat rows, which the
+      // popup hides. Count from the list instead, minus the chat rows.
+      const response = await notificationService.getNotifications(NOTIFICATION_FETCH_LIMIT, 0, false);
+      const chat = response.notifications.filter(isChatNotification);
+      setUnreadCount(Math.max(0, response.unread_count - chat.filter((n) => !n.is_read).length));
+      setTotalCount(Math.max(0, response.total - chat.length));
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
@@ -225,17 +246,20 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   // Handle new notification from WebSocket - stable callback
   const handleNewNotification = useCallback((notification: any) => {
     console.log('[Header] New notification via WebSocket:', notification);
+    // Chat messages aren't shown in the popup, so they don't bump its badge.
+    if (isChatNotification(notification)) return;
     // Increment unread count
     setUnreadCount(prev => prev + 1);
     // Dispatch event to trigger refresh if panel is open
     window.dispatchEvent(new CustomEvent('wsNotificationReceived'));
   }, []);
 
-  // Handle count update from WebSocket - stable callback
+  // Handle count update from WebSocket - stable callback. The pushed count
+  // includes chat rows, so recount instead of taking it as-is.
   const handleCountUpdate = useCallback((count: number) => {
     console.log('[Header] Count update via WebSocket:', count);
-    setUnreadCount(count);
-  }, []);
+    fetchNotificationCount();
+  }, [fetchNotificationCount]);
 
   // Listen for WebSocket notification events to refresh list if panel is open
   useEffect(() => {

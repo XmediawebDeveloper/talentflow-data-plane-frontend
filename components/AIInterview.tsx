@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -4886,24 +4886,23 @@ export default function AIInterview() {
           list itself is <AIInterviewInviteTable>, shared with the Job Details
           tracker so both entry points show identical columns and action rules. */}
       {viewInvitationsConfig && (() => {
-        /* Selection follows the selected card, as on the Assessments page:
-           the Invited card ticks the rows that can be revoked and offers
-           Revoke; the Expired card ticks the rows a fresh link can go to and
-           offers Resend. Every other card has no bulk action, so no checkbox
-           column either. "Select All" only ever targets the CURRENT page — the
-           list is server-paginated. The row rules are the table's own, so a
-           checkbox can never disagree with the action it feeds. A disabled
-           job's tracker is view-only, so it has no bulk mode at all. */
+        /* Any row a bulk Revoke OR a bulk Resend can act on gets a checkbox —
+           same rule as the Assessments tracker — regardless of which stat
+           card filter is currently active. "Select All" only ever targets
+           the CURRENT page — the list is server-paginated. Which bulk BUTTON
+           appears depends on the ticked selection being uniformly one
+           status-class or the other (see allTrackerRevocable /
+           allTrackerResendable below); a mixed Invited+Expired selection
+           shows neither — an action valid for one status must never be
+           applied to the other. A disabled job's tracker is view-only, so it
+           has no bulk mode at all. */
         const trackerJdLocked = isJdDisabled(viewInvitationsConfig.jd_status);
-        const trackerBulkMode: 'revoke' | 'resend' | null =
-          trackerJdLocked ? null
-          : inviteFilters.status === 'invited' ? 'revoke'
-            : inviteFilters.status === 'expired' ? 'resend'
-              : null;
         const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
-        const trackerRowSelectable = trackerBulkMode === 'resend' ? isTrackerResendable : isRevocableInvite;
-        const selectableIds = trackerBulkMode ? invitations.filter(trackerRowSelectable).map((inv) => inv.id) : [];
-        const trackerSelectedRows = invitations.filter((inv) => selectedInviteIds.has(inv.id) && trackerRowSelectable(inv));
+        const isTrackerBulkActionable = (inv: any) => isRevocableInvite(inv) || isTrackerResendable(inv);
+        const selectableIds = trackerJdLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
+        const trackerSelectedRows = invitations.filter((inv) => selectedInviteIds.has(inv.id));
+        const allTrackerRevocable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isRevocableInvite);
+        const allTrackerResendable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isTrackerResendable);
         const allSelectableOnPageSelected =
           selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
         const toggleSelectAll = () =>
@@ -5084,12 +5083,16 @@ export default function AIInterview() {
                       onClick={toggleSelectAll}
                       className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                     >
-                      <span role="checkbox" aria-checked={allSelectableOnPageSelected} className="p-1 flex-shrink-0">
-                        {allSelectableOnPageSelected ? (
-                          <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
-                        )}
+                      <span
+                        role="checkbox"
+                        aria-checked={allSelectableOnPageSelected}
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                          allSelectableOnPageSelected
+                            ? 'bg-brand-blue border-brand-blue'
+                            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
                       </span>
                       Select All ({selectableIds.length})
                     </button>
@@ -5098,8 +5101,8 @@ export default function AIInterview() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    {/* The selected card's bulk action — never both. */}
-                    {trackerBulkMode === 'revoke' && trackerSelectedRows.length > 0 && (
+                    {/* Uniform selection's bulk action — never both at once. */}
+                    {allTrackerRevocable && (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -5111,7 +5114,7 @@ export default function AIInterview() {
                         {isBulkRevoking ? 'Revoking…' : `Revoke (${trackerSelectedRows.length})`}
                       </Button>
                     )}
-                    {trackerBulkMode === 'resend' && trackerSelectedRows.length > 0 && (
+                    {allTrackerResendable && (
                       <Button
                         variant="primary"
                         size="sm"
@@ -5128,7 +5131,7 @@ export default function AIInterview() {
                     isOpen={trackerBulkResendOpen}
                     onClose={() => { if (!isTrackerBulkResending) setTrackerBulkResendOpen(false); }}
                     onConfirm={async () => {
-                      const targets = trackerSelectedRows;
+                      const targets = trackerSelectedRows.filter(isTrackerResendable);
                       if (targets.length === 0) { setTrackerBulkResendOpen(false); return; }
                       setIsTrackerBulkResending(true);
                       try {
@@ -5170,9 +5173,9 @@ export default function AIInterview() {
                   jobVersion={trackerShowVersions && !trackerJobScope ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
                   interviewVersion={trackerShowVersions && !trackerJobScope ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
                   showRowVersions={!!trackerJobScope}
-                  selectedIds={trackerBulkMode ? selectedInviteIds : undefined}
-                  onToggleSelect={trackerBulkMode ? toggleSelectOne : undefined}
-                  isSelectable={trackerRowSelectable}
+                  selectedIds={trackerJdLocked ? undefined : selectedInviteIds}
+                  onToggleSelect={trackerJdLocked ? undefined : toggleSelectOne}
+                  isSelectable={isTrackerBulkActionable}
                   /* A disabled job's tracker is view-only: no row actions. */
                   onResend={trackerJdLocked ? undefined : (inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
                   onEdit={trackerJdLocked ? undefined : (inv) => {
@@ -5465,7 +5468,7 @@ export default function AIInterview() {
         isOpen={bulkRevokeConfirmOpen}
         onClose={() => { if (!isBulkRevoking) setBulkRevokeConfirmOpen(false); }}
         onConfirm={async () => {
-          const targets = invitations.filter((inv) => selectedInviteIds.has(inv.id));
+          const targets = invitations.filter((inv) => selectedInviteIds.has(inv.id) && isRevocableInvite(inv));
           if (targets.length === 0) { setBulkRevokeConfirmOpen(false); return; }
           setIsBulkRevoking(true);
           try {
