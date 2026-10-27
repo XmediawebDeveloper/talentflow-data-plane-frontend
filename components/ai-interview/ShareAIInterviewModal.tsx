@@ -1231,7 +1231,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   : 'bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 border-brand-blue/15'
               }`;
             const iconTile = (tone: 'ok' | 'low' | 'out') => (
-              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 flex items-center justify-center ${
+              /* Phones: no tile — it squeezed the counts and the note into a
+                 strip beside it. */
+              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 max-sm:hidden flex items-center justify-center ${
                 tone === 'out' ? 'bg-destructive/10 ring-destructive/20' : tone === 'low' ? 'bg-brand-orange/10 ring-brand-orange/20' : 'bg-brand-blue/10 ring-brand-blue/15'
               }`}>
                 {tone === 'out'
@@ -1302,9 +1304,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         <div className={`h-full transition-all duration-300 ${tone === 'out' ? 'bg-red-600' : tone === 'low' ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
                         <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
                       </div>
-                      <div className="flex items-start justify-between gap-2 mt-1.5">
-                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400">
-                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
+                      {/* Phones: the pill above the breakdown, not a side column. */}
+                      <div className="flex items-start justify-between gap-2 mt-1.5 max-sm:flex-col-reverse max-sm:gap-1.5">
+                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400 max-sm:w-full">
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums max-sm:[&>span]:whitespace-nowrap">
                             <span>Total: {total_quota}</span>
                             <span>Attended (consumed): {consumed}</span>
                             {pending > 0 && (
@@ -1312,8 +1315,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             )}
                           </div>
                           {pending > 0 && (
-                            <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-0.5 text-brand-blue dark:text-slate-200">
-                              <Info className="w-3 h-3 flex-shrink-0" />
+                            <p className="mt-1.5 inline-flex max-sm:flex items-start sm:items-center gap-1.5 rounded-lg sm:rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-1 sm:py-0.5 text-brand-blue dark:text-slate-200">
+                              <Info className="w-3 h-3 flex-shrink-0 mt-0.5 sm:mt-0" />
                               <span>
                                 <span className="font-semibold">Note:</span>{' '}
                                 {pending} unit{pending > 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.
@@ -2186,7 +2189,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hidden sm:flex items-center justify-center flex-shrink-0">
               <Mail className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
