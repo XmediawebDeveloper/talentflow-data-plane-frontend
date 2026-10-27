@@ -51,7 +51,8 @@ interface Props {
   sessionId?: string | null;
 }
 
-const MHS_THRESHOLD = 6.0;
+// Exported so the results-page header shows the same Pass/Fail as this report.
+export const MHS_THRESHOLD = 6.0;
 
 function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3'; weight: number } {
   if (p === 'High')   return { tag: 'P1', weight: 10 };
@@ -298,8 +299,9 @@ export async function exportEvalReportPDF(
       } else {
         answerDisplay = _rawAns;
       }
-      const ansLines = splitLines(answerDisplay, CW - 14, 8);
-      const answerBlockH = 4.5 + ansLines.length * ANSWER_LINE_H;
+      // Label on its own line, the answer full-width below it (as on screen).
+      const ansLines = splitLines(answerDisplay, CW - 2, 8);
+      const answerBlockH = 4.5 + (ansLines.length + 1) * ANSWER_LINE_H;
       const skillRows = qSkills.map((s) => {
         const lines = splitLines(s.name, CW - 62, 8);
         return {
@@ -327,7 +329,7 @@ export async function exportEvalReportPDF(
 
       let cursorY = y;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(indigo);
-      const overallLabel = `Q${askedNumber.get(q) ?? q.qNum}`;
+      const overallLabel = `Question ${askedNumber.get(q) ?? q.qNum}`;
       doc.text(overallLabel, M, cursorY + 3);
       const overallW = doc.getTextWidth(overallLabel);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); txt(sub);
@@ -345,12 +347,12 @@ export async function exportEvalReportPDF(
       // Candidate's Answer block (label + wrapped response / placeholder).
       const _ansTop = cursorY;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(sub);
-      doc.text('Answer', M, _ansTop + 2.5);
+      doc.text("Candidate's Answer", M, _ansTop + 2.5);
       const _ansIsPlaceholder = q.notDelivered || !_hasAnswer || _nonEnglish;
       doc.setFont('helvetica', _ansIsPlaceholder ? 'italic' : 'normal');
       doc.setFontSize(8); txt(_ansIsPlaceholder ? faint : ink);
       ansLines.forEach((lineText, idx) => {
-        doc.text(lineText, M + 12, _ansTop + 2.5 + idx * ANSWER_LINE_H);
+        doc.text(lineText, M, _ansTop + 2.5 + (idx + 1) * ANSWER_LINE_H);
       });
       cursorY += answerBlockH;
 
@@ -1265,8 +1267,8 @@ export function EvalReportCombined({
               const sc = scoreColor(q.questionScore);
               const sectionLabel = q.section === 'mth' ? 'Must-Have' : q.section === 'nth' ? 'Nice-to-Have' : 'HR';
               const sectionClass = q.section === 'mth'
-                ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                : q.section === 'nth' ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' : 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20';
+                ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                : q.section === 'nth' ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20' : 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
               // Header middle column shows the mapped skills (HR has none);
               // the actual question text is rendered full-width just below.
               const skillsText = isHR ? '' : (q.skills.map(s => s.name).join(', ') || '');
@@ -1293,8 +1295,9 @@ export function EvalReportCombined({
               return (
                 <div key={i} className="px-4 sm:px-5 py-4 space-y-2" style={{ pageBreakInside: 'avoid' }}>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-sm font-bold text-brand-blue">Q{i + 1}</span>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ring-1 ${sectionClass}`}>{sectionLabel} · Q{q.qNum}</span>
+                    {/* Same pill + section tag as Question Analysis (All view). */}
+                    <span className="text-xs font-semibold text-white bg-brand-blue px-2 py-0.5 rounded-full">Question {i + 1}</span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionClass}`}>{sectionLabel} · Q{q.qNum}</span>
                     {skillsText && <span className="text-xs text-gray-500 dark:text-slate-400 truncate min-w-0 flex-1">{skillsText}</span>}
                     <span className="ml-auto text-right">
                       {isHR
@@ -1307,14 +1310,20 @@ export function EvalReportCombined({
                   </div>
                   {/* Actual interview question text — recruiters need to see
                       WHAT was asked, not just the mapped skills. */}
+                  {/* Formatted as in Question Analysis: bold text, no "Q:" prefix,
+                      ending in a question mark. */}
                   {q.question && q.question.trim() && (
-                    <div className="text-sm text-gray-800 dark:text-slate-200 leading-relaxed">
-                      <span className="font-semibold text-gray-500">Q:&nbsp;</span>{q.question}
+                    <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 leading-relaxed">
+                      {/[?!.]$/.test(q.question.trim()) ? q.question.trim() : `${q.question.trim()}?`}
                     </div>
                   )}
-                  {/* Candidate's answer — the actual response the score is based on. */}
-                  <div className={`text-sm leading-relaxed ${ansIsPlaceholder ? 'text-gray-400 italic' : 'text-gray-700 dark:text-slate-300'}`}>
-                    <span className="font-semibold text-gray-500 not-italic">A:&nbsp;</span>{answerText}
+                  {/* Candidate's answer — the actual response the score is based on.
+                      Labelled block, as in Question Analysis. */}
+                  <div className="border-l-2 border-brand-blue/20 pl-3">
+                    <div className="text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Candidate&apos;s Answer</div>
+                    <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${ansIsPlaceholder ? 'text-gray-400 italic' : 'text-gray-700 dark:text-slate-300'}`}>
+                      {answerText}
+                    </div>
                   </div>
                   {hasRationale && (
                     <div className="text-2xs leading-relaxed text-warning-strong bg-warning-subtle/60 border border-warning-line rounded-lg px-3 py-2" style={{ pageBreakInside: 'avoid' }}>
