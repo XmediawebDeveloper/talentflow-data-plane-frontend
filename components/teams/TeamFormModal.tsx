@@ -19,6 +19,10 @@ interface TeamFormModalProps {
     teamLeadId: string;
   };
   availableUsers: ApiUser[];
+  /** The user list is still loading — the picker shows a loader, not "No users available". */
+  isLoadingUsers?: boolean;
+  /** Active users left out of the picker because they already belong to another team. */
+  hiddenUsersCount?: number;
   isSubmitting?: boolean;
   onDelete?: () => void;
   /** false = user lacks teams:delete — Delete stays visible but greyed with a tooltip. */
@@ -45,6 +49,8 @@ export default function TeamFormModal({
   mode,
   initialData,
   availableUsers,
+  isLoadingUsers = false,
+  hiddenUsersCount = 0,
   isSubmitting = false,
   onDelete,
   canDelete = true,
@@ -152,11 +158,17 @@ export default function TeamFormModal({
 
           <MemberSelector
             availableUsers={availableUsers}
+            isLoading={isLoadingUsers}
             selectedMemberIds={selectedMemberIds}
             onToggleMember={handleToggleMember}
             teamLeadId={teamLeadId}
             onTeamLeadChange={setTeamLeadId}
             showTeamLeadSelector={true}
+            footnote={
+              !isLoadingUsers && hiddenUsersCount > 0
+                ? `${hiddenUsersCount} ${hiddenUsersCount === 1 ? 'user is' : 'users are'} already in another team, so not listed — a user can belong to one team.`
+                : undefined
+            }
           />
         </div>
 

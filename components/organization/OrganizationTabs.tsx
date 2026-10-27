@@ -7,11 +7,12 @@ import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvi
 import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
 
 /**
- * Shared tab bar for the organization / user-management area.
+ * Shared tab bar for the organization area, in two groups:
+ *   'users' — User Management: Users, Usage History, Roles & Permissions
+ *   'teams' — Teams: Teams, Chat (reached from the dashboard's Teams tile)
  *
- * Renders the same horizontal tabs across all five pages (Users, Usage History,
- * Roles & Permissions, Teams, Chat). Tabs navigate between routes — each target
- * page keeps its own content — and the active tab is derived from the pathname.
+ * Tabs navigate between routes — each target page keeps its own content — and
+ * the active tab is derived from the pathname.
  * Visibility mirrors the quick-links that used to live on the User Management
  * page, so non-admins only see the tabs they can actually open.
  *
@@ -21,27 +22,31 @@ import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
  * parent), and it paints the card's background edge to edge so content scrolls
  * cleanly underneath. Omit it on pages whose header never scrolls (Chat).
  */
-export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } = {}) {
+export type OrganizationTabGroup = 'users' | 'teams';
+
+export default function OrganizationTabs({ stickyTop, group = 'users' }: { stickyTop?: number; group?: OrganizationTabGroup } = {}) {
   const pathname = usePathname();
   const { isTenantAdmin, hasPermission } = useAuth();
   const { hasPlanFeature, loading: planLoading } = usePlanFeaturesContext();
 
   // `visible: false` = the user lacks the permission. Such tabs are still
   // rendered — greyed, hover tooltip, not clickable — never hidden.
-  const tabs: { id: string; label: string; short: string; href: string; visible: boolean; deniedMessage?: string; planLocked?: boolean }[] = [
+  const allTabs: { id: string; group: OrganizationTabGroup; label: string; short: string; href: string; visible: boolean; deniedMessage?: string; planLocked?: boolean }[] = [
     // Visibility mirrors each destination page's own access guard exactly —
     // UserManagement.tsx checks canManageUsers/canViewUsers, UsageHistory.tsx
     // checks canViewUsage (also declared in lib/navigation/routeAccess.ts for
     // this same route prefix), RoleManagement.tsx checks canManageUsers. This
     // used to be isTenantAdmin-only for all three, hiding tabs a non-owner
     // admin with the right granular permissions could actually open.
-    { id: 'users', label: 'Users', short: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers'), deniedMessage: 'You do not have permission to view users' },
-    { id: 'usage-history', label: 'Usage History', short: 'Usage', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage history' },
-    { id: 'role-management', label: 'Roles & Permissions', short: 'Roles', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to manage roles & permissions' },
+    { id: 'users', group: 'users', label: 'Users', short: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers'), deniedMessage: 'You do not have permission to view users' },
+    { id: 'usage-history', group: 'users', label: 'Usage History', short: 'Usage', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage history' },
+    { id: 'role-management', group: 'users', label: 'Roles & Permissions', short: 'Roles', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to manage roles & permissions' },
     // Plan-gated: stays visible but disabled (hover explains) when the plan lacks Teams.
-    { id: 'team-management', label: 'Teams', short: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
-    { id: 'team-chat', label: 'Chat', short: 'Chat', href: '/organization/team-chat', visible: true },
+    { id: 'team-management', group: 'teams', label: 'Teams', short: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
+    { id: 'team-chat', group: 'teams', label: 'Chat', short: 'Chat', href: '/organization/team-chat', visible: true },
   ];
+  const tabs = allTabs.filter((t) => t.group === group);
+  const navLabel = group === 'teams' ? 'Teams tabs' : 'User management tabs';
 
   // Nothing to switch between — don't render a lone tab.
   if (tabs.length <= 1) return null;
@@ -62,24 +67,25 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
       }
     >
       {/* Mobile + tablet (< lg): one segmented control — the sliding white-tile
-          toggle used across the app. Five equal cells on a light brand-blue
-          track; the white tile glides to the active tab. This bar lives in the
+          toggle used across the app. Equal cells (one per tab) on a light
+          brand-blue track; the white tile glides to the active tab. This bar lives in the
           persistent organization layout, so it stays mounted across tab
           switches and the tile visibly slides from the old tab to the new one.
-          Short labels so all five fit on a phone (full name on hover). */}
+          Short labels so every tab fits on a phone (full name on hover). */}
       {(() => {
         const activeIndex = tabs.findIndex((t) => pathname === t.href || pathname.startsWith(`${t.href}/`));
         const cell = 'relative z-10 inline-flex min-w-0 items-center justify-center rounded-md px-1 text-xs font-medium transition-colors duration-300 sm:text-sm';
         return (
           <nav
-            aria-label="User management tabs"
-            className="relative grid h-9 grid-cols-5 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10 lg:hidden"
+            aria-label={navLabel}
+            style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+            className="relative grid h-9 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10 lg:hidden"
           >
             {activeIndex >= 0 && (
               <span
                 aria-hidden
-                style={{ transform: `translateX(${activeIndex * 100}%)` }}
-                className="absolute bottom-1 left-1 top-1 w-[calc((100%-0.5rem)/5)] rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
+                style={{ width: `calc((100% - 0.5rem) / ${tabs.length})`, transform: `translateX(${activeIndex * 100}%)` }}
+                className="absolute bottom-1 left-1 top-1 rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
               />
             )}
             {tabs.map((tab) => {
@@ -117,7 +123,7 @@ export default function OrganizationTabs({ stickyTop }: { stickyTop?: number } =
 
       {/* Desktop (lg+): folder tabs that merge into the panel below */}
       <nav
-        aria-label="User management tabs"
+        aria-label={navLabel}
         className="hidden max-w-full flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700 lg:flex"
       >
         {tabs.map((tab) => {
