@@ -29,6 +29,8 @@ import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssign
 import GlobalScoringProgressIndicator from '@/components/GlobalScoringProgressIndicator';
 import BulkInviteProgressIndicator from '@/components/bulk-invite/BulkInviteProgressIndicator';
 import RouteGuard from '@/components/RouteGuard';
+import { masterDataService } from '@/lib/services';
+import { setConfiguredExperienceLevels } from '@/lib/utils/jobExperience';
 
 // Paths allowed when subscription is expired/inactive
 const SUBSCRIPTION_ALLOWED_PATHS = [
@@ -92,6 +94,30 @@ function ResumeUsageReconciler() {
       await refetch();
     })();
   }, [refetch]);
+
+  return null;
+}
+
+/**
+ * Loads Configuration > Experience Levels once per login so every experience
+ * badge/text across the dashboard (JD detail, JD lists, scoring, version
+ * history, ...) resolves a JD's job_level against what Configuration actually
+ * has on file instead of only the fixed word list built into jobExperience.ts.
+ * Mounted once here (this layout persists across dashboard navigation), the
+ * same pattern as ResumeUsageReconciler above. Failing silently is fine - the
+ * formatter just keeps using its built-in dictionary for the standard codes.
+ */
+function ExperienceLevelsBootstrapper() {
+  const ranRef = useRef(false);
+
+  useEffect(() => {
+    if (ranRef.current) return;
+    ranRef.current = true;
+    masterDataService
+      .listExperienceLevels(true)
+      .then((res) => setConfiguredExperienceLevels(res.items))
+      .catch(() => {});
+  }, []);
 
   return null;
 }
@@ -386,6 +412,7 @@ export default function DashboardLayout({
   return (
     <QuotaProvider>
       <ResumeUsageReconciler />
+      <ExperienceLevelsBootstrapper />
       <PlanFeaturesProvider>
         <PlanChangeProvider>
         <AdminAssignedPlanProvider>
