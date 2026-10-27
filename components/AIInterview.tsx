@@ -597,6 +597,9 @@ export default function AIInterview() {
   // Beside Refresh in the pill row: the All Interviews table portals its
   // Clear Sort button here.
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
+  /* The line under the tab pills: each tab's Actions (N) + Clear portal into
+     it while rows are ticked. */
+  const [bulkActionSlotEl, setBulkActionSlotEl] = useState<HTMLDivElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -3318,23 +3321,9 @@ export default function AIInterview() {
               );
             })}
           </div>
-        </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
+              tabs line, just before Refresh, as Clear Sort sits on Assessments. */}
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
-          {/* Invitation Status's Resend / Revoke used to be buttons here,
-              beside Refresh. They now live in the tab's Actions (N) menu in
-              its toolbar row; this confirm is the one Resend opens. */}
-          <ConfirmationDialog
-            isOpen={statusBulkResendOpen}
-            onClose={() => { if (!isStatusBulkResending) setStatusBulkResendOpen(false); }}
-            onConfirm={handleStatusBulkResend}
-            title="Resend invitations to selected candidates?"
-            description={`A fresh interview link will be emailed to ${statusResendableSelectedRows.length} selected candidate${statusResendableSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-            confirmText={isStatusBulkResending ? 'Sending…' : `Yes, resend to ${statusResendableSelectedRows.length}`}
-            cancelText="Cancel"
-            variant="info"
-          />
           {/* Sort by — moved out of More Filters to sit before Refresh, in the
               shared SortByControl's shape (components/ui/select-all-menu.tsx):
               the label always shown, p-1 + h-7 = the toolbar's 36px band and
@@ -4291,7 +4280,6 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
-                      afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       /* Shown only while rows are ticked ("N selected"): the
                          tab pills already carry the totals. */
@@ -4466,6 +4454,9 @@ export default function AIInterview() {
                     </div>
 
                     {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
+                    {/* Actions + Clear — on the line under the tab pills (the
+                        page's bulk slot), at the pills' h-8 height. */}
+                    {bulkActionSlotEl && statusBulkActions && createPortal(statusBulkActions, bulkActionSlotEl)}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable

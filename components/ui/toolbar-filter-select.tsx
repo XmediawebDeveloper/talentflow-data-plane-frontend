@@ -66,7 +66,7 @@ export default function ToolbarFilterSelect({
     /* One size at every width (36px, 14px text), like SortByControl beside
        it — toolbar controls share one type size. max-w-full + truncate keep a
        long option (a team lead's name) from pushing the pill past a phone's edge. */
-    <div className={`inline-flex max-w-full items-center ${className ?? ''}`}>
+    <div data-toolbar-filter="" className={`inline-flex max-w-full items-center ${className ?? ''}`}>
       <FilterSelect
         value={value}
         onChange={onChange}
