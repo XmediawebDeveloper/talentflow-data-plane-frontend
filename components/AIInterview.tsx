@@ -3009,6 +3009,9 @@ export default function AIInterview() {
             {
               label: 'Configured Jobs',
               value: allConfigs.length ? totalJobs : (stats?.total_configs ?? 0),
+              // Every config is one interview version, so the versions behind
+              // the job count are the configs themselves (Total Interviews).
+              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
               icon: Briefcase,
               tab: 'all' as TabKey,
               cardKey: 'jobs' as OverviewCardKey,
@@ -3043,7 +3046,7 @@ export default function AIInterview() {
           ];
           return (
             <StatsCardGrid className="mb-5 sm:mb-8" columns={4}>
-              {cards.map(({ label, value, icon: Icon, tab, cardKey }) => (
+              {cards.map(({ label, value, versions, icon: Icon, tab, cardKey }) => (
                 <StatsCard
                   key={label}
                   tone="neutral"
@@ -3054,7 +3057,13 @@ export default function AIInterview() {
                   value={value}
                   sparkline={false}
                   onClick={() => openListView(tab, { cardKey })}
-                />
+                >
+                  {versions !== undefined && (
+                    <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                      {versions} {versions === 1 ? 'version' : 'versions'}
+                    </span>
+                  )}
+                </StatsCard>
               ))}
             </StatsCardGrid>
           );
