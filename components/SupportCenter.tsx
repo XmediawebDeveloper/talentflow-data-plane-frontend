@@ -20,12 +20,15 @@ import {
 import { toast } from 'sonner';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
+import type { InternalTicketFilterParams } from '@/lib/services/internalTicketService';
 import ListPagination from '@/components/ListPagination';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import api, { ApiError, handleApiError, getTokens } from '@/lib/services/api';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -103,7 +106,28 @@ function titleWords(text: string): string[] {
   return Array.from(new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 3)));
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+// The backend's `detail` message for a failed api call, or the fallback.
+function errorText(error: unknown, fallback: string): string {
+  try {
+    handleApiError(error);
+  } catch (e) {
+    if (e instanceof ApiError && e.message) return e.message;
+  }
+  return fallback;
+}
+
+// Attachment limits — mirrored by the backend (routers/support_tickets.py).
+// Combined size of all files sent together (create form, or one reply).
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const formatBytes = (n: number) =>
+  n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
+const ATTACHMENT_MAX_FILES = 5;
+// Shown under "Supported formats". The extra types are still accepted
+// (same allowlist as the backend's ATTACHMENT_GROUPS).
+const ATTACHMENT_SHOWN_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.webp'];
+const ATTACHMENT_EXTRA_EXTS = ['.xlsx', '.csv', '.log', '.json', '.xml', '.yaml', '.yml', '.xls'];
+const ATTACHMENT_EXTENSIONS = [...ATTACHMENT_SHOWN_EXTS, ...ATTACHMENT_EXTRA_EXTS];
+const ATTACHMENT_ACCEPT = ATTACHMENT_EXTENSIONS.join(',');
 
 interface SupportTicket {
   id: string;
@@ -263,6 +287,23 @@ function AwaitingReplyTag() {
   );
 }
 
+// Shown instead of "No tickets" when the list request failed.
+function ListLoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-4 py-10 text-center sm:py-12">
+      <AlertCircle className="h-10 w-10 text-destructive" />
+      <div>
+        <p className="text-sm font-medium text-gray-900 dark:text-slate-50">Couldn&apos;t load tickets</p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{message}</p>
+      </div>
+      <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
+        <RefreshCw className="h-4 w-4" />
+        Retry
+      </Button>
+    </div>
+  );
+}
+
 function renderFormattedMessage(message: string): React.ReactNode {
   const lines = message.split('\n');
   const blocks: React.ReactNode[] = [];
@@ -296,10 +337,21 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [activeTab, setActiveTab] = useState<'external' | 'team'>('external');
   const [view, setView] = useState<'overview' | 'submit' | 'tickets' | 'detail' | 'knowledge-base'>('overview');
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  // My Tickets filters. The Team tab has its own set below — they used to be
+  // shared, so "Urgent" picked here emptied the Team list (team has no Urgent).
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [myCategoryFilter, setMyCategoryFilter] = useState<string>('all');
+  const [teamSearchQuery, setTeamSearchQuery] = useState('');
+  const [teamFilterStatus, setTeamFilterStatus] = useState<string>('all');
+  const [teamFilterPriority, setTeamFilterPriority] = useState<string>('all');
+  // Search is sent to the server 300 ms after typing stops.
+  const debouncedSearch = useDebounce(searchQuery.trim(), 300);
+  const debouncedTeamSearch = useDebounce(teamSearchQuery.trim(), 300);
   const [replyMessage, setReplyMessage] = useState('');
+  // Blocks a second send while a reply is in flight (double-click sent it twice).
+  const [replySending, setReplySending] = useState(false);
   // Ticket detail view: Conversation / Attachments tab + dismissible reply tip.
   // Tab is remembered per ticket id, so opening another ticket starts on Conversation.
   const [detailTabState, setDetailTabState] = useState<{ id: string | null; tab: 'conversation' | 'activity' | 'attachments' }>({ id: null, tab: 'conversation' });
@@ -480,15 +532,24 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [category, setCategory] = useState<SupportTicket['category']>('technical');
   const [priority, setPriority] = useState<SupportTicket['priority']>('medium');
   const [attachments, setAttachments] = useState<File[]>([]);
+  // Files chosen in the reply box; uploaded to the ticket after the message.
+  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Data states
+  // Data states. `tickets` / `internalTickets` hold only the current page; the
+  // server does filtering, search, sort and paging and reports the total.
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [myTotal, setMyTotal] = useState(0);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
   const [stats, setStats] = useState<TicketStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   // Team/Internal ticket states (for admin)
   const [internalTickets, setInternalTickets] = useState<InternalTicket[]>([]);
+  const [teamTotal, setTeamTotal] = useState(0);
+  const [internalTicketsError, setInternalTicketsError] = useState<string | null>(null);
   const [internalStats, setInternalStats] = useState<InternalTicketAdminStats | null>(null);
   const [selectedInternalTicket, setSelectedInternalTicket] = useState<InternalTicket | null>(null);
   const [internalLoading, setInternalLoading] = useState(false);
@@ -514,7 +575,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const rootRef = useScrollRestoration('support-tickets', !loading);
   useListStatePersistence(
     'support-tickets',
-    { activeTab, view, searchQuery, filterStatus, filterPriority, internalFilterAssignment,
+    { activeTab, view, searchQuery, filterStatus, filterPriority, myCategoryFilter,
+      teamSearchQuery, teamFilterStatus, teamFilterPriority, internalFilterAssignment,
       myCurrentPage, myItemsPerPage, teamCurrentPage, teamItemsPerPage },
     (s) => {
       if (s.activeTab === 'external' || s.activeTab === 'team') setActiveTab(s.activeTab);
@@ -522,6 +584,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.filterStatus === 'string') setFilterStatus(s.filterStatus);
       if (typeof s.filterPriority === 'string') setFilterPriority(s.filterPriority);
+      if (typeof s.myCategoryFilter === 'string') setMyCategoryFilter(s.myCategoryFilter);
+      if (typeof s.teamSearchQuery === 'string') setTeamSearchQuery(s.teamSearchQuery);
+      if (typeof s.teamFilterStatus === 'string') setTeamFilterStatus(s.teamFilterStatus);
+      if (typeof s.teamFilterPriority === 'string') setTeamFilterPriority(s.teamFilterPriority);
       if (typeof s.internalFilterAssignment === 'string') setInternalFilterAssignment(s.internalFilterAssignment);
       if (typeof s.myCurrentPage === 'number') setMyCurrentPage(s.myCurrentPage);
       if (typeof s.myItemsPerPage === 'number') setMyItemsPerPage(s.myItemsPerPage);
@@ -548,26 +614,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     { value: 'urgent', label: 'Urgent', color: 'text-destructive bg-destructive-subtle border-destructive-line' }
   ];
 
-  const getAuthToken = () => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('accessToken');
-    }
-    return null;
-  };
-
-  const getAuthHeaders = () => {
-    const token = getAuthToken();
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  };
-
-  // Build support tickets API URL - uses local backend
-  const getSupportApiUrl = (endpoint: string = '') => {
-    // URL format: http://localhost:8000/api/v1/support-tickets{endpoint}
-    return `${API_BASE_URL}/support-tickets${endpoint}`;
-  };
+  // Support-ticket calls go through the shared `api` client (auth header, token
+  // refresh and 401 → session-expired handling), not raw fetch.
+  const supportPath = (endpoint: string = '') => `/support-tickets${endpoint}`;
 
   // Auto-save the create-ticket form as a per-user draft while it is open.
   useEffect(() => {
@@ -585,57 +634,51 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return () => clearTimeout(timer);
   }, [title, description, category, priority, view, activeTab, authUser?.id]);
 
-  // Fetch tickets and stats on mount
+  // Stats once on mount (the list loads from the effect below).
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
-
-    // Check if user is authenticated
-    const token = getAuthToken();
-    if (!token) {
-      console.warn('No auth token found, user may need to login');
+    if (!getTokens().accessToken) {
       setLoading(false);
       setStatsFailed(true);
       return;
     }
-
-    fetchTickets();
     fetchStats();
   }, []);
+
+  // One page of My Tickets from the server, refetched whenever the page, page
+  // size, filters, sort or (debounced) search change. Before, only the first
+  // 20 tickets were ever loaded and search/paging ran inside those 20.
+  useEffect(() => {
+    if (!getTokens().accessToken) return;
+    fetchTickets();
+  }, [myCurrentPage, myItemsPerPage, filterStatus, filterPriority, myCategoryFilter, debouncedSearch, ticketSort]);
 
   const fetchTickets = async () => {
     const seq = ++ticketsFetchSeqRef.current;
     const isStale = () => seq !== ticketsFetchSeqRef.current;
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (filterStatus !== 'all') params.append('status', filterStatus);
-      if (filterPriority !== 'all') params.append('priority', filterPriority);
-      if (searchQuery) params.append('search', searchQuery);
-
-      const url = `${getSupportApiUrl()}?${params.toString()}`;
-      console.log('[SupportCenter] Fetching tickets from:', url);
-
-      const response = await fetch(url, {
-        headers: getAuthHeaders(),
+      setTicketsError(null);
+      const { data } = await api.get(supportPath(), {
+        params: {
+          page: myCurrentPage,
+          page_size: myItemsPerPage,
+          status: filterStatus !== 'all' ? filterStatus : undefined,
+          priority: filterPriority !== 'all' ? filterPriority : undefined,
+          category: myCategoryFilter !== 'all' ? myCategoryFilter : undefined,
+          search: debouncedSearch || undefined,
+          sort: ticketSort !== 'default' ? ticketSort : undefined,
+        },
       });
       if (isStale()) return;
-
-      if (response.ok) {
-        const data = await response.json();
-        if (isStale()) return;
-        setTickets(data.items.map(transformTicket));
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        if (isStale()) return;
-        console.error('Failed to fetch tickets:', response.status, errorData);
-        // Keep empty array on error
-        setTickets([]);
-      }
+      setTickets((data.items || []).map(transformTicket));
+      setMyTotal(data.total ?? 0);
     } catch (error) {
       if (isStale()) return;
-      console.error('Error fetching tickets:', error);
       setTickets([]);
+      setMyTotal(0);
+      setTicketsError(errorText(error, 'Could not load your tickets'));
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -643,77 +686,63 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(getSupportApiUrl('/stats'), {
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-        setStatsFailed(false);
-      } else {
-        setStatsFailed(true);
-      }
-    } catch (error) {
-      console.error('Error fetching stats:', error);
+      const { data } = await api.get(supportPath('/stats'));
+      setStats(data);
+      setStatsFailed(false);
+    } catch {
       setStatsFailed(true);
     }
   };
 
   const fetchTicketDetail = async (ticketId: string) => {
+    setDetailError(null);
     try {
-      const response = await fetch(getSupportApiUrl(`/${ticketId}`), {
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setSelectedTicket(transformTicket(data));
-      }
+      const { data } = await api.get(supportPath(`/${ticketId}`));
+      setSelectedTicket(transformTicket(data));
     } catch (error) {
-      console.error('Error fetching ticket detail:', error);
+      // The row's summary stays on screen; say the full ticket didn't load.
+      setDetailError(errorText(error, 'Could not load this ticket'));
     }
   };
 
-  // Re-fetch when filters change
-  useEffect(() => {
-    if (!hasFetched.current) return;
-    fetchTickets();
-  }, [filterStatus, filterPriority]);
-
-  // Fetch internal tickets when admin switches to team tab
+  // Team tab: stats once when first opened; the list follows its own filters.
   useEffect(() => {
     if (activeTab === 'team' && isAdmin && !hasInternalFetched.current) {
       hasInternalFetched.current = true;
-      fetchInternalTickets();
       fetchInternalStats();
     }
   }, [activeTab, isAdmin]);
 
-  // Re-fetch internal tickets when filters change
   useEffect(() => {
-    if (!hasInternalFetched.current) return;
+    if (activeTab !== 'team' || !isAdmin) return;
     fetchInternalTickets();
-  }, [filterStatus, filterPriority, internalFilterAssignment]);
+  }, [activeTab, isAdmin, teamCurrentPage, teamItemsPerPage, teamFilterStatus, teamFilterPriority, teamCategoryFilter, internalFilterAssignment, debouncedTeamSearch, teamSort]);
 
   const fetchInternalTickets = async () => {
     const seq = ++internalTicketsFetchSeqRef.current;
     const isStale = () => seq !== internalTicketsFetchSeqRef.current;
     try {
       setInternalLoading(true);
+      setInternalTicketsError(null);
       const response = await internalTicketService.adminListAllTickets({
-        status: filterStatus !== 'all' ? filterStatus as any : undefined,
-        priority: filterPriority !== 'all' ? filterPriority as any : undefined,
-        search: searchQuery || undefined,
+        page: teamCurrentPage,
+        page_size: teamItemsPerPage,
+        status: teamFilterStatus !== 'all' ? teamFilterStatus as InternalTicketFilterParams['status'] : undefined,
+        priority: teamFilterPriority !== 'all' ? teamFilterPriority as InternalTicketFilterParams['priority'] : undefined,
+        category: teamCategoryFilter !== 'all' ? teamCategoryFilter as InternalTicketFilterParams['category'] : undefined,
+        search: debouncedTeamSearch || undefined,
+        sort: teamSort !== 'default' ? teamSort : undefined,
         assigned_to_me: internalFilterAssignment === 'mine' ? true : undefined,
         unassigned: internalFilterAssignment === 'unassigned' ? true : undefined,
       });
       if (isStale()) return;
       setInternalTickets(response.items);
+      setTeamTotal(response.total ?? 0);
     } catch (error) {
       if (isStale()) return;
-      console.error('Error fetching internal tickets:', error);
       setInternalTickets([]);
+      setTeamTotal(0);
+      setInternalTicketsError(errorText(error, 'Could not load team tickets'));
     } finally {
       if (!isStale()) setInternalLoading(false);
     }
@@ -735,7 +764,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       const ticket = await internalTicketService.getTicket(ticketId);
       setSelectedInternalTicket(ticket);
     } catch (error) {
-      console.error('Error fetching internal ticket detail:', error);
+      toast.error(`${errorText(error, 'Could not load this ticket')} — showing the summary from the list.`);
     }
   };
 
@@ -812,20 +841,22 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   };
 
   const handleSendInternalReply = async () => {
-    if (!replyMessage.trim() || !selectedInternalTicket) return;
+    if (!replyMessage.trim() || !selectedInternalTicket || replySending) return;
 
+    setReplySending(true);
     try {
       const updatedTicket = await internalTicketService.addResponse(selectedInternalTicket.id, {
         message: replyMessage,
       });
 
       setSelectedInternalTicket(updatedTicket);
-      setInternalTickets(internalTickets.map(t => t.id === selectedInternalTicket.id ? updatedTicket : t));
+      setInternalTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
       setReplyMessage('');
       toast.success('Reply sent successfully');
     } catch (error) {
-      console.error('Error sending reply:', error);
-      toast.error('Failed to send reply');
+      toast.error(errorText(error, 'Failed to send reply'));
+    } finally {
+      setReplySending(false);
     }
   };
 
@@ -879,29 +910,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return cat?.icon || HelpCircle;
   };
 
-  const filteredInternalTickets = internalTickets.filter(ticket => {
-    const matchesSearch =
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.created_by?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = teamCategoryFilter === 'all' || ticket.category === teamCategoryFilter;
-    return matchesSearch && matchesCategory;
-  });
-
-  const INTERNAL_PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
-  const sortedInternalTickets = teamSort === 'default'
-    ? filteredInternalTickets
-    : [...filteredInternalTickets].sort((a, b) => {
-        if (teamSort === 'priority') return (INTERNAL_PRIORITY_RANK[a.priority] ?? 9) - (INTERNAL_PRIORITY_RANK[b.priority] ?? 9);
-        const key = teamSort === 'newest' ? 'created_at' : 'updated_at';
-        return new Date(b[key]).getTime() - new Date(a[key]).getTime();
-      });
-
-  const paginatedInternalTickets = sortedInternalTickets.slice(
-    (teamCurrentPage - 1) * teamItemsPerPage,
-    teamCurrentPage * teamItemsPerPage
-  );
+  // The server already filtered, searched, sorted and paged this list.
+  const filteredInternalTickets = internalTickets;
+  const sortedInternalTickets = internalTickets;
+  const paginatedInternalTickets = internalTickets;
 
   const handleSubmitTicket = async () => {
     if (!title.trim() || !description.trim()) {
@@ -911,126 +923,155 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
     try {
       setSubmitting(true);
-      const response = await fetch(getSupportApiUrl(), {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          title,
-          description,
-          category,
-          priority,
-        }),
-      });
+      const { data } = await api.post(supportPath(), { title, description, category, priority });
+      const newTicket = transformTicket(data);
 
-      if (response.ok) {
-        const data = await response.json();
-        const newTicket = transformTicket(data);
-        setTickets([newTicket, ...tickets]);
-
-        toast.success(`Ticket #${newTicket.ticketNumber} created. We'll respond within 24 hours.`);
-
-        // Reset form (and drop the saved draft — it has been submitted)
-        if (authUser?.id) {
-          try { localStorage.removeItem(`${TICKET_DRAFT_PREFIX}${authUser.id}`); } catch { /* storage unavailable */ }
+      // Files go up after the ticket exists. They used to be dropped silently —
+      // only title/description/category/priority were ever sent.
+      let uploadProblem: string | null = null;
+      if (attachments.length > 0) {
+        try {
+          await uploadAttachments(newTicket.id, attachments);
+        } catch (error) {
+          uploadProblem = errorText(error, 'the files could not be uploaded');
         }
-        setDraftRestored(false);
-        setSubmitAttempted(false);
-        setTitle('');
-        setDescription('');
-        setCategory('technical');
-        setPriority('medium');
-        setAttachments([]);
-        setView('tickets');
-
-        // Refresh stats
-        fetchStats();
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to create ticket');
       }
+
+      if (uploadProblem) {
+        toast.warning(`Ticket #${newTicket.ticketNumber} created, but its attachments were not uploaded: ${uploadProblem}. You can attach them from the ticket.`);
+      } else {
+        toast.success(`Ticket #${newTicket.ticketNumber} created. We'll respond within 24 hours.`);
+      }
+
+      // Reset form (and drop the saved draft — it has been submitted)
+      if (authUser?.id) {
+        try { localStorage.removeItem(`${TICKET_DRAFT_PREFIX}${authUser.id}`); } catch { /* storage unavailable */ }
+      }
+      setDraftRestored(false);
+      setSubmitAttempted(false);
+      setTitle('');
+      setDescription('');
+      setCategory('technical');
+      setPriority('medium');
+      setAttachments([]);
+      setView('tickets');
+
+      // Show it from the server's first page (the list is server-paged now).
+      if (myCurrentPage === 1) fetchTickets(); else setMyCurrentPage(1);
+      fetchStats();
     } catch (error) {
-      console.error('Error creating ticket:', error);
-      toast.error('Failed to create ticket');
+      toast.error(errorText(error, 'Failed to create ticket'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleSendReply = async () => {
-    if (!replyMessage.trim() || !selectedTicket) return;
+  // POST /support-tickets/{id}/attachments (multipart). Returns the updated ticket.
+  const uploadAttachments = async (ticketId: string, files: File[]): Promise<SupportTicket> => {
+    const form = new FormData();
+    files.forEach(f => form.append('files', f));
+    const { data } = await api.post(supportPath(`/${ticketId}/attachments`), form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return transformTicket(data);
+  };
 
+  // Attachments are served through the API (auth required), so fetch as a blob.
+  const downloadAttachment = async (ticketId: string, file: { id: string; name: string }) => {
     try {
-      const response = await fetch(getSupportApiUrl(`/${selectedTicket.id}/responses`), {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          message: replyMessage,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const updatedTicket = transformTicket(data);
-        setSelectedTicket(updatedTicket);
-        setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-        setReplyMessage('');
-        toast.success('Reply sent successfully');
-      } else {
-        toast.error('Failed to send reply');
-      }
+      const { data } = await api.get(supportPath(`/${ticketId}/attachments/${file.id}/download`), { responseType: 'blob' });
+      const url = URL.createObjectURL(data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (error) {
-      console.error('Error sending reply:', error);
-      toast.error('Failed to send reply');
+      toast.error(errorText(error, 'Could not download the file'));
+    }
+  };
+
+  // Checks type / combined size / count; returns the files that may be added.
+  // The 10 MB limit is for all files sent together, not per file.
+  const acceptFiles = (incoming: File[], alreadyChosen: File[]): File[] => {
+    const accepted: File[] = [];
+    let totalBytes = alreadyChosen.reduce((sum, f) => sum + f.size, 0);
+    for (const f of incoming) {
+      const ext = f.name.includes('.') ? `.${f.name.split('.').pop()!.toLowerCase()}` : '';
+      if (!ATTACHMENT_EXTENSIONS.includes(ext)) {
+        toast.error(`${f.name}: this file type can't be attached`);
+      } else if (totalBytes + f.size > ATTACHMENT_MAX_BYTES) {
+        toast.error(`${f.name} wasn't added: all attachments together must be 10 MB or less (${formatBytes(totalBytes)} already chosen)`);
+      } else if (alreadyChosen.length + accepted.length >= ATTACHMENT_MAX_FILES) {
+        toast.error(`You can attach up to ${ATTACHMENT_MAX_FILES} files at a time`);
+        break;
+      } else {
+        accepted.push(f);
+        totalBytes += f.size;
+      }
+    }
+    return accepted;
+  };
+
+  const applyUpdatedTicket = (updatedTicket: SupportTicket) => {
+    setSelectedTicket(updatedTicket);
+    setTickets(prev => prev.map(t => t.id === updatedTicket.id ? updatedTicket : t));
+  };
+
+  const handleSendReply = async () => {
+    if ((!replyMessage.trim() && replyFiles.length === 0) || !selectedTicket || replySending) return;
+
+    setReplySending(true);
+    try {
+      let updatedTicket = selectedTicket;
+      if (replyMessage.trim()) {
+        const { data } = await api.post(supportPath(`/${selectedTicket.id}/responses`), { message: replyMessage });
+        updatedTicket = transformTicket(data);
+        applyUpdatedTicket(updatedTicket);
+        setReplyMessage('');
+      }
+      if (replyFiles.length > 0) {
+        try {
+          updatedTicket = await uploadAttachments(selectedTicket.id, replyFiles);
+          applyUpdatedTicket(updatedTicket);
+          setReplyFiles([]);
+        } catch (error) {
+          // Keep the files chosen so the user can retry just the upload.
+          toast.error(errorText(error, 'The attachments could not be uploaded'));
+          return;
+        }
+      }
+      toast.success('Reply sent successfully');
+    } catch (error) {
+      toast.error(errorText(error, 'Failed to send reply'));
+    } finally {
+      setReplySending(false);
     }
   };
 
   const handleCloseTicket = async () => {
     if (!selectedTicket) return;
-
     try {
-      const response = await fetch(getSupportApiUrl(`/${selectedTicket.id}/close`), {
-        method: 'POST',
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const updatedTicket = transformTicket(data);
-        setSelectedTicket(updatedTicket);
-        setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-        toast.success('Ticket closed');
-        fetchStats();
-      } else {
-        toast.error('Failed to close ticket');
-      }
+      const { data } = await api.post(supportPath(`/${selectedTicket.id}/close`));
+      applyUpdatedTicket(transformTicket(data));
+      toast.success('Ticket closed');
+      fetchStats();
     } catch (error) {
-      console.error('Error closing ticket:', error);
-      toast.error('Failed to close ticket');
+      toast.error(errorText(error, 'Failed to close ticket'));
     }
   };
 
   const handleReopenTicket = async () => {
     if (!selectedTicket) return;
-
     try {
-      const response = await fetch(getSupportApiUrl(`/${selectedTicket.id}/reopen`), {
-        method: 'POST',
-        headers: getAuthHeaders(),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const updatedTicket = transformTicket(data);
-        setSelectedTicket(updatedTicket);
-        setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-        toast.success('Ticket reopened');
-        fetchStats();
-      } else {
-        toast.error('Failed to reopen ticket');
-      }
+      const { data } = await api.post(supportPath(`/${selectedTicket.id}/reopen`));
+      applyUpdatedTicket(transformTicket(data));
+      toast.success('Ticket reopened');
+      fetchStats();
     } catch (error) {
-      console.error('Error reopening ticket:', error);
-      toast.error('Failed to reopen ticket');
+      toast.error(errorText(error, 'Failed to reopen ticket'));
     }
   };
 
@@ -1043,39 +1084,30 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     status?: string;
   }) => {
     if (!selectedTicket) return;
-
     try {
-      const response = await fetch(getSupportApiUrl(`/${selectedTicket.id}`), {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(updates),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const updatedTicket = transformTicket(data);
-        setSelectedTicket(updatedTicket);
-        setTickets(tickets.map(t => t.id === selectedTicket.id ? updatedTicket : t));
-        toast.success('Ticket updated');
-        fetchStats();
-        return true;
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to update ticket');
-        return false;
-      }
+      const { data } = await api.put(supportPath(`/${selectedTicket.id}`), updates);
+      applyUpdatedTicket(transformTicket(data));
+      toast.success('Ticket updated');
+      fetchStats();
+      return true;
     } catch (error) {
-      console.error('Error updating ticket:', error);
-      toast.error('Failed to update ticket');
+      toast.error(errorText(error, 'Failed to update ticket'));
       return false;
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setAttachments(prev => [...prev, ...newFiles]);
-    }
+    const picked = Array.from(e.target.files || []);
+    e.target.value = ''; // allow choosing the same file again after removing it
+    const ok = acceptFiles(picked, attachments);
+    if (ok.length) setAttachments(prev => [...prev, ...ok]);
+  };
+
+  const handleReplyFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';
+    const ok = acceptFiles(picked, replyFiles);
+    if (ok.length) setReplyFiles(prev => [...prev, ...ok]);
   };
 
   const removeAttachment = (index: number) => {
@@ -1116,36 +1148,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return cat?.icon || HelpCircle;
   };
 
-  const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch =
-      ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ticket.description.toLowerCase().includes(searchQuery.toLowerCase());
+  // The server already filtered, searched, sorted and paged this list.
+  const filteredTickets = tickets;
+  const paginatedTickets = tickets;
 
-    return matchesSearch;
-  });
-
-  const PRIORITY_RANK: Record<SupportTicket['priority'], number> = { urgent: 0, high: 1, medium: 2, low: 3 };
-  const sortedTickets = ticketSort === 'default'
-    ? filteredTickets
-    : [...filteredTickets].sort((a, b) => {
-        if (ticketSort === 'priority') return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-        const key = ticketSort === 'newest' ? 'createdAt' : 'updatedAt';
-        return new Date(b[key]).getTime() - new Date(a[key]).getTime();
-      });
-  const paginatedTickets = sortedTickets.slice(
-    (myCurrentPage - 1) * myItemsPerPage,
-    myCurrentPage * myItemsPerPage
-  );
-
-  // Reset pagination on filter / tab changes
+  // Back to page 1 when a tab's own filters change.
   useEffect(() => {
     setMyCurrentPage(1);
-  }, [searchQuery, filterStatus, filterPriority, activeTab]);
+  }, [debouncedSearch, filterStatus, filterPriority, myCategoryFilter, ticketSort, activeTab]);
 
   useEffect(() => {
     setTeamCurrentPage(1);
-  }, [searchQuery, filterStatus, filterPriority, internalFilterAssignment, activeTab, teamCategoryFilter, teamSort]);
+  }, [debouncedTeamSearch, teamFilterStatus, teamFilterPriority, internalFilterAssignment, activeTab, teamCategoryFilter, teamSort]);
 
 
   /* Card counts come only from the stats endpoints. They used to fall back to
@@ -1843,25 +1857,31 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <Label className="mb-1.5 font-semibold">
                       Attachments <span className="font-normal text-gray-500 dark:text-slate-400">(Optional)</span>
                     </Label>
-                    {/* Files are not sent with the ticket yet (the create API takes no files),
-                        so uploads stay disabled rather than being silently dropped. */}
-                    <div aria-disabled="true" className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 p-5 text-center dark:border-slate-700 dark:bg-slate-800/30 sm:p-6">
+                    {/* Uploaded right after the ticket is created (POST …/attachments). */}
+                    <label
+                      htmlFor="file-upload"
+                      className="block cursor-pointer rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 p-5 text-center transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] dark:border-slate-700 dark:bg-slate-800/30 sm:p-6"
+                    >
                       <input
                         type="file"
                         id="file-upload"
                         multiple
-                        disabled
+                        accept={ATTACHMENT_ACCEPT}
                         onChange={handleFileSelect}
                         className="hidden"
                       />
                       <div className="flex flex-col items-center">
-                        <UploadCloud className="mb-2 h-9 w-9 text-gray-300 dark:text-slate-600" />
-                        <span className="text-sm font-medium text-gray-600 dark:text-slate-300">File uploads are coming soon</span>
+                        <UploadCloud className="mb-2 h-9 w-9 text-brand-blue/60" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Click to attach files</span>
+                        <span className="mt-2 text-xs text-gray-600 dark:text-slate-300">
+                          <span className="font-medium text-gray-700 dark:text-slate-200">Supported formats:</span>{' '}
+                          {ATTACHMENT_SHOWN_EXTS.join(', ')}
+                        </span>
                         <span className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                          For now, paste error messages or describe what you see in the description above.
+                          Up to {ATTACHMENT_MAX_FILES} files, 10 MB in total
                         </span>
                       </div>
-                    </div>
+                    </label>
 
                     {attachments.length > 0 && (
                       <div className="mt-3 space-y-2">
@@ -1938,7 +1958,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {[
                     { title: 'Use a clear and concise title', desc: 'Summarize your issue in a few words.' },
                     { title: 'Provide step-by-step details', desc: 'Include the exact steps to reproduce the issue.' },
-                    { title: 'Include error messages', desc: 'Paste any error text you see. File uploads are coming soon.' },
+                    { title: 'Include error messages', desc: 'Paste any error text you see, or attach a screenshot or log file.' },
                     { title: 'Mention expected and actual results', desc: 'Clearly explain what you expected and what actually happened.' },
                     { title: 'Select the correct category and priority', desc: 'Choose the category and priority that best matches your issue.' },
                   ].map(tip => (
@@ -2013,6 +2033,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     />
 
                     <FilterSelect
+                      value={myCategoryFilter}
+                      onChange={(v) => setMyCategoryFilter(v)}
+                      ariaLabel="Filter by category"
+                      options={[{ value: 'all', label: 'All Categories' }, ...categories.map(c => ({ value: c.value, label: c.label }))]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
+
+                    <FilterSelect
                       value={ticketSort}
                       onChange={(v) => setTicketSort(v as typeof ticketSort)}
                       ariaLabel="Sort tickets"
@@ -2027,7 +2055,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {/* Active filters — each removable, plus clear all */}
-                  {(filterStatus !== 'all' || filterPriority !== 'all' || searchQuery) && (
+                  {(filterStatus !== 'all' || filterPriority !== 'all' || myCategoryFilter !== 'all' || searchQuery) && (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
                       {searchQuery && (
@@ -2045,9 +2073,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           Priority: {filterPriority} <X className="h-3 w-3" />
                         </button>
                       )}
+                      {myCategoryFilter !== 'all' && (
+                        <button type="button" onClick={() => setMyCategoryFilter('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
+                          {getCategoryLabel(myCategoryFilter)} <X className="h-3 w-3" />
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); }}
+                        onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); setMyCategoryFilter('all'); }}
                         className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline dark:text-slate-400"
                       >
                         Clear all
@@ -2170,7 +2203,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </table>
                   </div>
 
-                  {filteredTickets.length === 0 && (
+                  {ticketsError ? (
+                    <ListLoadError message={ticketsError} onRetry={fetchTickets} />
+                  ) : filteredTickets.length === 0 && (
                     <EmptyState
                       icon={Ticket}
                       title="No tickets found"
@@ -2181,12 +2216,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               )}
             </div>
 
-            {/* Pagination — My Support Tickets */}
-            {!loading && filteredTickets.length > 0 && (
+            {/* Pagination — My Support Tickets (server total, not just this page) */}
+            {!loading && myTotal > 0 && (
               <ListPagination
                 currentPage={myCurrentPage}
                 itemsPerPage={myItemsPerPage}
-                totalItems={filteredTickets.length}
+                totalItems={myTotal}
                 onPageChange={setMyCurrentPage}
                 onItemsPerPageChange={setMyItemsPerPage}
                 itemLabel="tickets"
@@ -2324,6 +2359,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               cancelText="Keep Open"
               variant="warning"
             />
+            {detailError && (
+              <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2.5 text-sm text-destructive">
+                <span className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {detailError} — showing the summary from the list.
+                </span>
+                <Button type="button" variant="secondary" size="sm" onClick={() => fetchTicketDetail(selectedTicket.id)}>
+                  <RefreshCw className="h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            )}
             {/* Back + previous / next */}
             <div className="mb-3 flex items-center justify-between gap-2">
               <button
@@ -2559,16 +2606,47 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             placeholder="Type your message..."
                             rows={4}
                           />
+                          {replyFiles.length > 0 && (
+                            <ul className="mt-2 flex flex-wrap gap-1.5">
+                              {replyFiles.map((file, index) => (
+                                <li key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                                  <Paperclip className="h-3 w-3 shrink-0 text-brand-blue" />
+                                  <span className="truncate" title={file.name}>{file.name}</span>
+                                  <span className="shrink-0 text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setReplyFiles(prev => prev.filter((_, i) => i !== index))}
+                                    disabled={replySending}
+                                    aria-label={`Remove ${file.name}`}
+                                    className="rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             {/* Toolbar */}
                             <div className="flex flex-wrap items-center gap-0.5">
-                              <Tooltip content="File attachments in replies are not supported yet">
-                                <span>
-                                  <button type="button" disabled className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400">
-                                    <Paperclip className="h-4 w-4" />
-                                    Attach file
-                                  </button>
-                                </span>
+                              <input
+                                ref={replyFileInputRef}
+                                type="file"
+                                multiple
+                                accept={ATTACHMENT_ACCEPT}
+                                onChange={handleReplyFileSelect}
+                                className="hidden"
+                              />
+                              <Tooltip content={`Attach up to ${ATTACHMENT_MAX_FILES} files, 10 MB in total`}>
+                                <button
+                                  type="button"
+                                  onClick={() => replyFileInputRef.current?.click()}
+                                  disabled={replySending}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800"
+                                >
+                                  <Paperclip className="h-4 w-4" />
+                                  Attach file
+                                </button>
                               </Tooltip>
                               <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-slate-700" />
                               <button type="button" onClick={() => wrapSelection('**', '**', 'bold text')} aria-label="Bold" title="Bold" className={toolBtn}><Bold className="h-4 w-4" /></button>
@@ -2610,11 +2688,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <Button
                               variant="primary"
                               onClick={handleSendReply}
-                              disabled={!replyMessage.trim()}
-                              icon={<Send className="h-4 w-4" />}
+                              disabled={replySending || (!replyMessage.trim() && replyFiles.length === 0)}
+                              icon={replySending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                               className="w-full sm:w-auto"
                             >
-                              Send Reply
+                              {replySending ? 'Sending…' : 'Send Reply'}
                             </Button>
                           </div>
                         </div>
@@ -2654,11 +2732,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
                             <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-slate-100" title={file.name}>{file.name}</span>
                             <span className="shrink-0 text-xs text-gray-500 dark:text-slate-400">{file.size}</span>
-                            {file.url && (
-                              <a href={file.url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${file.name}`} className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
-                                <Download className="h-4 w-4" />
-                              </a>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => downloadAttachment(selectedTicket.id, file)}
+                              aria-label={`Download ${file.name}`}
+                              className="shrink-0 rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -2848,7 +2929,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <button
                     key={card.label}
                     type="button"
-                    onClick={() => { setFilterStatus(card.status); setInternalFilterAssignment(card.assignment); setTeamCategoryFilter('all'); setView('tickets'); }}
+                    onClick={() => { setTeamFilterStatus(card.status); setInternalFilterAssignment(card.assignment); setTeamCategoryFilter('all'); setView('tickets'); }}
                     className={`group flex w-full items-start gap-3 overflow-hidden rounded-xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
                       card.attention
                         ? 'border-brand-orange/30 bg-brand-orange/[0.04] hover:border-brand-orange/50'
@@ -2888,7 +2969,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <button
                         key={cat}
                         type="button"
-                        onClick={() => { setFilterStatus('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter(cat); setView('tickets'); }}
+                        onClick={() => { setTeamFilterStatus('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter(cat); setView('tickets'); }}
                         className="group flex min-w-[180px] items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-left transition-colors hover:border-brand-blue/30 hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:hover:bg-slate-800"
                       >
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-brand-blue ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
@@ -3071,8 +3152,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <Search className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-brand-blue/60" />
                     <Input
                       type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      value={teamSearchQuery}
+                      onChange={(e) => setTeamSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
                       className="w-full pl-9 pr-4"
                     />
@@ -3080,8 +3161,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
                     <FilterSelect
-                      value={filterStatus}
-                      onChange={(v) => setFilterStatus(v)}
+                      value={teamFilterStatus}
+                      onChange={(v) => setTeamFilterStatus(v)}
                       ariaLabel="Filter by status"
                       options={[
                         { value: 'all', label: 'All Status' },
@@ -3106,8 +3187,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     />
 
                     <FilterSelect
-                      value={filterPriority}
-                      onChange={(v) => setFilterPriority(v)}
+                      value={teamFilterPriority}
+                      onChange={(v) => setTeamFilterPriority(v)}
                       ariaLabel="Filter by priority"
                       options={[
                         { value: 'all', label: 'All Priority' },
@@ -3141,17 +3222,17 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {/* Active filters — each removable, plus clear all */}
-                  {(filterStatus !== 'all' || filterPriority !== 'all' || internalFilterAssignment !== 'all' || teamCategoryFilter !== 'all' || searchQuery) && (
+                  {(teamFilterStatus !== 'all' || teamFilterPriority !== 'all' || internalFilterAssignment !== 'all' || teamCategoryFilter !== 'all' || teamSearchQuery) && (
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
-                      {searchQuery && (
-                        <button type="button" onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
-                          &ldquo;{searchQuery}&rdquo; <X className="h-3 w-3" />
+                      {teamSearchQuery && (
+                        <button type="button" onClick={() => setTeamSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
+                          &ldquo;{teamSearchQuery}&rdquo; <X className="h-3 w-3" />
                         </button>
                       )}
-                      {filterStatus !== 'all' && (
-                        <button type="button" onClick={() => setFilterStatus('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
-                          Status: {filterStatus.replace(/[-_]/g, ' ')} <X className="h-3 w-3" />
+                      {teamFilterStatus !== 'all' && (
+                        <button type="button" onClick={() => setTeamFilterStatus('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
+                          Status: {teamFilterStatus.replace(/[-_]/g, ' ')} <X className="h-3 w-3" />
                         </button>
                       )}
                       {internalFilterAssignment !== 'all' && (
@@ -3159,9 +3240,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           {internalFilterAssignment === 'mine' ? 'Assigned to me' : 'Unassigned'} <X className="h-3 w-3" />
                         </button>
                       )}
-                      {filterPriority !== 'all' && (
-                        <button type="button" onClick={() => setFilterPriority('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
-                          Priority: {filterPriority} <X className="h-3 w-3" />
+                      {teamFilterPriority !== 'all' && (
+                        <button type="button" onClick={() => setTeamFilterPriority('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
+                          Priority: {teamFilterPriority} <X className="h-3 w-3" />
                         </button>
                       )}
                       {teamCategoryFilter !== 'all' && (
@@ -3171,7 +3252,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       )}
                       <button
                         type="button"
-                        onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); }}
+                        onClick={() => { setTeamSearchQuery(''); setTeamFilterStatus('all'); setTeamFilterPriority('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); }}
                         className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline dark:text-slate-400"
                       >
                         Clear all
@@ -3334,13 +3415,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </table>
                   </div>
 
-                  {filteredInternalTickets.length === 0 && (
+                  {internalTicketsError ? (
+                    <ListLoadError message={internalTicketsError} onRetry={fetchInternalTickets} />
+                  ) : filteredInternalTickets.length === 0 && (
                     <div className="py-10 text-center sm:py-12">
                       <Inbox className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-600 sm:h-12 sm:w-12" />
                       <p className="text-sm font-medium text-gray-700 dark:text-slate-300">
-                        {internalFilterAssignment === 'unassigned' && filterStatus === 'all' && !searchQuery && teamCategoryFilter === 'all'
+                        {internalFilterAssignment === 'unassigned' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
                           ? 'No unassigned tickets 🎉'
-                          : internalFilterAssignment === 'mine' && filterStatus === 'all' && !searchQuery && teamCategoryFilter === 'all'
+                          : internalFilterAssignment === 'mine' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
                             ? 'Nothing is assigned to you right now'
                             : 'No tickets match these filters'}
                       </p>
@@ -3356,11 +3439,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Pagination — Team Support Tickets */}
-            {!internalLoading && filteredInternalTickets.length > 0 && (
+            {!internalLoading && teamTotal > 0 && (
               <ListPagination
                 currentPage={teamCurrentPage}
                 itemsPerPage={teamItemsPerPage}
-                totalItems={filteredInternalTickets.length}
+                totalItems={teamTotal}
                 onPageChange={setTeamCurrentPage}
                 onItemsPerPageChange={setTeamItemsPerPage}
                 itemLabel="tickets"
@@ -3725,11 +3808,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <Button
                             variant="primary"
                             onClick={handleSendInternalReply}
-                            disabled={!replyMessage.trim()}
-                            icon={<Send className="h-4 w-4" />}
+                            disabled={replySending || !replyMessage.trim()}
+                            icon={replySending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                             className="w-full sm:w-auto"
                           >
-                            Send Reply
+                            {replySending ? 'Sending…' : 'Send Reply'}
                           </Button>
                         </div>
                       </div>

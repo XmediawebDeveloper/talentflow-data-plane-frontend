@@ -1,26 +1,32 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Check } from 'lucide-react';
+import { Search, Check, Loader2 } from 'lucide-react';
 import { ApiUser } from '@/lib/services/userService';
 import FilterSelect from '@/components/ui/filter-select';
 
 interface MemberSelectorProps {
   availableUsers: ApiUser[];
+  /** Users are still loading — show a loader instead of the (stale or empty) list. */
+  isLoading?: boolean;
   selectedMemberIds: string[];
   onToggleMember: (userId: string) => void;
   teamLeadId?: string;
   onTeamLeadChange?: (userId: string) => void;
   showTeamLeadSelector?: boolean;
+  /** Small note under the list (e.g. why some users aren't offered). */
+  footnote?: string;
 }
 
 export default function MemberSelector({
   availableUsers,
+  isLoading = false,
   selectedMemberIds,
   onToggleMember,
   teamLeadId = '',
   onTeamLeadChange,
   showTeamLeadSelector = true,
+  footnote,
 }: MemberSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -53,7 +59,12 @@ export default function MemberSelector({
         </div>
 
         <div className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-          {filteredUsers.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 p-6 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading users…
+            </div>
+          ) : filteredUsers.length > 0 ? (
             filteredUsers.map((user) => {
               const isSelected = selectedMemberIds.includes(user.id);
               return (
@@ -106,6 +117,7 @@ export default function MemberSelector({
         <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">
           {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? 's' : ''} selected
         </p>
+        {footnote && <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">{footnote}</p>}
       </div>
 
       {showTeamLeadSelector && selectedMemberIds.length > 0 && onTeamLeadChange && (
