@@ -5428,7 +5428,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           illustrated empty state below speaks for it. */}
                       {!showFullEmptyState && (() => {
                         const statCards = [
-                          { key: 'completed', label: 'Completed', value: completedCount, icon: CheckCircle, tone: 'brand-blue' },
+                          // Labelled "Files Completed" (not "Completed") because it sums completed
+                          // files across every batch in this tab, while the tab badge and the
+                          // "N batches" header below count batches — a batch with several files
+                          // can push this past that batch count, which used to read as a bug.
+                          { key: 'completed', label: 'Files Completed', value: completedCount, icon: CheckCircle, tone: 'brand-blue' },
                           { key: 'duplicated', label: 'Duplicates', value: duplicatedCount, icon: Copy, tone: 'brand-orange' },
                           { key: 'versioned', label: 'Versioned', value: versionedCount, icon: GitBranch, tone: 'brand-blue-2' },
                           { key: 'error', label: 'Failed', value: failedCount, icon: AlertCircle, tone: 'brand-orange-deep' },
@@ -5575,7 +5579,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             uploadHistoryFilter === 'cancelled' ? 'bg-gray-200 text-gray-800' :
                             'bg-brand-teal/10 text-brand-teal'
                           }`}>
-                            {uploadHistoryFilter === 'completed' ? 'Completed' :
+                            {uploadHistoryFilter === 'completed' ? 'Files Completed' :
                              uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
                              uploadHistoryFilter === 'versioned' ? 'Versioned' :
                              uploadHistoryFilter === 'error' ? 'Failed' :

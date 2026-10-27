@@ -9,6 +9,10 @@ import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetSta
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
+import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
+import { mapLimit } from '@/lib/utils/mapLimit';
+import { startWarmUp } from '@/lib/utils/warmUp';
+import { prefetchAssessmentRows } from '@/components/assessments/AllAssessmentsTable';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -47,6 +51,8 @@ import { DateField } from '@/components/ui/date-field';
 import {
   ListToolbarSlot,
   ListToolbarSlotProvider,
+  ListBulkActions,
+  useListSortSlot,
   ListToolbarPortal,
   useListToolbarSlot,
 } from '@/components/ui/list-toolbar-slot';
@@ -114,6 +120,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
+import Dropdown from '@/components/ui/filter-select';
 import AllAssessmentsTable, { VersionPill, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
@@ -529,6 +536,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      Draft, Activity Logs, Consent Logs) portal their existing toolbar up into
      it; nothing about what those toolbars filter or how moves with them. */
   const toolbarSlot = useListToolbarSlot();
+  const sortSlotEl = useListSortSlot(toolbarSlot.node);
   // Proctoring settings are a staging-only testing menu — in production it's
   // hidden, so land on Topics instead.
   /* Activity Logs and Consent Logs sit here, beside Proctoring & Security and
@@ -785,6 +793,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      a bare flag, so moving to another tab hides the button at once instead of
      showing it until the new table reports in. */
   const [clearAssessmentSortSignal, setClearAssessmentSortSignal] = useState(0);
+  /* The pill row's Sort by, shared by Total Jobs and the flat tabs. */
+  const [listSortBy, setListSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
   const [sortedAssessmentTab, setSortedAssessmentTab] = useState<string | null>(null);
   // Clone confirmation state — simple confirm-only modal. The recruiter
   // invites V2 candidates manually via the normal invite flow.
@@ -1484,7 +1494,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Cross-assessment "Candidate Results" tab — aggregates every completed
   // attempt across all assessments by fanning out listResults() calls (no
   // global endpoint exists yet). Client-side paginated.
-  const [completedCandidates, setCompletedCandidates] = useState<CandidateResultRow[]>([]);
+  /* Both cross-assessment tabs start from the last set this page loaded, so a
+     return from a details page (or reopening the tab) shows rows at once; their
+     loads below still run and replace them. */
+  const [completedCandidates, setCompletedCandidates] = useState<CandidateResultRow[]>(() => readListSnapshot<CandidateResultRow[]>('assessments-results:rows') ?? []);
+  const completedCandidatesRef = useRef(completedCandidates);
+  completedCandidatesRef.current = completedCandidates;
   const [isLoadingCompletedCandidates, setIsLoadingCompletedCandidates] = useState(false);
   const [completedCandidatesError, setCompletedCandidatesError] = useState<string | null>(null);
   const [completedCandidatesPage, setCompletedCandidatesPage] = useState(1);
@@ -1539,7 +1554,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      bar and status badges the popup uses, so the two cannot read differently.
      Filtering and paging are client-side because the rows are already merged
      here — a per-request filter would have to be re-fanned out to be correct. */
-  const [inviteStatusRows, setInviteStatusRows] = useState<any[]>([]);
+  const [inviteStatusRows, setInviteStatusRows] = useState<any[]>(() => readListSnapshot<any[]>('assessments-invite-status:rows') ?? []);
+  const inviteStatusRowsRef = useRef(inviteStatusRows);
+  inviteStatusRowsRef.current = inviteStatusRows;
   const [isLoadingInviteStatus, setIsLoadingInviteStatus] = useState(false);
   const [inviteStatusError, setInviteStatusError] = useState<string | null>(null);
   const [inviteStatusPage, setInviteStatusPage] = useState(1);
@@ -1631,11 +1648,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     coding_scoring_type: 'scored',
   });
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
-  const [isSavingTopics, setIsSavingTopics] = useState(false);
+  // Tracks which individual topic key(s) are currently being saved, so only
+  // the toggle the user actually touched shows a disabled/busy state instead
+  // of every toggle in the section.
+  const [savingTopicsKeys, setSavingTopicsKeys] = useState<Set<string>>(new Set());
   const [topicsError, setTopicsError] = useState<string | null>(null);
 
   // Stats from API
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState(() => {
+    const defaults = {
     total_assessments: 0,
     total_jobs_with_assessments: 0,
     total_ever_created: 0,
@@ -1652,15 +1673,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        (`candidatesAssessed`), which is why the Total Assessed card is not
        stuck on 0 the way reading the optional field alone left it. */
     total_candidates_tested: 0,
+    total_invitations: 0,
     total_candidates_completed: 0,
     average_pass_rate: null as number | null,
     average_score: null as number | null,
     units_consumed: 0,
+    };
+    // The last stats this page loaded, so a return visit shows real numbers at once.
+    return { ...defaults, ...(readListSnapshot<Partial<typeof defaults>>('assessments:stats') ?? {}) };
   });
-  /* Starts true: the mount effect (`loadAllData`) is what fills `stats`, and
-     until it has run the five cards would otherwise print their 0 defaults
-     for a frame. Its `finally` always clears this, on every path. */
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  /* Starts true when nothing is remembered: the mount effect (`loadAllData`) is
+     what fills `stats`, and until it has run the five cards would otherwise
+     print their 0 defaults for a frame. Remembered stats skip that placeholder
+     and the load refreshes them quietly. Its `finally` always clears this, on
+     every path. */
+  const [isLoadingStats, setIsLoadingStats] = useState(() => readListSnapshot('assessments:stats') === null);
 
   // Persist scroll position + view state so returning from a detail/results
   // page lands the user exactly where they left off. Re-detect the scroll
@@ -2778,19 +2805,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       .map((a: any, index: number) => mapAssessmentFromApi(a, index));
   };
 
-  const loadAssessmentsPage = async (page: number) => {
+  /* The whole-set answers this page has already fetched, per filter set. A tab
+     click reuses a fresh one (and refreshes a stale one quietly behind it)
+     instead of downloading every assessment again behind a skeleton; anything
+     that changes data reloads for real and clears them. */
+  const [initialAssessmentsCache] = useState(
+    () => new Map(readListSnapshot<[string, { rows: any[]; at: number }][]>('assessments:page-cache') ?? []),
+  );
+  const assessmentsCacheRef = useRef(initialAssessmentsCache);
+  const ASSESSMENTS_FRESH_MS = 60_000;
+  const loadAssessmentsPage = async (page: number, mode: 'reload' | 'tab' = 'reload') => {
     const seq = ++assessmentsFetchSeqRef.current;
     const isStale = () => seq !== assessmentsFetchSeqRef.current;
-    setIsLoading(true);
+    const filters: any = {};
+    if (preSelectedJdId) {
+      filters.jd_id = preSelectedJdId;
+    }
+    const status = getAssessmentStatusFilter(activeTab);
+    if (status) {
+      filters.status = status;
+    }
+    const cacheKey = JSON.stringify(filters);
+    const cached = mode === 'tab' ? assessmentsCacheRef.current.get(cacheKey) : undefined;
+    if (mode === 'reload') {
+      assessmentsCacheRef.current.clear();
+      writeListSnapshot('assessments:page-cache', []);
+    }
+    if (cached) {
+      setApiAssessments(cached.rows);
+      setIsLoading(false);
+      if (Date.now() - cached.at < ASSESSMENTS_FRESH_MS) return;
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const filters: any = {};
-      if (preSelectedJdId) {
-        filters.jd_id = preSelectedJdId;
-      }
-      const status = getAssessmentStatusFilter(activeTab);
-      if (status) {
-        filters.status = status;
-      }
       /* No `search` param: the search box matches Job ID and Job Name only,
          in `filteredAssessments`, over this full set. */
 
@@ -2813,6 +2861,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       {
         const collected = await fetchAllAssessments(filters);
         if (isStale()) return;
+        assessmentsCacheRef.current.set(cacheKey, { rows: collected, at: Date.now() });
+        writeListSnapshot('assessments:page-cache', Array.from(assessmentsCacheRef.current.entries()));
         setApiAssessments(collected);
         /* The count of everything that matched, before the browser-side
            filters and the version collapse narrow it further. What the footer
@@ -3082,7 +3132,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   const loadAllCompletedCandidates = async () => {
-    setIsLoadingCompletedCandidates(true);
+    const startedAt = performance.now();
+    // Rows already on screen: refresh behind them rather than back to a skeleton.
+    if (completedCandidatesRef.current.length === 0) setIsLoadingCompletedCandidates(true);
     setCompletedCandidatesError(null);
     try {
       /* Every assessment of every job version, paged to the end rather than
@@ -3104,9 +3156,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          instead of paging every assessment's results only to get an empty
          list. An id missing from the answer, or a failed batch, is fetched
          as before, so nothing is dropped on a count error. */
+      /* Fast path: every completed result in ONE request (backend
+         /assessments/all-results), instead of the counts + per-assessment
+         fan-out below. Any failure leaves `fastAttempts` null and the original
+         path runs unchanged. */
+      let fastAttempts: any[] | null = null;
+      try {
+        fastAttempts = await assessmentService.getAllResults();
+      } catch {
+        fastAttempts = null;
+      }
       const knownEmpty = new Set<string>();
       const COUNT_BATCH = 200;
-      for (let start = 0; start < items.length; start += COUNT_BATCH) {
+      for (let start = 0; !fastAttempts && start < items.length; start += COUNT_BATCH) {
         const batch = items.slice(start, start + COUNT_BATCH).map((a: any) => a.id);
         try {
           const counts = await assessmentService.getCompletedCounts(batch);
@@ -3119,14 +3181,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       }
       // Results rather than invitations: the attempt carries the scores and the
       // pass/fail verdict this tab is about.
-      const results = await Promise.all(
-        items.map(async (a: any) => {
-          if (knownEmpty.has(a.id)) return [];
-          try {
-            const attempts = await collectAllPages((page, page_size) =>
-              assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
-            );
-            return attempts.map((attempt): CandidateResultRow => ({
+      const assessmentById = new Map<string, any>(items.map((a: any) => [a.id, a]));
+      const stampAttempt = (a: any, attempt: any): CandidateResultRow => ({
               ...attempt,
               _assessment_id: a.id,
               _assessment_short_id: a.short_id,
@@ -3147,12 +3203,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  disagree with the assessment it came from. Same field, same
                  name, as the Invitation Status rows use. */
               _assessment_version: a.version,
-            }));
-          } catch {
-            return [];
-          }
-        })
-      );
+      });
+      const results = fastAttempts
+        // A row whose assessment is not in `items` has nothing to stamp it with.
+        ? [fastAttempts.flatMap((attempt: any) => {
+            const a = assessmentById.get(attempt.assessment_id);
+            return a ? [stampAttempt(a, attempt)] : [];
+          })]
+        : await Promise.all(
+            items.map(async (a: any) => {
+              if (knownEmpty.has(a.id)) return [];
+              try {
+                const attempts = await collectAllPages((page, page_size) =>
+                  assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
+                );
+                return attempts.map((attempt) => stampAttempt(a, attempt));
+              } catch {
+                return [];
+              }
+            })
+          );
       const merged = results.flat();
 
       /* ── Resume Version ────────────────────────────────────────────────
@@ -3181,7 +3251,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const resumeVersionByKey = new Map<string, number>();
       if (jdIds.length > 0) {
         const scoreKey = (jdId: string, email?: string) => `${jdId}|${(email || '').trim().toLowerCase()}`;
-        await Promise.all(
+        /* Fast path: one request per 200 jobs (backend /scoring/resume-versions)
+           instead of a page of full scoring records per job. Same value, same
+           (job, email) key. On any failure the per-job reads below run as before. */
+        let resumeVersionsBatched = false;
+        try {
+          const batched = await scoringService.getResumeVersions(jdIds);
+          for (const [jdId, byEmail] of Object.entries(batched)) {
+            for (const [email, version] of Object.entries(byEmail)) {
+              resumeVersionByKey.set(scoreKey(jdId, email), version);
+            }
+          }
+          resumeVersionsBatched = true;
+        } catch {
+          resumeVersionsBatched = false;
+        }
+        if (!resumeVersionsBatched) await Promise.all(
           jdIds.map(async (jdId) => {
             try {
               const scored = await scoringService.getJDScoredResumes(jdId, { page_size: 1000 });
@@ -3225,6 +3310,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         (stampTime(y.completed_at) - stampTime(x.completed_at))
         || (stampTime(y.created_at) - stampTime(x.created_at)));
       setCompletedCandidates(merged);
+      writeListSnapshot('assessments-results:rows', merged);
+      perfNote('Assessments / Results — loaded', startedAt);
       setCompletedCandidatesPage(1);
     } catch (err: any) {
       console.error('Failed to load completed candidates:', err);
@@ -3260,7 +3347,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const seq = ++inviteStatusSeqRef.current;
     const isStale = () => seq !== inviteStatusSeqRef.current;
     inviteStatusInFlightRef.current += 1;
-    if (!silent) setIsLoadingInviteStatus(true);
+    const startedAt = performance.now();
+    // Rows already on screen: refresh behind them rather than back to a skeleton.
+    if (!silent && inviteStatusRowsRef.current.length === 0) setIsLoadingInviteStatus(true);
     if (!silent) setInviteStatusError(null);
     try {
       /* Every assessment of every job version, paged to the end — see the same
@@ -3275,52 +3364,77 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const jobVersionByJdId = rememberJobVersions(
         await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
       );
-      const perAssessment = await Promise.all(
-        items.map(async (a: any) => {
+      /* Stamps an invitation with the assessment it belongs to. Used by both the
+         one-request path and the per-assessment fallback below, so the rows
+         are identical either way. */
+      const stampInvite = (inv: any, a: any) => ({
+            ...inv,
+            _assessment_id: a.id,
+            _assessment_short_id: a.short_id,
+            _assessment_title: a.title,
+            /* The job and version columns. An invitation record carries none
+               of this — it knows its candidate and its assessment — but the
+               fan-out is already holding the parent assessment, which has
+               all four on it (AssessmentResponse), so the columns cost no
+               request of their own and cannot disagree with the assessment
+               they came from.
+
+                 _jd_short_id        the human-readable Job ID, e.g. JD-014.
+                 _jd_title           the job's name.
+                 _jd_version         the job version the assessment was
+                                     authored against — resolved from its JD
+                                     ROW, since the `jd_version` number on the
+                                     record is a creation-time snapshot that
+                                     reads 1 for assessments authored against
+                                     later versions.
+                 _assessment_version the assessment's own version, which
+                                     increments on each edit/publish. */
+            _jd_id: a.jd_id,
+            _jd_short_id: a.jd_short_id,
+            _jd_title: a.jd_title,
+            _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
+            _assessment_version: a.version,
+            /* Which rounds this assessment has. Only the score cells' "why
+               is this blank" tooltip reads them — the columns themselves
+               stay put, because rows here span assessments and a column
+               cannot come and go per row the way the popup's can. */
+            _technical_enabled: a.technical_enabled,
+            _coding_enabled: a.coding_enabled,
+      });
+      /* ONE request for every invitation of every assessment (rows carry their
+         `assessment_id`); a failure or an older backend falls through to the
+         per-assessment path below, unchanged. */
+      let fastRows: any[] | null = null;
+      try {
+        const assessmentById = new Map<string, any>(items.map((a: any) => [a.id, a]));
+        const rows = await assessmentService.getAllInvitations();
+        if (isStale()) return;
+        fastRows = rows
+          .filter((inv: any) => inv.assessment_id && assessmentById.has(inv.assessment_id))
+          .map((inv: any) => stampInvite(inv, assessmentById.get(inv.assessment_id)));
+      } catch {
+        fastRows = null;
+      }
+
+      const perAssessment = fastRows ? [fastRows] : await mapLimit(
+        // Fewer in flight for a background/silent run (warm-up, poll) so a click
+        // made meanwhile is not queued behind it.
+        items, silent ? 3 : 6, async (a: any) => {
+          /* The list already says how many invitations each assessment has (the
+             same table `listInvitations` reads), so one with none costs no
+             request. Most assessments are in that group. */
+          if (typeof a.invitations_count === 'number' && a.invitations_count === 0) return [];
           try {
             const invitations = await collectAllPages((page, page_size) =>
               assessmentService.listInvitations(a.id, { page, page_size }),
             );
-            return invitations.map((inv: any) => ({
-              ...inv,
-              _assessment_id: a.id,
-              _assessment_short_id: a.short_id,
-              _assessment_title: a.title,
-              /* The job and version columns. An invitation record carries none
-                 of this — it knows its candidate and its assessment — but the
-                 fan-out is already holding the parent assessment, which has
-                 all four on it (AssessmentResponse), so the columns cost no
-                 request of their own and cannot disagree with the assessment
-                 they came from.
-
-                   _jd_short_id        the human-readable Job ID, e.g. JD-014.
-                   _jd_title           the job's name.
-                   _jd_version         the job version the assessment was
-                                       authored against — resolved from its JD
-                                       ROW, since the `jd_version` number on the
-                                       record is a creation-time snapshot that
-                                       reads 1 for assessments authored against
-                                       later versions.
-                   _assessment_version the assessment's own version, which
-                                       increments on each edit/publish. */
-              _jd_id: a.jd_id,
-              _jd_short_id: a.jd_short_id,
-              _jd_title: a.jd_title,
-              _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
-              _assessment_version: a.version,
-              /* Which rounds this assessment has. Only the score cells' "why
-                 is this blank" tooltip reads them — the columns themselves
-                 stay put, because rows here span assessments and a column
-                 cannot come and go per row the way the popup's can. */
-              _technical_enabled: a.technical_enabled,
-              _coding_enabled: a.coding_enabled,
-            }));
+            return invitations.map((inv: any) => stampInvite(inv, a));
           } catch {
             /* One assessment's invitations being unavailable must not empty the
                tab — the rest still list. */
             return [];
           }
-        })
+        },
       );
       /* One row per invitation: paging that shifts while it is being walked
          can hand the same record back twice, and it would list as two rows. */
@@ -3340,6 +3454,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
       if (isStale()) return;
       setInviteStatusRows(merged);
+      writeListSnapshot('assessments-invite-status:rows', merged);
+      perfNote('Assessments / Invitation Status — loaded', startedAt);
       /* A background poll must not yank the recruiter back to page 1 or drop
          their selection — only an explicit load does. */
       if (!silent) {
@@ -3361,6 +3477,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (!isStale()) setIsLoadingInviteStatus(false);
     }
   };
+
+  /* Warm-up: once the page's own stats have loaded, load the other tabs' data in
+     the background, lightest first, so a click on any tab finds it ready instead
+     of starting from a skeleton. Each step is skipped quietly if it fails (the
+     tab then loads normally when opened). Runs once per visit; only leaving the
+     page stops it. */
+  const warmFnsRef = useRef({ results: loadAllCompletedCandidates, invites: loadAllInviteStatuses });
+  warmFnsRef.current = { results: loadAllCompletedCandidates, invites: loadAllInviteStatuses };
+  const warmedRef = useRef(false);
+  const cancelWarmUpRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (isLoadingStats || warmedRef.current) return;
+    warmedRef.current = true;
+    cancelWarmUpRef.current = startWarmUp([
+      () => prefetchAssessmentRows(),
+      () => prefetchAssessmentRows('published'),
+      () => prefetchAssessmentRows('draft'),
+      () => prefetchAssessmentRows('archived'),
+      () => warmFnsRef.current.results(),
+      () => warmFnsRef.current.invites(true),
+    ]);
+  }, [isLoadingStats]);
+  useEffect(() => () => cancelWarmUpRef.current?.(), []);
 
   useEffect(() => {
     if (activeTab !== 'invitation-status') return;
@@ -3389,7 +3528,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
     const loadAllData = async () => {
-      setIsLoadingStats(true);
+      // Remembered stats are already on screen: refresh without the placeholder.
+      if (readListSnapshot('assessments:stats') === null) setIsLoadingStats(true);
 
       // Everything below reads `.value` off three settled results and writes
       // several pieces of state, ending in `setIsLoadingStats(false)`. That
@@ -3423,7 +3563,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         // the quota block or the final `setIsLoadingStats(false)`.
         if (statsResult.status === 'fulfilled' && statsResult.value) {
           const response = statsResult.value;
-          setStats({
+          const freshStats = {
             total_assessments: response.total_assessments,
             total_jobs_with_assessments: response.total_jobs_with_assessments || 0,
             total_ever_created: response.total_ever_created || response.total_assessments,
@@ -3432,11 +3572,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             draft_assessments: response.draft_assessments || 0,
             archived_assessments: response.archived_assessments || 0,
             total_candidates_tested: response.total_candidates_tested || 0,
+            total_invitations: response.total_invitations || 0,
             total_candidates_completed: response.total_candidates_completed || 0,
             average_pass_rate: response.average_pass_rate,
             average_score: response.average_score,
             units_consumed: response.units_consumed || 0,
-          });
+          };
+          setStats(freshStats);
+          writeListSnapshot('assessments:stats', freshStats);
           console.log('[TalentFlow] Loaded assessment stats from API');
         } else {
           console.log(
@@ -3536,7 +3679,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (activeTab === 'invitation-status' || activeTab === 'settings') {
       return;
     }
-    loadAssessmentsPage(assessmentCurrentPage);
+    loadAssessmentsPage(assessmentCurrentPage, 'tab');
     // The advanced filters belong here too: turning one on switches the loader
     // between "one server page" and "the whole result set", and without the
     // dependency that switch never happened.
@@ -3612,7 +3755,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Update topic settings
   const updateTopicSettings = async (updates: Partial<TopicSettings>) => {
-    setIsSavingTopics(true);
+    const keys = Object.keys(updates);
+    setSavingTopicsKeys(prev => new Set([...prev, ...keys]));
     setTopicsError(null);
 
     // Optimistically update local state
@@ -3630,7 +3774,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       // Rollback on error
       setTopicSettings(previousSettings);
     } finally {
-      setIsSavingTopics(false);
+      setSavingTopicsKeys(prev => {
+        const next = new Set(prev);
+        keys.forEach(k => next.delete(k));
+        return next;
+      });
     }
   };
 
@@ -3820,6 +3968,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         draft_assessments: statsResponse.draft_assessments || 0,
         archived_assessments: statsResponse.archived_assessments || 0,
         total_candidates_tested: statsResponse.total_candidates_tested || 0,
+        total_invitations: statsResponse.total_invitations || 0,
         total_candidates_completed: statsResponse.total_candidates_completed || 0,
         average_pass_rate: statsResponse.average_pass_rate,
         average_score: statsResponse.average_score,
@@ -4734,7 +4883,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      call sites below. */
   const collapseByLineage = (list: typeof assessments) => collapseJobLineages(list);
 
-  const collapsedAssessments = orderTotalJobs(filteredAssessments);
+  const collapsedAssessments = (() => {
+    const ordered = orderTotalJobs(filteredAssessments);
+    if (listSortBy === 'oldest') return [...ordered].reverse();
+    if (listSortBy === 'newest') return ordered;
+    const first = listSortBy === 'active' ? 'active' : 'draft';
+    const isFirst = (a: (typeof ordered)[number]) => String(a.status ?? '').toLowerCase() === first;
+    return [...ordered.filter(isFirst), ...ordered.filter((a) => !isFirst(a))];
+  })();
 
   /* Open the Total Jobs list on a just-saved draft. Waits for the reload that
      brings the draft in, then: the job row that holds it (the row may stand
@@ -5469,7 +5625,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Totals for the job. Two columns on a phone, four in a
             divided row once there is width for them. */}
-        <div className={!selectMode && listDisplayMode === 'grid'
+        {/* An opened card spans the full row (col-span-full), so it takes the
+            list layout: one row of four metrics, not a 2 x 2 block. */}
+        <div className={!selectMode && listDisplayMode === 'grid' && openVersionsFor !== assessment.id
           ? 'grid grid-cols-2 gap-x-2 gap-y-3'
           : 'grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/job-row:flex-1 @4xl/job-row:min-w-0'}>
           {/* `selectMode` is exactly what the panel below is given as
@@ -5478,7 +5636,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           {getJobRowMetrics(assessment, totals, selectMode).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
             <div
               key={key}
-              className={!selectMode && listDisplayMode === 'grid'
+              className={!selectMode && listDisplayMode === 'grid' && openVersionsFor !== assessment.id
                 ? 'min-w-0'
                 : 'min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0'}
             >
@@ -6643,6 +6801,75 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     );
   };
 
+  /* First load: a full-page skeleton (same shape as the AI Interviews page)
+     until the stats are in, instead of a page of "..." placeholders. Remembered
+     stats from an earlier visit skip it — `isLoadingStats` then starts false. */
+  if (isLoadingStats) {
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
+            {/* Header */}
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
+              <div className="flex items-start gap-3 min-w-0">
+                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-56" />
+                  <Skeleton className="h-4 w-80 max-w-full" />
+                </div>
+              </div>
+              <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+                <Skeleton className="h-9 w-36 rounded-lg" />
+                <Skeleton className="h-9 w-32 rounded-lg" />
+                <Skeleton className="h-9 w-40 rounded-lg" />
+              </div>
+            </div>
+            {/* Stats cards */}
+            <div className="grid gap-2.5 sm:gap-3 mb-5 sm:mb-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-brand-blue/15 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex items-start gap-2.5">
+                    <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
+                    <div className="min-w-0 space-y-1.5 flex-1">
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-6 w-10" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Assessment rows */}
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="p-3 sm:p-4 bg-white rounded-xl border border-gray-300 shadow-sm shadow-brand-blue/5">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                    <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
+                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                    <div className="flex-shrink-0 lg:w-[104px]">
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 lg:flex-1 lg:min-w-0">
+                      {Array.from({ length: 4 }).map((_, j) => (
+                        <div key={j} className="space-y-1.5">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-4 w-10" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
@@ -6856,7 +7083,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             pills these cards open are text-only, so none of this is shared
             with them.) */}
         <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-          <StatsCardGrid columns={5}>
+          <StatsCardGrid columns={4}>
             {/* Total Jobs — the count of jobs (that have an assessment) this
                 tenant has, opening the job-grouped Total Jobs tab, which is
                 the list those jobs are the rows of. Same shared StatsCard as
@@ -6874,7 +7101,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               active={isOverviewCardActive('jobs')}
               showClickArrow
               icon={Briefcase}
-              label="Total Jobs"
+              label="Configured Jobs"
               value={isLoadingStats ? '...' : totalJobs.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('jobs')}
@@ -6903,28 +7130,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               value={isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('active')}
-            />
-            {/* Draft Assessments, third: it sits beside Active because the two
-                are the same split of the Total above them — Active + Draft is
-                how that figure divides — and reading them apart would make the
-                row three unrelated numbers and one pair.
-
-                `stats.draft_assessments` was already in this page's stats state
-                and already mapped from the same /assessments/stats response the
-                other figures come from; it had simply never been rendered. So
-                this card adds no request, and it cannot disagree with the tab
-                it opens: the Draft tab asks the API for `status: 'draft'` (see
-                `getAssessmentStatusFilter`), which is what the backend counts
-                here. */}
-            <StatsCard
-              tone="neutral"
-              active={isOverviewCardActive('draft')}
-              showClickArrow
-              icon={Pencil}
-              label="Draft Assessments"
-              value={isLoadingStats ? '...' : stats.draft_assessments.toLocaleString()}
-              sparkline={false}
-              onClick={() => openAssessmentsList('draft')}
             />
             <StatsCard
               tone="neutral"
@@ -7154,13 +7359,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
              while a pill can only ever show a fixed total. It also widened
              every pill enough to wrap the row onto a third line. */
           const TABS = ([
-            { key: 'jobs', label: 'Total Jobs', short: 'Jobs' },
-            { key: 'all', label: 'All Assessments', short: 'All' },
-            { key: 'active', label: 'Active' },
-            { key: 'draft', label: 'Draft' },
-            { key: 'archived', label: 'Archived' },
-            { key: 'completed-candidates', label: 'Candidate Results', short: 'Results' },
-            { key: 'invitation-status', label: 'Invitation Status', short: 'Invites' },
+            { key: 'jobs', label: 'Configured Jobs', short: 'Jobs', count: totalJobs },
+            { key: 'all', label: 'All Assessments', short: 'All', count: stats.total_assessments },
+            { key: 'active', label: 'Active', count: stats.active_assessments },
+            { key: 'draft', label: 'Draft', count: stats.draft_assessments },
+            { key: 'archived', label: 'Archived', count: stats.archived_assessments },
+            { key: 'completed-candidates', label: 'Results', count: candidatesAssessed },
+            { key: 'invitation-status', label: 'Invitation Status', short: 'Invites', count: stats.total_invitations },
             // Its own tab, beside Settings — as on the AI Interviews page. It
             // used to be an admin-only sub-tab inside Settings.
             { key: 'audit', label: 'Activity Logs', short: 'Activity' },
@@ -7177,7 +7382,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           /* One pill class for the row — the tab pills and Clear Sort beside
              Settings — so the button sits at exactly Settings' size. */
-          const TAB_PILL_CLASS = 'px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5';
+          const TAB_PILL_CLASS = 'px-2.5 h-9 rounded-lg text-sm font-medium transition-all whitespace-nowrap inline-flex items-center gap-1.5';
           const TAB_PILL_IDLE_CLASS = 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue';
           const TAB_PILL_ICON_CLASS = 'w-3.5 h-3.5 sm:w-4 sm:h-4';
 
@@ -7207,19 +7412,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 ) : (
                   tab.label
                 )}
+                {'count' in tab && (
+                  /* Drawn while the stats load too (a pulsing placeholder the
+                     size of a two-digit count), so the pills do not widen and
+                     reflow the row when the numbers arrive. */
+                  <span className={`px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
+                  } ${isLoadingStats ? 'animate-pulse text-transparent' : ''}`}>
+                    {isLoadingStats ? '00' : tab.count.toLocaleString()}
+                  </span>
+                )}
               </button>
             );
           };
 
+          /* Sort by: every list tab. Results, invitations and the single-status
+             tabs (Active / Draft / Archived) have no other status to float, so
+             they get Newest / Oldest only. */
+          const dateOnlySort = activeTab === 'completed-candidates' || activeTab === 'invitation-status'
+            || activeTab === 'active' || activeTab === 'draft' || activeTab === 'archived';
+          const showSortBy = activeTab === 'jobs' || showFlatAssessmentTable || dateOnlySort;
+
           const visibleTabs = TABS.filter((tab) => !('adminOnly' in tab && tab.adminOnly) || isTenantAdmin);
 
           return (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap">
               {visibleTabs.filter((tab) => !AFTER_DIVIDER.includes(tab.key) && !CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
-              <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-3">
+              <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
                 {visibleTabs.filter((tab) => CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
               </div>
-              <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-3">
+              <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
                 {visibleTabs.filter((tab) => AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
                 {/* Clear Sort — All / Active / Draft / Archived, right after
                     Settings, in Settings' own pill styling. Shown only while
@@ -7239,6 +7461,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </button>
                 )}
               </div>
+              {/* Sort by + Refresh are ONE unit pinned to the row's right
+                  edge. As separate flex-wrap siblings, any extra width in the
+                  pills (a longer count, a new tab) pushed Refresh down onto a
+                  line of its own. Together they wrap as a pair or not at all,
+                  and the "Sort by" word drops out below 2xl so the pair stays
+                  narrow enough to share the pills' line. */}
+              <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+              {showSortBy && (() => {
+                const sortControl = (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="assessment-sort" className="text-sm text-gray-700 dark:text-slate-300 font-medium whitespace-nowrap">Sort by</label>
+                  <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
+                    <Dropdown
+                      id="assessment-sort"
+                      ariaLabel="Sort by"
+                      value={dateOnlySort ? (listSortBy === 'oldest' ? 'oldest' : 'newest') : listSortBy}
+                      onChange={(v) => setListSortBy(v as typeof listSortBy)}
+                      className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300 font-medium"
+                      options={[
+                        { value: 'newest', label: 'Newest' },
+                        { value: 'oldest', label: 'Oldest' },
+                        ...(dateOnlySort ? [] : [
+                          { value: 'active', label: 'Active first' },
+                          { value: 'draft', label: 'Draft first' },
+                        ]),
+                      ]}
+                    />
+                  </div>
+                </div>
+                );
+                return sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl;
+              })()}
               {/* Refresh — right corner of the pill row, on every tab, as on
                   the AI Interviews page. */}
               <Button
@@ -7249,13 +7503,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 title="Refresh"
                 aria-label="Refresh"
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-                className="flex-shrink-0 ml-auto"
+                className="flex-shrink-0 !h-9"
               >
-                <span className="hidden sm:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+                <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
+              </div>
             </div>
           );
         })()}
+        {/* Actions (N) + Clear for ticked rows land on this third line. */}
+        <div data-list-bulk-slot className="empty:hidden mt-3 flex flex-wrap items-center gap-2" />
         </div>
 
         {/* The list itself. Like the Job Descriptions page, the rows and
@@ -7289,6 +7546,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   embedded
                   fixedStatus={config.fixedStatus}
                   clearSortSignal={clearAssessmentSortSignal}
+                  sortPreset={activeTab === 'all' ? listSortBy : (listSortBy === 'oldest' ? 'oldest' : 'newest')}
                   onSortDefaultChange={(isDefault) => setSortedAssessmentTab(isDefault ? null : activeTab)}
                   /* Every flat tab: the same ⋮ items the row has on Total Jobs. */
                   extraRowActions={buildFlatTabExtraActions}
@@ -7344,7 +7602,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 return scores.every((value) => value >= RESULT_PASS_MARK) ? 'pass' : 'fail';
               };
 
-              const filteredResults = completedCandidates.filter((row) => {
+              const filteredResults = (listSortBy === 'oldest' ? [...completedCandidates].reverse() : completedCandidates).filter((row) => {
                 if (resultQuery) {
                   const haystack = [
                     row.candidate_name,
@@ -7417,12 +7675,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             row (or card) is ticked, with Export and Download
                             PDF Reports. Clear unticks everything. */}
                         {selectedResultRows.length > 0 && (
-                          <>
+                          <ListBulkActions>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
                                   type="button"
-                                  className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                                  className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                                   aria-label={`Actions for ${selectedResultRows.length} selected`}
                                 >
                                   <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -7473,11 +7731,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               size="sm"
                               onClick={() => setSelectedResultKeys(new Set())}
                               icon={<X className="w-4 h-4" />}
-                              className="whitespace-nowrap !h-[38px] !text-sm"
+                              className="whitespace-nowrap !h-9 !text-sm"
                             >
                               Clear
                             </Button>
-                          </>
+                          </ListBulkActions>
                         )}
                       </ListToolbar>
 
@@ -8005,7 +8263,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  exactly 00:00. */
               const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
               const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
-              const filtered = inviteStatusRows.filter((inv) => {
+              const filtered = (listSortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
                 if (inviteStatusFilters.status !== 'all' && statusOf(inv) !== inviteStatusFilters.status) return false;
                 if (search) {
                   /* Every identifier the row shows is searchable, plus the
@@ -8228,24 +8486,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         filtersApplied={inviteStatusFilterCount > 0}
                         onClearFilters={clearInviteStatusFilters}
                         className="mb-0"
-                        countBadge={
+                        /* Shown only while rows are ticked ("N selected"): the
+                           tab pills already carry the totals. */
+                        countBadge={selectedInviteRows.length > 0 ? (
                           <ListCountBadge
                             filtered={total}
                             total={totalInvites}
                             noun="invitation"
                             selected={selectedInviteRows.length}
                           />
-                        }
+                        ) : undefined}
                         /* The page-wide List / Card switch, pinned far right. */
                         trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       >
+                        <ListBulkActions>
                         {hasInviteBulkAction && (
                           <>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
                                   type="button"
-                                  className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                                  className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                                   aria-label={`Actions for ${selectedInviteRows.length} selected`}
                                 >
                                   <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -8303,11 +8564,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             size="sm"
                             onClick={() => setSelectedInviteIds(new Set<string>())}
                             icon={<X className="w-4 h-4" />}
-                            className="whitespace-nowrap !h-[38px] !text-sm"
+                            className="whitespace-nowrap !h-9 !text-sm"
                           >
                             Clear
                           </Button>
                         )}
+                        </ListBulkActions>
                       </ListToolbar>
 
                       {showInviteStatusFilters && (
@@ -9163,12 +9425,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </p>
                               </div>
                             </div>
-                            {isSavingTopics && (
-                              <span className="text-xs text-white/80 flex items-center gap-1">
-                                <RefreshCw className="w-3 h-3 animate-spin" />
-                                Saving...
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -9202,14 +9458,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   if (!canUpdateAssessment) return;
                                   updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled });
                                 }}
-                                disabled={isSavingTopics}
-                                aria-disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={savingTopicsKeys.has('hr_enabled')}
+                                aria-disabled={savingTopicsKeys.has('hr_enabled') || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(savingTopicsKeys.has('hr_enabled') || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.hr_enabled
@@ -9254,14 +9510,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   if (!canUpdateAssessment) return;
                                   updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled });
                                 }}
-                                disabled={isSavingTopics}
-                                aria-disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={savingTopicsKeys.has('technical_enabled')}
+                                aria-disabled={savingTopicsKeys.has('technical_enabled') || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(savingTopicsKeys.has('technical_enabled') || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.technical_enabled
@@ -9306,14 +9562,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   if (!canUpdateAssessment) return;
                                   updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled });
                                 }}
-                                disabled={isSavingTopics}
-                                aria-disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={savingTopicsKeys.has('coding_enabled')}
+                                aria-disabled={savingTopicsKeys.has('coding_enabled') || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(savingTopicsKeys.has('coding_enabled') || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.coding_enabled

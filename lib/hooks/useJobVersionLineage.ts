@@ -172,7 +172,12 @@ export function useJobVersionLineage(): JobVersionLineage {
             .then((full) => {
               setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: full }));
             })
-            .catch(() => { /* row falls back to the lineage fields + dashes */ });
+            .catch(() => {
+              /* Row falls back to the lineage fields + dashes. An empty record
+                 (not an absent one) marks the fetch as settled, so a panel
+                 waiting on this version's detail stops showing its placeholder. */
+              setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: {} as JDResponse }));
+            });
 
           void refreshVersionApplicants(version.id);
         });
