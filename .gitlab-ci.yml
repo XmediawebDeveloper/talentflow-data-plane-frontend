@@ -6,6 +6,9 @@
 # Branches:
 #   ci/cd-staging → lint → build → deploy:staging   (automatic)
 #   aws     → lint → build → deploy:production (MANUAL button in GitLab UI)
+#   aws_live → Check → Build → Push to ECR → Deploy → Health check (automatic
+#             on merge from production) — deploys to the AWS EC2 instance.
+#             Jobs live in .gitlab/ci/aws-live.yml.
 #
 # REQUIRED GitLab CI/CD variables (Settings → CI/CD → Variables) — these are
 # baked into the client bundle at build time:
@@ -41,9 +44,15 @@
 stages:
   - check
   - build
+  - push
   - test environment
   - test
   - release
+  - deploy
+  - health check
+
+include:
+  - local: .gitlab/ci/aws-live.yml
 
 # NOTE: gitlab.mo.vc has no instance-level Container Registry configured
 # ($CI_REGISTRY is empty), so images are built and used LOCALLY on the VM —
