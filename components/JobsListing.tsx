@@ -573,15 +573,6 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     sortOrder,
   );
 
-  // Debug: Log sorted jobs order - show first 5 with their departments
-  console.log('Sorted by:', sortBy, 'Order:', sortOrder);
-  console.table(sortedJobs.slice(0, 10).map((j, i) => ({
-    '#': i + 1,
-    title: j.title?.substring(0, 30),
-    department: j.department || '(empty)',
-    industry: j.industry_type || '(empty)'
-  })));
-
   // Bulk action handlers
   /* The single Select All control offers both scopes through its dropdown:
      - current page: add the jobs visible on the active page (count tracks the

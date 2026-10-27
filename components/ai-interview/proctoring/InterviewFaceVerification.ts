@@ -272,10 +272,12 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     return loadPromiseRef.current;
   }, []);
 
-  // Warm the worker as soon as the portal mounts (consent / identity steps):
-  // the models (~7 MB) load in the background, so registering the identity
-  // photo (8 s budget) and the system-check face match only pay for the scan.
-  useEffect(() => {
+  // Background warm-up of the worker + models (~610 KB face-api + ~7 MB
+  // weights). No longer fired at hook mount (that downloaded everything during
+  // consent / identity); the portal calls warm() from the system check on.
+  // Any first real use (registerFace / registerFaceFromBlob / verify) still
+  // loads on demand if warm() has not run yet — loadModels dedupes.
+  const warm = useCallback(() => {
     void loadModels();
   }, [loadModels]);
 
@@ -660,5 +662,6 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     hasBaseline,
     baselineReady,
     baselineDescriptorRef,
-  }), [registerFace, registerFaceFromBlob, verifyCurrentFace, startVerification, stopVerification, verifyNow, hasBaseline, baselineReady]);
+    warm,
+  }), [registerFace, registerFaceFromBlob, verifyCurrentFace, startVerification, stopVerification, verifyNow, hasBaseline, baselineReady, warm]);
 }

@@ -23,6 +23,7 @@ import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { readListSnapshot, writeListSnapshot } from '@/lib/utils/listSnapshot';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -108,8 +109,15 @@ function JobOpeningsSkeleton() {
 }
 
 export default function JobOpeningsPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
+  /* Last fully-loaded list, remembered in memory. A revisit paints it (rows and
+     stat counts) straight away and refreshes quietly; only a first visit with
+     nothing remembered shows the skeleton. */
+  const rememberedJobsRef = useRef<Job[] | null>(null);
+  const [jobs, setJobs] = useState<Job[]>(() => {
+    rememberedJobsRef.current = readListSnapshot<Job[]>('job-openings:jobs');
+    return rememberedJobsRef.current ?? [];
+  });
+  const [loading, setLoading] = useState(() => rememberedJobsRef.current === null);
   /* Whether `jobs` holds every page yet. The stat cards show a placeholder
      until it does, then count straight from `jobs` — the same rows, and the
      same version rules, as the table below them. They used to show the
@@ -118,7 +126,13 @@ export default function JobOpeningsPage() {
      version, the cards by "any version has the status", so each card equals
      its tab's row count) — the handover was the jump from one set of numbers
      to another on every load. */
-  const [jobsFullyLoaded, setJobsFullyLoaded] = useState(false);
+  const [jobsFullyLoaded, setJobsFullyLoaded] = useState(() => rememberedJobsRef.current !== null);
+
+  // Keep the remembered list current, including after local edits/deletes, so
+  // the next visit doesn't briefly show a row that was removed here.
+  useEffect(() => {
+    if (jobsFullyLoaded) writeListSnapshot('job-openings:jobs', jobs);
+  }, [jobs, jobsFullyLoaded]);
   /* Bumped by every fetchJobs run and by unmount / user change, so a response
      belonging to an older run is dropped instead of overwriting newer data
      (or appending its pages onto another run's list). */
@@ -264,11 +278,18 @@ export default function JobOpeningsPage() {
   const fetchJobs = async () => {
     const seq = ++fetchSeqRef.current;
     const isStale = () => seq !== fetchSeqRef.current;
-    setLoading(true);
-    setJobsFullyLoaded(false);
+    // Quiet refresh when a remembered list is already on screen: keep it (rows,
+    // counts, no skeleton) and swap in the fresh list once every page is in.
+    const quiet = rememberedJobsRef.current !== null;
+    rememberedJobsRef.current = null;
+    if (!quiet) {
+      setLoading(true);
+      setJobsFullyLoaded(false);
+    }
     // Pull "my JDs" in smaller pages. The previous page_size=total request
     // produced oversized responses and browser transport failures upstream.
     let firstPage;
+    let firstJobs: Job[] = [];
     try {
       firstPage = await jdService.list({
         page: 1,
@@ -284,7 +305,8 @@ export default function JobOpeningsPage() {
          instead of waiting for every remaining page to load sequentially.
          `?? []` guards a backend response without an `items` array — otherwise
          `.map` would throw and (crucially) leave the page stuck on the skeleton. */
-      setJobs((firstPage.items ?? []).map(mapJDToJob));
+      firstJobs = (firstPage.items ?? []).map(mapJDToJob);
+      if (!quiet) setJobs(firstJobs);
     } catch (error) {
       if (isStale()) return;
       // First-page failure (or a bad shape) is a real load failure — surface it.
@@ -307,6 +329,7 @@ export default function JobOpeningsPage() {
       1
     );
     if (totalPages <= 1) {
+      if (quiet) setJobs(firstJobs.filter((j) => !deletedIdsRef.current.has(j.id)));
       setJobsFullyLoaded(true);
       return;
     }
@@ -321,7 +344,16 @@ export default function JobOpeningsPage() {
     const restJobs = results.flatMap((r) =>
       r.status === 'fulfilled' ? (r.value.items ?? []).map(mapJDToJob) : []
     );
-    if (restJobs.length) {
+    if (quiet) {
+      // Replace the remembered list wholesale with the fresh pages (deduped:
+      // a JD created mid-fetch can shift a row across a page boundary).
+      const seen = new Set<string>();
+      setJobs([...firstJobs, ...restJobs].filter((j) => {
+        if (seen.has(j.id) || deletedIdsRef.current.has(j.id)) return false;
+        seen.add(j.id);
+        return true;
+      }));
+    } else if (restJobs.length) {
       setJobs((prev) => {
         /* A JD created between the page requests shifts rows across page
            boundaries, so the same row can arrive twice — count it once. The

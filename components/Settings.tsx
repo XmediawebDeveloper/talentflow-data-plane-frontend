@@ -1,7 +1,7 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, SlidersHorizontal } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, SlidersHorizontal } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, useSyncExternalStore } from 'react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 // Workspace & admin pages — rendered inline in the right panel (they keep their own routes too).
 import PermissionsPage from '@/app/(dashboard)/settings/permissions/page';
@@ -9,7 +9,6 @@ import ApiManagementPage from '@/app/(dashboard)/settings/api-management/page';
 import BrandingPage from '@/app/(dashboard)/settings/branding/page';
 import SecurityPage from '@/app/(dashboard)/settings/security/page';
 import LegalCompliancePage from '@/app/(dashboard)/settings/legal/page';
-import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
@@ -18,6 +17,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import CountryPhoneInput, { phoneError } from '@/components/ui/country-phone-input';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { browserTimeZone, timeZoneOptions } from '@/lib/utils/timezones';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -27,9 +29,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+// ApiError (handleApiError) carries the backend `detail` as its message.
+const noopSubscribe = () => () => {};
+
+// Fallback when /auth/me sent no role_display (same labels as the header).
+const ROLE_LABELS: Record<string, string> = {
+  tenant_admin: 'Owner',
+  admin: 'Admin',
+  recruiter: 'Recruiter',
+  viewer: 'Viewer',
+  billing_manager: 'Billing Manager',
+  standard_user: 'Member',
+};
+const prettyRoleName = (role?: string) =>
+  (role && ROLE_LABELS[role]) || (role ? role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');
+
+const errorMessage = (error: unknown, fallback: string) =>
+  (error instanceof Error && error.message) || fallback;
+
 export default function Settings() {
-  const { user, logout, hasPermission, hasPermissionCode, isTenantAdmin } = useAuth();
-  const { setTheme, theme: currentTheme } = useTheme();
+  const { user, logout, hasPermission, hasPermissionCode, isTenantAdmin, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +57,9 @@ export default function Settings() {
   // canManageSettings admin flag, which only decides whether links to the
   // OTHER settings sub-pages (Branding, Legal, ...) are shown below.
   const canEditSettings = isTenantAdmin || hasPermissionCode('settings:general');
+  // My Profile is the user's own record — the backend lets every user update
+  // it, so it is never gated on settings:general like the shared tabs are.
+  const canEditCurrentTab = activeTab === 'profile' || canEditSettings;
 
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -49,12 +71,28 @@ export default function Settings() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Profile Settings
-  const [profileData, setProfileData] = useState<UserProfileUpdate & { email?: string }>({
-    full_name: '',
-    phone: '',
-    job_title: '',
-    department: '',
+  const emptyProfile = { full_name: '', phone: '', job_title: '', department: '', timezone: '' };
+  const [profileData, setProfileData] = useState<UserProfileUpdate & { email?: string }>(emptyProfile);
+  // Last values the server confirmed — drives "unsaved changes" and Discard.
+  const [savedProfile, setSavedProfile] = useState(emptyProfile);
+  // The picture is a draft like the other fields: it is only saved by Save Changes.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [savedAvatarUrl, setSavedAvatarUrl] = useState<string | null>(null);
+  const [isAvatarBusy, setIsAvatarBusy] = useState(false);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const profileFormFromApi = (profile: UserProfile) => ({
+    full_name: profile.full_name || '',
+    phone: profile.phone || '',
+    job_title: profile.job_title || '',
+    department: profile.department || '',
+    timezone: profile.timezone || '',
   });
+  const timeZoneChoices = useMemo(() => timeZoneOptions(), []);
+  // Browser-only value; the server render shows the generic text instead of its own zone.
+  const detectedTimeZone = useSyncExternalStore(noopSubscribe, browserTimeZone, () => 'your browser time zone');
+  const isAvatarDirty = avatarUrl !== savedAvatarUrl;
 
   // User Settings (combined)
   const [settings, setSettings] = useState<UserSettingsUpdate>({
@@ -96,20 +134,33 @@ export default function Settings() {
     default_view: 'dashboard',
   });
 
+  // Theme lives in the header's Light / Dark / Auto button (saved per browser),
+  // not on this page — so nothing here reads or applies it.
+  const isProfileDirty = isAvatarDirty || (Object.keys(emptyProfile) as (keyof typeof emptyProfile)[])
+    .some(k => (profileData[k] || '') !== savedProfile[k]);
+
   // Load user profile and settings on mount
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // Load profile
-        const profile = await userSettingsApi.getProfile();
-        setProfileData({
-          full_name: profile.full_name || '',
-          email: profile.email,
-          phone: profile.phone || '',
-          job_title: profile.job_title || '',
-          department: profile.department || '',
-        });
+        // Load profile. Its own try: a profile failure must not also throw
+        // away the settings below, and must be visible instead of leaving a
+        // blank form that silently can't be saved.
+        try {
+          const profile = await userSettingsApi.getProfile();
+          const form = profileFormFromApi(profile);
+          setProfileData({ ...form, email: profile.email });
+          setSavedProfile(form);
+          setAvatarUrl(profile.avatar_url || null);
+          setSavedAvatarUrl(profile.avatar_url || null);
+          setProfileLoadError(null);
+          // Pick up a role changed in User Management since this session loaded.
+          refreshUser().catch(() => {});
+        } catch (error) {
+          console.error('Error loading profile:', error);
+          setProfileLoadError(errorMessage(error, 'Could not load your profile'));
+        }
 
         // Load settings
         const userSettings = await userSettingsApi.getSettings();
@@ -146,10 +197,6 @@ export default function Settings() {
           time_format: userSettings.time_format,
           default_view: userSettings.default_view,
         });
-        // Apply saved theme preference to next-themes
-        if (userSettings.theme) {
-          setTheme(userSettings.theme === 'auto' ? 'system' : userSettings.theme);
-        }
       } catch (error) {
         console.error('Error loading settings:', error);
         // Use default values on error
@@ -161,7 +208,104 @@ export default function Settings() {
     loadData();
   }, []);
 
+  const validateProfile = (): string | null => {
+    const name = (profileData.full_name || '').trim();
+    if (!name) return 'Full name is required';
+    if (name.length > 255) return 'Full name must be 255 characters or fewer';
+    return phoneError(profileData.phone);
+  };
+
+  const handleSaveProfile = async () => {
+    const problem = validateProfile();
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
+    setIsSaving(true);
+    try {
+      // Profile only — this used to also PUT every other settings tab, so a
+      // failure there reported "Failed to save settings" for a profile save.
+      const updated = await userSettingsApi.updateProfile({
+        full_name: profileData.full_name,
+        phone: profileData.phone,
+        job_title: profileData.job_title,
+        department: profileData.department,
+        timezone: profileData.timezone,
+        // "" removes the picture; sent only when it changed (it can be ~40 KB).
+        ...(isAvatarDirty ? { avatar_url: avatarUrl || '' } : {}),
+      });
+      const form = profileFormFromApi(updated);
+      setProfileData({ ...form, email: updated.email });
+      setSavedProfile(form);
+      setAvatarUrl(updated.avatar_url || null);
+      setSavedAvatarUrl(updated.avatar_url || null);
+      setSaveSuccess(true);
+      toast.success('Profile updated');
+      setTimeout(() => setSaveSuccess(false), 3000);
+      // Header name/avatar come from /auth/me — pull the new values in.
+      refreshUser().catch(() => {});
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      toast.error(errorMessage(error, 'Failed to save profile'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Downscale to a 256px square JPEG in the browser so the stored data URL
+  // stays ~20-40 KB regardless of the original file size.
+  const resizeImageToDataUrl = (file: File, size = 256): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const side = Math.min(img.width, img.height);
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Image processing is not supported in this browser'));
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, size, size);
+        // Centre-crop to a square, then scale.
+        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('That file could not be read as an image'));
+      };
+      img.src = url;
+    });
+
+  const handleAvatarSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast.error('Please choose a JPG or PNG image');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller');
+      return;
+    }
+    setIsAvatarBusy(true);
+    try {
+      setAvatarUrl(await resizeImageToDataUrl(file)); // preview only until Save Changes
+    } catch (error) {
+      toast.error(errorMessage(error, 'Failed to process image'));
+    } finally {
+      setIsAvatarBusy(false);
+    }
+  };
+
   const handleSave = async () => {
+    if (activeTab === 'profile') {
+      await handleSaveProfile();
+      return;
+    }
     if (!canEditSettings) {
       toast.error('You have view-only access to these settings');
       return;
@@ -169,16 +313,6 @@ export default function Settings() {
 
     setIsSaving(true);
     try {
-      // Save profile if on profile tab
-      if (activeTab === 'profile') {
-        await userSettingsApi.updateProfile({
-          full_name: profileData.full_name,
-          phone: profileData.phone,
-          job_title: profileData.job_title,
-          department: profileData.department,
-        });
-      }
-
       // Save settings
       await userSettingsApi.updateSettings(settings);
 
@@ -230,29 +364,33 @@ export default function Settings() {
   // `visible: false` = the user lacks the permission. The tab is still rendered
   // (greyed, hover tooltip, click is a no-op) - permission-gated tabs are never
   // hidden. `visibleTabs` only drives which tab may be ACTIVE.
-  const tabs: { id: string; label: string; icon: typeof User; visible: boolean; deniedMessage?: string }[] = [
+  // `hidden: true` removes a tab from the UI entirely (a product decision, not a
+  // permission gate); its panel code is kept so it can be re-enabled.
+  const tabs: { id: string; label: string; icon: typeof User; visible: boolean; hidden?: boolean; deniedMessage?: string }[] = [
     { id: 'profile', label: 'My Profile', icon: User, visible: true },
     { id: 'notifications', label: 'Notifications', icon: Bell, visible: true },
-    { id: 'job-preferences', label: 'Job Preferences', icon: Briefcase, visible: canAccessJobPreferences, deniedMessage: 'You do not have permission to access Job Preferences' },
-    { id: 'workflow', label: 'Workflow', icon: Filter, visible: canAccessWorkflow, deniedMessage: 'You do not have permission to access Workflow settings' },
+    { id: 'job-preferences', label: 'Job Preferences', icon: Briefcase, visible: canAccessJobPreferences, hidden: true, deniedMessage: 'You do not have permission to access Job Preferences' },
+    { id: 'workflow', label: 'Workflow', icon: Filter, visible: canAccessWorkflow, hidden: true, deniedMessage: 'You do not have permission to access Workflow settings' },
     { id: 'privacy', label: 'Privacy & Security', icon: Shield, visible: true },
-    { id: 'appearance', label: 'Appearance', icon: Palette, visible: true },
-    { id: 'change-password', label: 'Change Password', icon: KeyRound, visible: true },
+    { id: 'appearance', label: 'Appearance', icon: Palette, visible: true, hidden: true },
+    { id: 'change-password', label: 'Change Password', icon: KeyRound, visible: true, hidden: true },
   ];
-  const visibleTabs = tabs.filter(tab => tab.visible);
+  const shownTabs = tabs.filter(tab => !tab.hidden);
+  const visibleTabs = shownTabs.filter(tab => tab.visible);
 
   // Workspace / admin settings. Each also has its own route, but here they open
   // inline in the right panel like the other tabs. `visible` mirrors the
   // route-access rules for those routes (tenant admin OR the same permission);
   // links without access are shown greyed with a hover tooltip, never hidden.
-  const adminSettingsLinks = [
-    { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', visible: isTenantAdmin || hasPermission('canViewRoles'), deniedMessage: 'You do not have permission to view roles and permissions' },
-    { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', visible: isTenantAdmin || hasPermission('canViewApiManagement'), deniedMessage: 'You do not have permission to view API management' },
+  const adminSettingsLinks: { id: string; label: string; icon: typeof User; href: string; visible: boolean; hidden?: boolean; deniedMessage: string }[] = [
+    { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', visible: isTenantAdmin || hasPermission('canViewRoles'), hidden: true, deniedMessage: 'You do not have permission to view roles and permissions' },
+    { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', visible: isTenantAdmin || hasPermission('canViewApiManagement'), deniedMessage: 'You do not have permission to view API management', hidden: true },
     { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', visible: isTenantAdmin || hasPermission('canViewBranding'), deniedMessage: 'You do not have permission to view branding settings' },
     { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', visible: isTenantAdmin || hasPermission('canViewSecuritySettings'), deniedMessage: 'You do not have permission to view security settings' },
     { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', visible: isTenantAdmin || hasPermission('canManageSettings'), deniedMessage: 'You do not have permission to view legal & compliance settings' },
   ];
-  const visibleAdminSettingsLinks = adminSettingsLinks.filter(link => link.visible);
+  const shownAdminSettingsLinks = adminSettingsLinks.filter(link => !link.hidden);
+  const visibleAdminSettingsLinks = shownAdminSettingsLinks.filter(link => link.visible);
   const isAdminTab = visibleAdminSettingsLinks.some(link => link.id === activeTab);
 
   useEffect(() => {
@@ -376,7 +514,7 @@ export default function Settings() {
         <div className="w-full lg:w-64 flex-shrink-0">
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-2 lg:sticky lg:top-8">
             <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
-              {tabs.map((tab) => {
+              {shownTabs.map((tab) => {
                 const Icon = tab.icon;
                 const locked = !tab.visible;
                 return (
@@ -400,13 +538,13 @@ export default function Settings() {
               })}
 
               {/* Workspace & admin settings — open inline in the right panel */}
-              {adminSettingsLinks.length > 0 && (
+              {shownAdminSettingsLinks.length > 0 && (
                 <>
                   <div className="hidden lg:block my-1.5 border-t border-gray-100 dark:border-slate-700/60" />
                   <span className="hidden lg:block px-4 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-[0.1em]">
                     Workspace &amp; Admin
                   </span>
-                  {adminSettingsLinks.map((link) => {
+                  {shownAdminSettingsLinks.map((link) => {
                     const Icon = link.icon;
                     const locked = !link.visible;
                     return (
@@ -434,8 +572,8 @@ export default function Settings() {
               )}
             </nav>
 
-            {/* Role Info */}
-            <div className="hidden lg:block mt-4 p-3 rounded-lg bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/5">
+            {/* Role Info — hidden on request; drop `hidden` and restore `lg:block` to bring it back. */}
+            <div className="hidden mt-4 p-3 rounded-lg bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/5">
               <div className="text-2xs font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
               <div className="text-sm text-gray-900 dark:text-slate-50 font-semibold">{user?.role || 'Recruiter'}</div>
               <div className="text-xs text-gray-600 dark:text-slate-400 mt-1">Access Level: {(user?.role as string) === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
@@ -446,7 +584,7 @@ export default function Settings() {
         {/* Right Content Area */}
         <div className="flex-1">
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
-            {!canEditSettings && activeTab !== 'change-password' && !isAdminTab && (
+            {!canEditCurrentTab && activeTab !== 'change-password' && !isAdminTab && (
               <div className="mb-6 rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 px-4 py-3 text-sm text-brand-orange-deep">
                 View-only access. You can review these settings, but you do not have permission to edit them.
               </div>
@@ -491,24 +629,63 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
+                {profileLoadError && (
+                  <div className="mb-6 rounded-lg ring-1 ring-red-200 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-center justify-between gap-3">
+                    <span>Couldn&apos;t load your profile: {profileLoadError}</span>
+                    <Button type="button" variant="secondary" size="sm" onClick={() => window.location.reload()}>
+                      Retry
+                    </Button>
+                  </div>
+                )}
+
+                <fieldset disabled={!!profileLoadError}>
                   {/* Profile Picture */}
                   <div className="mb-8 pb-8 border-b border-gray-200 dark:border-slate-700">
                     <Label className="mb-3">Profile Picture</Label>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
-                      <div className="w-20 h-20 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15 text-2xl flex-shrink-0">
-                        {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
-                      </div>
-                      <div className="text-center sm:text-left">
-                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                          <Button type="button" variant="primary" size="sm">
-                            Upload New
-                          </Button>
-                          <Button type="button" variant="secondary" size="sm">
-                            Remove
-                          </Button>
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Profile picture"
+                          className="w-20 h-20 rounded-full object-cover shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15 text-2xl flex-shrink-0">
+                          {profileData.full_name?.trim().split(/\s+/).map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">JPG, PNG or GIF. Max size 5MB.</p>
+                      )}
+                      <div className="text-center sm:text-left">
+                        <input
+                          ref={avatarInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={handleAvatarSelected}
+                        />
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            disabled={isAvatarBusy}
+                            onClick={() => avatarInputRef.current?.click()}
+                            icon={isAvatarBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                          >
+                            {avatarUrl ? 'Edit Profile' : 'Upload Now'}
+                          </Button>
+                          {avatarUrl && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              disabled={isAvatarBusy}
+                              onClick={() => setAvatarUrl(null)}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">JPG, PNG</p>
                       </div>
                     </div>
                   </div>
@@ -517,10 +694,12 @@ export default function Settings() {
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div>
-                        <Label className="mb-1.5">Full Name</Label>
+                        <Label className="mb-1.5">Full Name <span className="text-red-500">*</span></Label>
                         <Input
                           type="text"
                           value={profileData.full_name || ''}
+                          maxLength={255}
+                          placeholder="Your full name"
                           onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
                         />
                       </div>
@@ -539,39 +718,44 @@ export default function Settings() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                         <div>
                           <Label className="mb-1.5">Phone Number</Label>
-                          <div className="relative">
-                            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
-                            <Input
-                              type="tel"
-                              value={profileData.phone || ''}
-                              onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                              className="pl-10"
-                            />
-                          </div>
+                          <CountryPhoneInput
+                            value={profileData.phone || ''}
+                            onChange={(phone) => setProfileData({ ...profileData, phone })}
+                          />
                         </div>
                         <div>
-                          <Label className="mb-1.5">Job Title</Label>
+                          {/* The role assigned in User Management — read-only here, and
+                              refreshed from /auth/me so an edit there shows up. */}
+                          <Label className="mb-1.5">Role</Label>
                           <div className="relative">
                             <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500 z-10 pointer-events-none" />
                             <Input
                               type="text"
-                              value={profileData.job_title || ''}
-                              onChange={(e) => setProfileData({ ...profileData, job_title: e.target.value })}
+                              value={user?.roleDisplay || prettyRoleName(user?.role)}
+                              disabled
                               className="pl-10"
                             />
                           </div>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Assigned in User Management</p>
                         </div>
                       </div>
                     </div>
 
                     <div>
-                      <Label className="mb-1.5">Department</Label>
-                      <Input
-                        type="text"
-                        value={profileData.department || ''}
-                        onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
+                      <Label className="mb-1.5">Time Zone</Label>
+                      <SearchableSelect
+                        value={profileData.timezone || ''}
+                        onChange={(timezone) => setProfileData({ ...profileData, timezone })}
+                        options={timeZoneChoices}
+                        allLabel={`Auto-detect (${detectedTimeZone.replace(/_/g, ' ')})`}
+                        placeholder={`Auto-detect (${detectedTimeZone.replace(/_/g, ' ')})`}
+                        searchPlaceholder="Search city or zone…"
+                        emptyMessage="No matching time zone"
+                        ariaLabel="Time zone"
+                        className="w-full"
                       />
                     </div>
+
                   </div>
                 </fieldset>
               </div>
@@ -936,39 +1120,6 @@ export default function Settings() {
 
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                 <div className="space-y-6">
-                  {/* Theme */}
-                  <div>
-                    <Label className="mb-3">Theme</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                      {[
-                        { value: 'light', label: 'Light', desc: 'Classic bright theme' },
-                        { value: 'dark', label: 'Dark', desc: 'Easy on the eyes' },
-                        { value: 'auto', label: 'Auto', desc: 'Match system' },
-                      ].map((theme) => (
-                        <button
-                          key={theme.value}
-                          onClick={() => {
-                            setSettings({ ...settings, theme: theme.value });
-                            setTheme(theme.value === 'auto' ? 'system' : theme.value);
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all ${
-                            settings.theme === theme.value
-                              ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/15'
-                              : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
-                          }`}
-                        >
-                          <div className={`w-full h-20 rounded-md mb-3 ${
-                            theme.value === 'light' ? 'bg-white dark:bg-slate-900 border-2 border-gray-200 dark:border-slate-700' :
-                            theme.value === 'dark' ? 'bg-gray-900' :
-                            'bg-brand-blue'
-                          }`}></div>
-                          <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{theme.label}</div>
-                          <div className="text-xs text-gray-600 dark:text-slate-400">{theme.desc}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* Language */}
                   <div>
                     <Label className="mb-1.5">Language</Label>
@@ -1155,28 +1306,46 @@ export default function Settings() {
             {activeTab !== 'change-password' && !isAdminTab && (
             <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 dark:border-slate-700 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-600 dark:text-slate-400">
-                {saveSuccess && (
+                {saveSuccess ? (
                   <div className="flex items-center gap-2 text-brand-cyan font-semibold">
                     <Check className="w-4 h-4" />
                     Settings saved successfully!
                   </div>
-                )}
+                ) : activeTab === 'profile' && isProfileDirty ? (
+                  <span className="text-brand-orange-deep">You have unsaved changes</span>
+                ) : null}
               </div>
-              <span
-                className={`w-full sm:w-auto ${!canEditSettings ? 'cursor-not-allowed' : ''}`}
-                title={!canEditSettings ? 'You do not have permission to edit settings' : undefined}
-              >
-                <Button
-                  onClick={() => { if (canEditSettings) handleSave(); }}
-                  disabled={isSaving || !canEditSettings}
-                  aria-disabled={!canEditSettings}
-                  variant="primary"
-                  className={`w-full sm:w-auto ${!canEditSettings ? 'opacity-60 pointer-events-none' : ''}`}
-                  icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              <div className="flex w-full sm:w-auto flex-col-reverse sm:flex-row gap-2">
+                {activeTab === 'profile' && isProfileDirty && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={isSaving}
+                    onClick={() => {
+                      setProfileData(prev => ({ ...savedProfile, email: prev.email }));
+                      setAvatarUrl(savedAvatarUrl);
+                    }}
+                    className="w-full sm:w-auto"
+                  >
+                    Discard
+                  </Button>
+                )}
+                <span
+                  className={`w-full sm:w-auto ${!canEditCurrentTab ? 'cursor-not-allowed' : ''}`}
+                  title={!canEditCurrentTab ? 'You do not have permission to edit settings' : undefined}
                 >
-                  {isSaving ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </span>
+                  <Button
+                    onClick={() => { if (canEditCurrentTab) handleSave(); }}
+                    disabled={isSaving || !canEditCurrentTab || (activeTab === 'profile' && (!isProfileDirty || !!profileLoadError))}
+                    aria-disabled={!canEditCurrentTab}
+                    variant="primary"
+                    className={`w-full sm:w-auto ${!canEditCurrentTab ? 'opacity-60 pointer-events-none' : ''}`}
+                    icon={isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  >
+                    {isSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </span>
+              </div>
             </div>
             )}
           </div>

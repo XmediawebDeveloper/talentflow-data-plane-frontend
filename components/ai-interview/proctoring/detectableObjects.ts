@@ -60,6 +60,13 @@ export interface DetectableObjectDef {
   /** Stronger tier, applied when the score clears `escalate.above`. */
   escalate?: EscalationTier;
   /**
+   * Boxes smaller than `smallBoxArea` must clear `smallBoxMinConfidence`
+   * instead of `minConfidence`. Lets a class keep a low cut-off for the large
+   * close-up case it exists for while small background boxes need a firm score.
+   */
+  smallBoxArea?: number;
+  smallBoxMinConfidence?: number;
+  /**
    * Minimum sigmoid score to consider. Phones sit lower than the rest on
    * purpose: a phone held at chest height is small, often half-occluded by a
    * hand, and frequently screen-off — the very cases we most want to catch.
@@ -116,6 +123,11 @@ export const DETECTABLE_OBJECTS: Record<string, DetectableObjectDef> = {
     // prohibited-item flag beats missing it entirely.
     minConfidence: 0.40,
     minBoxArea: 0.01,
+    // Small boxes (< 10% of the frame) are desks/monitors in the background,
+    // not a close-up phone: staging 2026-10-27 flagged a 0.016-area box in the
+    // bottom corner of an office at 0.48-0.62 all interview.
+    smallBoxArea: 0.10,
+    smallBoxMinConfidence: 0.60,
     framesToConfirm: 2,
   },
   tv: {

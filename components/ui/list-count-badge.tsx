@@ -8,7 +8,7 @@ import { cn } from './utils';
  * /recruitment/job-openings — the reference page.
  *
  * Two states, one badge:
- *   nothing ticked → "24 of 56 jobs"   (how much of the list you are seeing)
+ *   nothing ticked → "56 jobs", or "24 of 56 jobs" once filtered (how much of the list you are seeing)
  *   rows ticked    → "3 selected"      (what the bulk actions will act on)
  *
  * Pages had been hand-rolling this and drifted — some omitted the noun, some
@@ -54,7 +54,11 @@ export default function ListCountBadge({
       ) : (
         <>
           <span className="text-brand-blue font-semibold">{filtered.toLocaleString()}</span>
-          {' '}of {total.toLocaleString()} {total === 1 ? noun : plural}
+          {/* "47 of 47" says nothing the first number does not: the "of N" only
+              appears once something is filtered out. */}
+          {filtered === total
+            ? <>{' '}{total === 1 ? noun : plural}</>
+            : <>{' '}of {total.toLocaleString()} {total === 1 ? noun : plural}</>}
         </>
       )}
     </div>

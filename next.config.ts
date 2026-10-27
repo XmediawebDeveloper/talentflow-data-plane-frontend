@@ -20,7 +20,6 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     '@mediapipe/hands', '@mediapipe/face_detection', '@mediapipe/face_mesh',
     '@mediapipe/camera_utils', '@mediapipe/drawing_utils',
-    'three', '@react-three/fiber', '@react-three/drei',
   ],
   reactStrictMode: false,
   turbopack: {
@@ -138,6 +137,18 @@ const nextConfig: NextConfig = {
         source: '/ort/:path*',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      // TalkingHead library (talkinghead.mjs ~2 MB, dynamicbones, lipsync-*,
+      // playback-worklet.js). Unlike /models and /ort these filenames are NOT
+      // content-hashed — the files are edited in place and ship with a deploy —
+      // so no 1-year immutable: a day of fresh caching, then serve-stale while
+      // revalidating (one background ETag check), so a deploy is picked up on
+      // the next load after expiry instead of being pinned for a year.
+      {
+        source: '/talkinghead/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=86400' },
         ],
       },
       {

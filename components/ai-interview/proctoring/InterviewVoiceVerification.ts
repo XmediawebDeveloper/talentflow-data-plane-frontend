@@ -59,17 +59,62 @@ for (let i = 0; i < FFT_SIZE; i++) {
 }
 
 /**
- * Pre-compute DFT twiddle factors (cos/sin lookup table).
- * Eliminates repeated Math.cos/sin calls in the inner loop.
+ * Radix-2 FFT (replaces the old O(N^2) DFT whose 2 x Float32Array(1024 x 2048)
+ * twiddle tables — ~16 MB and ~4.2M sin/cos — were built at MODULE IMPORT,
+ * even when server voice-ID is on and this client fallback never runs).
+ * Tables here are tiny (N/2 twiddles + an N bit-reversal map) and are built
+ * lazily on the first extractMFCC call. Same magnitudes as the DFT (to float
+ * rounding), at O(N log N).
  */
 const HALF_FFT = FFT_SIZE / 2;
-const DFT_COS = new Float32Array(HALF_FFT * FFT_SIZE);
-const DFT_SIN = new Float32Array(HALF_FFT * FFT_SIZE);
-for (let k = 0; k < HALF_FFT; k++) {
-  for (let n = 0; n < FFT_SIZE; n++) {
-    const angle = (2 * Math.PI * k * n) / FFT_SIZE;
-    DFT_COS[k * FFT_SIZE + n] = Math.cos(angle);
-    DFT_SIN[k * FFT_SIZE + n] = Math.sin(angle);
+let fftTables: { cos: Float64Array; sin: Float64Array; rev: Uint32Array } | null = null;
+function getFftTables() {
+  if (fftTables) return fftTables;
+  const cos = new Float64Array(HALF_FFT);
+  const sin = new Float64Array(HALF_FFT);
+  for (let k = 0; k < HALF_FFT; k++) {
+    const angle = (2 * Math.PI * k) / FFT_SIZE;
+    cos[k] = Math.cos(angle);
+    sin[k] = Math.sin(angle);
+  }
+  const bits = Math.log2(FFT_SIZE);
+  const rev = new Uint32Array(FFT_SIZE);
+  for (let i = 0; i < FFT_SIZE; i++) {
+    let r = 0;
+    for (let b = 0; b < bits; b++) r = (r << 1) | ((i >> b) & 1);
+    rev[i] = r;
+  }
+  fftTables = { cos, sin, rev };
+  return fftTables;
+}
+
+/** In-place iterative radix-2 FFT (forward, e^{-i...}) of length FFT_SIZE. */
+function fftInPlace(re: Float64Array, im: Float64Array): void {
+  const { cos, sin, rev } = getFftTables();
+  for (let i = 0; i < FFT_SIZE; i++) {
+    const j = rev[i];
+    if (j > i) {
+      const tr = re[i]; re[i] = re[j]; re[j] = tr;
+      const ti = im[i]; im[i] = im[j]; im[j] = ti;
+    }
+  }
+  for (let size = 2; size <= FFT_SIZE; size <<= 1) {
+    const half = size >> 1;
+    const step = FFT_SIZE / size;
+    for (let start = 0; start < FFT_SIZE; start += size) {
+      for (let k = 0; k < half; k++) {
+        const wr = cos[k * step];
+        const wi = -sin[k * step];
+        const a = start + k;
+        const b = a + half;
+        const xr = re[b] * wr - im[b] * wi;
+        const xi = re[b] * wi + im[b] * wr;
+        re[b] = re[a] - xr;
+        im[b] = im[a] - xi;
+        re[a] += xr;
+        im[a] += xi;
+      }
+    }
   }
 }
 
@@ -91,7 +136,8 @@ function extractMFCC(audioData: Float32Array, sampleRate: number): Float32Array 
   const frameStep = totalFrames <= MAX_SAMPLE_FRAMES ? 1 : Math.floor(totalFrames / MAX_SAMPLE_FRAMES);
 
   const avgSpectrum = new Float32Array(HALF_FFT);
-  const windowed = new Float32Array(FFT_SIZE);
+  const re = new Float64Array(FFT_SIZE);
+  const im = new Float64Array(FFT_SIZE);
 
   for (let fi = 0; fi < framesToProcess; fi++) {
     const frame = fi * frameStep;
@@ -99,19 +145,14 @@ function extractMFCC(audioData: Float32Array, sampleRate: number): Float32Array 
 
     // Hanning window (pre-computed)
     for (let i = 0; i < FFT_SIZE; i++) {
-      windowed[i] = (audioData[start + i] || 0) * HANN_WINDOW[i];
+      re[i] = (audioData[start + i] || 0) * HANN_WINDOW[i];
+      im[i] = 0;
     }
 
-    // DFT magnitude using pre-computed twiddle factors
+    // Magnitude spectrum (bins 0 .. N/2-1) via FFT
+    fftInPlace(re, im);
     for (let k = 0; k < HALF_FFT; k++) {
-      let real = 0;
-      let imag = 0;
-      const kOffset = k * FFT_SIZE;
-      for (let n = 0; n < FFT_SIZE; n++) {
-        real += windowed[n] * DFT_COS[kOffset + n];
-        imag -= windowed[n] * DFT_SIN[kOffset + n];
-      }
-      avgSpectrum[k] += Math.sqrt(real * real + imag * imag) / framesToProcess;
+      avgSpectrum[k] += Math.sqrt(re[k] * re[k] + im[k] * im[k]) / framesToProcess;
     }
   }
 

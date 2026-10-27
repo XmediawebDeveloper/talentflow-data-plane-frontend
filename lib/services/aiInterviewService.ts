@@ -1036,6 +1036,32 @@ export const aiInterviewService = {
    * `getConfigInvitations(id, { page_size: 1 })`, whose `total` and `completed`
    * the Interview list reads per config.
    */
+  /**
+   * Every invitation of every interview, in as few requests as the backend
+   * allows (normally ONE) — instead of one `getConfigInvitations` per
+   * interview. Rows are the per-interview endpoint's own rows; each carries its
+   * `config_id`. Throws when the endpoint is unavailable (an older backend), so
+   * the caller can fall back to the per-interview path.
+   */
+  async getAllInvitations(): Promise<AIInterviewResponse[]> {
+    const PAGE_SIZE = 5000;
+    try {
+      const rows: AIInterviewResponse[] = [];
+      for (let page = 1; page <= 40; page += 1) {
+        const response = await api.get<{ items: AIInterviewResponse[]; total: number; total_pages?: number }>(
+          '/ai-interview/all-invitations',
+          { params: { page, page_size: PAGE_SIZE } },
+        );
+        const items = response.data?.items ?? [];
+        rows.push(...items);
+        if (items.length < PAGE_SIZE || rows.length >= (response.data?.total ?? rows.length)) break;
+      }
+      return rows;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   async getInvitationCounts(configIds: string[]): Promise<Record<string, { total: number; completed: number }>> {
     const ids = Array.from(new Set(configIds.filter(Boolean)));
     if (ids.length === 0) return {};

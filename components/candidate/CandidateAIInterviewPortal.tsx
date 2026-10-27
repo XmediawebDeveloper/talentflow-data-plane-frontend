@@ -11,7 +11,7 @@ import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscre
 import { toast } from 'sonner';
 import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
-import { InterviewUI } from '@/components/ai-interview/InterviewUI';
+import dynamic from 'next/dynamic';
 import type { InterviewTimerSnapshot } from '@/components/ai-interview/InterviewUI';
 import { useInterviewFaceVerification } from '@/components/ai-interview/proctoring/InterviewFaceVerification';
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
@@ -37,7 +37,6 @@ import { revealAfterPaint } from '@/lib/utils/candidateScroll';
 import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
-import StepSamplePractice from '@/components/candidate/StepSamplePractice';
 import { SingleInterviewTabGuard } from '@/components/candidate/SingleInterviewTabGuard';
 import InterviewFeedbackModal from '@/components/candidate/InterviewFeedbackModal';
 import CandidateHeader from '@/components/candidate/CandidateHeader';
@@ -156,6 +155,38 @@ const isMetaKey = (e: KeyboardEvent): boolean =>
 // "chances", no termination (a network blip or accidental focus change just
 // pauses and auto-resumes on return). Enforced only in production; staging is
 // relaxed for dev testing.
+
+// The live-interview code (InterviewUI ~12k lines + avatar/proctoring/TTS it
+// pulls in) and the practice step are code-split so the consent / identity /
+// system-check steps load fast. Both are prefetched once the candidate reaches
+// system_check (see prefetchInterviewChunks), so by the time they are rendered
+// the chunk is already in the module cache and the fallback is a single frame.
+const loadInterviewUI = () => import('@/components/ai-interview/InterviewUI');
+const loadStepSamplePractice = () => import('@/components/candidate/StepSamplePractice');
+let interviewChunksPrefetched = false;
+function prefetchInterviewChunks() {
+  if (interviewChunksPrefetched) return;
+  interviewChunksPrefetched = true;
+  loadInterviewUI().catch(() => { interviewChunksPrefetched = false; });
+  loadStepSamplePractice().catch(() => {});
+}
+const chunkLoadingFallback = () => (
+  <div className="fixed inset-0 flex items-center justify-center">
+    <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+  </div>
+);
+const InterviewUI = dynamic(() => loadInterviewUI().then((m) => m.InterviewUI), {
+  ssr: false,
+  loading: chunkLoadingFallback,
+});
+const StepSamplePractice = dynamic(() => loadStepSamplePractice(), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+    </div>
+  ),
+});
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   return Promise.race([
@@ -917,7 +948,26 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       fetch('/talkinghead/talkinghead.mjs').catch(() => {});
       fetch('/models/rpm-recruiter.glb').catch(() => {});
     }
+    // Code-split chunks (InterviewUI, StepSamplePractice): fetch them from the
+    // system check on — and on any later step a reload resumes into — so the
+    // interview step never waits on the download. Idempotent.
+    if (step !== 'loading' && step !== 'consent' && step !== 'identity' && step !== 'reauth'
+      && step !== 'completed' && step !== 'terminated' && step !== 'error') {
+      prefetchInterviewChunks();
+    }
   }, [step]);
+
+  // Face-identity models (~610 KB face-api + ~7 MB weights) used to warm at
+  // portal mount, i.e. during consent. Warm them when the Identity step OPENS:
+  // consent stays free of the download, and the models load while the candidate
+  // positions for the photo — the identity-photo registration on Identity submit
+  // has an 8 s timeout, so it must not be the first load. Idempotent — loadModels dedupes.
+  const warmFaceModels = faceVerification.warm;
+  useEffect(() => {
+    if (step === 'loading' || step === 'consent' || step === 'reauth'
+      || step === 'completed' || step === 'terminated' || step === 'error') return;
+    warmFaceModels();
+  }, [step, warmFaceModels]);
 
   // Start the SCREEN recorder exactly when the interview begins — the same moment
   // the webcam recorder (InterviewUI.handleVideoReady) starts — so both recordings
