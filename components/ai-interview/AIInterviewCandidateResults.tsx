@@ -1,7 +1,9 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { ListBulkActions } from '@/components/ui/list-toolbar-slot';
 import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
+import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -152,6 +154,8 @@ function PassFailBadge({ result }: { result: 'Pass' | 'Fail' }) {
 }
 
 export interface AIInterviewCandidateResultsProps {
+  /** The host's Sort by: rows load newest first, `oldest` reverses them. */
+  sortOrder?: 'newest' | 'oldest';
   /**
    * DOM node the search/filter toolbar portals into, so it renders in the
    * shared slot above the tab pills (AIInterview.tsx) instead of its own
@@ -173,15 +177,17 @@ export interface AIInterviewCandidateResultsProps {
   onDisplayModeChange?: (mode: ListDisplayMode) => void;
 }
 
-export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
+export default function AIInterviewCandidateResults({ sortOrder = 'newest', toolbarSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, enforced server-side by the
   // audit endpoint too) — greyed with the reason when missing, never hidden.
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
 
-  const [rows, setRows] = useState<CandidateSessionRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  /* The last set this tab loaded draws at once (return from a details page, or
+     reopening the tab); the load below still runs and replaces it. */
+  const [rows, setRows] = useState<CandidateSessionRow[]>(() => readListSnapshot<CandidateSessionRow[]>('ai-results:rows') ?? []);
+  const [isLoading, setIsLoading] = useState(() => readListSnapshot<CandidateSessionRow[]>('ai-results:rows') === null);
   const [error, setError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -244,10 +250,14 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   /* Bumped by every loadAllSessions run, so a slower, older run (mount and a
      Refresh click overlapping) can't overwrite the newer one's rows. */
   const loadSeqRef = useRef(0);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
   const loadAllSessions = useCallback(async () => {
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
-    setIsLoading(true);
+    const startedAt = performance.now();
+    // Rows already on screen: refresh behind them instead of a skeleton.
+    if (rowsRef.current.length === 0) setIsLoading(true);
     setError(null);
     try {
       /* Every config, archived included and every page of each — the same set
@@ -265,8 +275,24 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         }
         return all;
       };
-      const [activeConfigs, archivedConfigs] = await Promise.all([listAllConfigs(), listAllConfigs('archived')]);
-      if (isStale()) return;
+      /* The sessions list does not depend on the config lists, so it is asked
+         for beside them rather than after them. */
+      const fetchSessions = async (): Promise<AIInterviewResponse[] | null> => {
+        // Paginated — a mature tenant can have more completed/terminated
+        // sessions than fit on one page.
+        const collected: AIInterviewResponse[] = [];
+        for (let page = 1; page <= 40; page += 1) {
+          // No catch: a failed page is a load error, not the end of the list.
+          const res = await aiInterviewService.list({ status: 'completed,terminated', page, page_size: 1000 });
+          if (isStale()) return null;
+          const items = res.items ?? [];
+          collected.push(...items);
+          if (items.length < 1000 || collected.length >= (res.total ?? collected.length)) break;
+        }
+        return collected;
+      };
+      const [activeConfigs, archivedConfigs, fetchedSessions] = await Promise.all([listAllConfigs(), listAllConfigs('archived'), fetchSessions()]);
+      if (isStale() || fetchedSessions === null) return;
       const configById = new Map([...activeConfigs, ...archivedConfigs].map((c) => [c.id, c]));
       const configs = [...configById.values()];
       if (configs.length === 0) {
@@ -294,17 +320,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           .forEach((config, index) => ordinalByConfigId.set(config.id, index + 1));
       }
 
-      // Paginated — a mature tenant can have more completed/terminated
-      // sessions than fit on one page.
-      const sessions: AIInterviewResponse[] = [];
-      for (let page = 1; page <= 40; page += 1) {
-        // No catch: a failed page is a load error, not the end of the list.
-        const res = await aiInterviewService.list({ status: 'completed,terminated', page, page_size: 1000 });
-        if (isStale()) return;
-        const items = res.items ?? [];
-        sessions.push(...items);
-        if (items.length < 1000 || sessions.length >= (res.total ?? sessions.length)) break;
-      }
+      const sessions = fetchedSessions;
 
       // `configs` includes archived interviews, so this only drops a session
       // whose config no longer exists at all.
@@ -332,6 +348,8 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         });
 
       setRows(merged);
+      writeListSnapshot('ai-results:rows', merged);
+      perfNote('AI Interviews / Results — loaded', startedAt);
       // Page is NOT reset here — it may have just been restored (see
       // useListStatePersistence above), and safePage clamps it if the
       // reload left fewer pages.
@@ -368,7 +386,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     const query = search.appliedQuery.trim().toLowerCase();
     const f = search.filters;
 
-    return rows.filter((row) => {
+    return (sortOrder === 'oldest' ? [...rows].reverse() : rows).filter((row) => {
       if (query && ![row.candidate_name, row.candidate_email, row.candidate_cid, row._config_title, row._job_id]
         .some((field) => (field || '').toLowerCase().includes(query))) return false;
       if (f.job && row._job_id !== f.job) return false;
@@ -381,7 +399,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       if (!matchesDateRange(row.completed_at, f.completedFrom, f.completedTo)) return false;
       return true;
     });
-  }, [rows, search.appliedQuery, search.filters]);
+  }, [rows, sortOrder, search.appliedQuery, search.filters]);
 
   /* Filter options come from the loaded rows, so every choice matches at
      least one candidate. */
@@ -646,12 +664,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
             holds Export (format + columns picked in its popup) and Download
             PDF Reports. Clear unticks everything. */}
         {selectedRows.length > 0 && (
-          <>
+          <ListBulkActions>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                  className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                   aria-label={`Actions for ${selectedRows.length} selected`}
                 >
                   <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -703,11 +721,11 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
               size="sm"
               onClick={() => setSelectedKeys(new Set())}
               icon={<X className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
+              className="whitespace-nowrap !h-9 !text-sm"
             >
               Clear
             </Button>
-          </>
+          </ListBulkActions>
         )}
         <ListViewToggle value={displayMode} onChange={setDisplayMode} />
       </ListToolbar>

@@ -33,13 +33,14 @@ import ListToolbar from '@/components/ui/list-toolbar';
    it — on the Assessments page that is the one row above the tab pills, shared
    with every other tab. On this screen's own route there is no slot, and it
    renders in place exactly as before. */
-import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
+import { ListToolbarPortal, ListBulkActions } from '@/components/ui/list-toolbar-slot';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { DateField } from '@/components/ui/date-field';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -313,6 +314,8 @@ interface AllAssessmentsTableProps {
    *  this table): each new value puts the sort back to its default. Only the
    *  sort — search, filters and the page stay as they are. */
   clearSortSignal?: number;
+  /** The host's Sort by dropdown: reorders the rows while no column sort is applied. */
+  sortPreset?: 'newest' | 'oldest' | 'active' | 'draft';
   /** Told whether the sort is at its default, so Clear Sort can disable
    *  itself when there is nothing to clear. */
   onSortDefaultChange?: (isDefault: boolean) => void;
@@ -352,7 +355,7 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
 const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated, displayMode = 'list', onDisplayModeChange }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, sortPreset = 'newest', onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated, displayMode = 'list', onDisplayModeChange }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -379,7 +382,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           : 'View and manage all assessments across jobs and job versions.'
   );
 
-  const [rows, setRows] = useState<AssessmentRow[]>([]);
+  /* What this tab last loaded draws at once on the next mount, so switching
+     tabs or coming back from a details page skips the skeleton. Remembered per
+     status because each tab asks the server for its own set. The fetch below
+     still runs and swaps the fresh rows in. */
+  const snapshotName = `assessments:rows:${fixedStatus ?? 'all'}`;
+  const hasLoadedOnce = useRef(false);
+  const [initialRows] = useState<AssessmentRow[] | null>(() => readListSnapshot<AssessmentRow[]>(snapshotName));
+  const [rows, setRows] = useState<AssessmentRow[]>(initialRows ?? []);
   /* Each row's job version status (by JD id): on an Archived / Disabled job
      version every action that changes the assessment is off — the Assessments
      page's rule. One batched read. */
@@ -394,7 +404,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(initialRows === null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     onRowCountChange?.(isLoading || error ? null : rows.length);
@@ -477,9 +487,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      one returns. */
   useEffect(() => {
     let alive = true;
+    const startedAt = performance.now();
+    /* Any load after the first is a refresh after a change (status action, host
+       mutation, Retry): the other tabs' remembered rows may now be wrong, so
+       they are dropped rather than shown stale. */
+    const isRefresh = hasLoadedOnce.current;
+    hasLoadedOnce.current = true;
     fetchAll()
       .then((next) => {
         if (!alive) return;
+        if (isRefresh) clearListSnapshots();
+        writeListSnapshot(snapshotName, next);
+        perfNote(`Assessments (${fixedStatus ?? 'all'}) — rows ready`, startedAt);
         setRows(next);
         setError(null);
       })
@@ -498,7 +517,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     return () => {
       alive = false;
     };
-  }, [fetchAll, reloadToken, reloadSignal]);
+  }, [fetchAll, reloadToken, reloadSignal, snapshotName, fixedStatus]);
 
   /* Retry from the error state. Bumping the token re-runs the effect above,
      so the retry path and the mount path are the same code — a second
@@ -612,7 +631,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     });
   }, [rows, appliedSearch, filters, fixedStatus]);
 
-  const sorted = useMemo(() => {
+  const sortedByColumn = useMemo(() => {
     const compare = COMPARATORS[sortKey];
     /* A copy, because `filtered` is memoised and sorting in place would mutate
        the array the memo hands back on the next render. Ties break on the
@@ -651,6 +670,16 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       return sortDir === 'asc' ? result : -result;
     });
   }, [filtered, sortKey, sortDir, fixedStatus]);
+
+  /* The host's Sort by, on top of the default order only — a clicked column
+     header wins. Oldest reverses it; Active / Draft first float that status
+     to the top and keep the newest-first order inside each group. */
+  const sorted = useMemo(() => {
+    if (!isDefaultSort || sortPreset === 'newest') return sortedByColumn;
+    if (sortPreset === 'oldest') return [...sortedByColumn].reverse();
+    const first = sortPreset === 'active' ? 'Active' : 'Draft';
+    return [...sortedByColumn.filter((r) => r.status === first), ...sortedByColumn.filter((r) => r.status !== first)];
+  }, [sortedByColumn, isDefaultSort, sortPreset]);
 
   /* Clamped on read: a shrinking result set (a new filter, a narrower search)
      leaves the page number past the end, and the rows would come back empty
@@ -1033,12 +1062,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       : fixedStatus ? ['archive', 'delete']
         : ['archive', 'unarchive', 'delete'];
   const bulkActionsMenu = selectedRows.length > 0 ? (
-    <>
+    <ListBulkActions>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+            className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
             aria-label={`Actions for ${selectedRows.length} selected`}
           >
             <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -1099,11 +1128,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         size="sm"
         onClick={() => setSelectedIds(new Set())}
         icon={<X className="w-4 h-4" />}
-        className="whitespace-nowrap !h-[38px] !text-sm"
+        className="whitespace-nowrap !h-9 !text-sm"
       >
         Clear
       </Button>
-    </>
+    </ListBulkActions>
   ) : null;
 
   type RowAction = AssessmentRowAction;

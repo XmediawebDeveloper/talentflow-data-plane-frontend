@@ -1,6 +1,8 @@
 'use client';
 
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
+import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -85,10 +87,12 @@ import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsave
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
-/* The version panel's 3-dot menu trigger — the 28px bordered square matched to
-   the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
+/* The version panel's 3-dot menu trigger — the 32px bordered square matched to
+   the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx, and to the
+   panel's own View eye beside it (h-8 w-8). It was 28px, so the menu button sat
+   smaller than the eye next to it. */
 const QUICK_ACTION_BASE =
-  'h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 border rounded-md transition-all';
+  'h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-900 border rounded-md transition-all';
 /* One dropdown item's row, shared by every entry in the compact menu so they
    line up exactly as the Assessment page's do. */
 const VERSION_MENU_ITEM_CLASS =
@@ -412,7 +416,12 @@ export default function AIInterview() {
      fanning out one getConfigInvitations() per config (below), not a single
      cross-config endpoint — the backend has none — the same approach the
      Assessments page's own cross-assessment tab uses. */
-  const [inviteStatusRows, setInviteStatusRows] = useState<any[]>([]);
+  /* Starts from the last set this page loaded, so coming back from a details
+     page (or opening the tab again) shows rows at once; the load below still
+     runs and replaces them. */
+  const [inviteStatusRows, setInviteStatusRows] = useState<any[]>(() => readListSnapshot<any[]>('ai-invite-status:rows') ?? []);
+  const inviteStatusRowsRef = useRef(inviteStatusRows);
+  inviteStatusRowsRef.current = inviteStatusRows;
   /* Bumped by every loadAllInviteStatuses run, so only the latest run's rows
      are applied when two overlap (tab open, poll, refresh after an action). */
   const inviteStatusSeqRef = useRef(0);
@@ -565,6 +574,7 @@ export default function AIInterview() {
      portal needs the node to already be mounted to target it, and a ref alone
      doesn't re-render this component when it first attaches. */
   const [toolbarSlotEl, setToolbarSlotEl] = useState<HTMLDivElement | null>(null);
+  const sortSlotEl = useListSortSlot(toolbarSlotEl);
   // Beside Refresh in the pill row: the All Interviews table portals its
   // Clear Sort button here.
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
@@ -675,6 +685,14 @@ export default function AIInterview() {
 
   /* Bumped by every loadData run, so overlapping runs (a row action's refresh
      landing beside a Refresh click) apply only the newest one's results. */
+  /* Every interview, live + archived, deduped — what the flat tables can draw
+     at once instead of asking for the same list again. Withheld until the first
+     load is done so a table never seeds from a half-loaded page. */
+  const tableSeedConfigs = useMemo(() => {
+    if (loading) return undefined;
+    const seen = new Set(configs.map((c) => c.id));
+    return [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
+  }, [loading, configs, archivedConfigs]);
   const loadDataSeqRef = useRef(0);
   /* Set once the first load has finished. Only that load shows the full-page
      skeleton: later runs are refreshes after a send / revoke / publish etc.,
@@ -691,6 +709,19 @@ export default function AIInterview() {
     const archivedLoad = firstLoad ? loadArchivedConfigs() : null;
     try {
       if (firstLoad) setLoading(true);
+      /* The stats and the interviewed count do not depend on the config list,
+         so they are asked for NOW, beside it, instead of one after another
+         behind it (three serial round trips before the page could settle). */
+      const statsRequest = aiInterviewService.getConfigStats().then(
+        (value) => ({ ok: true as const, value }),
+        (error) => ({ ok: false as const, error }),
+      );
+      // Same query Candidate Results loads; only the total is needed, so one row will do.
+      const interviewedRequest = aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 }).then(
+        (value) => ({ ok: true as const, value }),
+        (error) => ({ ok: false as const, error }),
+      );
+
       let configItems: AIInterviewResponse[] = [];
       try {
         configItems = await loadAllConfigs();
@@ -703,22 +734,17 @@ export default function AIInterview() {
       if (isStale()) return;
       setConfigs(configItems);
 
-      try {
-        const statsRes = await aiInterviewService.getConfigStats();
-        if (isStale()) return;
-        setStats(statsRes);
-      } catch (statsError) {
-        console.error('Failed to load AI interview stats:', statsError);
-      }
+      const statsRes = await statsRequest;
+      if (isStale()) return;
+      if (statsRes.ok) setStats(statsRes.value);
+      else console.error('Failed to load AI interview stats:', (statsRes as { error?: unknown }).error);
 
-      try {
-        // Same query Candidate Results loads; only the total is needed, so one row will do.
-        const interviewedRes = await aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 });
-        if (isStale()) return;
-        setInterviewedCount(typeof interviewedRes.total === 'number' ? interviewedRes.total : null);
-      } catch (countError) {
-        if (isStale()) return;
-        console.error('Failed to load interviewed count:', countError);
+      const interviewedRes = await interviewedRequest;
+      if (isStale()) return;
+      if (interviewedRes.ok) {
+        setInterviewedCount(typeof interviewedRes.value.total === 'number' ? interviewedRes.value.total : null);
+      } else {
+        console.error('Failed to load interviewed count:', (interviewedRes as { error?: unknown }).error);
         setInterviewedCount(null);
       }
     } catch (error) {
@@ -940,7 +966,11 @@ export default function AIInterview() {
      request: the stat cards must keep counting the whole set while the
      table is narrowed, so narrowing happens client-side over these rows —
      same rule the Assessments page's own cross-assessment tab follows. */
-  const loadAllInviteStatuses = useCallback(async (silent = false) => {
+  const loadAllInviteStatuses = useCallback(async (silentRequested = false) => {
+    /* With rows already on screen a reload is a refresh, not a first load: no
+       skeleton, and a failure keeps what is shown (the poll's rules). */
+    const silent = silentRequested || inviteStatusRowsRef.current.length > 0;
+    const startedAt = performance.now();
     const seq = ++inviteStatusSeqRef.current;
     const isStale = () => seq !== inviteStatusSeqRef.current;
     if (!silent) setIsLoadingInviteStatus(true);
@@ -1039,6 +1069,8 @@ export default function AIInterview() {
         new Date(a.invitation_sent_at || a.created_at || 0).getTime(),
       );
       setInviteStatusRows(merged);
+      writeListSnapshot('ai-invite-status:rows', merged);
+      perfNote('AI Interviews / Invitation Status — loaded', startedAt);
       // Page is NOT reset here: it's restored from the persisted snapshot when
       // coming back from a candidate / job page, and the render clamps it
       // (safePage) if the reload left fewer pages.
@@ -2651,6 +2683,8 @@ export default function AIInterview() {
   /** Status tabs always render the flat, one-row-per-version table instead
    *  of this component's own card list below. */
   const showUngroupedList = isStatusTab;
+  /** Candidate Results / Invitation Status / Active / Draft / Archived: no other status to float, so Sort by is Newest / Oldest only. */
+  const dateOnlySort = activeTab === 'candidate-results' || activeTab === 'invitation-status' || isStatusTab;
 
   /* The grouped job list hands its jobs, in the order shown (sort, search and
      filters applied), to the details page's Prev / Next. */
@@ -2899,7 +2933,7 @@ export default function AIInterview() {
           ).size;
           const cards = [
             {
-              label: 'Total Jobs',
+              label: 'Configured Jobs',
               value: allConfigs.length ? totalJobs : (stats?.total_configs ?? 0),
               icon: Briefcase,
               tab: 'all' as TabKey,
@@ -2926,15 +2960,6 @@ export default function AIInterview() {
               cardKey: 'active' as OverviewCardKey,
             },
             {
-              label: 'Draft Interviews',
-              value: configs.length
-                ? configs.filter((c) => c.status === 'draft').length
-                : (stats?.draft_configs ?? 0),
-              icon: Pencil,
-              tab: 'draft' as TabKey,
-              cardKey: 'draft' as OverviewCardKey,
-            },
-            {
               label: 'Total Interviewed',
               value: interviewedCount ?? stats?.completed ?? 0,
               icon: Users,
@@ -2943,7 +2968,7 @@ export default function AIInterview() {
             },
           ];
           return (
-            <StatsCardGrid className="mb-5 sm:mb-8" columns={5}>
+            <StatsCardGrid className="mb-5 sm:mb-8" columns={4}>
               {cards.map(({ label, value, icon: Icon, tab, cardKey }) => (
                 <StatsCard
                   key={label}
@@ -3124,40 +3149,54 @@ export default function AIInterview() {
         {/* Tabs — below the search row inside the same card, in the Job
             Descriptions page's status-pill row (no "Show:" label). */}
         <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {([
-            { key: 'all', label: 'Total Jobs' },
-            { key: 'all-interviews', label: 'All Interviews' },
-            { key: 'published', label: 'Active' },
-            { key: 'draft', label: 'Draft' },
-            { key: 'archived', label: 'Archived' },
-          ] as const).map(tab => {
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {(() => {
+            // Same counts as the stat cards, so a pill and the card it
+            // mirrors cannot disagree.
+            const seen = new Set(configs.map((c) => c.id));
+            const everyConfig = [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
+            const jobCount = new Set(
+              everyConfig.map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
+            ).size;
+            return [
+              { key: 'all', label: 'Configured Jobs', count: everyConfig.length ? jobCount : (stats?.total_configs ?? 0) },
+              { key: 'all-interviews', label: 'All Interviews', count: everyConfig.length || (stats?.total_configs ?? 0) },
+              { key: 'published', label: 'Active', count: configs.length ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length : (stats?.published_configs ?? 0) },
+              { key: 'draft', label: 'Draft', count: configs.length ? configs.filter((c) => c.status === 'draft').length : (stats?.draft_configs ?? 0) },
+              { key: 'archived', label: 'Archived', count: archivedConfigs.length || (stats?.archived_configs ?? 0) },
+            ];
+          })().map(tab => {
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
                 onClick={() => openListView(tab.key as TabKey)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
+                className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                     : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
                 }`}
               >
                 {tab.label}
+                <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
+                }`}>
+                  {tab.count.toLocaleString()}
+                </span>
               </button>
             );
           })}
           {/* Candidates and invitations — their own group, divided off from
               the interview lists the way Activity Logs / Settings are. */}
-          <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-3">
+          <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
             {([
               // Candidate sessions across every interview — the Assessments
               // page's tab of the same name, for AI interviews.
-              { key: 'candidate-results', label: 'Candidate Results' },
+              { key: 'candidate-results', label: 'Results', count: interviewedCount ?? stats?.completed ?? 0 },
               // Every invitation across every interview — the Assessments
               // page's Invitation Status tab, for AI interviews.
-              { key: 'invitation-status', label: 'Invitation Status' },
+              { key: 'invitation-status', label: 'Invitation Status', count: stats?.candidates_invited ?? 0 },
             ] as const).map(tab => {
               const isActive = activeTab === tab.key;
               return (
@@ -3165,18 +3204,25 @@ export default function AIInterview() {
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
+                  className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
                       ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                       : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
                   }`}
                 >
                   {tab.label}
+                  {'count' in tab && (
+                    <span className={`ml-1 px-1 py-0.5 rounded text-[11px] font-semibold tabular-nums ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
+                    }`}>
+                      {tab.count.toLocaleString()}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
-          <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-3">
+          <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
             {([
               { key: 'audit', label: 'Activity Logs' },
               { key: 'settings', label: 'Settings' },
@@ -3187,7 +3233,7 @@ export default function AIInterview() {
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
+                  className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
                       ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                       : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3221,26 +3267,31 @@ export default function AIInterview() {
               14px text at every width, like the controls beside it. The
               options carry their own direction (Newest / Oldest), so there is
               no order toggle. Only on the grouped job list, the one list it sorts. */}
-          {isConfigListTab && !showUngroupedList && (
+          {(isConfigListTab || activeTab === 'all-interviews' || dateOnlySort) && (() => {
+            const sortControl = (
             <div className="flex items-center gap-2">
-              <label htmlFor="ai-interview-sort" className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
+              <label htmlFor="ai-interview-sort" className="text-sm text-gray-700 dark:text-slate-300 font-medium whitespace-nowrap">Sort by</label>
               <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                 <Dropdown
                   id="ai-interview-sort"
                   ariaLabel="Sort by"
-                  value={sortBy}
+                  value={dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy}
                   onChange={(v) => setSortBy(v as typeof sortBy)}
-                  className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300"
+                  className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300 font-medium"
                   options={[
                     { value: 'newest', label: 'Newest' },
                     { value: 'oldest', label: 'Oldest' },
-                    { value: 'active', label: 'Active first' },
-                    { value: 'draft', label: 'Draft first' },
+                    ...(dateOnlySort ? [] : [
+                      { value: 'active', label: 'Active first' },
+                      { value: 'draft', label: 'Draft first' },
+                    ]),
                   ]}
                 />
               </div>
             </div>
-          )}
+            );
+            return sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl;
+          })()}
 
           {/* Refresh — right corner of the pill row. Refetches whichever tab
               is on screen: the config-list/processing/invitation-status/
@@ -3254,12 +3305,14 @@ export default function AIInterview() {
             title="Refresh"
             aria-label="Refresh"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-            className="flex-shrink-0"
+            className="flex-shrink-0 !h-9"
           >
-            <span className="hidden sm:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+            <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
           </div>
         </div>
+        {/* Actions (N) + Clear for ticked rows land on this third line. */}
+        <div data-list-bulk-slot className="empty:hidden mt-3 flex flex-wrap items-center gap-2" />
         </div>{/* closes toolbar card */}
 
         {/* Main Content. Like the Job Descriptions and Assessments pages, the
@@ -3280,7 +3333,7 @@ export default function AIInterview() {
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable seedConfigs={tableSeedConfigs} toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} defaultSort={sortBy} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -3290,6 +3343,8 @@ export default function AIInterview() {
               key={activeTab}
               toolbarSlot={toolbarSlotEl}
               sortActionSlot={sortActionSlotEl}
+              defaultSort={sortBy === 'oldest' ? 'oldest' : 'newest'}
+              seedConfigs={tableSeedConfigs}
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
               renderRowActions={renderInterviewVersionActions}
@@ -3474,13 +3529,13 @@ export default function AIInterview() {
 
                           {/* Totals for the job. Two columns on a phone, four in a
                               divided row once there is width for them. */}
-                          <div className={listDisplayMode === 'grid'
+                          <div className={listDisplayMode === 'grid' && openVersionsFor !== config.id
                             ? 'grid grid-cols-2 gap-x-2 gap-y-3'
                             : 'grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0'}>
                             {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                               <div
                                 key={key}
-                                className={listDisplayMode === 'grid'
+                                className={listDisplayMode === 'grid' && openVersionsFor !== config.id
                                   ? 'min-w-0'
                                   : 'min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0'}
                               >
@@ -3753,7 +3808,7 @@ export default function AIInterview() {
               interview, the same table the per-interview results view shows. */}
           {activeTab === 'candidate-results' && (
             <div className="p-3 sm:p-6">
-              <AIInterviewCandidateResults toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} />
+              <AIInterviewCandidateResults sortOrder={sortBy === 'oldest' ? 'oldest' : 'newest'} toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} />
             </div>
           )}
 
@@ -3884,7 +3939,7 @@ export default function AIInterview() {
                    exactly 00:00. */
                 const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
                 const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
-                const filtered = inviteStatusRows.filter((inv) => {
+                const filtered = (sortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
                   if (inviteStatusFilters.status !== 'all' && resolveInviteStatus(inv) !== inviteStatusFilters.status) return false;
                   if (search) {
                     const haystack = [inv.candidate_name, inv.candidate_email, inv.candidate_cid, inv._config_title, inv._jd_short_id]
@@ -4000,12 +4055,12 @@ export default function AIInterview() {
                   },
                 ];
                 const statusBulkActions = selectedStatusRows.length > 0 ? (
-                  <>
+                  <ListBulkActions>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                          className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                           aria-label={`Actions for ${selectedStatusRows.length} selected`}
                         >
                           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -4045,11 +4100,11 @@ export default function AIInterview() {
                       size="sm"
                       onClick={() => setSelectedStatusInviteIds(new Set())}
                       icon={<X className="w-4 h-4" />}
-                      className="whitespace-nowrap !h-[38px] !text-sm"
+                      className="whitespace-nowrap !h-9 !text-sm"
                     >
                       Clear
                     </Button>
-                  </>
+                  </ListBulkActions>
                 ) : null;
 
                 /* Export — the ticked rows, with the columns picked in the
@@ -4164,14 +4219,16 @@ export default function AIInterview() {
                       className="mb-0"
                       afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
-                      countBadge={
+                      /* Shown only while rows are ticked ("N selected"): the
+                         tab pills already carry the totals. */
+                      countBadge={selectedStatusRows.length > 0 ? (
                         <ListCountBadge
                           filtered={total}
                           total={totalInvites}
                           noun="invitation"
                           selected={selectedStatusRows.length}
                         />
-                      }
+                      ) : undefined}
                       filterPanel={
                         /* One filter per column with a fixed set of values —
                            candidate and CID are what the search box is for,

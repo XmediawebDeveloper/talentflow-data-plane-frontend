@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ListBulkActions } from '@/components/ui/list-toolbar-slot';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -32,6 +33,7 @@ import type { JDLineageVersion } from '@/lib/services/jdService';
 import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
@@ -67,6 +69,8 @@ interface InterviewRow {
   rounds: string[];         // enabled round types, in config order
   invitations: number;      //                        -> column 6
   completed: number;        // completed sessions, filled in by fetchAll
+  /** The Completed figure is still on its way (it comes from a second request). */
+  completedPending?: boolean;
   createdAt: string;        // ISO                    -> column 7
   createdSort: number;      // epoch ms, so the sort never re-parses
   createdBy: string;        //                        -> column 8
@@ -334,6 +338,15 @@ export interface AllInterviewsTableProps {
    * actions. Falls back to rendering above the table when unset.
    */
   sortActionSlot?: HTMLElement | null;
+  /** The host's Sort by dropdown; orders the rows until a column header is clicked. */
+  defaultSort?: 'newest' | 'oldest' | 'active' | 'draft';
+  /**
+   * Every interview (live + archived) the host has ALREADY loaded. Used to draw
+   * the table at once on a first visit instead of asking the server for the
+   * same list again; the table still refetches in the background and swaps the
+   * fresh rows in. Leave unset until the host's own load has finished.
+   */
+  seedConfigs?: AIInterviewResponse[];
   /**
    * Bumped by the host's Refresh button (AIInterview.tsx) to force a
    * reload — this table otherwise only refetches on mount or its own Retry.
@@ -413,14 +426,29 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   return null;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', seedConfigs, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
 
-  const [rows, setRows] = useState<InterviewRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  /* First paint, best source first: what this table last loaded (any tab of it
+     shares one remembered set), else what the host page already holds. Either
+     way the skeleton is skipped and the background fetch below corrects it. */
+  const [initial] = useState(() => {
+    const remembered = readListSnapshot<InterviewRow[]>('ai-interviews:rows');
+    const seeded = !remembered && seedConfigs && seedConfigs.length > 0
+      ? withInterviewVersions(seedConfigs).map((row) => (row.invitations > 0 ? { ...row, completedPending: true } : row))
+      : null;
+    const start = remembered ?? seeded;
+    return {
+      rows: start ? (fixedStatus ? start.filter((r) => r.rawStatus === fixedStatus) : start) : ([] as InterviewRow[]),
+      hasRows: !!start,
+    };
+  });
+  const hasLoadedOnce = useRef(false);
+  const [rows, setRows] = useState<InterviewRow[]>(initial.rows);
+  const [isLoading, setIsLoading] = useState(!initial.hasRows);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -452,7 +480,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   /* Two requests, not one: `listConfigs` with no status filter excludes
      archived configs (AIInterview.tsx loads them separately for the same
      reason), and "All Interviews" means every version regardless of status. */
-  const fetchAll = useCallback(async (): Promise<InterviewRow[]> => {
+  const fetchAll = useCallback(async (onList: (rows: InterviewRow[]) => void): Promise<InterviewRow[]> => {
+    const startedAt = performance.now();
     const { live, archived } = await aiInterviewService.listAllConfigsSplit();
 
     const seen = new Set<string>();
@@ -464,13 +493,20 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     }
     const rows = withInterviewVersions(merged);
 
-    /* The list response carries no finished-sessions count, so read it off
-       the batched `/invitation-counts` endpoint (`completed`) — one request per
-       200 configs, only for configs that have sent at least one invite (the
-       rest are 0). If a batch fails (older backend, transient error) fall back
-       to the per-config page_size-1 probe for that batch, ten at a time. A
-       failed probe just leaves that row at 0. */
+    /* The list response carries no finished-sessions count, so it is read off
+       the batched `/invitation-counts` endpoint — a SECOND request. The rows
+       are handed to the table first, with Completed marked pending (carrying
+       over the last known figure meanwhile), so the list is on screen as soon
+       as the first request answers instead of after both. */
     const withInvites = rows.filter((row) => row.invitations > 0);
+    const known = new Map((readListSnapshot<InterviewRow[]>('ai-interviews:rows') ?? []).map((r) => [r.id, r.completed]));
+    for (const row of withInvites) {
+      row.completed = known.get(row.id) ?? 0;
+      row.completedPending = true;
+    }
+    onList([...rows]);
+    perfNote('All Interviews — rows ready', startedAt);
+
     const COUNTS_BATCH = 200; // backend cap on ids per request
     for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
       const batch = withInvites.slice(start, start + COUNTS_BATCH);
@@ -478,6 +514,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
         const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
         for (const row of batch) row.completed = counts[row.id]?.completed || 0;
       } catch {
+        /* Older backend / transient error: fall back to the per-config probe
+           for this batch, ten at a time. A failed probe leaves that row at 0. */
         for (let i = 0; i < batch.length; i += 10) {
           await Promise.all(
             batch.slice(i, i + 10).map(async (row) => {
@@ -491,20 +529,35 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
           );
         }
       }
+      for (const row of batch) row.completedPending = false;
     }
+    perfNote('All Interviews — counts complete', startedAt);
     return rows;
   }, []);
 
   useEffect(() => {
     let alive = true;
-    fetchAll()
+    // A load after the first follows a change (reload, Retry): drop what other
+    // tabs remembered rather than show it stale.
+    const isRefresh = hasLoadedOnce.current;
+    hasLoadedOnce.current = true;
+    const show = (next: InterviewRow[]) => {
+      if (!alive) return;
+      // Ordinals are computed over the WHOLE set before this filter runs, so a
+      // version's number still reflects its true position in the lineage rather
+      // than shifting once other statuses are hidden.
+      setRows(fixedStatus ? next.filter((r) => r.rawStatus === fixedStatus) : next);
+      setError(null);
+      setIsLoading(false);
+    };
+    fetchAll(show)
       .then((next) => {
         if (!alive) return;
-        // Ordinals are computed above over the WHOLE set before this filter
-        // runs, so a version's number still reflects its true position in
-        // the lineage rather than shifting once other statuses are hidden.
-        setRows(fixedStatus ? next.filter((r) => r.rawStatus === fixedStatus) : next);
-        setError(null);
+        // Fresh objects, so the rows whose Completed just landed re-render.
+        const settled = next.map((row) => ({ ...row }));
+        if (isRefresh) clearListSnapshots();
+        writeListSnapshot('ai-interviews:rows', settled);
+        show(settled);
       })
       .catch((err) => {
         if (!alive) return;
@@ -601,14 +654,24 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   }, [rows, appliedSearch, filters]);
 
   const sorted = useMemo(() => {
-    if (!sortKey) return [...filtered].sort((a, b) => b.createdSort - a.createdSort);
+    if (!sortKey) {
+      const first = defaultSort === 'active' ? 'Active' : defaultSort === 'draft' ? 'Draft' : null;
+      return [...filtered].sort((a, b) => {
+        if (first) {
+          const aw = a.status === first ? 0 : 1;
+          const bw = b.status === first ? 0 : 1;
+          if (aw !== bw) return aw - bw;
+        }
+        return defaultSort === 'oldest' ? a.createdSort - b.createdSort : b.createdSort - a.createdSort;
+      });
+    }
     const compare = COMPARATORS[sortKey];
     return [...filtered].sort((a, b) => {
       const primary = compare(a, b);
       const result = primary !== 0 ? primary : b.createdSort - a.createdSort;
       return sortDir === 'asc' ? result : -result;
     });
-  }, [filtered, sortKey, sortDir]);
+  }, [filtered, sortKey, sortDir, defaultSort]);
 
   /* The details page's Prev / Next walk THIS table — its rows, sort and
      filters — so "X / N" matches the count shown here. The order is handed
@@ -889,7 +952,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
       onClick={clearSort}
       title="Clear the column sort"
       icon={<X className="w-3.5 h-3.5" />}
-      className="flex-shrink-0"
+      className="flex-shrink-0 !h-9 !text-sm"
     >
       Clear Sort
     </Button>
@@ -1047,9 +1110,13 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
       case 'completed':
         return (
           <>
-            <span className="tabular-nums text-gray-900 dark:text-slate-100">
-              {row.completed.toLocaleString()}
-            </span>
+            {row.completedPending
+              ? <span aria-label="Loading" className="inline-block h-4 w-6 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
+              : (
+                <span className="tabular-nums text-gray-900 dark:text-slate-100">
+                  {row.completed.toLocaleString()}
+                </span>
+              )}
           </>
         );
       case 'createdAt':
@@ -1166,9 +1233,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
               </span>
             )}
           </button>
+          {/* Sort by lands here — see `useListSortSlot`. */}
+          <span data-list-sort-slot className="contents" />
           {/* Actions (N) + Clear — only while rows are ticked. */}
           {selectedRows.length > 0 && (
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <ListBulkActions>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -1231,7 +1300,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
               >
                 Clear
               </Button>
-            </div>
+            </ListBulkActions>
           )}
           {onDisplayModeChange && (
             <ListViewToggle value={displayMode} onChange={onDisplayModeChange} className="self-start sm:self-auto" />
