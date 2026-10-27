@@ -35,7 +35,7 @@ import CoverageTab from './tabs/CoverageTab';
 // import { OverviewSection } from './evaluation-dashboard/OverviewSection'; // replaced by OverviewSectionV2 (Vite design)
 import { OverviewSectionV2 } from './evaluation-dashboard/OverviewSectionV2';
 import { EvaluationReportV2 } from './evaluation-dashboard/EvaluationReportV2';
-import { EvalReportCombined } from './evaluation-dashboard/EvalReportCombined';
+import { EvalReportCombined, MHS_THRESHOLD } from './evaluation-dashboard/EvalReportCombined';
 // EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
 // import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
 import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
@@ -1749,7 +1749,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           { key: 'question_analysis'  as TabKey, label: 'Question Analysis',  icon: <Target   className="w-4 h-4" /> },
         ]
       : []),
-    { key: 'coverage',         label: 'Cluster Coverage', icon: <Activity className="w-4 h-4" />, live: isInProgress },
+    { key: 'coverage',         label: 'Skill Coverage', icon: <Activity className="w-4 h-4" />, live: isInProgress },
     // 'eval_dashboard' removed — its content (Skills/Questions/Formula) is now mounted as 3 individual tabs above.
     // { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
     // Sentiment tab removed per Vite design — Sentiment had no equivalent in the Vite source. Block below kept (commented) for revert.
@@ -2216,6 +2216,34 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 </div>
                 </div>
               </div>
+              {/* Result pill + actions. Phones: pill above the buttons row;
+                  sm+: pill to the left of the stacked buttons. */}
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3 flex-shrink-0">
+              {/* Pass/Fail + Match Score — the same verdict and score the
+                  Evaluation Report tab shows (EvalReportCombined). Hidden while
+                  there's no final verdict (pending, partial, no evaluation). */}
+              {(() => {
+                if (!(isCompleted || isPartial) || evaluationPending || getPlaceholderMessage('eval')) return null;
+                const d = buildQuestionAnalysisData();
+                if (d.isPartialEvaluation) return null;
+                const passed = d.finalResult ? d.finalResult === 'Pass' : d.scores.mustHave >= MHS_THRESHOLD;
+                const matchScore = Math.round(d.scores.mustHave * 10);
+                return (
+                  <span
+                    className={`self-start inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full ring-1 text-xs font-semibold tabular-nums sm:mt-2 ${
+                      passed
+                        ? 'bg-success-subtle text-success-strong ring-success-line'
+                        : 'bg-destructive-subtle text-destructive ring-destructive-line'
+                    }`}
+                    title="Final result and Match Score (Must-Have), as in the Evaluation Report"
+                  >
+                    {passed ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> : <XCircle className="w-3.5 h-3.5 shrink-0" />}
+                    {passed ? 'Pass' : 'Fail'}
+                    <span className="opacity-40" aria-hidden>|</span>
+                    {matchScore}%
+                  </span>
+                );
+              })()}
               {/* View Resume, with Download Report stacked under it (side by
                   side on phones, under the details). */}
               <div className="flex flex-row sm:flex-col items-stretch gap-2 flex-shrink-0 [&>*]:flex-1 sm:[&>*]:flex-none">
@@ -2282,6 +2310,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   {reportDownloading ? 'Preparing…' : 'Report'}
                 </button>
               )}
+              </div>
               </div>
             </div>
           </div>

@@ -2,11 +2,24 @@
 
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { ArrowUpRight, Rocket, LayoutGrid, UsersRound } from 'lucide-react';
+import { toast } from 'sonner';
+import { ArrowUpRight, Rocket, LayoutGrid, Lock, UsersRound } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { buildMenuSections, filterMenuSections, DISABLED_REASON_MESSAGE, type NavItem } from '@/lib/navigation/menuSections';
 import type { Permission } from '@/lib/types/tenant';
+
+// These sections live in the header profile dropdown — hide them from the
+// dashboard Quick Access tiles to avoid duplication.
+// 'user-management-section' (Users) was moved out of the header dropdown into
+// Quick Access, so it is intentionally NOT hidden here.
+const HIDDEN_SECTIONS = new Set([
+  'subscription',
+  'organization',
+  'settings',
+  'audits',
+  'support',
+]);
 
 // One-line subtitle per nav item.
 const ITEM_SUBTITLE: Record<string, string> = {
@@ -25,6 +38,13 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'support-tickets': 'Help & tickets',
   'help-desk': 'Internal desk',
   teams: 'Teams & team chat',
+};
+
+// Short, always-visible reason under a disabled tile; the full sentence is in
+// DISABLED_REASON_MESSAGE (hover title + the toast shown on tap).
+const DISABLED_SHORT_REASON: Record<'permission' | 'plan', string> = {
+  permission: 'No permission',
+  plan: 'Not in your plan',
 };
 
 /**
@@ -79,6 +99,21 @@ const TILE_TONES: TileTone[] = [
 /** Two tiles per tone, cycling. */
 const toneFor = (index: number): TileTone => TILE_TONES[Math.floor(index / 2) % TILE_TONES.length];
 
+/* The position is taken from the FULL tool list (every section, every item), not
+   from the tiles this user can see — so each tool keeps one colour for everyone.
+   An Owner sees the same blue/cyan/orange pairs as before; a role with fewer
+   tools no longer has every colour shift along when one tile is hidden. */
+const CANONICAL_TOOL_ORDER: string[] = buildMenuSections(true)
+  .filter((s) => !HIDDEN_SECTIONS.has(s.id))
+  .flatMap((s) => s.items.map((i) => i.id))
+  .filter((id) => id !== 'dashboard')
+  .concat('teams'); // the Teams tile, always appended last
+
+const toneForTool = (id: string, fallbackIndex: number): TileTone => {
+  const index = CANONICAL_TOOL_ORDER.indexOf(id);
+  return toneFor(index === -1 ? fallbackIndex : index);
+};
+
 function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   const Icon = item.icon;
   const href = item.href || '#';
@@ -124,13 +159,17 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
         >
           {item.label}
         </p>
-        {subtitle && (
-          <p className={`mt-0.5 line-clamp-1 text-xs ${disabled ? 'text-slate-400 dark:text-slate-600' : 'text-slate-500 dark:text-slate-400'}`}>
-            {subtitle}
+        {disabled ? (
+          <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+            {DISABLED_SHORT_REASON[item.disabledReason ?? 'permission']}
           </p>
+        ) : (
+          subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
         )}
       </div>
-      {!disabled && (
+      {disabled ? (
+        <Lock aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+      ) : (
         <ArrowUpRight
           className={`h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
         />
@@ -156,14 +195,19 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   }
 
   if (disabled) {
+    const message = DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission'];
+    // A focusable button (aria-disabled, not `disabled`) so a tap or Enter can
+    // explain the lock in a toast — `title` alone only ever shows on mouse hover.
     return (
-      <div
+      <button
+        type="button"
         aria-disabled="true"
-        title={DISABLED_REASON_MESSAGE[item.disabledReason ?? 'permission']}
-        className="group relative flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+        title={message}
+        onClick={() => toast.info(message)}
+        className="group relative flex w-full cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
       >
         {inner}
-      </div>
+      </button>
     );
   }
 
@@ -192,18 +236,6 @@ export default function DashboardQuickAccess() {
     if (!user?.permissions) return false;
     return keys.some((k) => user.permissions[k as keyof Permission] === true);
   };
-
-  // These sections live in the header profile dropdown — hide them from the
-  // dashboard Quick Access tiles to avoid duplication.
-  // 'user-management-section' (Users) was moved out of the header dropdown into
-  // Quick Access, so it is intentionally NOT hidden here.
-  const HIDDEN_SECTIONS = new Set([
-    'subscription',
-    'organization',
-    'settings',
-    'audits',
-    'support',
-  ]);
 
   const sections = useMemo(
     () =>
@@ -239,7 +271,6 @@ export default function DashboardQuickAccess() {
 
   const totalItems = tiles.length;
 
-  if (totalItems === 0) return null;
 
   return (
     <section
@@ -254,22 +285,36 @@ export default function DashboardQuickAccess() {
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-2xs font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
           <LayoutGrid className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-          {sections.length + 1} categories · {totalItems} tools
+          {totalItems} {totalItems === 1 ? 'tool' : 'tools'}
         </span>
       </header>
 
+      {/* No tools for this role/plan: say so, instead of the section vanishing
+          and leaving the dashboard with just the banner. */}
+      {totalItems === 0 && (
+        <div className="px-3 pb-4 sm:px-4 sm:pb-5 md:px-8 md:pb-6">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-800/40">
+            <Lock className="mx-auto h-6 w-6 text-slate-400 dark:text-slate-500" />
+            <p className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-300">No tools are enabled for your role</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Contact your workspace admin to get access.</p>
+          </div>
+        </div>
+      )}
+
       {/* Tiles — single continuous grid across all categories */}
+      {totalItems > 0 && (
       <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
         {/* Flattened first so the colour run counts tiles as they appear on
             screen, not as they are grouped by section. */}
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {tiles.map((item, index) => (
             <li key={item.id}>
-              <TileCard item={item} tone={toneFor(index)} />
+              <TileCard item={item} tone={toneForTool(item.id, index)} />
             </li>
           ))}
         </ul>
       </div>
+      )}
     </section>
   );
 }

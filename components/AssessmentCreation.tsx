@@ -41,6 +41,7 @@ import {
   jobSearchMatcher,
   lineageKey,
   mapJDStatus,
+  needsVersionPicker,
   mapJDToJob,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
@@ -3531,7 +3532,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   ran into the button. */}
               <JobEligibilityNote
                 className="mt-3"
-                description="Only Published (or Republished) job versions without an assessment are listed. Archived, Disabled, Draft and already-assessed jobs are hidden — use View Versions to see a job's full history."
+                description="Only Published (or Republished) job versions without an assessment are listed. Archived, Disabled, Draft and already-assessed jobs are hidden. A job with only one available version is selected straight from its card; View Versions appears when there are versions to choose from, and the eye icon shows a job's full history."
               />
             </div>
 
@@ -3714,6 +3715,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     latestHasAssessment,
                     job.status,
                   );
+                  /* View Versions only when another version could be picked:
+                     a job whose card version is its one available version is
+                     picked straight from the card (needsVersionPicker). */
+                  const showVersionPicker = needsVersionPicker(job, allJdVersions, version =>
+                    versionHasAssessment(versionKey, version.id),
+                  );
 
                   return (
                     <div
@@ -3737,7 +3744,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           ? otherPickReason
                           : !latestSelectableStatus
                             ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
-                            : 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
+                            : showVersionPicker
+                              ? 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
+                              : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the assessment against it.`
                       }
                       aria-disabled={blockedByOtherPick}
                       className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
@@ -3943,41 +3952,44 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           with one version opens onto that version, which is an
                           answer rather than a dead end.
 
-                          Note this differs from the Job Openings card, which
-                          hides the button on a single-version job. Here the
-                          list is collapsed to one row per lineage and the
-                          button is the only route to the rest, so it is always
-                          offered. */}
-                      <div className="mt-3 flex items-center justify-end max-sm:justify-start max-sm:pl-6 gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleJdVersions(job);
-                          }}
-                          aria-expanded={versionsExpanded}
-                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                            versionsExpanded
-                              ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
-                              : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                          }`}
-                          title={
-                            versionsExpanded
-                              ? 'Hide version history'
-                              : 'View version history — every version of this job, and the one to build the assessment against'
-                          }
-                        >
-                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
+                          The one exception: when the card's version is the
+                          job's ONLY available version, there is no other
+                          version to reach, so the button is left off and the
+                          card's radio and Add act on that version directly
+                          (needsVersionPicker). The eye still opens the full
+                          history. */}
+                      {showVersionPicker && (
+                        <div className="mt-3 flex items-center justify-end max-sm:justify-start max-sm:pl-6 gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleJdVersions(job);
+                            }}
+                            aria-expanded={versionsExpanded}
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                              versionsExpanded
+                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
+                                : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                            }`}
+                            title={
+                              versionsExpanded
+                                ? 'Hide version history'
+                                : 'View version history — every version of this job, and the one to build the assessment against'
+                            }
+                          >
+                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                      )}
 
                       {/* Version history, expanded in place — the same panel
                           the Job Openings list opens, newest version first,
                           with the latest marked. Two things are added for this
                           surface: an Assessment column, and a radio per row so
                           an older version can be the one built against. */}
-                      {versionsExpanded && (
+                      {showVersionPicker && versionsExpanded && (
                         <JobVersionHistoryPanel
                           job={job}
                           versions={jdLineage.lineages[versionKey]}
