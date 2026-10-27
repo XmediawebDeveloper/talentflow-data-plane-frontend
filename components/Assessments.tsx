@@ -10631,7 +10631,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 Only bulk-actionable rows (Invited/Expired) get a
                                 checkbox; the rest keep a fixed-width slot so the
                                 columns stay aligned. */}
-                            <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                            <td className="py-3 pl-4 pr-0 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                               {isBulkActionable(invitation) ? (
                                 <button
                                   type="button"

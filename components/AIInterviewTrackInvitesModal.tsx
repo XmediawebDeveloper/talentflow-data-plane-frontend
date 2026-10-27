@@ -41,6 +41,11 @@ const isBulkResendable = (inv: any): boolean =>
   !inv.started_at &&
   !inv.completed_at;
 
+/* Any row a bulk Revoke OR a bulk Resend can act on gets a checkbox — same
+   rule as the Assessments tracker, independent of which stat card filter is
+   currently active. */
+const isBulkActionable = (inv: any): boolean => isRevocableInvite(inv) || isBulkResendable(inv);
+
 interface AIInterviewTrackInvitesModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -218,22 +223,21 @@ export default function AIInterviewTrackInvitesModal({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const heightLock = useDialogHeightLock<HTMLDivElement>();
 
-  /* Bulk selection — same control and semantics as the assessment tracker's
-     Select All bar: only bulk-resendable rows (Expired) are selectable,
-     scoped to the rows on the CURRENT page. */
+  /* Bulk selection — same control and semantics as the Assessments tracker's
+     Select All bar: any row a bulk Revoke OR a bulk Resend can act on gets a
+     checkbox, regardless of which stat card filter is currently active —
+     Invited and Expired rows can be ticked together. Which bulk BUTTON
+     appears depends on the ticked selection being uniformly one status-class
+     or the other (see allRevocable/allResendable below); a mixed
+     Invited+Expired selection shows neither — an action valid for one status
+     must never be applied to the other. Scoped to the rows on the CURRENT page. */
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
   const [isBulkResending, setIsBulkResending] = useState(false);
-  /* Selection follows the selected card, as on the AI Interviews page: the
-     Invited card ticks revocable rows and offers Revoke; the Expired card
-     ticks resendable rows and offers Resend. Other cards have no bulk action. */
-  const bulkMode: 'revoke' | 'resend' | null = jdDisabled
-    ? null
-    : filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
-  const bulkResendMode = bulkMode === 'resend';
-  const rowSelectable = bulkMode === 'revoke' ? isRevocableInvite : isBulkResendable;
-  const selectableIds = bulkMode ? invitations.filter(rowSelectable).map((inv: any) => inv.id) : [];
-  const selectedRows = invitations.filter((inv: any) => selectedIds.has(inv.id) && rowSelectable(inv));
+  const selectableIds = jdDisabled ? [] : invitations.filter(isBulkActionable).map((inv: any) => inv.id);
+  const selectedRows = invitations.filter((inv: any) => selectedIds.has(inv.id));
+  const allRevocable = selectedRows.length > 0 && selectedRows.every(isRevocableInvite);
+  const allResendable = selectedRows.length > 0 && selectedRows.every(isBulkResendable);
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
   const toggleSelectAll = () =>
@@ -247,17 +251,17 @@ export default function AIInterviewTrackInvitesModal({
     });
   /* Reloads (paging, filtering, the 15s refresh moving a candidate forward)
      can leave selected ids pointing at rows that are gone or no longer
-     eligible — drop those so the bulk button's count always matches what a
-     resend would actually do. */
+     eligible — drop those so the bulk button's count always matches what an
+     action would actually do. */
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(invitations.filter(rowSelectable).map((inv: any) => inv.id));
+      const valid = new Set(invitations.filter(isBulkActionable).map((inv: any) => inv.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invitations, bulkMode]);
+  }, [invitations, jdDisabled]);
 
   // Bulk resend — same endpoint as the single-row Resend, called per
   // invitation. Sequential on purpose: a burst of parallel resends is exactly
@@ -382,7 +386,7 @@ export default function AIInterviewTrackInvitesModal({
   };
 
   const handleBulkRevoke = async () => {
-    const targets = selectedRows;
+    const targets = selectedRows.filter(isRevocableInvite);
     if (targets.length === 0) { setShowBulkRevokeConfirm(false); return; }
     setIsBulkRevoking(true);
     try {
@@ -585,10 +589,11 @@ export default function AIInterviewTrackInvitesModal({
           onClearExtras={() => { setJobVersionFilter(''); setVersionFilter(''); setSourceFilter(''); setResultFilter(''); }}
         />
 
-        {/* Select All — same control, wording and placement as the assessment
-            tracker's bulk-select bar. Only Expired rows count. The
-            completion-rate badge (previously its own card in the stat row
-            above) sits on this same row, straight across from Select All. */}
+        {/* Select All — same control, wording and placement as the Assessments
+            tracker's bulk-select bar. Any Invited or Expired row counts,
+            regardless of the active stat card. The completion-rate badge
+            (previously its own card in the stat row above) sits on this same
+            row, straight across from Select All. */}
         {!initialLoading && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             {selectableIds.length > 0 ? (
@@ -611,8 +616,8 @@ export default function AIInterviewTrackInvitesModal({
             )}
 
             <div className="flex items-center gap-2">
-              {/* The selected card's bulk action — never both. */}
-              {bulkMode === 'revoke' && selectedRows.length > 0 && (
+              {/* Uniform selection's bulk action — never both at once. */}
+              {allRevocable && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -625,7 +630,7 @@ export default function AIInterviewTrackInvitesModal({
                   {isBulkRevoking ? 'Revoking…' : `Revoke (${selectedRows.length})`}
                 </Button>
               )}
-              {bulkResendMode && selectedIds.size > 0 && (
+              {allResendable && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -665,9 +670,9 @@ export default function AIInterviewTrackInvitesModal({
             onRevoke={(inv) => setRevokeTarget(inv)}
             revokingId={revokingId}
             onViewDetails={onViewResult}
-            selectedIds={bulkMode ? selectedIds : undefined}
-            onToggleSelect={bulkMode ? toggleSelectOne : undefined}
-            isSelectable={rowSelectable}
+            selectedIds={jdDisabled ? undefined : selectedIds}
+            onToggleSelect={jdDisabled ? undefined : toggleSelectOne}
+            isSelectable={isBulkActionable}
           />
           {refreshVeil && (
             <div
