@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -5083,12 +5083,16 @@ export default function AIInterview() {
                       onClick={toggleSelectAll}
                       className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                     >
-                      <span role="checkbox" aria-checked={allSelectableOnPageSelected} className="p-1 flex-shrink-0">
-                        {allSelectableOnPageSelected ? (
-                          <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400" />
-                        )}
+                      <span
+                        role="checkbox"
+                        aria-checked={allSelectableOnPageSelected}
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                          allSelectableOnPageSelected
+                            ? 'bg-brand-blue border-brand-blue'
+                            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
                       </span>
                       Select All ({selectableIds.length})
                     </button>
