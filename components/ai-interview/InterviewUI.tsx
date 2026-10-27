@@ -19,7 +19,8 @@ import {
   type DetectedObjectEvent,
   type ObjectEventType,
 } from './proctoring';
-import { CandidateInterviewInfo, candidateAIInterviewService, getAiClientSessionId } from "@/lib/services/candidateAIInterviewService";
+import { CandidateInterviewInfo, candidateAIInterviewService, getAiClientSessionId, type ProctorFrameServerEvent } from "@/lib/services/candidateAIInterviewService";
+import { useServerProctorFrames, type ProctorVisionMode } from "./proctoring/useServerProctorFrames";
 import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
@@ -179,6 +180,7 @@ type InterviewWindow = Window & {
   webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
   __audioFramesDropped?: number;
   __audioFramesSent?: number;
+  __audioSilentFramesSent?: number;
   __audioBytesSent?: number;
   __audioFramesFailed?: number;
 };
@@ -274,6 +276,11 @@ const FACE_VERIFY_INTERVAL_MS = 30000;
 const FACE_BASELINE_GRACE_MS = 15000;
 // Longest the "Preparing your interview…" warm-up may hold back the start.
 const PREPARE_MAX_WAIT_MS = 20000;
+// Stagger inside "Preparing…": object detection (ONNX/WebGPU worker + 28.8 MB
+// model) starts warming only once MediaPipe face detection reports warmed, or
+// after this many ms — whichever first — so the two don't compete for the
+// CPU/GPU at the same moment. The PREPARE_MAX_WAIT_MS cap is unchanged.
+const OBJECT_DETECTION_WARMUP_STAGGER_MS = 3000;
 
 /** Returns current time formatted as IST with AM/PM (e.g. "2:34 PM") */
 function nowIST(): string {
@@ -1310,6 +1317,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // and the browser clock above is fallback only. Cleared on `unavailable`
   // and when the WebSocket closes.
   const serverVadActiveRef = useRef(false);
+  // Safety net over Plan B: if the server has not raised "Are you done?" this
+  // long after the browser clock reached DONE_CONFIRM_SILENCE_MS, the browser
+  // raises it itself (server audio arrived late / a server-side rule held it).
+  // A popup raised this way is closed by the browser's own speech check, since
+  // the server never knew about it and will not send speech_resumed.
+  const SERVER_POPUP_GRACE_MS = 7000;
+  const popupByClientFallbackRef = useRef(false);
   // Total speech-like ms observed since the popup was raised. Reset when the
   // popup is raised (fresh cycle) and when it closes — never by a pause.
   const speechAccumMsRef = useRef(0);
@@ -1318,6 +1332,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const [midSilenceConfirm, setMidSilenceConfirm] = useState(false);
   const midSilenceConfirmRef = useRef(false);
   const setMidSilenceConfirm_ = useCallback((val: boolean) => {
+    if (!val) popupByClientFallbackRef.current = false;
     if (midSilenceConfirmRef.current !== val) {
       midSilenceConfirmRef.current = val;
       setMidSilenceConfirm(val);
@@ -1706,6 +1721,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
+  // Server proctor-frame mode (see useServerProctorFrames below). Mirrored
+  // into a ref here because the proctoring monitor is created before the
+  // hook (it needs the attention handlers, which need this monitor).
+  const proctorVisionModeRef = useRef<ProctorVisionMode>('pending');
   const { state: proctoringState, emitEvent, flushEvents, initialMicDeviceId } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
@@ -1723,6 +1742,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     shouldSuppressVoiceCheck: () =>
       isAiSpeakingRef.current || isRecordingRef.current
       || isProcessingRef.current || isCandidateTranscriptProcessingRef.current,
+    // Server mode: the server judges + persists camera_obstructed.
+    shouldSuppressObstructionEvent: () => proctorVisionModeRef.current === 'server',
   });
   // Stable ref so ws.onclose closure can always call the latest flush function
   const flushProctoringEventsRef = useRef(flushEvents);
@@ -2534,15 +2555,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // (ended_by "face_missing") before it raises face_missing, so an empty
   // camera shows "Face not detected", never "Looking away".
   type AttentionKind = 'face_missing' | 'gaze_away' | 'multiple_faces';
-  interface AttentionEpisode { id: string; startedAt: number; details: Record<string, any> }
+  // `server`: opened from a server proctor-frame event — already persisted
+  // server-side (and closed there too), so neither its start nor its end is
+  // POSTed to /proctor-event from here.
+  interface AttentionEpisode { id: string; startedAt: number; details: Record<string, any>; server?: boolean }
   const attentionEpisodesRef = useRef<Partial<Record<AttentionKind, AttentionEpisode>>>({});
 
-  const startAttentionEpisode = useCallback((kind: AttentionKind, details: Record<string, any>) => {
+  const startAttentionEpisode = useCallback((kind: AttentionKind, details: Record<string, any>, opts?: { server?: boolean }) => {
     if (attentionEpisodesRef.current[kind]) return; // already open; detector only fires on the edge anyway
     const startedAt = Date.now();
     const id = `${kind}-${startedAt}-${Math.random().toString(36).slice(2, 8)}`;
-    attentionEpisodesRef.current[kind] = { id, startedAt, details };
+    attentionEpisodesRef.current[kind] = { id, startedAt, details, server: !!opts?.server };
     InterviewEventBus.emitHeld(kind, id, details);
+    if (opts?.server) return; // server already persisted it
     candidateAIInterviewService.reportProctorEvent(token, {
       event_type: kind,
       timestamp: new Date(startedAt).toISOString(),
@@ -2555,6 +2580,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!ep) return;
     delete attentionEpisodesRef.current[kind];
     InterviewEventBus.release(ep.id);
+    if (ep.server) return; // server closes its own episodes (event / POST /end)
     const endedAt = Date.now();
     const durationMs = Math.max(0, endedAt - ep.startedAt);
     candidateAIInterviewService.reportProctorEvent(token, {
@@ -2686,10 +2712,86 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     emitEvent('object_detection_unavailable', { reason });
   }, [emitEvent]);
 
+  // ── Server proctor frames (PROCTOR_VISION_SERVER_ENABLED) ──────────────
+  // Server events are ALREADY persisted server-side: here they only drive the
+  // same candidate UI the browser detectors drive — never /proctor-event.
+  //   face_missing / multiple_faces  → held attention toast (server episode)
+  //   phone_detected / unauthorized_object / camera_obstructed → toast
+  //   face_mismatch / face_identity_changed / face_unverifiable → toast
+  //     (`__server` stops the monitor's identity subscription re-queuing it)
+  //   *_unavailable → diagnostics, no candidate UI
+  const handleServerProctorEvents = useCallback((events: ProctorFrameServerEvent[]) => {
+    for (const ev of events) {
+      const type = ev.event_type || '';
+      const isEnd = ev.phase === 'end' || type.endsWith('_ended');
+      const base = type.replace(/_ended$/, '');
+      const details: Record<string, any> = { ...(ev.details ?? {}), __server: true };
+      switch (base) {
+        case 'face_missing':
+          if (isEnd) {
+            endAttentionEpisode('face_missing', 'restored');
+          } else {
+            // Face first, gaze second: no face means no "looking away".
+            endAttentionEpisode('gaze_away', 'face_missing');
+            startAttentionEpisode('face_missing', details, { server: true });
+          }
+          break;
+        case 'multiple_faces':
+          if (isEnd) endAttentionEpisode('multiple_faces', 'restored');
+          else startAttentionEpisode('multiple_faces', { face_count: ev.details?.face_count ?? ev.details?.faces, ...details }, { server: true });
+          break;
+        case 'phone_detected':
+        case 'unauthorized_object':
+        case 'camera_obstructed':
+        case 'face_mismatch':
+        case 'face_identity_changed':
+        case 'face_unverifiable':
+          if (!isEnd) InterviewEventBus.emit(base as Parameters<typeof InterviewEventBus.emit>[0], details);
+          break;
+        case 'face_verification_unavailable':
+        case 'object_detection_unavailable':
+          console.warn(`[INTERVIEW-DEBUG] Server proctoring: ${base}`, ev.details?.reason ?? '');
+          break;
+        default:
+          break;
+      }
+    }
+  }, [startAttentionEpisode, endAttentionEpisode]);
+
+  const proctorVision = useServerProctorFrames({
+    token,
+    streaming: isConnected && webcamReady && !isClosing && !isMediaPaused,
+    ended: isClosing,
+    getVideoElement: () => webcamRef.current?.getVideoElement?.() ?? null,
+    onServerEvents: handleServerProctorEvents,
+  });
+  proctorVisionModeRef.current = proctorVision.mode;
+  const serverVision = proctorVision.mode === 'server';
+  const localVision = proctorVision.mode === 'local';
+
+  // Fell back server → browser mid-session: take down any held server
+  // episode (the browser detector re-raises it if still true). The face-api
+  // identity loop is started by the faceVerification effect (keyed on mode).
+  const prevVisionModeRef = useRef<ProctorVisionMode>('pending');
+  useEffect(() => {
+    const prev = prevVisionModeRef.current;
+    prevVisionModeRef.current = proctorVision.mode;
+    if (prev !== 'server' || proctorVision.mode !== 'local') return;
+    (['face_missing', 'multiple_faces'] as const).forEach(kind => {
+      if (attentionEpisodesRef.current[kind]?.server) endAttentionEpisode(kind, 'restored');
+    });
+  }, [proctorVision.mode, endAttentionEpisode]);
+
+  // Set by the stagger effect below (after faceDetection): face detection
+  // warms first, object detection follows (see OBJECT_DETECTION_WARMUP_STAGGER_MS).
+  const [objectDetectionWarmupGo, setObjectDetectionWarmupGo] = useState(false);
   const objectDetection = useInterviewObjectDetection({
-    enabled: isConnected && webcamReady,
-    // Load + warm up during "Preparing your interview…" (see preparingDone).
-    warmup: webcamReady,
+    // Browser RF-DETR only in 'local' mode — never loads (nor warms) while the
+    // proctor-frame config is pending or the server does object detection.
+    enabled: isConnected && webcamReady && localVision,
+    // Load + warm up during "Preparing your interview…" (see preparingDone),
+    // staggered after face detection's warm-up.
+    warmup: webcamReady && objectDetectionWarmupGo && localVision,
     // No GPU inference while Bina speaks (her audio + lip-sync stuttered).
     paused: isAiSpeaking,
     lowTier: effectiveDeviceCapability?.tier === 'low',
@@ -2710,6 +2812,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // interview → the stored Identity photo is re-fetched), in which case
     // handleVideoReady skipped starting — start it here. startVerification is
     // idempotent (it replaces any running interval).
+    // Server proctor-frame mode: identity is checked server-side — the
+    // face-api loop must not run. Re-runs on fallback to 'local'.
+    if (!localVision) return;
     const video = faceVerifyVideoRef.current;
     if (video && faceVerification.hasBaseline()) {
       faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
@@ -2717,7 +2822,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return () => {
       faceVerification.stopVerification();
     };
-  }, [faceVerification, isConnected]);
+  }, [faceVerification, isConnected, localVision]);
 
   // No face baseline (face models failed to load, or no face found in the
   // identity photo / system-check frames) → no identity check runs at all this
@@ -2729,6 +2834,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const faceVerifyUnavailableSentRef = useRef(false);
   useEffect(() => {
     if (!isConnected || faceVerifyUnavailableSentRef.current) return;
+    // Server mode reports its own face_verification_unavailable.
+    if (!localVision) return;
     if (faceVerification?.hasBaseline()) return;
     const t = setTimeout(() => {
       if (faceVerifyUnavailableSentRef.current) return;
@@ -2737,11 +2844,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       emitEvent('face_verification_unavailable', { reason: 'no_face_baseline' });
     }, FACE_BASELINE_GRACE_MS);
     return () => clearTimeout(t);
-  }, [isConnected, faceVerification, emitEvent]);
+  }, [isConnected, faceVerification, emitEvent, localVision]);
 
   const faceDetection = useInterviewFaceDetection({
-    enabled: isConnected && webcamReady,
-    warmup: webcamReady,
+    // Waits for the proctor-frame config so it never loads FaceDetection only
+    // to tear it down again. Server mode: gaze (FaceMesh) only, face count
+    // from the server's latest answer.
+    enabled: isConnected && webcamReady && proctorVision.mode !== 'pending',
+    warmup: webcamReady && proctorVision.mode !== 'pending',
+    faceCountSource: serverVision ? 'external' : 'local',
+    externalFaceCountRef: proctorVision.latestRef,
     enableGazeTracking: true,
     lowTier: effectiveDeviceCapability?.tier === 'low',
     onFaceMissing: handleFaceMissing,
@@ -2751,6 +2863,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     onGazeAway: handleGazeAway,
     onGazeRestored: handleGazeRestored,
   });
+
+  // Warm-up stagger: release object detection's warm-up once face detection
+  // has warmed (MediaPipe FaceDetection + FaceMesh, initialised serially inside
+  // useInterviewFaceDetection — untouched), or after the stagger delay. Latches
+  // true; `enabled` (connect) starts object detection regardless.
+  useEffect(() => {
+    if (objectDetectionWarmupGo || !webcamReady) return;
+    const startedAt = performance.now();
+    const iv = setInterval(() => {
+      const fdWarm = faceDetection.warmedUpRef.current;
+      const waited = performance.now() - startedAt;
+      if (fdWarm || waited >= OBJECT_DETECTION_WARMUP_STAGGER_MS) {
+        clearInterval(iv);
+        console.log(
+          `[INTERVIEW-DEBUG] Object-detection warm-up released after ${Math.round(waited)} ms ` +
+          `(${fdWarm ? 'face detection warmed' : 'stagger timeout'})`,
+        );
+        setObjectDetectionWarmupGo(true);
+      }
+    }, 100);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webcamReady, objectDetectionWarmupGo]);
 
   // ── Pre-interview warm-up gate ──────────────────────────────────────────
   // Object detection (28.8 MB model + WebGPU session + a slow first
@@ -2765,17 +2900,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (preparingDone) return;
     const startedAt = performance.now();
     const iv = setInterval(() => {
-      const odWarm = objectDetection.warmedUpRef.current;
-      const fdWarm = faceDetection.warmedUpRef.current;
+      const visionMode = proctorVisionModeRef.current;
+      // Server mode: the browser object detector never runs — nothing to wait
+      // for. While the config is still pending nothing has started warming.
+      const odWarm = visionMode === 'server' || (visionMode === 'local' && objectDetection.warmedUpRef.current);
+      const fdWarm = visionMode !== 'pending' && faceDetection.warmedUpRef.current;
       const waited = performance.now() - startedAt;
       if ((odWarm && fdWarm) || waited >= PREPARE_MAX_WAIT_MS) {
         clearInterval(iv);
         // Don't let a detector that missed the warm-up window finish loading
         // (and run a multi-second GPU frame) on top of Bina's intro.
-        if (!odWarm) objectDetection.abandonIfNotWarm(waited);
+        if (!odWarm && visionMode === 'local') objectDetection.abandonIfNotWarm(waited);
         console.log(
           `[INTERVIEW-DEBUG] Preparing done in ${Math.round(waited)} ms ` +
-          `(objectDetection=${odWarm ? 'ready' : 'still loading'}, faceDetection=${fdWarm ? 'ready' : 'still loading'})`,
+          `(vision=${visionMode}, objectDetection=${visionMode === 'server' ? 'server' : odWarm ? 'ready' : 'still loading'}, ` +
+          `faceDetection=${fdWarm ? 'ready' : 'still loading'})`,
         );
         setPreparingDone(true);
       }
@@ -3105,7 +3244,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // once 4-core machines started classifying as 'mid'. 30s still catches a
     // substituted candidate within ~30s.
     faceVerifyVideoRef.current = video;
-    if (faceVerification?.hasBaseline()) {
+    // Only in browser-vision mode; a still-pending config is picked up by the
+    // faceVerification effect once it resolves to 'local'.
+    if (proctorVisionModeRef.current === 'local' && faceVerification?.hasBaseline()) {
       faceVerification.startVerification(video, FACE_VERIFY_INTERVAL_MS);
       console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${FACE_VERIFY_INTERVAL_MS / 1000}s cadence)`);
     }
@@ -4133,6 +4274,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
   const POSSIBLE_SPEECH_LEVEL = 0.0018;
   const MIN_POSSIBLE_SPEECH_FRAMES = 6;
+  // Soft streaming gate: voiced frames (~85 ms each) needed to START sending
+  // PCM. Leaky, not "N in a row": a non-voice frame takes one step back
+  // instead of resetting, so a quiet or broken short answer ("yes", "40 LPA")
+  // still opens it. The old 6-in-a-row rule never opened for some short quiet
+  // answers, so the server got no audio at all (Oct 26 test, aiu3 Q14).
+  const SOFT_GATE_OPEN_FRAMES = 4;
   const QUIET_SPEECH_ACTIVITY_LEVEL = 0.0032;
   // Ceiling for what counts as "ambient/room noise" that the noise floor may
   // learn. The OLD code only learned ambient while avgLevel < QUIET_SPEECH_
@@ -4221,6 +4368,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // near the target get gain≈1 (unchanged). Ambient-relative thresholds + the
   // RNNoise worklet scale with the boost, so noise rejection still holds.
   const micRecentPeakRef = useRef(0);
+  // Previous frame's raw level: the peak may only rise to min(prev, current),
+  // i.e. a level sustained for 2 consecutive frames. A lone transient (cough,
+  // desk knock) no longer collapses the gain for the next ~10-20 s.
+  const micPrevRawLevelRef = useRef(0);
   const MIC_GAIN_TARGET_PEAK = 0.045; // desired avg-abs level for confident VAD/ASR
   const MIC_GAIN_PEAK_FLOOR = 0.012;  // never divide by less than this (caps silence-time gain)
 
@@ -6265,6 +6416,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // Repeat Question re-speak: no text arrives with it (see repeatTextRef).
             || (repeatInFlightRef.current ? repeatTextRef.current : "")
         );
+        // A new utterance (new question, Repeat, nudge, or a backend TTS-stall
+        // restart — `data.restart`) owns playback from here. The previous
+        // utterance's "TalkingHead ended early" flag must NOT carry over: left
+        // set, the 2nd PCM chunk of this utterance took the re-arm path below
+        // and restarted the worklet mid-word (Repeat stutter, aiu1 13:02:53).
+        talkingHeadEndedEarlyRef.current = false;
+        if (data.restart) {
+          console.warn(`[WS ${timestamp}] speaking_started(restart, reason=${data.reason}) — backend TTS stalled; replaying this utterance from a fresh stream`);
+        }
         // Defer streamStart until the first PCM chunk arrives (see pendingStreamStartRef).
         // Calling streamStart here (empty buffer) can cause TalkingHead to fire onAudioEnd
         // immediately on Q1 when AudioContext is cold, clearing isAiSpeaking mid-speech.
@@ -8187,6 +8347,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     lastVadFrameAtRef.current = null;
       speechPeakLevelRef.current = 0;
       micRecentPeakRef.current = 0;
+      micPrevRawLevelRef.current = 0;
       inTurnSpeechFrameCountRef.current = 0;
       ambientNoiseFloorRef.current = POSSIBLE_SPEECH_LEVEL * 0.5;
       candidateAudioStreamingRef.current = false;
@@ -8276,7 +8437,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
         // Skip empty frames — AudioWorklet can produce zero-filled frames.
         // Checked on the RAW level so boosting can't un-skip a silent frame.
-        if (rawLevel < 0.0001) return;
+        // While the answer is streaming, still SEND the frame (as silence):
+        // the server's pause clock counts silence in received audio, so
+        // dropping these made 15 s of quiet take 30-55 s of wall time to
+        // arrive (Oct 26 test logs, noise-suppressed built-in mic).
+        if (rawLevel < 0.0001) {
+          if (
+            candidateAudioStreamingRef.current &&
+            !isAiSpeakingRef.current &&
+            wsRef.current?.readyState === WebSocket.OPEN &&
+            wsRef.current.bufferedAmount <= 5_000_000
+          ) {
+            const silentLen = downsampleRatio > 1 ? Math.floor(input.length / downsampleRatio) : input.length;
+            try {
+              wsRef.current.send(new Int16Array(silentLen).buffer);
+              const interviewWindow = window as InterviewWindow;
+              interviewWindow.__audioFramesSent = (interviewWindow.__audioFramesSent || 0) + 1;
+              interviewWindow.__audioSilentFramesSent = (interviewWindow.__audioSilentFramesSent || 0) + 1;
+            } catch { /* same handling as a dropped frame — next frame retries */ }
+          }
+          return;
+        }
 
         // ── Adaptive gain: boost quiet (headset) mics toward a target level ──
         // Track a slowly-decaying recent peak; gain brings that peak up to the
@@ -8287,7 +8468,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // PCM bytes sent to ASR (pcmEarly), so detection and transcription see
         // a consistent, audible signal regardless of device.
         // (1) Gain — ceiling comes from the active device profile.
-        micRecentPeakRef.current = Math.max(rawLevel, micRecentPeakRef.current * 0.995);
+        // Transient-robust: a frame only raises the peak when the previous
+        // frame was loud too (candidate = min of the two), so one cough/knock
+        // can't drop the gain to ~1-2x for the next 10-20 s; sustained loud
+        // speech still lowers it within 2 frames (~170 ms). Same decay/bounds.
+        const sustainedLevel = Math.min(rawLevel, micPrevRawLevelRef.current);
+        micPrevRawLevelRef.current = rawLevel;
+        micRecentPeakRef.current = Math.max(sustainedLevel, micRecentPeakRef.current * 0.995);
         const micGain = Math.min(
           micGainMaxRef.current,
           Math.max(1, micGainTargetRef.current / Math.max(micRecentPeakRef.current, MIC_GAIN_PEAK_FLOOR)),
@@ -8489,7 +8676,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           !suppressNewSpeechDetection
         ) {
           candidateAudioFrameCountRef.current++;
-          if (candidateAudioFrameCountRef.current >= MIN_POSSIBLE_SPEECH_FRAMES) {
+          if (candidateAudioFrameCountRef.current >= SOFT_GATE_OPEN_FRAMES) {
             if (!candidateAudioStreamingRef.current) {
               candidateAudioStreamingRef.current = true;
               flushPreSpeechAudioToBackend();
@@ -8501,7 +8688,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             }
           }
         } else if (!candidateAudioStreamingRef.current && (avgLevel <= possibleSpeechThreshold || !voiceLike)) {
-          candidateAudioFrameCountRef.current = 0;
+          candidateAudioFrameCountRef.current = Math.max(0, candidateAudioFrameCountRef.current - 1);
         }
 
         const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
@@ -8607,7 +8794,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // frame's decision, in the same window as the streak above rather
             // than after it. dt is clamped so a stalled tab can't credit a gap.
             // Skipped while the server detector owns the popup (Plan B).
-            if (midSilenceConfirmRef.current && !serverVadActiveRef.current) {
+            if (midSilenceConfirmRef.current && (!serverVadActiveRef.current || popupByClientFallbackRef.current)) {
               const _prev = popupVadFrameAtRef.current;
               popupVadFrameAtRef.current = nowMs;
               if (_frameIsActive && _prev != null) {
@@ -9008,6 +9195,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               popupUp: midSilenceConfirmRef.current,
             });
           }
+          if (!midSilenceConfirmRef.current && (nowTs - start) >= DONE_CONFIRM_SILENCE_MS + SERVER_POPUP_GRACE_MS) {
+            console.warn('[INTERVIEW-DEBUG] AII14-clock: server silent past grace — browser raising "Are you done?"', {
+              question: questionNumberRef.current,
+              silenceMs: nowTs - start,
+              graceMs: SERVER_POPUP_GRACE_MS,
+            });
+            speechAccumMsRef.current = 0;
+            popupVadFrameAtRef.current = null;
+            setMidSilenceConfirm_(true);
+            popupByClientFallbackRef.current = true;
+          }
           return;
         }
         if (!midSilenceConfirmRef.current) {
@@ -9036,7 +9234,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       speechAccumMsRef.current = 0;
       setMidSilenceConfirm_(false);
     };
-  }, [isRecording, setMidSilenceConfirm_, setMidSilenceCountdown_, DONE_CONFIRM_SILENCE_MS]);
+  }, [isRecording, setMidSilenceConfirm_, setMidSilenceCountdown_, DONE_CONFIRM_SILENCE_MS, SERVER_POPUP_GRACE_MS]);
 
   // AII14 AC4 — "Submit": finalize the CURRENT response and move on.
   // stopRecording() is the normal end-of-turn path (the same one the parked
@@ -9423,6 +9621,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         if (pendingStreamStartRef.current) {
           const cb = pendingStreamStartRef.current;
           pendingStreamStartRef.current = null;
+          // Fresh stream for this utterance — a stale early-end flag from the
+          // previous one would re-arm (restart) the worklet on the next chunk.
+          talkingHeadEndedEarlyRef.current = false;
           talkingHeadRef.current?.streamStart(24000, cb);
         } else if (talkingHeadEndedEarlyRef.current) {
           // Recovery path: TalkingHead's worklet ended early (buffer drained
