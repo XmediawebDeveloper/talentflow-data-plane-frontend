@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -602,12 +602,16 @@ export default function AIInterviewTrackInvitesModal({
                 onClick={toggleSelectAll}
                 className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
               >
-                <span role="checkbox" aria-checked={allSelected} className="p-1 flex-shrink-0">
-                  {allSelected ? (
-                    <CheckSquare className="w-4 h-4 text-brand-blue" />
-                  ) : (
-                    <Square className="w-4 h-4 text-gray-400" />
-                  )}
+                <span
+                  role="checkbox"
+                  aria-checked={allSelected}
+                  className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                    allSelected
+                      ? 'bg-brand-blue border-brand-blue'
+                      : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                  }`}
+                >
+                  {allSelected && <Check className="w-3 h-3 text-white" />}
                 </span>
                 Select All ({selectableIds.length})
               </button>
