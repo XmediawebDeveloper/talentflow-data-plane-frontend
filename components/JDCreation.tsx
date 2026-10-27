@@ -32,6 +32,7 @@ import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
 import { convertSalaryAmount, formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
+import { setConfiguredExperienceLevels } from '@/lib/utils/jobExperience';
 import { getExchangeRate } from '@/lib/services/exchangeRateService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -4165,9 +4166,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         });
 
         // Use API data if available, otherwise use fallback
-        setExperienceLevels(data.experience_levels?.length > 0 ? data.experience_levels : FALLBACK_EXPERIENCE_LEVELS);
+        const resolvedExperienceLevels = data.experience_levels?.length > 0 ? data.experience_levels : FALLBACK_EXPERIENCE_LEVELS;
+        setExperienceLevels(resolvedExperienceLevels);
         setEducationLevels(data.education_levels?.length > 0 ? data.education_levels : FALLBACK_EDUCATION_LEVELS);
         setIndustryTypes(data.industry_types?.length > 0 ? data.industry_types : FALLBACK_INDUSTRY_TYPES);
+        // So the experience badge shown later on this same JD (summary card,
+        // published view) resolves its word against Configuration right away,
+        // not just the hardcoded standard-level dictionary.
+        setConfiguredExperienceLevels(resolvedExperienceLevels);
 
         if (!data.experience_levels?.length) {
           console.log('[TalentFlow] No experience levels from API, using fallback');
@@ -4453,29 +4459,39 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   ]);
 
   const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
-    const value =
-      min !== null && min !== undefined && !Number.isNaN(Number(min))
-        ? Number(min)
-        : max !== null && max !== undefined && !Number.isNaN(Number(max))
-          ? Number(max)
-          : null;
+    const hasMin = min !== null && min !== undefined && !Number.isNaN(Number(min));
+    const hasMax = max !== null && max !== undefined && !Number.isNaN(Number(max));
+    const minVal = hasMin ? Number(min) : null;
+    const maxVal = hasMax ? Number(max) : null;
+    const value = minVal ?? maxVal;
     if (value === null) return '';
     const levels = experienceLevels || [];
     if (levels.length) {
-      const containing = levels.filter((l) => {
-        const lo = l.min_years ?? 0;
-        const hi = l.max_years == null ? Number.POSITIVE_INFINITY : l.max_years;
-        return value >= lo && value <= hi;
-      });
+      const lo = (l: ExperienceLevel) => l.min_years ?? 0;
+      const hi = (l: ExperienceLevel) => (l.max_years == null ? Number.POSITIVE_INFINITY : l.max_years);
+      const width = (l: ExperienceLevel) => hi(l) - lo(l);
+
+      // When BOTH bounds are known, a band that contains the WHOLE entered range
+      // wins over one that only happens to contain a single edge of it. Without
+      // this, a range that exactly equals a configured band's own years (e.g.
+      // 2-4, Junior's band) tied on width against the band it merely borders
+      // (Entry's 0-2, sharing the boundary at 2) and the tie-break below kept
+      // whichever came first in the list - mislabelling Junior's own range as
+      // Entry Level.
+      if (minVal !== null && maxVal !== null) {
+        const fullyContaining = levels.filter((l) => minVal >= lo(l) && maxVal <= hi(l));
+        if (fullyContaining.length) {
+          fullyContaining.sort((a, b) => width(a) - width(b) || lo(b) - lo(a));
+          return fullyContaining[0].code;
+        }
+      }
+
+      const containing = levels.filter((l) => value >= lo(l) && value <= hi(l));
       if (containing.length) {
-        containing.sort((a, b) => {
-          const wa = (a.max_years == null ? Number.POSITIVE_INFINITY : a.max_years) - (a.min_years ?? 0);
-          const wb = (b.max_years == null ? Number.POSITIVE_INFINITY : b.max_years) - (b.min_years ?? 0);
-          return wa - wb;
-        });
+        containing.sort((a, b) => width(a) - width(b));
         return containing[0].code;
       }
-      const byMin = [...levels].sort((a, b) => (b.min_years ?? 0) - (a.min_years ?? 0));
+      const byMin = [...levels].sort((a, b) => lo(b) - lo(a));
       if (byMin.length) return byMin[0].code;
     }
     // Fallback thresholds when master levels are unavailable.
@@ -4668,9 +4684,31 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const matchExperienceCodeByYears = (min: number | null, max: number | null, text: string): string => {
       const levels = experienceLevels || [];
       if (!levels.length) return '';
-      const value = (min != null && !Number.isNaN(min)) ? min : ((max != null && !Number.isNaN(max)) ? max : null);
+      const hasMin = min != null && !Number.isNaN(min);
+      const hasMax = max != null && !Number.isNaN(max);
+      const value = hasMin ? min : (hasMax ? max : null);
       if (value == null) return '';
       const rangeOf = (l: ExperienceLevel) => ({ lo: l.min_years ?? 0, hi: l.max_years == null ? Number.POSITIVE_INFINITY : l.max_years });
+
+      // A band that contains the ENTIRE extracted range wins outright over one that
+      // merely contains a single edge of it. Without this, an extracted "2-4 years"
+      // (Junior's own configured band) tied on width against Entry's 0-2 - which only
+      // shares the boundary at 2 - and the lowest-floor tie-break below picked Entry,
+      // mislabelling Junior's own range as Entry Level.
+      if (hasMin && hasMax) {
+        const fullyContaining = levels.filter(l => { const { lo, hi } = rangeOf(l); return min! >= lo && max! <= hi; });
+        if (fullyContaining.length) {
+          fullyContaining.sort((a, b) => {
+            const ra = rangeOf(a); const rb = rangeOf(b);
+            const wa = ra.hi - ra.lo; const wb = rb.hi - rb.lo;
+            if (wa !== wb) return wa - wb;
+            return rb.lo - ra.lo;              // on a tie, the band this range actually starts at
+          });
+          const r0 = rangeOf(fullyContaining[0]);
+          const tied = fullyContaining.filter(l => { const r = rangeOf(l); return (r.hi - r.lo) === (r0.hi - r0.lo) && r.lo === r0.lo; });
+          return tied.length > 1 ? disambiguateSeniorLevel(tied, text) : fullyContaining[0].code;
+        }
+      }
 
       let candidates = levels.filter(l => { const { lo, hi } = rangeOf(l); return value >= lo && value <= hi; });
       if (candidates.length === 0) {

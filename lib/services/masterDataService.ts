@@ -96,7 +96,7 @@ export const masterDataService = {
     return response.data;
   },
 
-  async updateExperienceLevel(id: number, data: Partial<ExperienceLevelCreate>): Promise<ExperienceLevel> {
+  async updateExperienceLevel(id: number, data: Partial<ExperienceLevelCreate> & { is_active?: boolean }): Promise<ExperienceLevel> {
     const response = await api.put<ExperienceLevel>(`/master-data/experience-levels/${id}`, data);
     return response.data;
   },
@@ -118,7 +118,7 @@ export const masterDataService = {
     return response.data;
   },
 
-  async updateEducationLevel(id: number, data: Partial<EducationLevelCreate>): Promise<EducationLevel> {
+  async updateEducationLevel(id: number, data: Partial<EducationLevelCreate> & { is_active?: boolean }): Promise<EducationLevel> {
     const response = await api.put<EducationLevel>(`/master-data/education-levels/${id}`, data);
     return response.data;
   },
@@ -140,7 +140,7 @@ export const masterDataService = {
     return response.data;
   },
 
-  async updateIndustryType(id: number, data: Partial<IndustryTypeCreate>): Promise<IndustryType> {
+  async updateIndustryType(id: number, data: Partial<IndustryTypeCreate> & { is_active?: boolean }): Promise<IndustryType> {
     const response = await api.put<IndustryType>(`/master-data/industry-types/${id}`, data);
     return response.data;
   },
