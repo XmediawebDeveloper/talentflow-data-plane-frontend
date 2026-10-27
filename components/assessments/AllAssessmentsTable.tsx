@@ -355,6 +355,39 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
 const DEFAULT_SORT_KEY: SortKey = 'published';
 const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
 
+/**
+ * Every assessment of one tab's set, paged to the end, as table rows. Module
+ * level so the page can warm a tab (`prefetchAssessmentRows`) before it is
+ * opened, through the same code the table itself uses.
+ */
+async function fetchAssessmentRows(fixedStatus?: FixedAssessmentStatus): Promise<AssessmentRow[]> {
+  const collected: AssessmentResponse[] = [];
+  let apiPage = 1;
+  for (;;) {
+    const batch = await assessmentService.list({
+      ...(fixedStatus ? { status: fixedStatus } : {}),
+      page: apiPage,
+      page_size: FULL_SET_BATCH_SIZE,
+    });
+    const items = batch.items || [];
+    collected.push(...items);
+    const total = batch.total ?? collected.length;
+    if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
+    apiPage += 1;
+  }
+  /* Offset paging over a list that can change between batches (a row
+     created or archived mid-walk) can hand the same assessment back on two
+     pages — one row per id. */
+  const seen = new Set<string>();
+  return collected.filter((a) => !seen.has(a.id) && !!seen.add(a.id)).map(toRow);
+}
+
+/** Loads a tab's rows and remembers them, so opening that tab draws at once. */
+export async function prefetchAssessmentRows(fixedStatus?: FixedAssessmentStatus): Promise<void> {
+  const rows = await fetchAssessmentRows(fixedStatus);
+  writeListSnapshot(`assessments:rows:${fixedStatus ?? 'all'}`, rows);
+}
+
 export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, sortPreset = 'newest', onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated, displayMode = 'list', onDisplayModeChange }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
@@ -455,27 +488,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      the mount effect below therefore contains no synchronous setState at all.
      `isLoading` starts true, so a mount needs no "start loading" write either
      — only Retry does, and that is an event handler. */
-  const fetchAll = useCallback(async (): Promise<AssessmentRow[]> => {
-    const collected: AssessmentResponse[] = [];
-    let apiPage = 1;
-    for (;;) {
-      const batch = await assessmentService.list({
-        ...(fixedStatus ? { status: fixedStatus } : {}),
-        page: apiPage,
-        page_size: FULL_SET_BATCH_SIZE,
-      });
-      const items = batch.items || [];
-      collected.push(...items);
-      const total = batch.total ?? collected.length;
-      if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
-      apiPage += 1;
-    }
-    /* Offset paging over a list that can change between batches (a row
-       created or archived mid-walk) can hand the same assessment back on two
-       pages — one row per id. */
-    const seen = new Set<string>();
-    return collected.filter((a) => !seen.has(a.id) && !!seen.add(a.id)).map(toRow);
-  }, [fixedStatus]);
+  const fetchAll = useCallback(() => fetchAssessmentRows(fixedStatus), [fixedStatus]);
 
   /* Every state write lands in a promise callback rather than in the effect
      body — the shape React actually wants for "subscribe to an external system

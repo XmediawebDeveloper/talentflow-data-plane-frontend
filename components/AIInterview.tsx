@@ -3,6 +3,10 @@
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
+import { mapLimit } from '@/lib/utils/mapLimit';
+import { startWarmUp } from '@/lib/utils/warmUp';
+import { prefetchInterviewRows } from '@/components/ai-interview/AllInterviewsTable';
+import { prefetchAIResultRows } from '@/components/ai-interview/AIInterviewCandidateResults';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -672,12 +676,16 @@ export default function AIInterview() {
      row actions all call it, and an older response landing last must not
      overwrite a newer list. */
   const archivedSeqRef = useRef(0);
+  /* When the archived list was last loaded, so a tab click does not download it
+     all again (and re-render everything built on it) when it is seconds old. */
+  const archivedLoadedAtRef = useRef(0);
   const loadArchivedConfigs = useCallback(async () => {
     const seq = ++archivedSeqRef.current;
     try {
       const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ status: 'archived', page, page_size, compact: true }));
       if (seq !== archivedSeqRef.current) return;
       setArchivedConfigs(result.items);
+      archivedLoadedAtRef.current = Date.now();
     } catch (error) {
       console.error('Failed to load archived configs:', error);
     }
@@ -1002,42 +1010,20 @@ export default function AIInterview() {
           .forEach((config, index) => interviewVersionById.set(config.id, index + 1));
       });
 
-      /* Each config's invitation total in ONE request (batches of 200), so a
-         config with none is skipped outright and one with some is fetched in a
-         single call at its exact size — instead of a page_size=1 probe per
-         config followed by a second, sized request. A batch that fails leaves
-         its configs out of the map and they take the probe path below, as
-         before. */
-      const knownTotals = new Map<string, number>();
-      for (let start = 0; start < allConfigs.length; start += 200) {
-        const batch = allConfigs.slice(start, start + 200);
-        try {
-          const counts = await aiInterviewService.getInvitationCounts(batch.map((c) => c.id));
-          for (const c of batch) {
-            const entry = counts[c.id];
-            if (entry) knownTotals.set(c.id, entry.total || 0);
-          }
-        } catch {
-          /* fall back per config */
-        }
-      }
-
-      if (isStale()) return;
-      // Configs whose invitations could not be fetched — see below.
-      let failedConfigs = 0;
-      const perConfig = await Promise.all(
-        allConfigs.map(async (config) => {
-          try {
-            const known = knownTotals.get(config.id);
-            if (known === 0) return [];
-            const probe = known !== undefined
-              ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: known })
-              : await fetchAllRows((page_size, page) => aiInterviewService.getConfigInvitations(config.id, { page, page_size }));
-            if (!probe.total) return [];
-            const full = probe.total > probe.items.length
-              ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })
-              : probe;
-            return full.items.map((inv) => ({
+      /* ONE request for every invitation of every interview. Rows carry their
+         `config_id`; the config's title / job / versions are joined here from
+         the list already in hand. An older backend without the endpoint (or a
+         failure) falls through to the per-interview path below, unchanged. */
+      let merged: any[] | null = null;
+      try {
+        const configById = new Map(allConfigs.map((config) => [config.id, config]));
+        const rows = await aiInterviewService.getAllInvitations();
+        if (isStale()) return;
+        merged = rows
+          .filter((inv) => inv.config_id && configById.has(inv.config_id))
+          .map((inv) => {
+            const config = configById.get(inv.config_id as string)!;
+            return {
               ...inv,
               _config_id: config.id,
               _config_title: config.jd_title || config.position || 'Untitled',
@@ -1045,23 +1031,76 @@ export default function AIInterview() {
               _jd_short_id: config.jd_short_id,
               _jd_version: config.jd_version ?? 1,
               _interview_version: interviewVersionById.get(config.id) ?? 1,
-            }));
-          } catch {
-            // One config's invitations being unavailable must not empty the tab.
-            failedConfigs += 1;
-            return [];
-          }
-        }),
-      );
-      if (isStale()) return;
-      if (failedConfigs > 0) {
-        /* A background poll keeps the rows it already has rather than
-           replacing them with a set missing those configs' invites; a visible
-           load shows what it got, but says the counts may be short. */
-        if (silent) return;
-        toast.error(`Invitations for ${failedConfigs} interview${failedConfigs === 1 ? '' : 's'} could not be loaded — counts may be incomplete. Refresh to try again.`);
+            };
+          });
+      } catch {
+        merged = null;
       }
-      const merged = perConfig.flat();
+
+      if (merged === null) {
+        /* Each config's invitation total in ONE request (batches of 200), so a
+           config with none is skipped outright and one with some is fetched in a
+           single call at its exact size — instead of a page_size=1 probe per
+           config followed by a second, sized request. A batch that fails leaves
+           its configs out of the map and they take the probe path below, as
+           before. */
+        const knownTotals = new Map<string, number>();
+        for (let start = 0; start < allConfigs.length; start += 200) {
+          const batch = allConfigs.slice(start, start + 200);
+          try {
+            const counts = await aiInterviewService.getInvitationCounts(batch.map((c) => c.id));
+            for (const c of batch) {
+              const entry = counts[c.id];
+              if (entry) knownTotals.set(c.id, entry.total || 0);
+            }
+          } catch {
+            /* fall back per config */
+          }
+        }
+
+        if (isStale()) return;
+        // Configs whose invitations could not be fetched — see below.
+        let failedConfigs = 0;
+        const perConfig = await mapLimit(
+          // Fewer in flight for a background/silent run (warm-up, poll) so a click
+          // made meanwhile is not queued behind it.
+          allConfigs, silent ? 3 : 6, async (config) => {
+            try {
+              const known = knownTotals.get(config.id);
+              if (known === 0) return [];
+              const probe = known !== undefined
+                ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: known })
+                : await fetchAllRows((page_size, page) => aiInterviewService.getConfigInvitations(config.id, { page, page_size }));
+              if (!probe.total) return [];
+              const full = probe.total > probe.items.length
+                ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })
+                : probe;
+              return full.items.map((inv) => ({
+                ...inv,
+                _config_id: config.id,
+                _config_title: config.jd_title || config.position || 'Untitled',
+                _jd_id: config.jd_id,
+                _jd_short_id: config.jd_short_id,
+                _jd_version: config.jd_version ?? 1,
+                _interview_version: interviewVersionById.get(config.id) ?? 1,
+              }));
+            } catch {
+              // One config's invitations being unavailable must not empty the tab.
+              failedConfigs += 1;
+              return [];
+            }
+          },
+        );
+        if (isStale()) return;
+        if (failedConfigs > 0) {
+          /* A background poll keeps the rows it already has rather than
+             replacing them with a set missing those configs' invites; a visible
+             load shows what it got, but says the counts may be short. */
+          if (silent) return;
+          toast.error(`Invitations for ${failedConfigs} interview${failedConfigs === 1 ? '' : 's'} could not be loaded — counts may be incomplete. Refresh to try again.`);
+        }
+        merged = perConfig.flat();
+      }
       // Newest invite first: invitation_sent_at is the moment a recruiter cares
       // about; created_at covers a row that never made it out of the queue.
       merged.sort((a, b) =>
@@ -1109,6 +1148,25 @@ export default function AIInterview() {
   useEffect(() => {
     loadAllInviteStatusesRef.current = loadAllInviteStatuses;
   }, [loadAllInviteStatuses]);
+
+  /* Warm-up: once the page's own load is done, load the other tabs' data in the
+     background, lightest first, so a click on any tab finds it ready instead of
+     starting from a skeleton. Each step is skipped quietly if it fails (the tab
+     then loads normally when opened). Runs once per visit. */
+  const warmedRef = useRef(false);
+  const cancelWarmUpRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (loading || warmedRef.current || configs.length === 0) return;
+    warmedRef.current = true;
+    cancelWarmUpRef.current = startWarmUp([
+      () => prefetchInterviewRows(),
+      () => prefetchAIResultRows(),
+      () => loadAllInviteStatusesRef.current(true),
+    ]);
+  }, [loading, configs.length]);
+  // Only leaving the page stops the warm-up (a re-render must not).
+  useEffect(() => () => cancelWarmUpRef.current?.(), []);
+
   useEffect(() => {
     if (activeTab === 'invitation-status') loadAllInviteStatusesRef.current();
   }, [activeTab, inviteStatusConfigKey]);
@@ -1292,7 +1350,7 @@ export default function AIInterview() {
     // Every tab: Duplicate's latest-version and cap rules count archived versions,
     // so the row menu on Active/Draft/All Interviews needs them too. Skipped
     // until the first loadData has finished — that run loads them itself.
-    if (hasLoadedRef.current) loadArchivedConfigs();
+    if (hasLoadedRef.current && Date.now() - archivedLoadedAtRef.current > 30_000) loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);

@@ -10,6 +10,9 @@ import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
+import { mapLimit } from '@/lib/utils/mapLimit';
+import { startWarmUp } from '@/lib/utils/warmUp';
+import { prefetchAssessmentRows } from '@/components/assessments/AllAssessmentsTable';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -2790,19 +2793,34 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       .map((a: any, index: number) => mapAssessmentFromApi(a, index));
   };
 
-  const loadAssessmentsPage = async (page: number) => {
+  /* The whole-set answers this page has already fetched, per filter set. A tab
+     click reuses a fresh one (and refreshes a stale one quietly behind it)
+     instead of downloading every assessment again behind a skeleton; anything
+     that changes data reloads for real and clears them. */
+  const assessmentsCacheRef = useRef(new Map<string, { rows: any[]; at: number }>());
+  const ASSESSMENTS_FRESH_MS = 60_000;
+  const loadAssessmentsPage = async (page: number, mode: 'reload' | 'tab' = 'reload') => {
     const seq = ++assessmentsFetchSeqRef.current;
     const isStale = () => seq !== assessmentsFetchSeqRef.current;
-    setIsLoading(true);
+    const filters: any = {};
+    if (preSelectedJdId) {
+      filters.jd_id = preSelectedJdId;
+    }
+    const status = getAssessmentStatusFilter(activeTab);
+    if (status) {
+      filters.status = status;
+    }
+    const cacheKey = JSON.stringify(filters);
+    const cached = mode === 'tab' ? assessmentsCacheRef.current.get(cacheKey) : undefined;
+    if (mode === 'reload') assessmentsCacheRef.current.clear();
+    if (cached) {
+      setApiAssessments(cached.rows);
+      setIsLoading(false);
+      if (Date.now() - cached.at < ASSESSMENTS_FRESH_MS) return;
+    } else {
+      setIsLoading(true);
+    }
     try {
-      const filters: any = {};
-      if (preSelectedJdId) {
-        filters.jd_id = preSelectedJdId;
-      }
-      const status = getAssessmentStatusFilter(activeTab);
-      if (status) {
-        filters.status = status;
-      }
       /* No `search` param: the search box matches Job ID and Job Name only,
          in `filteredAssessments`, over this full set. */
 
@@ -2825,6 +2843,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       {
         const collected = await fetchAllAssessments(filters);
         if (isStale()) return;
+        assessmentsCacheRef.current.set(cacheKey, { rows: collected, at: Date.now() });
         setApiAssessments(collected);
         /* The count of everything that matched, before the browser-side
            filters and the version collapse narrow it further. What the footer
@@ -3293,52 +3312,77 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const jobVersionByJdId = rememberJobVersions(
         await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
       );
-      const perAssessment = await Promise.all(
-        items.map(async (a: any) => {
+      /* Stamps an invitation with the assessment it belongs to. Used by both the
+         one-request path and the per-assessment fallback below, so the rows
+         are identical either way. */
+      const stampInvite = (inv: any, a: any) => ({
+            ...inv,
+            _assessment_id: a.id,
+            _assessment_short_id: a.short_id,
+            _assessment_title: a.title,
+            /* The job and version columns. An invitation record carries none
+               of this — it knows its candidate and its assessment — but the
+               fan-out is already holding the parent assessment, which has
+               all four on it (AssessmentResponse), so the columns cost no
+               request of their own and cannot disagree with the assessment
+               they came from.
+
+                 _jd_short_id        the human-readable Job ID, e.g. JD-014.
+                 _jd_title           the job's name.
+                 _jd_version         the job version the assessment was
+                                     authored against — resolved from its JD
+                                     ROW, since the `jd_version` number on the
+                                     record is a creation-time snapshot that
+                                     reads 1 for assessments authored against
+                                     later versions.
+                 _assessment_version the assessment's own version, which
+                                     increments on each edit/publish. */
+            _jd_id: a.jd_id,
+            _jd_short_id: a.jd_short_id,
+            _jd_title: a.jd_title,
+            _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
+            _assessment_version: a.version,
+            /* Which rounds this assessment has. Only the score cells' "why
+               is this blank" tooltip reads them — the columns themselves
+               stay put, because rows here span assessments and a column
+               cannot come and go per row the way the popup's can. */
+            _technical_enabled: a.technical_enabled,
+            _coding_enabled: a.coding_enabled,
+      });
+      /* ONE request for every invitation of every assessment (rows carry their
+         `assessment_id`); a failure or an older backend falls through to the
+         per-assessment path below, unchanged. */
+      let fastRows: any[] | null = null;
+      try {
+        const assessmentById = new Map<string, any>(items.map((a: any) => [a.id, a]));
+        const rows = await assessmentService.getAllInvitations();
+        if (isStale()) return;
+        fastRows = rows
+          .filter((inv: any) => inv.assessment_id && assessmentById.has(inv.assessment_id))
+          .map((inv: any) => stampInvite(inv, assessmentById.get(inv.assessment_id)));
+      } catch {
+        fastRows = null;
+      }
+
+      const perAssessment = fastRows ? [fastRows] : await mapLimit(
+        // Fewer in flight for a background/silent run (warm-up, poll) so a click
+        // made meanwhile is not queued behind it.
+        items, silent ? 3 : 6, async (a: any) => {
+          /* The list already says how many invitations each assessment has (the
+             same table `listInvitations` reads), so one with none costs no
+             request. Most assessments are in that group. */
+          if (typeof a.invitations_count === 'number' && a.invitations_count === 0) return [];
           try {
             const invitations = await collectAllPages((page, page_size) =>
               assessmentService.listInvitations(a.id, { page, page_size }),
             );
-            return invitations.map((inv: any) => ({
-              ...inv,
-              _assessment_id: a.id,
-              _assessment_short_id: a.short_id,
-              _assessment_title: a.title,
-              /* The job and version columns. An invitation record carries none
-                 of this — it knows its candidate and its assessment — but the
-                 fan-out is already holding the parent assessment, which has
-                 all four on it (AssessmentResponse), so the columns cost no
-                 request of their own and cannot disagree with the assessment
-                 they came from.
-
-                   _jd_short_id        the human-readable Job ID, e.g. JD-014.
-                   _jd_title           the job's name.
-                   _jd_version         the job version the assessment was
-                                       authored against — resolved from its JD
-                                       ROW, since the `jd_version` number on the
-                                       record is a creation-time snapshot that
-                                       reads 1 for assessments authored against
-                                       later versions.
-                   _assessment_version the assessment's own version, which
-                                       increments on each edit/publish. */
-              _jd_id: a.jd_id,
-              _jd_short_id: a.jd_short_id,
-              _jd_title: a.jd_title,
-              _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
-              _assessment_version: a.version,
-              /* Which rounds this assessment has. Only the score cells' "why
-                 is this blank" tooltip reads them — the columns themselves
-                 stay put, because rows here span assessments and a column
-                 cannot come and go per row the way the popup's can. */
-              _technical_enabled: a.technical_enabled,
-              _coding_enabled: a.coding_enabled,
-            }));
+            return invitations.map((inv: any) => stampInvite(inv, a));
           } catch {
             /* One assessment's invitations being unavailable must not empty the
                tab — the rest still list. */
             return [];
           }
-        })
+        },
       );
       /* One row per invitation: paging that shifts while it is being walked
          can hand the same record back twice, and it would list as two rows. */
@@ -3381,6 +3425,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (!isStale()) setIsLoadingInviteStatus(false);
     }
   };
+
+  /* Warm-up: once the page's own stats have loaded, load the other tabs' data in
+     the background, lightest first, so a click on any tab finds it ready instead
+     of starting from a skeleton. Each step is skipped quietly if it fails (the
+     tab then loads normally when opened). Runs once per visit; only leaving the
+     page stops it. */
+  const warmFnsRef = useRef({ results: loadAllCompletedCandidates, invites: loadAllInviteStatuses });
+  warmFnsRef.current = { results: loadAllCompletedCandidates, invites: loadAllInviteStatuses };
+  const warmedRef = useRef(false);
+  const cancelWarmUpRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (isLoadingStats || warmedRef.current) return;
+    warmedRef.current = true;
+    cancelWarmUpRef.current = startWarmUp([
+      () => prefetchAssessmentRows(),
+      () => prefetchAssessmentRows('published'),
+      () => prefetchAssessmentRows('draft'),
+      () => prefetchAssessmentRows('archived'),
+      () => warmFnsRef.current.results(),
+      () => warmFnsRef.current.invites(true),
+    ]);
+  }, [isLoadingStats]);
+  useEffect(() => () => cancelWarmUpRef.current?.(), []);
 
   useEffect(() => {
     if (activeTab !== 'invitation-status') return;
@@ -3557,7 +3624,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (activeTab === 'invitation-status' || activeTab === 'settings') {
       return;
     }
-    loadAssessmentsPage(assessmentCurrentPage);
+    loadAssessmentsPage(assessmentCurrentPage, 'tab');
     // The advanced filters belong here too: turning one on switches the loader
     // between "one server page" and "the whole result set", and without the
     // dependency that switch never happened.

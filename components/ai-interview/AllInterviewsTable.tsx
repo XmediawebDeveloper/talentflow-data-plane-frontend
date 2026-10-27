@@ -426,6 +426,72 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   return null;
 }
 
+/**
+ * Every interview as table rows: the list first (handed to `onList` as soon as
+ * it is ready), then each row's Completed count. Module level so the page can
+ * warm the tab (`prefetchInterviewRows`) through the same code the table uses.
+ */
+async function loadInterviewRows(onList: (rows: InterviewRow[]) => void): Promise<InterviewRow[]> {
+  const startedAt = performance.now();
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
+
+  const seen = new Set<string>();
+  const merged: AIInterviewResponse[] = [];
+  for (const config of [...live, ...archived]) {
+    if (seen.has(config.id)) continue;
+    seen.add(config.id);
+    merged.push(config);
+  }
+  const rows = withInterviewVersions(merged);
+
+  /* The list response carries no finished-sessions count, so it is read off
+     the batched `/invitation-counts` endpoint — a SECOND request. The rows
+     are handed to the table first, with Completed marked pending (carrying
+     over the last known figure meanwhile), so the list is on screen as soon
+     as the first request answers instead of after both. */
+  const withInvites = rows.filter((row) => row.invitations > 0);
+  const known = new Map((readListSnapshot<InterviewRow[]>('ai-interviews:rows') ?? []).map((r) => [r.id, r.completed]));
+  for (const row of withInvites) {
+    row.completed = known.get(row.id) ?? 0;
+    row.completedPending = true;
+  }
+  onList([...rows]);
+  perfNote('All Interviews — rows ready', startedAt);
+
+  const COUNTS_BATCH = 200; // backend cap on ids per request
+  for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
+    const batch = withInvites.slice(start, start + COUNTS_BATCH);
+    try {
+      const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
+      for (const row of batch) row.completed = counts[row.id]?.completed || 0;
+    } catch {
+      /* Older backend / transient error: fall back to the per-config probe
+         for this batch, ten at a time. A failed probe leaves that row at 0. */
+      for (let i = 0; i < batch.length; i += 10) {
+        await Promise.all(
+          batch.slice(i, i + 10).map(async (row) => {
+            try {
+              const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
+              row.completed = res.completed || 0;
+            } catch {
+              /* leave at 0 */
+            }
+          }),
+        );
+      }
+    }
+    for (const row of batch) row.completedPending = false;
+  }
+  perfNote('All Interviews — counts complete', startedAt);
+  return rows;
+}
+
+/** Loads the rows (counts included) and remembers them, so the tab draws complete at once. */
+export async function prefetchInterviewRows(): Promise<void> {
+  const rows = await loadInterviewRows(() => {});
+  writeListSnapshot('ai-interviews:rows', rows.map((row) => ({ ...row })));
+}
+
 export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', seedConfigs, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -480,60 +546,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   /* Two requests, not one: `listConfigs` with no status filter excludes
      archived configs (AIInterview.tsx loads them separately for the same
      reason), and "All Interviews" means every version regardless of status. */
-  const fetchAll = useCallback(async (onList: (rows: InterviewRow[]) => void): Promise<InterviewRow[]> => {
-    const startedAt = performance.now();
-    const { live, archived } = await aiInterviewService.listAllConfigsSplit();
-
-    const seen = new Set<string>();
-    const merged: AIInterviewResponse[] = [];
-    for (const config of [...live, ...archived]) {
-      if (seen.has(config.id)) continue;
-      seen.add(config.id);
-      merged.push(config);
-    }
-    const rows = withInterviewVersions(merged);
-
-    /* The list response carries no finished-sessions count, so it is read off
-       the batched `/invitation-counts` endpoint — a SECOND request. The rows
-       are handed to the table first, with Completed marked pending (carrying
-       over the last known figure meanwhile), so the list is on screen as soon
-       as the first request answers instead of after both. */
-    const withInvites = rows.filter((row) => row.invitations > 0);
-    const known = new Map((readListSnapshot<InterviewRow[]>('ai-interviews:rows') ?? []).map((r) => [r.id, r.completed]));
-    for (const row of withInvites) {
-      row.completed = known.get(row.id) ?? 0;
-      row.completedPending = true;
-    }
-    onList([...rows]);
-    perfNote('All Interviews — rows ready', startedAt);
-
-    const COUNTS_BATCH = 200; // backend cap on ids per request
-    for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
-      const batch = withInvites.slice(start, start + COUNTS_BATCH);
-      try {
-        const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
-        for (const row of batch) row.completed = counts[row.id]?.completed || 0;
-      } catch {
-        /* Older backend / transient error: fall back to the per-config probe
-           for this batch, ten at a time. A failed probe leaves that row at 0. */
-        for (let i = 0; i < batch.length; i += 10) {
-          await Promise.all(
-            batch.slice(i, i + 10).map(async (row) => {
-              try {
-                const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
-                row.completed = res.completed || 0;
-              } catch {
-                /* leave at 0 */
-              }
-            }),
-          );
-        }
-      }
-      for (const row of batch) row.completedPending = false;
-    }
-    perfNote('All Interviews — counts complete', startedAt);
-    return rows;
-  }, []);
+  const fetchAll = loadInterviewRows;
 
   useEffect(() => {
     let alive = true;
