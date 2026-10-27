@@ -46,8 +46,11 @@ variables:
   - aws() { docker run --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION="$AWS_REGION" amazon/aws-cli:2.17.0 "$@"; }
 
 .ssh: &ssh
-  - chmod 600 "$AWS_SSH_KEY"
-  - SSH_OPTS="-i $AWS_SSH_KEY -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
+  # normalise the pasted key: CRLF, indentation and a missing final newline
+  # all make ssh fail with "error in libcrypto"
+  - printf '%s\n' "$(tr -d '\r' < "$AWS_SSH_KEY" | sed 's/^[[:space:]]*//')" > "$AWS_SSH_KEY.pem"
+  - chmod 600 "$AWS_SSH_KEY.pem"
+  - SSH_OPTS="-i $AWS_SSH_KEY.pem -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
   - SSH_TARGET="$AWS_SERVER_USER@$AWS_SERVER_HOST"
 
 # Lint is advisory, same as the existing "Code style (advisory)" job —
@@ -110,6 +113,8 @@ variables:
   before_script:
     - *aws-cli
     - *ssh
+  after_script:
+    - rm -f "$AWS_SSH_KEY.pem"
   script:
     - scp $SSH_OPTS docker-compose.yml "$SSH_TARGET:$AWS_DEPLOY_DIR/docker-compose.yml"
     - aws ecr get-login-password
@@ -122,6 +127,8 @@ variables:
   stage: health check
   resource_group: aws-live-frontend
   before_script: *ssh
+  after_script:
+    - rm -f "$AWS_SSH_KEY.pem"
   script:
     - ssh $SSH_OPTS "$SSH_TARGET" bash -s -- health "$AWS_DEPLOY_DIR"
         http://localhost:3000/ 24 < .gitlab/ci/aws-live-remote.sh
