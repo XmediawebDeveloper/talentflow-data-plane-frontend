@@ -160,6 +160,9 @@ export interface AIInterviewCandidateResultsProps {
    * rendering inline when unset.
    */
   toolbarSlot?: HTMLDivElement | null;
+  /** The host page's slot in its tab-pills row (before Refresh). When given,
+   *  Actions + Clear render there instead of inline in the toolbar. */
+  bulkActionSlot?: HTMLElement | null;
   /**
    * Bumped by the host's Refresh button (AIInterview.tsx) to force a
    * reload — this table otherwise only refetches on mount.
@@ -173,7 +176,7 @@ export interface AIInterviewCandidateResultsProps {
   onDisplayModeChange?: (mode: ListDisplayMode) => void;
 }
 
-export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
+export default function AIInterviewCandidateResults({ toolbarSlot, bulkActionSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, enforced server-side by the
   // audit endpoint too) — greyed with the reason when missing, never hidden.
@@ -569,6 +572,74 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     );
   };
 
+  /* Actions + Clear — only while rows are ticked: Export and Download PDF
+     Reports, then Clear. Inline in the toolbar standalone, or in the host
+     page's tab-pills row (bulkActionSlot). */
+  const selectionControls = selectedRows.length > 0 ? (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`relative ${bulkActionSlot ? 'h-8' : 'h-9'} px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300`}
+            aria-label={`Actions for ${selectedRows.length} selected`}
+          >
+            <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+            </span>
+            {downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            Actions ({selectedRows.length})
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+            {selectedRows.length.toLocaleString()} selected
+          </div>
+          <DropdownMenuItem
+            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+            aria-disabled={!canExport || undefined}
+            title={canExport ? undefined : 'You do not have permission to export AI interviews'}
+            onSelect={(e) => {
+              if (!canExport) { e.preventDefault(); return; }
+              setShowExportModal(true);
+            }}
+          >
+            <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+            <span>Export</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
+            disabled={!!downloadingPdfs}
+            aria-disabled={!canDownloadReports || undefined}
+            title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+            onSelect={(e) => {
+              if (!canDownloadReports) { e.preventDefault(); return; }
+              void handleDownloadSelectedPdfs();
+            }}
+          >
+            <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+            <span>
+              {downloadingPdfs
+                ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
+                : 'Download PDF Reports'}
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setSelectedKeys(new Set())}
+        icon={<X className="w-4 h-4" />}
+        className={`whitespace-nowrap ${bulkActionSlot ? '!h-8' : '!h-9'} !text-sm`}
+      >
+        Clear
+      </Button>
+    </>
+  ) : null;
+
   const toolbar = (
     <>
 
@@ -582,6 +653,9 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         searchPlaceholder="Search by name, email, CID, or interview..."
         // Many controls beside the search — lay out by the toolbar's own width.
         fitToContainer
+        /* Trailing, not among the controls: on phones it sits beside the
+           search box instead of on a line of its own. */
+        trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} />}
         onToggleFilters={() => setShowFilters((open) => !open)}
         filtersOpen={showFilters}
         activeFilterCount={search.activeFilterCount}
@@ -642,74 +716,9 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           </div>
         }
       >
-        {/* Actions — the Resume Scoring pill: appears once a row is ticked and
-            holds Export (format + columns picked in its popup) and Download
-            PDF Reports. Clear unticks everything. */}
-        {selectedRows.length > 0 && (
-          <>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
-                  aria-label={`Actions for ${selectedRows.length} selected`}
-                >
-                  <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-                    <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-                  </span>
-                  {downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Actions ({selectedRows.length})
-                  <ChevronDown className="w-4 h-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                  {selectedRows.length.toLocaleString()} selected
-                </div>
-                <DropdownMenuItem
-                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                  aria-disabled={!canExport || undefined}
-                  title={canExport ? undefined : 'You do not have permission to export AI interviews'}
-                  onSelect={(e) => {
-                    if (!canExport) { e.preventDefault(); return; }
-                    setShowExportModal(true);
-                  }}
-                >
-                  <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
-                  <span>Export</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
-                  disabled={!!downloadingPdfs}
-                  aria-disabled={!canDownloadReports || undefined}
-                  title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
-                  onSelect={(e) => {
-                    if (!canDownloadReports) { e.preventDefault(); return; }
-                    void handleDownloadSelectedPdfs();
-                  }}
-                >
-                  <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
-                  <span>
-                    {downloadingPdfs
-                      ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
-                      : 'Download PDF Reports'}
-                  </span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setSelectedKeys(new Set())}
-              icon={<X className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
-            >
-              Clear
-            </Button>
-          </>
-        )}
-        <ListViewToggle value={displayMode} onChange={setDisplayMode} />
+        {/* Actions + Clear — standalone (no host slot): inline beside More
+            Filters. In a host page: its tab-pills row, see the render. */}
+        {!bulkActionSlot && selectionControls}
       </ListToolbar>
     </>
   );
@@ -810,6 +819,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     return (
       <div>
         {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
+        {bulkActionSlot && selectionControls && createPortal(selectionControls, bulkActionSlot)}
         {stateBody}
       </div>
     );
@@ -818,6 +828,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   return (
     <div>
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
+      {bulkActionSlot && selectionControls && createPortal(selectionControls, bulkActionSlot)}
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {filteredRows.length === 0 ? (

@@ -1790,20 +1790,20 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
               </div>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
             </div>
           )}
 
           {/* Work Experience */}
           {detailedResume.experience.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
@@ -1812,12 +1812,12 @@ Best regards`);
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h4 className="font-semibold text-gray-900 mb-1">{exp.title}</h4>
-                          <div className="flex items-center gap-2 text-gray-700 mb-1">
+                          <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{exp.title}</h4>
+                          <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
                             <Building2 className="w-4 h-4" />
                             <span>{exp.company}</span>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-4 text-xs text-gray-600">
                             {exp.location && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
@@ -1875,22 +1875,22 @@ Best regards`);
             {/* Education */}
             {detailedResume.education.length > 0 && (
               <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-6">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
                 </div>
                 <div className="space-y-4">
                   {detailedResume.education.map((edu, index) => (
                     <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                      <h4 className="font-semibold text-gray-800 mb-1">
+                      <h4 className="text-sm sm:text-base font-semibold text-gray-800 mb-1">
                         {edu.degree}
                         {edu.field && ` in ${edu.field}`}
                       </h4>
-                      {edu.school && <div className="text-gray-700 mb-1">{edu.school}</div>}
-                      {edu.institution && !edu.school && <div className="text-gray-700 mb-1">{edu.institution}</div>}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                      {edu.school && <div className="text-sm text-gray-700 mb-1">{edu.school}</div>}
+                      {edu.institution && !edu.school && <div className="text-sm text-gray-700 mb-1">{edu.institution}</div>}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                         {edu.location && (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
@@ -1921,17 +1921,17 @@ Best regards`);
             {/* Skills */}
             {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
               <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-6">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Code className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
                 </div>
 
                 {/* Technical Skills */}
                 {detailedResume.skills.technical.length > 0 && (
                   <div className="mb-6">
-                    <h4 className="font-medium text-gray-900 mb-4">Technical Skills</h4>
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Technical Skills</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {detailedResume.skills.technical.map((skill, index) => (
                         <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
@@ -1946,7 +1946,7 @@ Best regards`);
                 {/* Soft Skills */}
                 {detailedResume.skills.soft.length > 0 && (
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-4">Soft Skills</h4>
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Soft Skills</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {detailedResume.skills.soft.map((skill, index) => (
                         <span key={index} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
@@ -1974,15 +1974,15 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                     <Award className="w-4 h-4 text-brand-orange" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
                 </div>
                 <div className={`space-y-2.5 ${detailedResume.certifications.length > 3 ? 'max-h-[15rem] overflow-y-auto pr-1' : ''}`}>
                   {detailedResume.certifications.map((cert, index) => (
                     <div key={index} className="px-3 py-2.5 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 [overflow-wrap:anywhere]">
-                          <h4 className="text-sm font-semibold text-gray-900 mb-0.5">{cert.name}</h4>
-                          {cert.issuer && <div className="text-xs text-gray-700 mb-0.5">{cert.issuer}</div>}
+                          <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5">{cert.name}</h4>
+                          {cert.issuer && <div className="text-sm text-gray-700 mb-0.5">{cert.issuer}</div>}
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                             {cert.date && (
                               <span className="flex items-center gap-1">
@@ -2011,7 +2011,7 @@ Best regards`);
                       <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <Languages className="w-4 h-4 text-brand-cyan" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {detailedResume.languages.map((lang, index) => (
@@ -2027,7 +2027,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Globe className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
                   </div>
                 )}
 
@@ -2075,17 +2075,17 @@ Best regards`);
           {/* Projects */}
           {resume.projects && resume.projects.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
               </div>
               <div className="space-y-4">
                 {resume.projects.map((project: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-gray-900">{project.name}</h4>
+                      <h4 className="text-sm sm:text-base font-semibold text-gray-900">{project.name}</h4>
                       {project.url && (
                         <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                           <ExternalLink className="w-4 h-4" />
@@ -2115,18 +2115,18 @@ Best regards`);
           {/* Awards */}
           {resume.awards && resume.awards.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
               </div>
               <div className="space-y-4">
                 {resume.awards.map((award: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-1">{award.name}</h4>
+                        <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{award.name}</h4>
                         {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
                         {award.date && (
                           <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
@@ -2149,11 +2149,11 @@ Best regards`);
           {/* Achievements */}
           {resume.achievements && resume.achievements.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
               </div>
               <div className="space-y-2">
                 {/* param is not just `string`: the render below branches on the object form
@@ -2172,16 +2172,16 @@ Best regards`);
           {/* Volunteer Experience */}
           {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand-cyan" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
               </div>
               <div className="space-y-4">
                 {resume.volunteerExperience.map((vol: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
+                    <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
                     {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
                     {vol.duration && (
                       <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
@@ -2199,15 +2199,15 @@ Best regards`);
           {/* Hobbies & Interests */}
           {resume.hobbies && resume.hobbies.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {resume.hobbies.map((hobby: string | { name?: string }, index: number) => (
-                  <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
+                  <span key={index} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
                     {typeof hobby === 'string' ? hobby : ((hobby.name || hobby) as React.ReactNode)}
                   </span>
                 ))}
@@ -2222,9 +2222,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
               </div>
-              <p className="text-gray-700 leading-relaxed">{resume.objective}</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{resume.objective}</p>
             </div>
           )}
 
@@ -2235,9 +2235,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
               </div>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
             </div>
           )}
 
@@ -2253,7 +2253,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
                   <History className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
                 <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
@@ -2447,7 +2447,7 @@ Best regards`);
         />
         <aside
           role="dialog"
-          aria-modal="true"
+          aria-modal={showFileProperties || undefined}
           aria-label="File Properties"
           className={`absolute inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-out ${
             showFileProperties ? 'translate-x-0' : 'translate-x-full'

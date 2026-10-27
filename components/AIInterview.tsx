@@ -568,6 +568,9 @@ export default function AIInterview() {
   // Beside Refresh in the pill row: the All Interviews table portals its
   // Clear Sort button here.
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
+  /* The line under the tab pills: each tab's Actions (N) + Clear portal into
+     it while rows are ticked. */
+  const [bulkActionSlotEl, setBulkActionSlotEl] = useState<HTMLDivElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -3198,23 +3201,9 @@ export default function AIInterview() {
               );
             })}
           </div>
-        </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
+              tabs line, just before Refresh, as Clear Sort sits on Assessments. */}
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
-          {/* Invitation Status's Resend / Revoke used to be buttons here,
-              beside Refresh. They now live in the tab's Actions (N) menu in
-              its toolbar row; this confirm is the one Resend opens. */}
-          <ConfirmationDialog
-            isOpen={statusBulkResendOpen}
-            onClose={() => { if (!isStatusBulkResending) setStatusBulkResendOpen(false); }}
-            onConfirm={handleStatusBulkResend}
-            title="Resend invitations to selected candidates?"
-            description={`A fresh interview link will be emailed to ${statusResendableSelectedRows.length} selected candidate${statusResendableSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-            confirmText={isStatusBulkResending ? 'Sending…' : `Yes, resend to ${statusResendableSelectedRows.length}`}
-            cancelText="Cancel"
-            variant="info"
-          />
           {/* Sort by — moved out of More Filters to sit before Refresh, in the
               shared SortByControl's shape (components/ui/select-all-menu.tsx):
               the label always shown, p-1 + h-7 = the toolbar's 36px band and
@@ -3241,25 +3230,42 @@ export default function AIInterview() {
               </div>
             </div>
           )}
-
-          {/* Refresh — right corner of the pill row. Refetches whichever tab
-              is on screen: the config-list/processing/invitation-status/
-              settings tabs this component owns directly, plus a bump of
-              `refreshSignal` for the three that manage their own data. */}
-          <Button
-            variant="secondary"
-            size="sm"
+          {/* Refresh — a pill in the tabs' own styling, in the same line as the
+              tabs. Refetches whichever tab is on screen: the config-list/
+              processing/invitation-status/settings tabs this component owns
+              directly, plus a bump of `refreshSignal` for the three that
+              manage their own data. */}
+          <button
+            type="button"
             onClick={handleRefreshCurrentTab}
             disabled={isRefreshingTab}
             title="Refresh"
             aria-label="Refresh"
-            icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-            className="flex-shrink-0"
+            className="px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
           >
+            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshingTab ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
-          </Button>
-          </div>
+          </button>
         </div>
+
+          {/* Invitation Status's Resend / Revoke used to be buttons here,
+              beside Refresh. They now live in the tab's Actions (N) menu in
+              its toolbar row; this confirm is the one Resend opens. */}
+          <ConfirmationDialog
+            isOpen={statusBulkResendOpen}
+            onClose={() => { if (!isStatusBulkResending) setStatusBulkResendOpen(false); }}
+            onConfirm={handleStatusBulkResend}
+            title="Resend invitations to selected candidates?"
+            description={`A fresh interview link will be emailed to ${statusResendableSelectedRows.length} selected candidate${statusResendableSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+            confirmText={isStatusBulkResending ? 'Sending…' : `Yes, resend to ${statusResendableSelectedRows.length}`}
+            cancelText="Cancel"
+            variant="info"
+          />
+        </div>
+        {/* Line 2, under the tabs + Refresh line: the active tab's Actions (N)
+            + Clear, portalled in while rows are ticked. Empty (and gone) while
+            nothing is ticked. */}
+        <div ref={setBulkActionSlotEl} className="empty:hidden mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200" />
         </div>{/* closes toolbar card */}
 
         {/* Main Content. Like the Job Descriptions and Assessments pages, the
@@ -3280,7 +3286,7 @@ export default function AIInterview() {
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} bulkActionSlot={bulkActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -3290,6 +3296,7 @@ export default function AIInterview() {
               key={activeTab}
               toolbarSlot={toolbarSlotEl}
               sortActionSlot={sortActionSlotEl}
+              bulkActionSlot={bulkActionSlotEl}
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
               renderRowActions={renderInterviewVersionActions}
@@ -3753,7 +3760,7 @@ export default function AIInterview() {
               interview, the same table the per-interview results view shows. */}
           {activeTab === 'candidate-results' && (
             <div className="p-3 sm:p-6">
-              <AIInterviewCandidateResults toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} />
+              <AIInterviewCandidateResults toolbarSlot={toolbarSlotEl} bulkActionSlot={bulkActionSlotEl} refreshSignal={refreshSignal} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} />
             </div>
           )}
 
@@ -4005,7 +4012,7 @@ export default function AIInterview() {
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                          className="relative h-8 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                           aria-label={`Actions for ${selectedStatusRows.length} selected`}
                         >
                           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -4045,7 +4052,7 @@ export default function AIInterview() {
                       size="sm"
                       onClick={() => setSelectedStatusInviteIds(new Set())}
                       icon={<X className="w-4 h-4" />}
-                      className="whitespace-nowrap !h-[38px] !text-sm"
+                      className="whitespace-nowrap !h-8 !text-sm"
                     >
                       Clear
                     </Button>
@@ -4162,7 +4169,6 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
-                      afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       countBadge={
                         <ListCountBadge
@@ -4335,6 +4341,9 @@ export default function AIInterview() {
                     </div>
 
                     {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
+                    {/* Actions + Clear — on the line under the tab pills (the
+                        page's bulk slot), at the pills' h-8 height. */}
+                    {bulkActionSlotEl && statusBulkActions && createPortal(statusBulkActions, bulkActionSlotEl)}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable

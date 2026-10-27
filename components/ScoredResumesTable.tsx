@@ -2435,10 +2435,6 @@ Best regards`);
                     />
                   );
                   })()}
-                  {/* Actions — beside Select All once rows are ticked, the AI
-                      Talent Match reference's pattern (it used to sit in a row
-                      below the toolbar). */}
-                  {selectionActions}
                 </>
               )
               : undefined
@@ -2521,6 +2517,16 @@ Best regards`);
             <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-[38px] !border-brand-blue/10" />
           )}
         </ListToolbar>
+
+        {/* Actions + Clear — embedded: their own full-width row under the
+            toolbar once rows are ticked. Inside `beforeSearch` they shared a
+            shrink-wrapped box with Select All and wrapped out of line; h-9
+            matches the Job Details toolbar band. */}
+        {embedded && selectionActions && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 animate-in fade-in slide-in-from-top-1 duration-200">
+            {selectionActions}
+          </div>
+        )}
 
         {/* Advanced Filters */}
         {showFilters && (

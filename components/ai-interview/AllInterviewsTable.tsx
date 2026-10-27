@@ -328,6 +328,9 @@ export interface AllInterviewsTableProps {
    * rendering inline when unset (e.g. a future standalone use).
    */
   toolbarSlot?: HTMLDivElement | null;
+  /** The host page's slot in its tab-pills row (before Refresh). When given,
+   *  Actions (N) + Clear render there instead of inline in the toolbar. */
+  bulkActionSlot?: HTMLElement | null;
   /**
    * DOM node beside the host's Refresh button that the Clear Sort button
    * portals into, so it sits in the pill row with the page's other list
@@ -413,7 +416,7 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   return null;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -1116,6 +1119,75 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
     </div>
   );
 
+  /* Actions (N) + Clear — only while rows are ticked. Rendered inline in the
+     toolbar standalone, or in the host page's tab-pills row (bulkActionSlot). */
+  const selectionControls = selectedRows.length > 0 ? (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`relative ${bulkActionSlot ? 'h-8' : 'h-9'} px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300`}
+            aria-label={`Actions for ${selectedRows.length} selected`}
+          >
+            <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+            </span>
+            Actions ({selectedRows.length})
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+          <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+            {selectedRows.length.toLocaleString()} selected
+          </div>
+          <DropdownMenuItem
+            aria-disabled={!canExport || undefined}
+            title={canExport ? undefined : 'You do not have permission to export AI interviews'}
+            onSelect={(e) => { if (!canExport) { e.preventDefault(); return; } setShowExportModal(true); }}
+            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+          >
+            <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+            <span>Export</span>
+          </DropdownMenuItem>
+          {bulkActions && bulkKinds.map((kind) => {
+            const { label, Icon, className } = BULK_META[kind];
+            const reasons = selectedRows.map((row) => bulkSkipReason(kind, row, bulkActions));
+            const eligibleCount = reasons.filter((r) => r === null).length;
+            const total = selectedRows.length;
+            const none = eligibleCount === 0;
+            // No ticked row qualifies: greyed with the reason, never hidden (RBAC rule).
+            const firstReason = reasons.find((r) => r !== null) ?? '';
+            return (
+              <DropdownMenuItem
+                key={kind}
+                aria-disabled={none || undefined}
+                title={none ? `None of the selected can be ${label === 'Delete' ? 'deleted' : `${label.toLowerCase()}d`} — ${firstReason}` : undefined}
+                onSelect={(e) => { if (none) { e.preventDefault(); return; } void runBulk(kind); }}
+                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
+                  none ? 'text-gray-400 cursor-not-allowed opacity-60' : kind === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${none ? 'text-gray-300' : className}`} />
+                <span>{label} ({eligibleCount === total ? total : `${eligibleCount} of ${total}`})</span>
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setSelectedIds(new Set())}
+        icon={<X className="w-4 h-4" />}
+        className={`whitespace-nowrap ${bulkActionSlot ? '!h-8' : '!h-9'} !text-sm`}
+      >
+        Clear
+      </Button>
+    </>
+  ) : null;
+
   const toolbar = (
     <>
 
@@ -1166,71 +1238,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
               </span>
             )}
           </button>
-          {/* Actions (N) + Clear — only while rows are ticked. */}
-          {selectedRows.length > 0 && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
-                    aria-label={`Actions for ${selectedRows.length} selected`}
-                  >
-                    <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-                      <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-                    </span>
-                    Actions ({selectedRows.length})
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                    {selectedRows.length.toLocaleString()} selected
-                  </div>
-                  <DropdownMenuItem
-                    aria-disabled={!canExport || undefined}
-                    title={canExport ? undefined : 'You do not have permission to export AI interviews'}
-                    onSelect={(e) => { if (!canExport) { e.preventDefault(); return; } setShowExportModal(true); }}
-                    className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                  >
-                    <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
-                    <span>Export</span>
-                  </DropdownMenuItem>
-                  {bulkActions && bulkKinds.map((kind) => {
-                    const { label, Icon, className } = BULK_META[kind];
-                    const reasons = selectedRows.map((row) => bulkSkipReason(kind, row, bulkActions));
-                    const eligibleCount = reasons.filter((r) => r === null).length;
-                    const total = selectedRows.length;
-                    const none = eligibleCount === 0;
-                    // No ticked row qualifies: greyed with the reason, never hidden (RBAC rule).
-                    const firstReason = reasons.find((r) => r !== null) ?? '';
-                    return (
-                      <DropdownMenuItem
-                        key={kind}
-                        aria-disabled={none || undefined}
-                        title={none ? `None of the selected can be ${label === 'Delete' ? 'deleted' : `${label.toLowerCase()}d`} — ${firstReason}` : undefined}
-                        onSelect={(e) => { if (none) { e.preventDefault(); return; } void runBulk(kind); }}
-                        className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
-                          none ? 'text-gray-400 cursor-not-allowed opacity-60' : kind === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
-                        }`}
-                      >
-                        <Icon className={`w-4 h-4 ${none ? 'text-gray-300' : className}`} />
-                        <span>{label} ({eligibleCount === total ? total : `${eligibleCount} of ${total}`})</span>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setSelectedIds(new Set())}
-                icon={<X className="w-4 h-4" />}
-                className="whitespace-nowrap !h-9 !text-sm"
-              >
-                Clear
-              </Button>
+          {/* Actions (N) + Clear — standalone (no host slot): inline beside
+              More Filters. In a host page: its tab-pills row, see below. */}
+          {!bulkActionSlot && selectionControls && (
+            <div className="flex items-center gap-2 flex-shrink-0 animate-in fade-in zoom-in-95 duration-200">
+              {selectionControls}
             </div>
           )}
           {onDisplayModeChange && (
@@ -1332,6 +1344,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
   return (
     <div className="p-3 sm:p-6">
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
+      {bulkActionSlot && selectionControls && createPortal(selectionControls, bulkActionSlot)}
       {clearSortButton && (sortActionSlot
         ? createPortal(clearSortButton, sortActionSlot)
         : <div className="flex justify-end mb-3">{clearSortButton}</div>)}
