@@ -24,6 +24,7 @@ import {
   type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1510,40 +1511,36 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             {/* Sort by — pushed to the row's end */}
             {sortedJobs.length > 0 && (
               <div className="flex items-center gap-2 sm:ml-auto">
-                <span className="text-xs sm:text-sm text-gray-700">Sort by</span>
+                <span className="text-sm text-gray-700">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
-                    the sort control belongs to the same pill system. */}
-                {/* Phones get a 28px control (p-0.5 + h-6, 12px text) so the sort
-                    sits at the same scale as the tab pills; `sm` and up are as before.
-                    `max-sm:!text-xs` because globals.css forces every <select>
-                    to 16px below 640px, unlayered, which outranks a plain utility. */}
-                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-0.5 sm:p-1 transition-all">
-                  <div className="relative">
-                    <select
-                      value={sortBy}
-                      onChange={(e) => {
-                        const value = e.target.value as JobSortBy;
-                        setSortBy(value);
-                      }}
-                      className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 cursor-pointer"
-                    >
-                      <option value="date">Date Posted</option>
-                      <option value="applicants">Scored</option>
-                      <option value="assessed">Assessed</option>
-                      <option value="interviewed">Interviewed</option>
-                      <option value="title">Job Title</option>
-                      <option value="status">Status</option>
-                      <option value="industry">Industry Type</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-                  </div>
+                    the sort control belongs to the same pill system. One size at
+                    every width (36px, 14px text) — the toolbar type standard. */}
+                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
+                  <FilterSelect
+                    value={sortBy}
+                    onChange={(v) => {
+                      const value = v as JobSortBy;
+                      setSortBy(value);
+                    }}
+                    ariaLabel="Sort jobs by"
+                    className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
+                    options={[
+                      { value: 'date', label: 'Date Posted' },
+                      { value: 'applicants', label: 'Scored' },
+                      { value: 'assessed', label: 'Assessed' },
+                      { value: 'interviewed', label: 'Interviewed' },
+                      { value: 'title', label: 'Job Title' },
+                      { value: 'status', label: 'Status' },
+                      { value: 'industry', label: 'Industry Type' },
+                    ]}
+                  />
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                     }}
-                    className="ml-0.5 h-6 w-6 sm:h-7 sm:w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
+                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
                     title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                   >
                     <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
@@ -1672,19 +1669,19 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     {hasCountBadges && (
                       <div className="flex basis-full md:basis-auto flex-nowrap gap-1 md:flex-col md:items-stretch md:gap-1.5 flex-shrink-0">
                         {applicantsCount != null && (
-                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-info-subtle text-info-strong">
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-info-subtle text-info-strong">
                             <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
-                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-success-subtle text-success-strong">
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-success-subtle text-success-strong">
                             <ClipboardCheck className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {assessedCount} Assessed
                           </span>
                         )}
                         {interviewedCount != null && (
-                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-2xs md:text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
+                          <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
                             <Video className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {interviewedCount} Interviewed
                           </span>
@@ -2226,23 +2223,19 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Show:</span>
-                  <select
-                    value={itemsPerPage}
-                    onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={40}>40</option>
-                    <option value={100}>100</option>
-                  </select>
+                  <FilterSelect
+                    value={String(itemsPerPage)}
+                    onChange={(v) => handleItemsPerPageChange(Number(v))}
+                    ariaLabel="Items per page"
+                    className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                    options={[5, 10, 20, 40, 100].map((n) => ({ value: String(n), label: String(n) }))}
+                  />
                   <span className="text-sm text-gray-600">per page</span>
                 </div>
 
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
-                <span className="text-xs sm:text-sm text-gray-600">
+                <span className="text-sm text-gray-600">
                   Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
                 </span>
               </div>
@@ -2251,7 +2244,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
                 {/* Go to page */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}

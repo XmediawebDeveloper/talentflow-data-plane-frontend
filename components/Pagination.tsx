@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface PaginationProps {
   currentPage: number;
@@ -45,27 +46,26 @@ export default function Pagination({
     "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-white">
+    // flex-wrap: in a narrow column (beside a side panel) the row used to
+    // squash and clip Next even though the viewport passed `sm`.
+    <div className="flex flex-col sm:flex-row sm:flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-white">
       {/* Left: Items per page */}
       {showItemsPerPage && (
         <div className="flex items-center gap-2">
           <span className="text-sm text-gray-600">Show</span>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="h-8 px-2 sm:px-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
+          <FilterSelect
+            value={String(itemsPerPage)}
+            onChange={(v) => onItemsPerPageChange(Number(v))}
+            ariaLabel="Items per page"
+            options={[10, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
+            className="w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 pl-2 sm:pl-3 pr-2 sm:pr-2 rounded-lg sm:rounded-lg text-sm"
+          />
           <span className="text-sm text-gray-600">per page</span>
         </div>
       )}
 
       {/* Center: Page info */}
-      <div className="text-xs sm:text-sm text-gray-600 text-center">
+      <div className="text-sm text-gray-600 text-center">
         Showing <span className="text-brand-blue font-semibold">{startItem}</span> to{' '}
         <span className="text-brand-blue font-semibold">{endItem}</span> of{' '}
         <span className="text-brand-blue font-semibold">{totalItems}</span> results
@@ -75,7 +75,7 @@ export default function Pagination({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Go to page */}
         <div className="flex items-center gap-1.5">
-          <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+          <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
           <input
             type="number"
             min={1}

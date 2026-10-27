@@ -16,6 +16,8 @@ import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import NameAvatar from '@/components/ui/name-avatar';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
+import { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -475,7 +477,7 @@ const buildFullTimeline = (
  *  status regardless of where tracking was opened from. */
 export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
   const base =
-    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
+    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
   switch (inv.status) {
     case 'completed': {
       // (Auto) surfaces when the timeout monitor finalized an abandoned session —
@@ -652,6 +654,9 @@ export interface AIInterviewInviteTableProps {
    *  its chevron) expands it to show the rest, instead of opening the
    *  candidate. View Details stays in the row's ⋮ menu. */
   expandableRows?: boolean;
+  /** 'grid' renders the rows as cards (the host's List/Card toggle). Every
+   *  other caller omits it and keeps the table. */
+  displayMode?: ListDisplayMode;
 }
 
 export default function AIInterviewInviteTable({
@@ -676,6 +681,7 @@ export default function AIInterviewInviteTable({
   revokingId,
   jdDisabled = false,
   expandableRows = false,
+  displayMode = 'list',
 }: AIInterviewInviteTableProps) {
   const selectable = !!onToggleSelect;
   const inRow = (id: InviteColumnId) => !expandableRows || PRIMARY_INVITE_COLUMNS.includes(id);
@@ -830,11 +836,11 @@ export default function AIInterviewInviteTable({
         <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/30" />
         {/* "None invited" is wrong when a filter is what emptied the list — it
             reads as data loss rather than as a narrowed view. */}
-        <p className="text-xs sm:text-sm">
+        <p className="text-sm">
           {hasActiveFilters ? 'No candidates match the current filters.' : 'No candidates invited yet.'}
         </p>
         {!hasActiveFilters && emptyHint && (
-          <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
+          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
         )}
       </div>
     );
@@ -842,6 +848,141 @@ export default function AIInterviewInviteTable({
 
   return (
     <>
+      {displayMode === 'grid' ? (
+      /* ── Card grid (List/Card toggle) ──────────────────────────────────
+         The Candidate Results tab's card, filled with this row's fields.
+         A div rather than a <button>: the card carries its own action
+         buttons, which can't nest inside one. */
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 content-start flex-1 min-h-0 overflow-y-auto">
+        {invitations.map((inv: any) => {
+          const score = displayInviteScore(inv);
+          const events = timelineEvents(inv);
+          const actions = rowActions(inv);
+          const openable = canOpenDetails(inv);
+          const canSelect = selectable && !rowLocked(inv) && (isSelectable ?? isRevocableInvite)(inv);
+          const isSelected = !!selectedIds?.has(inv.id);
+          const cardJobVersion = jobVersion ?? ((showJobColumn || showRowVersions) ? inv._jd_version : undefined);
+          const cardInterviewVersion = interviewVersion ?? ((showJobColumn || showRowVersions) ? inv._interview_version : undefined);
+          return (
+            <div
+              key={inv.id}
+              onClick={openable ? () => onViewDetails?.(inv) : undefined}
+              onKeyDown={openable ? onRowKeyDown(inv) : undefined}
+              role={openable ? 'button' : undefined}
+              tabIndex={openable ? 0 : undefined}
+              title={openable ? 'View candidate details' : undefined}
+              className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 flex flex-col gap-3 ${
+                openable ? 'cursor-pointer hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : ''
+              } ${gridCardSelectedClass(isSelected)}`}
+            >
+              {canSelect && (
+                <GridCardSelect
+                  selected={isSelected}
+                  onToggle={() => onToggleSelect?.(inv.id)}
+                  label={inv.candidate_name || inv.candidate_email || 'candidate'}
+                  selectionActive={(selectedIds?.size ?? 0) > 0}
+                />
+              )}
+              <div className="flex items-start gap-2.5">
+                <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={inv.candidate_name || 'Unknown'}>
+                    {inv.candidate_name || 'Unknown'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate" title={inv.candidate_email}>
+                    {inv.candidate_email || '—'}
+                  </p>
+                </div>
+                {inv.candidate_cid && (
+                  <span className="text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                    {inv.candidate_cid}
+                  </span>
+                )}
+              </div>
+
+              {showJobColumn && (inv._jd_short_id || inv._config_title) && (
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
+                  <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={inv._config_title || ''}>
+                    {inv._config_title}
+                  </p>
+                </div>
+              )}
+              {(cardJobVersion != null || cardInterviewVersion != null) && (
+                <div className="flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-500">
+                  {cardJobVersion != null && <><span>Job</span><VersionPill kind="job" version={cardJobVersion} /></>}
+                  {cardInterviewVersion != null && <><span className="ml-1">Interview</span><VersionPill kind="interview" version={cardInterviewVersion} /></>}
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <AIInviteStatusBadge inv={inv} />
+                {isInviteExpired(inv) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium whitespace-nowrap">
+                    <Clock className="w-3 h-3" /> Expired
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-slate-400">
+                <span className="inline-flex items-center gap-1.5">
+                  {score != null ? (
+                    <>
+                      <span className={`font-medium ${score >= 60 ? 'text-success' : 'text-destructive'}`}>{score}%</span>
+                      <ResultBadge result={inviteResult(inv, score)} />
+                    </>
+                  ) : (
+                    <span className="text-gray-400 dark:text-slate-500">No score</span>
+                  )}
+                </span>
+                {inviteSourceLabel(inv) && <InviteSourceValue inv={inv} iconClassName="w-3 h-3" />}
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 dark:border-slate-800 text-2xs text-gray-500 dark:text-slate-500 space-y-0.5">
+                {events.length > 0 ? events.map(({ label, at, Icon, tone }, i) => (
+                  <div key={`${label}-${i}`} className="flex items-center gap-1.5 min-w-0">
+                    <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                    <span className={`truncate ${tone}`}>{label}: {formatIST(at)}</span>
+                  </div>
+                )) : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                {hasMoreTimelineHistory(inv) && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
+                    className="flex items-center gap-1 text-2xs font-medium text-brand-blue hover:underline pt-0.5"
+                  >
+                    <History className="w-3 h-3" /> View full history
+                  </button>
+                )}
+              </div>
+
+              {/* Same inline action buttons as the mobile card. */}
+              {actions.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap mt-auto">
+                  {actions.map(({ key, label, Icon, run, disabled, title, destructive, busy }) => (
+                    <button
+                      key={key}
+                      onClick={(e) => { e.stopPropagation(); run(); }}
+                      disabled={disabled}
+                      title={title || label}
+                      className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                        destructive
+                          ? 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line hover:bg-destructive-subtle'
+                          : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                      }`}
+                    >
+                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      ) : (
+      <>
       {/* ── Mobile cards ──────────────────────────────────────────────── */}
       <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
         {invitations.map((inv: any) => {
@@ -890,8 +1031,9 @@ export default function AIInterviewInviteTable({
               </div>
 
               {/* Two-column grid rather than a free wrap, so entries line up
-                  instead of staggering by label width. */}
-              <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
+                  instead of staggering by label width. One column below sm:
+                  two columns cut every date short on a phone ("01:3…"). */}
+              <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
                 {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
                   <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                     <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
@@ -1003,7 +1145,7 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
               {/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
                   carries the invite time), Status, Score, Invite Source, then the job group (Job ID and Job
@@ -1012,24 +1154,24 @@ export default function AIInterviewInviteTable({
               {/* hidden md:table-cell mirrors this column's <td> — without it the
                   header carries one more cell than the body between sm and md and
                   every heading after Timeline shifts off its column. */}
-              {inRow('timeline') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>}
-              {inRow('status') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>}
-              {inRow('score') && <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>}
-              {inRow('inviteSource') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>}
-              {inRow('cid') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>}
+              {inRow('timeline') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
+              {inRow('status') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
+              {inRow('score') && <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
+              {inRow('inviteSource') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
+              {inRow('cid') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
               {showJobColumn && (
                 <>
-                  {inRow('jobId') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job ID</th>}
-                  {inRow('jobTitle') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Title</th>}
+                  {inRow('jobId') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
+                  {inRow('jobTitle') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
                 </>
               )}
               {(showJobColumn || jobVersion != null || showRowVersions) && inRow('jobVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
               )}
               {(showJobColumn || interviewVersion != null || showRowVersions) && inRow('interviewVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">Actions</th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1119,7 +1261,7 @@ export default function AIInterviewInviteTable({
                 },
                 ...(showJobColumn ? [
                   {
-                    id: 'jobId' as const, label: 'Job ID', className: 'py-3 px-4 align-middle whitespace-nowrap',
+                    id: 'jobId' as const, label: 'JD ID', className: 'py-3 px-4 align-middle whitespace-nowrap',
                     content: inv._jd_short_id
                       ? <JobIdBadge>{inv._jd_short_id}</JobIdBadge>
                       : <span className="text-gray-400 dark:text-slate-500">—</span>,
@@ -1258,6 +1400,8 @@ export default function AIInterviewInviteTable({
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
       {/* Full action-log modal — every send, resend, revoke, edit and
           candidate-lifecycle milestone as its own row, oldest first. */}

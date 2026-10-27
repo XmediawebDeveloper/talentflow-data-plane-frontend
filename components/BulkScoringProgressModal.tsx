@@ -4,6 +4,7 @@ import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, Folder
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
@@ -520,11 +521,11 @@ export default function BulkScoringProgressModal({
                 {/* Line 2: what this is, and how far it got. */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   {scopedToJobTitle && (
-                    <span className="text-xs sm:text-sm font-medium text-gray-600 dark:text-slate-400">
+                    <span className="text-sm font-medium text-gray-600 dark:text-slate-400">
                       Bulk scoring progress
                     </span>
                   )}
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                  <span className="text-sm text-gray-600 dark:text-slate-400">
                     {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
                   </span>
                 </div>
@@ -725,41 +726,39 @@ export default function BulkScoringProgressModal({
               <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Status
               </label>
-              <select
+              <FilterSelect
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-28 sm:w-32 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
-              >
-                <option value="all">All Status</option>
-                <option value="queued">Queued</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="skipped">Skipped</option>
-                <option value="failed">Failed</option>
-              </select>
+                onChange={(v) => setStatusFilter(v)}
+                ariaLabel="Status"
+                className="w-28 sm:w-32 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'queued', label: 'Queued' },
+                  { value: 'in-progress', label: 'In Progress' },
+                  { value: 'completed', label: 'Completed' },
+                  { value: 'skipped', label: 'Skipped' },
+                  { value: 'failed', label: 'Failed' },
+                ]}
+              />
             </div>
 
             <div className="flex items-center gap-1.5">
               <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Source
               </label>
-              <select
+              <FilterSelect
                 value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-28 sm:w-32 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
-              >
-                <option value="all">All Sources</option>
-                {/* Shared Database option: always listed, greyed out (disabled,
-                    hover reason) when the user has no Internal DB access. */}
-                <option
-                  value="internal-db"
-                  disabled={!hasInternalDBAccess}
-                  title={!hasInternalDBAccess ? 'You do not have permission to view the Shared Database' : undefined}
-                >
-                  Shared Database
-                </option>
-                <option value="my-resumes">My Resumes</option>
-              </select>
+                onChange={(v) => setSourceFilter(v)}
+                ariaLabel="Source"
+                className="w-28 sm:w-32 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
+                options={[
+                  { value: 'all', label: 'All Sources' },
+                  /* Shared Database option: always listed, greyed out (disabled)
+                     when the user has no Internal DB access. */
+                  { value: 'internal-db', label: 'Shared Database', disabled: !hasInternalDBAccess, title: !hasInternalDBAccess ? 'You do not have permission to view the Shared Database' : undefined },
+                  { value: 'my-resumes', label: 'My Resumes' },
+                ]}
+              />
             </div>
 
             {/* Filters - the less-used controls live behind this toggle rather
@@ -798,16 +797,16 @@ export default function BulkScoringProgressModal({
                       <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                         Scored By
                       </label>
-                      <select
+                      <FilterSelect
                         value={scoredByFilter}
-                        onChange={(e) => setScoredByFilter(e.target.value)}
-                        className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
-                      >
-                        <option value="all">All Scorers</option>
-                        {scoredByOptions.map(name => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setScoredByFilter(v)}
+                        ariaLabel="Scored By"
+                        className="w-full sm:w-full min-w-0 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
+                        options={[
+                          { value: 'all', label: 'All Scorers' },
+                          ...scoredByOptions.map(name => ({ value: name, label: name })),
+                        ]}
+                      />
                     </div>
                   )}
 
@@ -816,16 +815,16 @@ export default function BulkScoringProgressModal({
                       <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                         Job Version
                       </label>
-                      <select
+                      <FilterSelect
                         value={jobVersionFilter}
-                        onChange={(e) => setJobVersionFilter(e.target.value)}
-                        className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
-                      >
-                        <option value="all">All Versions</option>
-                        {jobVersionOptions.map(version => (
-                          <option key={version} value={String(version)}>v{version}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setJobVersionFilter(v)}
+                        ariaLabel="Job Version"
+                        className="w-full sm:w-full min-w-0 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
+                        options={[
+                          { value: 'all', label: 'All Versions' },
+                          ...jobVersionOptions.map(version => ({ value: String(version), label: `v${version}` })),
+                        ]}
+                      />
                     </div>
                   )}
 

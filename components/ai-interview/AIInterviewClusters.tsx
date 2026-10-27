@@ -21,6 +21,7 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
@@ -511,7 +512,9 @@ function ClusterRow({
             <AlertTriangle className="w-2.5 h-2.5" /> Empty
           </span>
         )}
-        <span className={`text-sm font-semibold flex-1 min-w-0 truncate transition-colors ${expanded ? 'text-brand-blue-deep' : 'text-gray-900'}`}>
+        {/* Wraps below sm: between the badges and row buttons a phone left the
+            name a few characters ("Platform & D…"); one truncated line from sm. */}
+        <span className={`text-sm font-semibold flex-1 min-w-0 [overflow-wrap:anywhere] sm:truncate transition-colors ${expanded ? 'text-brand-blue-deep' : 'text-gray-900'}`}>
           {cluster.name || 'Unnamed Cluster'}
         </span>
         {(() => {
@@ -968,8 +971,10 @@ function CategorySection({
 
                 {/* Search + filter. Both narrow the chips below; neither
                     changes the bucket, which is finalised on Configure. */}
-                <div className="flex items-center gap-2 mb-2.5">
-                  <div className="relative flex-1 min-w-0">
+                {/* Stacked below sm: beside the filter select (which grows to
+                    16px text on phones) the search box was squeezed to ~90px. */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2.5">
+                  <div className="relative w-full sm:w-auto sm:flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                     <input
                       type="text"
@@ -990,18 +995,18 @@ function CategorySection({
                       </button>
                     )}
                   </div>
-                  <div className="relative flex-shrink-0">
-                    <select
+                  <div className="sm:flex-shrink-0">
+                    <FilterSelect
                       value={skillFilter}
-                      onChange={e => setSkillFilter(e.target.value as typeof skillFilter)}
-                      aria-label="Filter skills"
-                      className="appearance-none pl-3 pr-7 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60"
-                    >
-                      <option value="all">All</option>
-                      <option value="skill">Skills only</option>
-                      <option value="command">Commands only</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                      onChange={v => setSkillFilter(v as typeof skillFilter)}
+                      ariaLabel="Filter skills"
+                      className="w-full sm:w-auto pl-3 sm:pl-3 pr-2 sm:pr-2 py-1.5 sm:py-1.5 text-xs font-medium rounded-lg sm:rounded-lg text-gray-700"
+                      options={[
+                        { value: 'all', label: 'All' },
+                        { value: 'skill', label: 'Skills only' },
+                        { value: 'command', label: 'Commands only' },
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -3647,7 +3652,7 @@ export default function AIInterviewClusters() {
                     </Popover>
                     */}
                   </div>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                  <p className="text-sm text-gray-500 mt-0.5">
                     Organize skills into weighted clusters for focused interview coverage
                   </p>
                 </div>

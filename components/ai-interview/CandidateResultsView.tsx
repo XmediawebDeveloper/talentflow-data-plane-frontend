@@ -43,6 +43,7 @@ import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
+import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
@@ -650,6 +651,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   }, []);
   const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
   const [reportDownloading, setReportDownloading] = useState(false);
+  // ai_interview:download_report — the header's Report button (greyed, never hidden).
+  const canDownloadReports = useCanDownloadAIReports();
   const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
   // liveSession must be declared before any useEffect that references it in its
@@ -1810,7 +1813,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     <span className="w-2 h-2 rounded-full bg-white tf-step-pulse-dot" />
                   ) : null}
                 </span>
-                <span className={`text-2xs sm:text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
+                <span className={`text-xs leading-tight text-center transition-colors duration-500 ${done || current ? 'text-brand-blue font-medium' : 'text-gray-400'}`}>
                   {label}
                 </span>
               </div>
@@ -2104,7 +2107,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 <div className="mb-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-xl font-semibold text-gray-900 tracking-tight">
+                      <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
                         {interview.candidate_name || 'Unknown Candidate'}
                       </h1>
                       <Badge variant={getStatusVariant(interview.status)}>
@@ -2259,18 +2262,21 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 <button
                   type="button"
                   onClick={async () => {
+                    if (!canDownloadReports) return;
                     setReportDownloading(true);
                     try {
                       await downloadSessionReport(liveSession.id);
                     } catch (err) {
                       console.error('[CandidateResultsView] report download failed:', err);
-                      toast.error('Could not download the report. Please try again.');
+                      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
                     } finally {
                       setReportDownloading(false);
                     }
                   }}
                   disabled={reportDownloading}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors"
+                  aria-disabled={!canDownloadReports || undefined}
+                  title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                  className={`${canDownloadReports ? '' : 'opacity-60 cursor-not-allowed '}inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors`}
                 >
                   {reportDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   {reportDownloading ? 'Preparing…' : 'Report'}
@@ -2486,7 +2492,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       aria-current={isActive ? 'page' : undefined}
                       className={`${
                         isAlertTab
-                          ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
+                          ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-all ${
                               isActive
                                 ? 'bg-destructive text-white shadow-sm shadow-destructive/25'
                                 : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
@@ -2548,9 +2554,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           </div>
 
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
-            box instead of stretching the grid column. */}
+            box instead of stretching the grid column. p-4 below sm: the
+            standard card inset — p-6 stacked on the cards inside each tab. */}
         <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {/* Evaluation pending spinner — shown for ALL tabs while batch eval
                 runs, except View JD, which does not depend on the evaluation. */}
             {evaluationPending && activeTab !== 'viewjd' && renderEvaluationSpinner()}

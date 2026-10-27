@@ -5,6 +5,7 @@ import { useState } from 'react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function Analytics() {
@@ -66,23 +67,25 @@ export default function Analytics() {
               <BarChart3 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-gray-900 dark:text-slate-50">My Recruitment Analytics</h1>
+              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">My Recruitment Analytics</h1>
               <p className="text-sm text-gray-600 dark:text-slate-400">Track your personal recruitment performance and insights</p>
             </div>
           </div>
 
           {/* Time Range Selector */}
           <div className="flex items-center gap-3">
-            <select
+            <FilterSelect
               value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="flex-1 sm:flex-initial min-w-0 px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white dark:bg-slate-900 text-sm"
-            >
-              <option value="7days">Last 7 days</option>
-              <option value="30days">Last 30 days</option>
-              <option value="90days">Last 90 days</option>
-              <option value="1year">Last year</option>
-            </select>
+              onChange={(v) => setTimeRange(v)}
+              ariaLabel="Time range"
+              options={[
+                { value: '7days', label: 'Last 7 days' },
+                { value: '30days', label: 'Last 30 days' },
+                { value: '90days', label: 'Last 90 days' },
+                { value: '1year', label: 'Last year' },
+              ]}
+              className="w-auto sm:w-auto flex-1 sm:flex-initial min-w-0 pl-4 sm:pl-4 pr-4 sm:pr-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+            />
             <Button
               variant="primary"
               icon={<Download className="w-4 h-4" />}

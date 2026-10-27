@@ -20,6 +20,7 @@ import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, R
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -41,6 +42,7 @@ import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '
 import { Badge } from '@/components/ui/badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import SearchableSelect from '@/components/ui/searchable-select';
+import FilterSelect from '@/components/ui/filter-select';
 import { tabPill } from '@/components/ui/filter-pills';
 import { DateField } from '@/components/ui/date-field';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
@@ -258,6 +260,13 @@ const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate }: AssessmentResultsProps) {
+  /* Export (a server export — the endpoint enforces `assessments:export` and
+     writes the audit row) is greyed with this reason when the permission is
+     missing: listed, never hidden. */
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
+  const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
+  const openExportModal = () => { if (canExportAssessments) setShowExportModal(true); };
   /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
@@ -1502,7 +1511,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Export all filtered results
   const handleExportAllFiltered = async (columnIds: string[]) => {
-    if (isExporting) return;
+    if (isExporting || !canExportAssessments) return;
     setIsExporting(true);
     const _toastId = toast.loading('Preparing export of all filtered results…');
     try {
@@ -1530,7 +1539,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       setShowExportModal(false);
     } catch (error) {
       console.error('Failed to export all results:', error);
-      toast.error('Failed to export results. Please try again.', { id: _toastId });
+      const msg = error instanceof Error ? error.message : '';
+      toast.error(/permission|forbidden|403/i.test(msg)
+        ? EXPORT_DENIED_REASON
+        : 'Failed to export results. Please try again.', { id: _toastId });
     } finally {
       setIsExporting(false);
     }
@@ -1884,7 +1896,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   assessment version) in the same way. Wraps under itself on a
                   phone; the divider only shows while they share a line. */}
               {!embedded && (
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm text-gray-600">
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-gray-600">
                   <span className="shrink-0">
                     {effectiveJobVersion === 'all' ? 'Showing all JD versions' : `Showing JD-Version V${effectiveJobVersion}`}
                   </span>
@@ -1937,8 +1949,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               <Button
                 variant="primary"
-                onClick={() => setShowExportModal(true)}
-                className="whitespace-nowrap"
+                onClick={openExportModal}
+                aria-disabled={!canExportAssessments || undefined}
+                title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                className={`whitespace-nowrap ${canExportAssessments ? '' : 'opacity-60 cursor-not-allowed'}`}
                 icon={<FileText className="w-4 h-4" />}
               >
                 Export
@@ -1997,16 +2011,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <div key={id} className={filterFieldClass}>
             <label htmlFor={portaled ? id : undefined} className={filterLabelClass}>{label}</label>
             {portaled ? (
-              <select
+              <FilterSelect
                 id={id}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={onChange}
                 disabled={disabled}
-                className={JOB_TAB_FILTER_CONTROL_CLASS}
-              >
-                <option value={allValue}>{allLabel}</option>
-                {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+                options={[{ value: allValue, label: allLabel }, ...options]}
+                className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50"
+              />
             ) : (
               <SearchableSelect
                 value={value === allValue ? '' : value}
@@ -2223,8 +2235,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <span className={MENU_ITEM_SCALE_CLASS}>Customize Columns</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                          onSelect={() => setShowExportModal(true)}
+                          className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExportAssessments ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
+                          aria-disabled={!canExportAssessments || undefined}
+                          title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                          onSelect={(e) => {
+                            if (!canExportAssessments) { e.preventDefault(); return; }
+                            setShowExportModal(true);
+                          }}
                         >
                           <FileDown className="w-4 h-4 text-menu-icon-download" />
                           <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
@@ -2385,8 +2402,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => setShowExportModal(true)}
-                className="whitespace-nowrap !h-[38px] !text-sm"
+                onClick={openExportModal}
+                aria-disabled={!canExportAssessments || undefined}
+                title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                className={`whitespace-nowrap !h-[38px] !text-sm ${canExportAssessments ? '' : 'opacity-60 cursor-not-allowed'}`}
                 icon={<FileText className="w-4 h-4" />}
               >
                 Export
@@ -2556,7 +2575,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   type="button"
                   onClick={clearSort}
                   title="Return the table to its default order"
-                  className="px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  className="px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue"
                 >
                   <ArrowUpDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Clear Sort

@@ -46,9 +46,9 @@ export default function OrganizationLayout({ children }: { children: React.React
   return (
     <main className={`flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col [@media(max-height:500px)]:h-auto [@media(max-height:500px)]:flex-none' : ''}`}>
       <div className={`mx-auto w-full max-w-[1400px] ${fill}`}>
-        {/* Phones get 12px instead of 16px around the content (all five tabs).
-            OrganizationTabs' sticky band mirrors this padding. */}
-        <div className={`my-4 w-full rounded-2xl bg-white shadow-2xl md:my-5 md:p-8 dark:bg-slate-900 p-3 sm:p-4 ${fill}`}>
+        {/* Standard page panel: 16px inset on phones, 32px from md (same as
+            every other page). OrganizationTabs' sticky band mirrors this padding. */}
+        <div className={`my-4 w-full rounded-2xl bg-white shadow-2xl md:my-5 md:p-8 dark:bg-slate-900 p-4 ${fill}`}>
           <PageBreadcrumb
             barRef={crumbRef}
             className="mb-4 shrink-0 md:mb-6"
@@ -62,7 +62,7 @@ export default function OrganizationLayout({ children }: { children: React.React
 
           {/* The active tab's panel — joins the tab bar's baseline on desktop
               (-mt-5 cancels the tab bar's mb-5). */}
-          <div className={`rounded-xl border border-gray-200 bg-slate-100 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50 p-3 ${fill}`}>
+          <div className={`rounded-xl border border-gray-200 bg-slate-100 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50 p-4 ${fill}`}>
             {/* Keyed by route so the fade replays on every tab switch. Opacity
                 only — a transform here would re-anchor the pages' fixed-position
                 popups to this box while it animates. */}

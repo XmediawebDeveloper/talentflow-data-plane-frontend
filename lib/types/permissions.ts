@@ -754,6 +754,7 @@ export const ROLE_PRESETS: RolePreset[] = [
       'ai_interview:create': true,
       'ai_interview:manage': true,
       'ai_interview:export': true,
+      'ai_interview:download_report': true,
       
       // Teams
       'teams:view': true,
@@ -883,6 +884,7 @@ export const ROLE_PRESETS: RolePreset[] = [
       'ai_interview:create': true,
       'ai_interview:manage': true,
       'ai_interview:export': true,
+      'ai_interview:download_report': true,
       
       // Teams
       'teams:view': true,
@@ -1012,6 +1014,7 @@ export const ROLE_PRESETS: RolePreset[] = [
       'ai_interview:create': false,
       'ai_interview:manage': false,
       'ai_interview:export': false,
+      'ai_interview:download_report': false,
       
       // Teams
       'teams:view': true,

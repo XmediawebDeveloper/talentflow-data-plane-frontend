@@ -29,6 +29,7 @@ import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -122,6 +123,10 @@ export const JOB_TAB_FILTER_FIELD_CLASS = 'min-w-0';
 export const JOB_TAB_FILTER_LABEL_CLASS = 'block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium';
 export const JOB_TAB_FILTER_CONTROL_CLASS =
   'w-full h-9 px-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50 placeholder:text-gray-400 dark:placeholder:text-slate-500 bg-white dark:bg-slate-900';
+
+/* FilterSelect trigger overrides matching FILTER_CONTROL_CLASS / JOB_TAB_FILTER_CONTROL_CLASS. */
+const FILTER_SELECT_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-md sm:rounded-md border-gray-300';
+const JOB_TAB_FILTER_SELECT_TRIGGER_CLASS = 'w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 px-3 sm:px-3 rounded-lg sm:rounded-lg hover:border-brand-blue/40 text-black dark:text-slate-50';
 
 /* The table's columns — FIXED, in this order (Actions follows as its own
    sticky column). No per-user customization: every recruiter sees the same
@@ -2327,11 +2332,11 @@ Best regards`);
     </>
   ) : null;
 
-  // Embedded in a tab (toolbar portals out) drops the padded outer card so the
-  // table sits in a single bordered card like the AI Talent Match tab, not a
-  // card inside a card. Standalone keeps its own card.
+  // No padded outer card, embedded or standalone: standalone it sat inside the
+  // page panel and framed the already-bordered rows a second time (a card
+  // inside a card). Resume Scoring's View by Job dropped the same shell.
   return (
-    <div className={compact || toolbarPortal ? '' : 'bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6'}>
+    <div>
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
@@ -2392,7 +2397,10 @@ Best regards`);
           /* In Job Details the row also carries Select All and Actions, so it
              lays out by the tab card's width: search takes its own row until
              the card is wide enough, instead of shrinking to an icon. */
-          fitToContainer={!!toolbarPortal}
+          // Standalone too: at 768 the inline filters crushed the search box
+          // to an icon, the same fix Resume Scoring's View by Job uses.
+          fitToContainer
+          containerBreakpoint={toolbarPortal ? undefined : '4xl'}
           /* Select All — embedded in Job Details, at the very start of the
              toolbar row, matching the AI Talent Match reference. Standalone
              Resume Scoring keeps it leading row 2 instead (see below), the
@@ -2567,16 +2575,18 @@ Best regards`);
               {!hideMatchStatusFilter && (
                 <div className={embedded ? JOB_TAB_FILTER_FIELD_CLASS : FILTER_FIELD_CLASS}>
                   <label className={embedded ? JOB_TAB_FILTER_LABEL_CLASS : FILTER_LABEL_CLASS}>Match Status</label>
-                  <select
+                  <FilterSelect
                     value={filterMatchStatus}
-                    onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
-                    className={embedded ? JOB_TAB_FILTER_CONTROL_CLASS : FILTER_CONTROL_CLASS}
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="Exact Match">Exact Match</option>
-                    <option value="Partial Match">Partial Match</option>
-                    <option value="No Match">No Match</option>
-                  </select>
+                    onChange={(v) => search.setFilter('matchStatus', v as typeof filterMatchStatus)}
+                    ariaLabel="Match Status"
+                    className={embedded ? JOB_TAB_FILTER_SELECT_TRIGGER_CLASS : FILTER_SELECT_TRIGGER_CLASS}
+                    options={[
+                      { value: 'all', label: 'All Statuses' },
+                      { value: 'Exact Match', label: 'Exact Match' },
+                      { value: 'Partial Match', label: 'Partial Match' },
+                      { value: 'No Match', label: 'No Match' },
+                    ]}
+                  />
                 </div>
               )}
 
@@ -2641,16 +2651,16 @@ Best regards`);
               {!embedded && (
                 <div className={FILTER_FIELD_CLASS}>
                   <label className={FILTER_LABEL_CLASS}>Job Version</label>
-                  <select
+                  <FilterSelect
                     value={filterJobVersion}
-                    onChange={(e) => search.setFilter('jobVersion', e.target.value)}
-                    className={FILTER_CONTROL_CLASS}
-                  >
-                    <option value="all">All Versions</option>
-                    {uniqueJobVersions.map(version => (
-                      <option key={version} value={version}>v{version}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => search.setFilter('jobVersion', v)}
+                    ariaLabel="Job Version"
+                    className={FILTER_SELECT_TRIGGER_CLASS}
+                    options={[
+                      { value: 'all', label: 'All Versions' },
+                      ...uniqueJobVersions.map(version => ({ value: version, label: `v${version}` })),
+                    ]}
+                  />
                 </div>
               )}
 
@@ -3863,9 +3873,9 @@ Best regards`);
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+              <div className="flex items-start justify-between gap-3 mb-6">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 flex-shrink-0 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -4592,13 +4602,14 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
           {/* Assessment Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment *</label>
-            <select
+            <FilterSelect
               value={selectedAssessment}
-              onChange={(e) => setSelectedAssessment(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">-- Choose an assessment --</option>
-              {assessments.map((assessment) => {
+              onChange={(v) => setSelectedAssessment(v)}
+              ariaLabel="Select Assessment"
+              className="w-full sm:w-full px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300"
+              options={[
+              { value: '', label: '-- Choose an assessment --' },
+              ...assessments.map((assessment) => {
                 // Strip any "- Version N" baked into the stored title and
                 // append the live version from `assessment.version` so the
                 // dropdown always reflects the assessment's real version.
@@ -4609,13 +4620,13 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
                 const base = parsed.cleanTitle || assessment.short_id || 'Untitled assessment';
                 const versionSuffix = displayVersion ? ` — Version ${displayVersion}` : '';
                 const shortIdSuffix = assessment.short_id ? ` (${assessment.short_id})` : '';
-                return (
-                  <option key={assessment.id} value={assessment.id}>
-                    {base}{versionSuffix}{shortIdSuffix} • {assessment.duration_minutes} min
-                  </option>
-                );
-              })}
-            </select>
+                return {
+                  value: String(assessment.id),
+                  label: `${base}${versionSuffix}${shortIdSuffix} • ${assessment.duration_minutes} min`,
+                };
+              }),
+              ]}
+            />
             <p className="text-xs text-gray-500 mt-2">
               {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job
             </p>
@@ -4624,17 +4635,19 @@ export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onS
           {/* Expiry Settings */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Invitation Expiry</label>
-            <select
-              value={expiryDays}
-              onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value={1}>1 day</option>
-              <option value={3}>3 days</option>
-              <option value={7}>7 days</option>
-              <option value={14}>14 days</option>
-              <option value={30}>30 days</option>
-            </select>
+            <FilterSelect
+              value={String(expiryDays)}
+              onChange={(v) => setExpiryDays(Number(v))}
+              ariaLabel="Invitation Expiry"
+              className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+              options={[
+                { value: '1', label: '1 day' },
+                { value: '3', label: '3 days' },
+                { value: '7', label: '7 days' },
+                { value: '14', label: '14 days' },
+                { value: '30', label: '30 days' },
+              ]}
+            />
           </div>
 
           {/* Included No Match candidates — a note, not an exclusion. */}

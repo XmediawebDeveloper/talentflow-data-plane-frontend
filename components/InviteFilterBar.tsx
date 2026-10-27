@@ -4,6 +4,7 @@ import { Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 
 export interface InviteFilterState {
   search: string;
@@ -138,7 +139,7 @@ export default function InviteFilterBar({
     : extraSelects.length === 1
       ? 'lg:grid-cols-[minmax(0,1fr)_160px_140px_150px_150px_auto]'
       : 'lg:grid-cols-[minmax(0,1fr)_170px_160px_160px_auto]';
-  const selectClass = 'min-w-0 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue';
+  const selectClass = 'w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] py-0 sm:py-0 px-3 sm:pl-3 sm:pr-3 rounded-lg sm:rounded-lg dark:text-slate-100';
 
   return (
     <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
@@ -171,39 +172,32 @@ export default function InviteFilterBar({
           )}
         </div>
 
-        <select
+        <FilterSelect
           value={filters.status}
-          onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="col-span-2 md:col-span-1 min-w-0 h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
-        >
-          {statusOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onChange({ ...filters, status: v })}
+          ariaLabel="Status"
+          options={statusOptions.map((option) => ({ value: option.value, label: option.label }))}
+          className={`col-span-2 md:col-span-1 ${selectClass}`}
+        />
 
         {extraSelects.map((select) => (
-          <select
+          <FilterSelect
             key={select.key}
             value={select.value}
-            onChange={(e) => select.onChange(e.target.value)}
-            aria-label={select.ariaLabel}
+            onChange={(v) => select.onChange(v)}
+            ariaLabel={select.ariaLabel}
+            options={[
+              { value: '', label: select.anyLabel },
+              ...select.options.map((option) => ({ value: option.value, label: option.label })),
+            ]}
             className={selectClass}
-          >
-            <option value="">{select.anyLabel}</option>
-            {select.options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          />
         ))}
 
         <DateField
           value={filters.dateFrom}
           onChange={(v) => onChange({ ...filters, dateFrom: v })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-sm"
           aria-label="Invite date from"
         />
 
@@ -211,7 +205,7 @@ export default function InviteFilterBar({
           value={filters.dateTo}
           min={filters.dateFrom || undefined}
           onChange={(v) => onChange({ ...filters, dateTo: v })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-xs sm:text-sm"
+          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-sm"
           aria-label="Invite date to"
         />
 

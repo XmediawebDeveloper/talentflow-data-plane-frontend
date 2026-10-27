@@ -27,6 +27,7 @@ import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -38,17 +39,6 @@ interface ConsentLogsProps {
   compact?: boolean;
   defaultFeature?: string;
 }
-
-/* Every control in the More Filters panel wears this. It is the field class the
-   panels on the Assessments page's other tabs use, verbatim, so a select here
-   and a select there are the same object — this row used to set its own height
-   and border because it was its own row; inside the shared panel it is not.
-   A literal string, not a template, so Tailwind's scanner can still see the
-   class names. */
-const FILTER_FIELD =
-  'w-full min-w-0 h-[38px] px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg ' +
-  'bg-white dark:bg-slate-900 text-black dark:text-slate-100 ' +
-  'focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 
 export default function ConsentLogs({ compact = false, defaultFeature = '' }: ConsentLogsProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -229,11 +219,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-lg font-semibold text-gray-900">Candidate Consent Logs</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Candidate Consent Logs</h2>
               {/* The count moved to the toolbar's badge, which also states what
                   the filters narrowed away ("12 of 340"). It stays here in
                   `compact`, where there is no toolbar to carry it. */}
-              <p className="text-xs sm:text-sm text-gray-500">
+              <p className="text-sm text-gray-500">
                 {compact
                   ? `${total} consent records`
                   : 'Every consent a candidate has given or declined, with the record behind it.'}
@@ -305,19 +295,20 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 <label htmlFor="consent-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                   Status
                 </label>
-                <select
+                <FilterSelect
                   id="consent-status"
                   value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
+                  onChange={(v) => {
+                    setStatusFilter(v);
                     setPage(0);
                   }}
-                  className={FILTER_FIELD}
-                >
-                  <option value="">All statuses</option>
-                  <option value="accepted">Accepted</option>
-                  <option value="declined">Declined</option>
-                </select>
+                  options={[
+                    { value: '', label: 'All statuses' },
+                    { value: 'accepted', label: 'Accepted' },
+                    { value: 'declined', label: 'Declined' },
+                  ]}
+                  className="w-full sm:w-full min-w-0 h-[38px] data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                />
               </div>
 
               <div>
@@ -530,7 +521,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             />
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[85dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Consent Log Details</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Consent Log Details</h3>
                 <button
                   onClick={() => {
                     setSelectedLog(null);
@@ -545,43 +536,43 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 [&>div]:min-w-0">
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Candidate</p>
+                    <p className="text-sm text-gray-500">Candidate</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 break-all">{selectedLog.candidate_email}</p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Feature</p>
+                    <p className="text-sm text-gray-500">Feature</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">{selectedLog.feature_name}</p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Status</p>
+                    <p className="text-sm text-gray-500">Status</p>
                     <p className={`text-sm sm:text-base font-medium ${selectedLog.consent_status ? 'text-success' : 'text-destructive'}`}>
                       {selectedLog.consent_status ? 'Accepted' : 'Declined'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Proctoring Consent</p>
+                    <p className="text-sm text-gray-500">Proctoring Consent</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
                       {selectedLog.proctoring_consent ? 'Yes' : 'No'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">IP Address</p>
+                    <p className="text-sm text-gray-500">IP Address</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">{selectedLog.ip_address}</p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Device</p>
+                    <p className="text-sm text-gray-500">Device</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">
                       {selectedLog.device_type} / {selectedLog.browser_name} {selectedLog.browser_version}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">OS</p>
+                    <p className="text-sm text-gray-500">OS</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
                       {selectedLog.os_name} {selectedLog.os_version}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs sm:text-sm text-gray-500">Date</p>
+                    <p className="text-sm text-gray-500">Date</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
                       {formatIST(selectedLog.created_at)}
                     </p>
@@ -595,11 +586,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                     {auditTrail.map((audit) => (
                       <div
                         key={audit.id}
-                        className="p-2.5 sm:p-3 bg-gray-50 rounded-lg text-xs sm:text-sm"
+                        className="p-2.5 sm:p-3 bg-gray-50 rounded-lg text-sm"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                           <span className="font-medium text-gray-900">{audit.action}</span>
-                          <span className="text-gray-500 text-2xs sm:text-xs">
+                          <span className="text-gray-500 text-xs">
                             {formatIST(audit.created_at)}
                           </span>
                         </div>

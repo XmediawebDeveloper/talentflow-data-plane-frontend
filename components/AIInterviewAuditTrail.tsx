@@ -10,13 +10,16 @@ import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiI
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { useAuth } from '@/components/providers/AuthProvider';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
 import { Button } from '@/components/ui/button';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -68,9 +71,20 @@ export interface AIInterviewAuditTrailProps {
    * change or a search/date edit.
    */
   refreshSignal?: number;
+  /**
+   * List (timeline) or card grid — owned by the host (AIInterview.tsx) so
+   * every AI Interviews tab shares one choice. The toggle only renders when
+   * `onDisplayModeChange` is passed.
+   */
+  displayMode?: ListDisplayMode;
+  onDisplayModeChange?: (mode: ListDisplayMode) => void;
 }
 
-export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AIInterviewAuditTrailProps = {}) {
+export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, displayMode = 'list', onDisplayModeChange }: AIInterviewAuditTrailProps = {}) {
+  // Export Logs is RBAC-gated (`ai_interview:export` — the export-log
+  // endpoint enforces it too); greyed with the reason when missing.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
   const [activities, setActivities] = useState<AIInterviewAuditActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -193,6 +207,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
       : activities;
 
   const handleExportAuditLogs = async (format: ExportFileFormat) => {
+    if (!canExport) return;
     const rows = exportActivities().map((activity) => [
       formatIST(activity.timestamp),
       activity.title,
@@ -311,7 +326,9 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         </div>
       </div>
       }
-    />
+    >
+      {onDisplayModeChange && <ListViewToggle value={displayMode} onChange={onDisplayModeChange} />}
+    </ListToolbar>
     </>
   );
 
@@ -350,8 +367,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
       {/* Main Audit Trail */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 tf-round-edges">
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+        {/* Tighter padding and a stacked header below sm: on a phone the
+            Export button sat beside a three-line description, and the chips
+            and timeline cards below clipped against the card's right edge. */}
+        <div className="p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Activity Log</h2>
               <p className="text-sm text-gray-600 mt-1">
@@ -361,8 +381,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
 
             <Button
               variant="secondary"
-              onClick={() => setShowExportModal(true)}
+              onClick={() => { if (canExport) setShowExportModal(true); }}
               disabled={activities.length === 0}
+              aria-disabled={!canExport || undefined}
+              title={canExport ? undefined : 'You do not have permission to export AI interviews'}
+              className={canExport ? undefined : 'opacity-50 cursor-not-allowed'}
               icon={<Download className="w-4 h-4" />}
             >
               Export Logs{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}
@@ -379,11 +402,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
           </div>
 
           {/* Category Filter Chips */}
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2 mb-4">
             <span className="text-sm text-gray-600 mr-2">Filter:</span>
             <button
               onClick={() => setCategoryFilter('all')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 categoryFilter === 'all'
                   ? 'bg-gray-900 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -393,7 +416,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             </button>
             <button
               onClick={() => setCategoryFilter('config_lifecycle')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 categoryFilter === 'config_lifecycle'
                   ? 'bg-blue-600 text-white'
                   : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
@@ -403,7 +426,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             </button>
             <button
               onClick={() => setCategoryFilter('candidate_activity')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 categoryFilter === 'candidate_activity'
                   ? 'bg-indigo-600 text-white'
                   : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
@@ -421,8 +444,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         </div>
 
         {/* Timeline View */}
-        <div className="p-6">
-          {isLoading ? (
+        <div className="p-3 sm:p-6">
+          {isLoading && displayMode === 'grid' ? (
+            // Card view loads as card skeletons, not the timeline.
+            <CardGridSkeleton count={8} className="xl:grid-cols-4" />
+          ) : isLoading ? (
             <div className="space-y-4">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
@@ -493,7 +519,101 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                   {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Select all'}
                 </span>
               </div>
-              {activities.map((activity, index) => {
+              {displayMode === 'grid' ? (
+                /* Card view — one card per entry, the Candidate Results grid's
+                   card shell. Clicking a card opens its Details inside it, the
+                   same toggle the timeline row uses. */
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2">
+                  {activities.map((activity, index) => {
+                    const colors = ACTIVITY_COLORS[activity.activity_type] || ACTIVITY_COLORS.config_created;
+                    const icon = ACTIVITY_ICONS[activity.activity_type] || <Activity className="w-4 h-4" />;
+                    const isExpanded = selectedActivity === activity.id;
+                    const key = activityKey(activity, index);
+                    const isSelected = selectedKeys.has(key);
+                    return (
+                      <div
+                        key={key}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedActivity(isExpanded ? null : activity.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') setSelectedActivity(isExpanded ? null : activity.id); }}
+                        className={`group relative text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer ${gridCardSelectedClass(isSelected)}`}
+                      >
+                        <GridCardSelect
+                          selected={isSelected}
+                          onToggle={() => toggleSelected(key)}
+                          label={activity.title}
+                          selectionActive={selectedKeys.size > 0}
+                        />
+                        <div className="flex items-start gap-2.5">
+                          <div className={`flex-shrink-0 w-9 h-9 rounded-full border-2 ${colors.border} ${colors.bg} flex items-center justify-center ${colors.icon}`}>
+                            {icon}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`font-medium truncate ${colors.text}`} title={activity.title}>{activity.title}</p>
+                            <span className={`inline-block mt-0.5 text-xs px-2 py-0.5 rounded-full ${
+                              activity.category === 'config_lifecycle'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-indigo-100 text-indigo-700'
+                            }`}>
+                              {getCategoryLabel(activity.category)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-gray-600 dark:text-slate-400 line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
+                          {activity.description}
+                        </p>
+
+                        <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-slate-500">
+                          {activity.actor_name && (
+                            <span className="flex items-center gap-1 min-w-0">
+                              <User className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate">{activity.actor_name}</span>
+                            </span>
+                          )}
+                          {activity.config_title && (
+                            <span className="flex items-center gap-1 min-w-0">
+                              <FileText className="w-3 h-3 flex-shrink-0" />
+                              <span className="truncate" title={activity.config_title}>{activity.config_title}</span>
+                            </span>
+                          )}
+                          {activity.score !== null && activity.score !== undefined && (
+                            <span className="flex items-center gap-1">
+                              <Award className="w-3 h-3" />
+                              Score: {activity.score.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-xs space-y-1.5 [overflow-wrap:anywhere]">
+                            <div><span className="text-gray-500">Activity Type:</span> <span className="text-gray-900">{activity.activity_type.replace(/_/g, ' ')}</span></div>
+                            {activity.jd_title && (
+                              <div><span className="text-gray-500">JD Title:</span> <span className="text-gray-900">{activity.jd_title}</span></div>
+                            )}
+                            {activity.candidate_email && (
+                              <div><span className="text-gray-500">Candidate Email:</span> <span className="text-gray-900">{activity.candidate_email}</span></div>
+                            )}
+                            <div><span className="text-gray-500">Timestamp:</span> <span className="text-gray-900">{formatIST(activity.timestamp)}</span></div>
+                            {activity.config_id && (
+                              <div><span className="text-gray-500">Config ID:</span> <span className="text-gray-900 font-mono">{activity.config_id}</span></div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="mt-auto flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs">
+                          <span className="text-gray-500">{formatTimestamp(activity.timestamp)}</span>
+                          <span className="text-gray-400 group-hover:text-gray-600">
+                            <Eye className="w-3 h-3 inline mr-1" />
+                            {isExpanded ? 'Hide' : 'Details'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : activities.map((activity, index) => {
                 const colors = ACTIVITY_COLORS[activity.activity_type] || ACTIVITY_COLORS.config_created;
                 const icon = ACTIVITY_ICONS[activity.activity_type] || <Activity className="w-4 h-4" />;
                 const isExpanded = selectedActivity === activity.id;
@@ -528,9 +648,12 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
+                        {/* Stacks below sm (timestamp + Details under the text):
+                            side by side, the 115px timestamp column pushed the
+                            text column past the card's edge on a phone. */}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                               <h4 className={`font-medium ${colors.text}`}>
                                 {activity.title}
                               </h4>
@@ -542,8 +665,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                                 {getCategoryLabel(activity.category)}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600">{activity.description}</p>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                            <p className="text-sm text-gray-600 [overflow-wrap:anywhere]">{activity.description}</p>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3" />
@@ -564,7 +687,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                               )}
                             </div>
                           </div>
-                          <div className="text-right flex-shrink-0">
+                          <div className="flex items-center gap-3 sm:block sm:text-right flex-shrink-0">
                             <p className="text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
                             <button className="mt-1 text-xs text-gray-400 hover:text-gray-600">
                               <Eye className="w-3 h-3 inline mr-1" />
@@ -576,7 +699,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
                     </div>
 
                     {isExpanded && (
-                      <div className="ml-0 sm:ml-14 mt-2 sm:mt-0 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm">
+                      <div className="ml-0 sm:ml-14 mt-2 sm:mt-0 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm [overflow-wrap:anywhere]">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
@@ -615,7 +738,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
         </div>
 
         {/* Footer with Pagination */}
-        <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+        <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600">
             Showing {activities.length} of {total} activity entries
           </div>

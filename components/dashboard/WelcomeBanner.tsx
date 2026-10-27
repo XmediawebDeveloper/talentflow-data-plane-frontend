@@ -150,9 +150,9 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
                 <span aria-hidden className="ml-0.5 inline-block w-[2px] self-stretch bg-white animate-caret-blink" />
               </span>
             </h1>
-            <div className="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs sm:text-sm text-white/80">
+            <div className="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-white/80">
               {user?.role && (
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-2xs sm:text-xs font-medium shadow-sm ${roleBadgeColors[user.role]}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium shadow-sm ${roleBadgeColors[user.role]}`}>
                   {roleLabels[user.role]}
                 </span>
               )}
@@ -174,17 +174,17 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
 
         {/* Right: Date/Time + Last Login */}
         <div className="flex flex-col items-start gap-1.5 text-sm text-white/80 sm:items-end">
-          <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 backdrop-blur-sm px-2.5 py-1 ring-1 ring-white/15 text-xs sm:text-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 backdrop-blur-sm px-2.5 py-1 ring-1 ring-white/15 text-sm">
             <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-brand-orange" />
             {formatDateTime(now)}
           </span>
           {user?.lastLogin ? (
-            <span className="inline-flex items-center gap-1.5 text-2xs sm:text-xs text-white/60">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
               <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Last login: {formatLastLogin(user.lastLogin)}
             </span>
           ) : user?.createdAt ? (
-            <span className="inline-flex items-center gap-1.5 text-2xs sm:text-xs text-white/60">
+            <span className="inline-flex items-center gap-1.5 text-xs text-white/60">
               <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Member since {formatISTDate(user.createdAt)}
             </span>

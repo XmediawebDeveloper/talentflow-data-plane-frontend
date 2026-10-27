@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface AssessmentEditModalProps {
   isOpen: boolean;
@@ -180,7 +181,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Edit Assessment</h2>
-              <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 Modify assessment details and configuration
               </p>
             </div>
@@ -274,31 +275,35 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Type</label>
-                  <select
+                  <FilterSelect
                     value={editedAssessment.type}
-                    onChange={(e) => setEditedAssessment({ ...editedAssessment, type: e.target.value })}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  >
-                    <option value="Technical">Technical</option>
-                    <option value="Behavioral">Behavioral</option>
-                    <option value="Coding">Coding</option>
-                    <option value="Aptitude">Aptitude</option>
-                    <option value="Mixed">Mixed</option>
-                  </select>
+                    onChange={(v) => setEditedAssessment({ ...editedAssessment, type: v })}
+                    ariaLabel="Type"
+                    options={[
+                      { value: 'Technical', label: 'Technical' },
+                      { value: 'Behavioral', label: 'Behavioral' },
+                      { value: 'Coding', label: 'Coding' },
+                      { value: 'Aptitude', label: 'Aptitude' },
+                      { value: 'Mixed', label: 'Mixed' },
+                    ]}
+                    className="w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] py-0 sm:py-0 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-sm"
+                  />
                 </div>
 
                 <div>
                   <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Status</label>
-                  <select
+                  <FilterSelect
                     value={editedAssessment.status}
-                    onChange={(e) => setEditedAssessment({ ...editedAssessment, status: e.target.value })}
-                    className="w-full min-w-0 h-[38px] px-3 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  >
-                    <option value="Draft">Draft</option>
-                    <option value="Active">Active</option>
-                    <option value="Completed">Completed</option>
-                    <option value="Archived">Archived</option>
-                  </select>
+                    onChange={(v) => setEditedAssessment({ ...editedAssessment, status: v })}
+                    ariaLabel="Status"
+                    options={[
+                      { value: 'Draft', label: 'Draft' },
+                      { value: 'Active', label: 'Active' },
+                      { value: 'Completed', label: 'Completed' },
+                      { value: 'Archived', label: 'Archived' },
+                    ]}
+                    className="w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] py-0 sm:py-0 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-sm"
+                  />
                 </div>
               </div>
             </div>

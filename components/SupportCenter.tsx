@@ -30,6 +30,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import NameAvatar from '@/components/ui/name-avatar';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 // Main API - Local backend handles everything including support tickets
 // Character limits for the Create Support Ticket form.
@@ -1270,7 +1271,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <span className="hidden sm:inline">Team Support Tickets</span>
               <span className="sm:hidden">Team</span>
               {internalUnassignedTickets > 0 && (
-                <span className="px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20 rounded-full font-semibold">
+                <span className="px-1.5 sm:px-2 py-0.5 text-xs bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20 rounded-full font-semibold">
                   {internalUnassignedTickets}
                 </span>
               )}
@@ -1666,15 +1667,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <Label className="mb-1.5 font-semibold">
                         Category <span className="text-destructive">*</span>
                       </Label>
-                      <select
+                      <FilterSelect
                         value={category}
-                        onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
-                        className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                      >
-                        {categories.map(cat => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setCategory(v as SupportTicket['category'])}
+                        options={categories.map(cat => ({ value: cat.value, label: cat.label }))}
+                        className="w-full sm:w-full px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                      />
                     </div>
 
                     <div>
@@ -1696,15 +1694,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           </span>
                         </Tooltip>
                       </div>
-                      <select
+                      <FilterSelect
                         value={priority}
-                        onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
-                        className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                      >
-                        {priorities.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setPriority(v as SupportTicket['priority'])}
+                        options={priorities.map(p => ({ value: p.value, label: p.label }))}
+                        className="w-full sm:w-full px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                      />
                       <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                         {PRIORITY_GUIDANCE.find(g => g.label.toLowerCase() === priority)?.text}
                       </p>
@@ -1969,7 +1964,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -1991,41 +1986,44 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 md:gap-4">
-                    <select
+                    <FilterSelect
                       value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="open">Open</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
-                    </select>
+                      onChange={(v) => setFilterStatus(v)}
+                      options={[
+                        { value: 'all', label: 'All Status' },
+                        { value: 'open', label: 'Open' },
+                        { value: 'in-progress', label: 'In Progress' },
+                        { value: 'resolved', label: 'Resolved' },
+                        { value: 'closed', label: 'Closed' },
+                      ]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
 
-                    <select
+                    <FilterSelect
                       value={filterPriority}
-                      onChange={(e) => setFilterPriority(e.target.value)}
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="all">All Priority</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
+                      onChange={(v) => setFilterPriority(v)}
+                      options={[
+                        { value: 'all', label: 'All Priority' },
+                        { value: 'low', label: 'Low' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'high', label: 'High' },
+                        { value: 'urgent', label: 'Urgent' },
+                      ]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
 
-                    <select
+                    <FilterSelect
                       value={ticketSort}
-                      onChange={(e) => setTicketSort(e.target.value as typeof ticketSort)}
-                      aria-label="Sort tickets"
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="default">Sort: Default</option>
-                      <option value="newest">Sort: Newest first</option>
-                      <option value="updated">Sort: Last updated</option>
-                      <option value="priority">Sort: Priority (high → low)</option>
-                    </select>
+                      onChange={(v) => setTicketSort(v as typeof ticketSort)}
+                      ariaLabel="Sort tickets"
+                      options={[
+                        { value: 'default', label: 'Sort: Default' },
+                        { value: 'newest', label: 'Sort: Newest first' },
+                        { value: 'updated', label: 'Sort: Last updated' },
+                        { value: 'priority', label: 'Sort: Priority (high → low)' },
+                      ]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
                   </div>
 
                   {/* Active filters — each removable, plus clear all */}
@@ -2089,8 +2087,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
-                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
-                              <h4 className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
+                              <span className="text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
+                              <h4 className="text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1">
                               {getStatusBadge(ticket.status)}
@@ -2100,10 +2098,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
                             <div className="flex items-center gap-1 min-w-0">
                               <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                              <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
+                              <span className="text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
+                            <span className="text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -2720,15 +2718,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       Update Priority
                     </h4>
                     <div className="flex gap-2">
-                      <select
+                      <FilterSelect
                         value={draftPriority}
-                        onChange={(e) => setPriorityDraft({ id: selectedTicket.id, value: e.target.value })}
-                        className="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                      >
-                        {priorities.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setPriorityDraft({ id: selectedTicket.id, value: v })}
+                        options={priorities.map(p => ({ value: p.value, label: p.label }))}
+                        className="min-w-0 flex-1 px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                      />
                       <Button
                         variant="primary"
                         onClick={() => handleUpdateTicket({ priority: draftPriority })}
@@ -2805,7 +2800,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           <div>
             <button
               onClick={() => setView('overview')}
-              className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
+              className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue mb-4 sm:mb-6"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Overview
@@ -2825,7 +2820,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     >
                       <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
                       <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">{cat.label}</h4>
-                      <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
                     </div>
                   );
                 })}
@@ -2960,7 +2955,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : internalTickets.length === 0 ? (
                 <div className="text-center py-8 sm:py-12">
                   <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
+                  <p className="text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
                 </div>
               ) : (() => {
                 const openInternal = (ticket: InternalTicket) => {
@@ -3084,65 +3079,65 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
-                    <select
+                    <FilterSelect
                       value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      aria-label="Filter by status"
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="open">Open</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
-                    </select>
+                      onChange={(v) => setFilterStatus(v)}
+                      ariaLabel="Filter by status"
+                      options={[
+                        { value: 'all', label: 'All Status' },
+                        { value: 'open', label: 'Open' },
+                        { value: 'in-progress', label: 'In Progress' },
+                        { value: 'resolved', label: 'Resolved' },
+                        { value: 'closed', label: 'Closed' },
+                      ]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
 
-                    <select
+                    <FilterSelect
                       value={internalFilterAssignment}
-                      onChange={(e) => setInternalFilterAssignment(e.target.value)}
-                      aria-label="Filter by assignment"
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="all">All Tickets</option>
-                      <option value="mine">Assigned to Me</option>
-                      <option value="unassigned">Unassigned</option>
-                    </select>
+                      onChange={(v) => setInternalFilterAssignment(v)}
+                      ariaLabel="Filter by assignment"
+                      options={[
+                        { value: 'all', label: 'All Tickets' },
+                        { value: 'mine', label: 'Assigned to Me' },
+                        { value: 'unassigned', label: 'Unassigned' },
+                      ]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
 
-                    <select
+                    <FilterSelect
                       value={filterPriority}
-                      onChange={(e) => setFilterPriority(e.target.value)}
-                      aria-label="Filter by priority"
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="all">All Priority</option>
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
+                      onChange={(v) => setFilterPriority(v)}
+                      ariaLabel="Filter by priority"
+                      options={[
+                        { value: 'all', label: 'All Priority' },
+                        { value: 'low', label: 'Low' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'high', label: 'High' },
+                      ]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
 
-                    <select
+                    <FilterSelect
                       value={teamCategoryFilter}
-                      onChange={(e) => setTeamCategoryFilter(e.target.value)}
-                      aria-label="Filter by category"
-                      className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      <option value="all">All Categories</option>
-                      {internalCategories.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setTeamCategoryFilter(v)}
+                      ariaLabel="Filter by category"
+                      options={[{ value: 'all', label: 'All Categories' }, ...internalCategories.map(c => ({ value: c.value, label: c.label }))]}
+                      className="px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
 
-                    <select
+                    <FilterSelect
                       value={teamSort}
-                      onChange={(e) => setTeamSort(e.target.value as typeof teamSort)}
-                      aria-label="Sort tickets"
-                      className="col-span-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 sm:col-span-1"
-                    >
-                      <option value="default">Sort: Default</option>
-                      <option value="newest">Sort: Newest first</option>
-                      <option value="updated">Sort: Last updated</option>
-                      <option value="priority">Sort: Priority (high → low)</option>
-                    </select>
+                      onChange={(v) => setTeamSort(v as typeof teamSort)}
+                      ariaLabel="Sort tickets"
+                      options={[
+                        { value: 'default', label: 'Sort: Default' },
+                        { value: 'newest', label: 'Sort: Newest first' },
+                        { value: 'updated', label: 'Sort: Last updated' },
+                        { value: 'priority', label: 'Sort: Priority (high → low)' },
+                      ]}
+                      className="col-span-2 sm:col-span-1 px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
                   </div>
 
                   {/* Active filters — each removable, plus clear all */}
@@ -3802,15 +3797,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <Flag className="h-4 w-4 text-brand-blue" />
                       Update Priority
                     </h4>
-                    <select
+                    <FilterSelect
                       value={t.priority}
-                      onChange={(e) => handleUpdateInternalPriority(t.id, e.target.value as InternalTicketPriority)}
-                      className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                    >
-                      {internalPriorities.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => handleUpdateInternalPriority(t.id, v as InternalTicketPriority)}
+                      options={internalPriorities.map(p => ({ value: p.value, label: p.label }))}
+                      className="w-full sm:w-full px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+                    />
                   </div>
                 )}
 

@@ -99,7 +99,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">
                 {config.title}
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+              <p className="text-sm text-gray-600 dark:text-slate-400">
                 {config.description}
               </p>
             </div>
@@ -116,12 +116,12 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{item.fileName}</h3>
-                <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">Uploaded file</p>
+                <p className="text-sm text-gray-500 dark:text-slate-500">Uploaded file</p>
               </div>
             </div>
 
             {item.candidateName && (
-              <div className="flex items-center gap-2 text-xs sm:text-sm py-2 border-t border-gray-200 dark:border-slate-700">
+              <div className="flex items-center gap-2 text-sm py-2 border-t border-gray-200 dark:border-slate-700">
                 <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                 <span className="text-gray-600 dark:text-slate-400">Candidate:</span>
                 <span className="font-medium text-gray-900 dark:text-slate-50 truncate">{item.candidateName}</span>
@@ -136,7 +136,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
                 <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
                   <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">Duplicate Detected</h4>
-                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  <p className="text-sm text-gray-700 dark:text-slate-300">
                     {item.errorMessage || 'A resume with the same candidate email already exists in your database. The duplicate was automatically skipped to prevent redundant entries.'}
                   </p>
                 </div>
@@ -150,11 +150,11 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
                 <GitBranch className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
                   <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">New Version Created</h4>
-                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  <p className="text-sm text-gray-700 dark:text-slate-300">
                     This resume was recognized as an update for an existing candidate. A new version has been created to preserve the resume history.
                   </p>
                   {item.candidateName && (
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1.5 sm:mt-2">
+                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1.5 sm:mt-2">
                       Candidate: <span className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</span>
                     </p>
                   )}
@@ -169,7 +169,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
                 <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
                   <h4 className="text-sm sm:text-base font-medium text-red-900 mb-0.5 sm:mb-1">Error Details</h4>
-                  <p className="text-xs sm:text-sm text-red-800">
+                  <p className="text-sm text-red-800">
                     {item.errorMessage || 'An unknown error occurred while processing this file. Please try uploading again or contact support if the issue persists.'}
                   </p>
                 </div>
@@ -183,11 +183,11 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
                   <h4 className="text-sm sm:text-base font-medium text-green-900 mb-0.5 sm:mb-1">Successfully Processed</h4>
-                  <p className="text-xs sm:text-sm text-green-800">
+                  <p className="text-sm text-green-800">
                     This resume was successfully uploaded, parsed, and added to your database.
                   </p>
                   {item.candidateName && (
-                    <p className="text-xs sm:text-sm text-green-700 mt-1.5 sm:mt-2">
+                    <p className="text-sm text-green-700 mt-1.5 sm:mt-2">
                       Candidate: <span className="font-medium">{item.candidateName}</span>
                     </p>
                   )}

@@ -41,10 +41,10 @@ const faqs = [
 export default function FAQPage() {
   return (
     <div className="py-10 sm:py-14 md:py-20">
-      <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
+      <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
         {/* Hero */}
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
-          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-xs sm:text-sm">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-sm">
             FAQ
           </Badge>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4 px-2 sm:px-0 tracking-tight">

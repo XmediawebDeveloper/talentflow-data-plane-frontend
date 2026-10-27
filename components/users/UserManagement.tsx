@@ -50,6 +50,7 @@ import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import UserPermissionsSummary from './UserPermissionsSummary';
 import AddSeatsModal from './AddSeatsModal';
+import FilterSelect from '@/components/ui/filter-select';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -1670,21 +1671,20 @@ export default function UserManagement() {
   // second line on phones) so the phone search box keeps its full width.
   const renderRoleFilter = (className: string) =>
     hasRoleFilter ? (
-      <select
+      <FilterSelect
         value={roleFilter}
-        onChange={(e) => setRoleFilter(e.target.value)}
-        aria-label="Filter by role"
-        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors max-sm:!text-xs hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
+        onChange={(v) => setRoleFilter(v)}
+        ariaLabel="Filter by role"
+        options={[
+          { value: 'all', label: 'All roles' },
+          ...roleFilterOptions.map(([code, label]) => ({ value: code, label })),
+        ]}
+        className={`h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-36 shrink-0 rounded-[6.6px] sm:rounded-[6.6px] px-2 sm:px-2 text-sm transition-colors hover:border-brand-blue/40 sm:w-40 ${
           roleFilter === 'all'
             ? 'border-gray-200 text-gray-700 dark:border-slate-700 dark:text-slate-300'
-            : 'border-brand-blue/40 text-brand-blue'
+            : 'border-brand-blue/40 text-brand-blue dark:border-brand-blue/40 dark:text-brand-blue'
         } ${className}`}
-      >
-        <option value="all">All roles</option>
-        {roleFilterOptions.map(([code, label]) => (
-          <option key={code} value={code}>{label}</option>
-        ))}
-      </select>
+      />
     ) : null;
 
   const sortedUsers = sortRows(filteredUsers, userSort.sortKey, userSort.sortDir, {
@@ -2917,7 +2917,7 @@ export default function UserManagement() {
               icon={<Plus className="w-4 h-4" />}
               aria-disabled={!canCreateUser}
               title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
-              className={`max-sm:h-8 max-sm:px-3 max-sm:text-xs ${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
+              className={`${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
                 if (!canCreateUser) return;
                 if (isAtLimit) {
@@ -2980,7 +2980,7 @@ export default function UserManagement() {
                   <Icon className="hidden h-4 w-4 sm:block" />
                   {key === 'all' ? <><span className="sm:hidden">All</span><span className="hidden sm:inline">{label}</span></> : label}
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums sm:px-2 sm:text-xs ${
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${
                       active ? 'bg-white/20 text-white' : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
                     }`}
                   >
@@ -3048,7 +3048,7 @@ export default function UserManagement() {
                 />
               </div>
               {/* Role filter: here from sm up (one row); phones show it on the second line. */}
-              {renderRoleFilter('hidden sm:block')}
+              {renderRoleFilter('hidden sm:flex')}
             </div>
             {/* Right: clear-sort chip (desktop) + count. On phones with a role filter this
                 becomes the full-width second line: role filter left, count right. */}
@@ -3640,11 +3640,17 @@ export default function UserManagement() {
               {/* User Details Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Name</label>
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Name</label>
+                    <span className={`text-xs tabular-nums ${editingUser.name.length >= 50 ? 'text-brand-orange' : 'text-gray-400'}`}>
+                      {editingUser.name.length}/50
+                    </span>
+                  </div>
                   <Input
                     type="text"
                     value={editingUser.name}
-                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                    maxLength={50}
+                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value.slice(0, 50) })}
                   />
                 </div>
                 <div>
@@ -4357,7 +4363,7 @@ export default function UserManagement() {
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
-                  <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{viewingRolePopup.code}</div>
+                  <div className="font-semibold text-brand-blue text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>

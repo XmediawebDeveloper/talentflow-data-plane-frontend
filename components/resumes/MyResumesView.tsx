@@ -15,6 +15,7 @@ import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
@@ -322,27 +323,22 @@ function ToolbarFilterSelect<T extends string>({
   const isActive = value !== 'all';
 
   return (
-    <label className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
+    <label title={label} className="relative min-w-0 flex-1 sm:min-w-[180px] sm:flex-none">
       <span className="sr-only">{label}</span>
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-gray-400">
         {icon}
       </span>
-      <select
+      <FilterSelect
         value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className={`h-10 w-full appearance-none rounded-lg border pl-9 pr-8 text-sm text-black transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 ${
+        onChange={(v) => onChange(v as T)}
+        ariaLabel={label}
+        options={options}
+        className={`w-full sm:w-full data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 pl-9 sm:pl-9 pr-3 sm:pr-3 rounded-lg sm:rounded-lg transition-all ${
           isActive
-            ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+            ? 'border-brand-blue/40 dark:border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
             : 'border-gray-300 bg-gray-50 hover:bg-white'
         }`}
-        aria-label={label}
-        title={label}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      />
     </label>
   );
 }
@@ -3961,7 +3957,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       {header}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
-        <div className="w-full sm:w-auto flex items-start gap-3">
+        <div className="w-full sm:w-auto min-w-0 flex items-start gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
             <FileText className="h-4 w-4 text-brand-blue" />
           </div>
@@ -3975,16 +3971,16 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 )}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
+            <p className="text-sm text-gray-600">Resumes uploaded by you</p>
           </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
           <button
             onClick={() => { if (!canViewMyResumes) return; openUploadHistoryModal(); }}
             disabled={canViewMyResumes && !hasUploadHistory}
             aria-disabled={!canViewMyResumes}
             title={!canViewMyResumes ? 'You do not have permission to view upload history' : hasUploadHistory ? 'View upload history' : 'No uploads yet'}
-            className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm flex-1 sm:flex-initial ${
+            className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm whitespace-nowrap flex-1 sm:flex-initial ${
               hasUploadHistory && canViewMyResumes
                 ? 'text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer'
                 : 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed'
@@ -4009,7 +4005,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             }}
             aria-disabled={!canUploadMyResumes}
             title={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
-            className={`flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial shadow-sm ring-1 ${
+            className={`flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm whitespace-nowrap flex-1 sm:flex-initial shadow-sm ring-1 ${
               canUploadMyResumes
                 ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
                 : 'bg-gray-200 text-gray-400 shadow-none ring-transparent cursor-not-allowed opacity-60'
@@ -4022,11 +4018,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         </div>
       </div>
 
-      {/* tf-round-edges instead of overflow-hidden: overflow-hidden makes this
-          card a scroll container, which the sticky search bar below would pin to
-          (scrolling away with the card) instead of to the page. tf-round-edges
-          keeps the rounded corners without creating that scroll container. */}
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+      {/* No frame of its own: this wraps the page's whole list inside the white
+          page panel, so a border/ring/shadow here was a card-in-panel double
+          frame and pushed every control 13px in from the panel's 16/32px
+          content inset. Still no overflow-hidden — that would make it a scroll
+          container the sticky search bar below would pin to. */}
+      <div className="bg-white">
         {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
         {selectedResumes.length > 0 && (() => {
           // Detect the Archived Resumes folder context — when active, the
@@ -4076,8 +4073,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
         {/* Search pinned to the top of the scroll viewport so it stays reachable
             while the list scrolls beneath it. Opaque bg so rows don't show
-            through; z above the rows. */}
-        <div className="sticky top-0 z-20 border-b border-gray-200 bg-white p-3">
+            through; z above the rows. Offset by --crumb-h (set by the page) so
+            it pins just below the sticky breadcrumb instead of under it. */}
+        <div className="sticky top-[var(--crumb-h,0px)] z-20 border-b border-gray-200 bg-white py-3">
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2 xl:flex-row xl:items-start">
               <div className="min-w-0 flex-1">
@@ -4231,28 +4229,32 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               width={folderTreeWidth}
               onWidthChange={setFolderTreeWidth}
               collapsible
+              flushStart
             />
 
             <div className="flex-1 flex flex-col min-w-0">
               {/* Breadcrumb Navigation for List View */}
               {selectedFolder && selectedFolder !== 'all' && (
-                <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
+                /* flex-wrap + min-w-0: a nested path of long folder names
+                   wraps onto more lines on a phone instead of running off
+                   the card. */
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
                   <button
                     onClick={() => setSelectedFolder('all')}
-                    className="flex items-center gap-1 text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
+                    className="flex shrink-0 items-center gap-1 whitespace-nowrap text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
                   >
                     <LayoutGrid className="w-4 h-4" />
                     <span>All Resumes</span>
                   </button>
                   {buildBreadcrumbPath(selectedFolder).map((item, index, arr) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <div key={item.id} className="flex min-w-0 items-center gap-2 [overflow-wrap:anywhere]">
+                      <ChevronRight className="w-4 h-4 shrink-0 text-gray-400" />
                       {index === arr.length - 1 ? (
                         <span className="text-gray-900 font-medium">{item.name}</span>
                       ) : (
                         <button
                           onClick={() => setSelectedFolder(item.id)}
-                          className="text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
+                          className="text-left text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
                         >
                           {item.name}
                         </button>
@@ -4270,6 +4272,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </div>
                 )}
                 <ResumeTable
+                  flushCards
                   resumes={filteredResumes}
                   selectedResumes={selectedResumes}
                   onSelectResume={handleSelectResume}
@@ -4319,20 +4322,30 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 />
               </div>
               {totalPages > 0 && (
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalItems={totalItems}
-                  itemsPerPage={itemsPerPage}
-                  onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
-                  onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
-                />
+                /* Beside the folder panel this column is far narrower than the
+                   viewport the pager's sm: breakpoint assumes (≈460px on a
+                   768px tablet), so its one row crushed the summary onto four
+                   lines and pushed Next past the card. Let it wrap instead;
+                   from xl the column is wide enough for the single row.
+                   mt-auto: the column stretches to the folder panel's
+                   height, so with only a few rows (or none) the pager is
+                   pushed to the bottom instead of sitting under the last row. */
+                <div className="mt-auto [&>div]:flex-wrap [&>div]:justify-center xl:[&>div]:flex-nowrap xl:[&>div]:justify-between">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={totalItems}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+                    onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+                  />
+                </div>
               )}
             </div>
           </div>
         ) : (
           // Card View - Folders as Cards with Breadcrumb Navigation
-          <div className="p-3 sm:p-4 md:p-6" data-folder-card-boundary>
+          <div className="py-4 md:py-6" data-folder-card-boundary>
             {(() => {
               // Get current folder data and children
               const currentFolderData = cardViewFolder ? getFolderById(cardViewFolder) : null;
@@ -4491,7 +4504,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <>
                   {/* Breadcrumb Navigation */}
                   {(cardViewFolder !== null || breadcrumbPath.length > 0) && (
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-4 sm:mb-6 text-xs sm:text-sm">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-4 sm:mb-6 text-sm">
                       <button
                         onClick={() => navigateToFolder(null)}
                         className="flex items-center gap-1 text-brand-blue hover:text-brand-blue-2 hover:underline transition-colors"
@@ -4551,7 +4564,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             ? 'Root (Default)'
                             : currentFolderData.name}
                         </h2>
-                        <p className="text-xs sm:text-sm text-gray-500">
+                        <p className="text-sm text-gray-500">
                           {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
                           {foldersToDisplay.length > 0 && visibleFolderResumes.length > 0 && ' • '}
                           {visibleFolderResumes.length > 0 && `${visibleFolderResumes.length} resume${visibleFolderResumes.length !== 1 ? 's' : ''}`}
@@ -4576,7 +4589,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             New Subfolder
                           </button>
                         ) : currentFolderDepth >= MAX_FOLDER_DEPTH ? (
-                          <span className="text-xs sm:text-sm text-gray-500 sm:self-start">
+                          <span className="text-sm text-gray-500 sm:self-start">
                             Maximum depth reached ({MAX_FOLDER_DEPTH} levels)
                           </span>
                         ) : null}
@@ -4603,7 +4616,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       </div>
                       <div className="min-w-0">
                         <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
-                        <p className="text-xs sm:text-sm text-gray-500">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
+                        <p className="text-sm text-gray-500">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
@@ -4638,7 +4651,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                   All Resumes card mirrors the folder cards' own
                                   markup (p-3, 36px icon tile, text-sm title) so
                                   they match to the pixel rather than roughly. */}
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-stretch">
+                              {/* 2-up below lg: three across a tablet truncated "Root (Default)" / "Archived Resumes" to a few letters. */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-stretch">
                                 {showAllResumesCard && (
                                   <div
                                     className="h-full bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
@@ -4708,11 +4722,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               {visibleMyFolders.map(folder => renderFolderCard(folder))}
                             </div>
                           ) : myFolders.length > 0 && folderControlsActive ? (
-                            <p className="text-xs sm:text-sm text-gray-500">No folders match the current search or filter.</p>
+                            <p className="text-sm text-gray-500">No folders match the current search or filter.</p>
                           ) : systemFolders.length > 0 ? (
                             // Skipped when there are no folders at all — the
                             // page-level empty state below covers that case.
-                            <p className="text-xs sm:text-sm text-gray-500">No folders yet. Create one to organize your resumes.</p>
+                            <p className="text-sm text-gray-500">No folders yet. Create one to organize your resumes.</p>
                           ) : null}
                           </>
                         )
@@ -4720,12 +4734,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         <>
                           {hasCurrentSubfolders && (
                             <div className="flex items-center mb-2 sm:mb-3">
-                              <h3 className="text-xs sm:text-sm font-medium text-gray-700">Subfolders</h3>
+                              <h3 className="text-sm font-medium text-gray-700">Subfolders</h3>
                             </div>
                           )}
 
                           {cardViewFolder !== 'all' && currentFolderDepth >= MAX_FOLDER_DEPTH && (
-                            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs sm:text-sm text-amber-800">
+                            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                               This child subfolder is the deepest allowed level.
                             </div>
                           )}
@@ -4736,7 +4750,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             </div>
                           )}
                           {foldersToDisplay.length > 0 && visibleFoldersToDisplay.length === 0 && folderControlsActive && (
-                            <p className="mt-3 text-xs sm:text-sm text-gray-500">No subfolders match the current search or filter.</p>
+                            <p className="mt-3 text-sm text-gray-500">No subfolders match the current search or filter.</p>
                           )}
                         </>
                       )}
@@ -4800,8 +4814,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               gray-200, so a lighter frame read as three sides
                               and a missing bottom — the top and flanks were the
                               table's separators showing through, not the card. */}
-                          <div className="bg-white border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl overflow-hidden">
+                          {/* Framed from md only: on a phone the rows are already cards, and a frame round them was card-in-card. */}
+                          <div className="bg-white md:border md:border-gray-200 md:ring-1 md:ring-black/[0.02] md:shadow-sm md:shadow-brand-blue/5 md:rounded-xl md:overflow-hidden">
                           <ResumeTable
+                            flushCards
                             resumes={visibleFolderResumes}
                             selectedResumes={selectedResumes}
                             onSelectResume={handleSelectResume}
@@ -5303,7 +5319,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">Upload History</h2>
-                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
+                    <p className="text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -5367,7 +5383,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       <div className="inline-flex items-center bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-1 mb-4 sm:mb-6 shadow-sm shadow-brand-blue/5">
                         <button
                           onClick={() => setUploadHistoryTab('current')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
                             uploadHistoryTab === 'current'
                               ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                               : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
@@ -5376,7 +5392,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-brand-blue animate-spin' : ''}`} />
                           Currently Processing
                           {activeRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-2xs sm:text-xs font-semibold ${
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
                               uploadHistoryTab === 'current' ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
                             }`}>
                               {activeRecords.length}
@@ -5385,7 +5401,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         </button>
                         <button
                           onClick={() => setUploadHistoryTab('completed')}
-                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-all ${
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
                             uploadHistoryTab === 'completed'
                               ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                               : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
@@ -5394,7 +5410,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Completed
                           {completedRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-2xs sm:text-xs font-semibold ${
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold ${
                               uploadHistoryTab === 'completed' ? 'bg-white text-brand-blue' : 'bg-gray-100 text-gray-700'
                             }`}>
                               {completedRecords.length}
@@ -5522,7 +5538,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
                                       <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                     </div>
-                                    <span className="text-2xs sm:text-xs text-gray-600 truncate">{label}</span>
+                                    <span className="text-xs text-gray-600 truncate">{label}</span>
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
@@ -5538,7 +5554,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 </div>
-                                <span className="text-2xs sm:text-xs text-gray-600 truncate">Success Rate</span>
+                                <span className="text-xs text-gray-600 truncate">Success Rate</span>
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
@@ -5589,7 +5605,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           return (
                             <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
                               <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue animate-spin flex-shrink-0" />
-                              <span className="text-xs sm:text-sm text-brand-blue">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
+                              <span className="text-sm text-brand-blue">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
                             </div>
                           );
                         }
@@ -5608,9 +5624,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-brand-blue/[0.07] rounded-xl">
                             <div className="flex items-center gap-2">
                               <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
-                              <span className="text-xs sm:text-sm font-medium text-brand-blue">{etaText}</span>
+                              <span className="text-sm font-medium text-brand-blue">{etaText}</span>
                             </div>
-                            <span className="text-2xs sm:text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
+                            <span className="text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
                           </div>
                         );
                       })()}
@@ -5653,7 +5669,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               so it reads as guidance rather than a warning. */}
                           <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
                             <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                            <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                            <p className="text-sm text-gray-700 dark:text-slate-300">
                               <span className="font-semibold">Tip:</span> You can upload a single resume or bulk upload multiple resumes at once.
                             </p>
                           </div>
@@ -6076,8 +6092,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-xs sm:text-sm truncate">{file.fileName}</div>
-                                              <div className="text-2xs sm:text-xs text-gray-500 mt-0.5 truncate">
+                                              <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
+                                              <div className="text-xs text-gray-500 mt-0.5 truncate">
                                                 {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
                                                 {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
                                                 {file.status === 'processing' && 'Processing…'}
@@ -6174,22 +6190,22 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <span className="text-xs sm:text-sm font-semibold text-brand-blue-2">
+                      <span className="text-sm font-semibold text-brand-blue-2">
                         {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
                       </span>
-                      <p className="text-2xs sm:text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
+                      <p className="text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setSelectedVersionedItems(new Map())}
-                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
                     >
                       Clear
                     </button>
                     <button
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
+                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
                     >
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Resolve ({selectedVersionedItems.size})
@@ -6303,7 +6319,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   // One line, always: it sits beside the buttons, and a second
                   // line would push the footer taller.
                   return (
-                    <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                       {inviteeCount === 0
                         ? 'Select at least one candidate to continue'
                         : selectedAssessments.length === 0
@@ -6445,14 +6461,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         />
       )}
 
-      {/* Cancel Batch Confirmation Dialog */}
+      {/* Cancel Batch Confirmation Dialog.
+          The confirmation dialogs below pass only `sm:max-w-lg`: a bare
+          `max-w-md` used to replace the base `max-w-[calc(100%-2rem)]`, so on a
+          phone they ran edge to edge with no gutter. */}
       <AlertDialog
         open={cancelBatchConfirm.isOpen}
         onOpenChange={(open) => {
           if (!open) setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
+        <AlertDialogContent className="sm:max-w-lg" hideClose>
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
@@ -6495,7 +6514,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           if (!open) setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
+        <AlertDialogContent className="sm:max-w-lg" hideClose>
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
@@ -6533,7 +6552,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           if (!open) setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
+        <AlertDialogContent className="sm:max-w-lg" hideClose>
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
@@ -6578,7 +6597,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           }
         }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg" hideClose>
+        <AlertDialogContent className="sm:max-w-lg" hideClose>
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">

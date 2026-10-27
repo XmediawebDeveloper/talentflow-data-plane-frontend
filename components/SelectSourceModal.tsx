@@ -1102,7 +1102,7 @@ export default function SelectSourceModal({
               {/* JD ID · job name · job version */}
               <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 {jobShortId && <JobIdBadge className="inline-flex items-center flex-shrink-0">{jobShortId}</JobIdBadge>}
-                <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{jobTitle}</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{jobTitle}</span>
                 {jobVersion != null && jobVersion > 0 && (
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
                 )}
@@ -1128,7 +1128,7 @@ export default function SelectSourceModal({
         {job && (
           <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-2.5 sm:py-3 bg-white dark:bg-slate-900 flex-shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2 min-w-0 text-xs sm:text-sm">
+              <div className="flex flex-wrap items-center gap-2 min-w-0 text-sm">
                 <span className="text-gray-600 dark:text-slate-400">Score against Job Version</span>
                 {jobVersion != null && jobVersion > 0 && (
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0">V{jobVersion}</span>
@@ -1198,7 +1198,7 @@ export default function SelectSourceModal({
               onClick={() => { if (!hasMyResumesScoreAccess) return; handleTabChange('my-resumes'); }}
               aria-disabled={!hasMyResumesScoreAccess}
               title={!hasMyResumesScoreAccess ? 'You do not have permission to score resumes from My Resumes' : undefined}
-              className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
+              className={`px-3 sm:px-5 py-2 sm:py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                 !hasMyResumesScoreAccess
                   ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
                   : activeTab === 'my-resumes'
@@ -1209,7 +1209,7 @@ export default function SelectSourceModal({
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">My Resumes</span>
               <span className="sm:hidden">Resumes</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
+              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'my-resumes'
                   ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
@@ -1222,7 +1222,7 @@ export default function SelectSourceModal({
               onClick={() => { if (!hasInternalDBAccess) return; handleTabChange('internal-db'); }}
               aria-disabled={!hasInternalDBAccess}
               title={!hasInternalDBAccess ? 'You do not have permission to score resumes from the Shared Database' : undefined}
-              className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
+              className={`px-3 sm:px-5 py-2 sm:py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                 !hasInternalDBAccess
                   ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
                   : activeTab === 'internal-db'
@@ -1233,7 +1233,7 @@ export default function SelectSourceModal({
               <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Shared Database</span>
               <span className="sm:hidden">Shared DB</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
+              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'internal-db'
                   ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
@@ -1364,7 +1364,7 @@ export default function SelectSourceModal({
                       </button>
                     );
                   })()}
-                  <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-transparent font-medium whitespace-nowrap">
+                  <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-transparent font-medium whitespace-nowrap">
                     <span className="text-brand-blue">{selectedResumes.length}</span> <span className="hidden sm:inline">selected</span>
                   </div>
                 </div>
@@ -1484,7 +1484,7 @@ export default function SelectSourceModal({
                         <div className="text-center py-10 sm:py-16">
                           <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
                           <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
-                          <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                          <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
                             {searchTerm
                               ? 'No resumes match your search. Try different keywords.'
                               : 'No resumes available in the internal database.'}
@@ -1514,7 +1514,7 @@ export default function SelectSourceModal({
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-            <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+            <div className="text-sm text-gray-600 dark:text-slate-400">
               {selectedResumes.length > 0 ? (
                 <span>
                   <span className="font-medium text-gray-900 dark:text-slate-50">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected
@@ -1651,7 +1651,7 @@ export default function SelectSourceModal({
         open={!!deleteResumeTarget}
         onOpenChange={(open) => { if (!open) setDeleteResumeTarget(null); }}
       >
-        <AlertDialogContent className="max-w-md sm:max-w-lg">
+        <AlertDialogContent className="sm:max-w-lg">
           <button
             type="button"
             onClick={() => setDeleteResumeTarget(null)}

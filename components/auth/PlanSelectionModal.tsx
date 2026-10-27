@@ -307,6 +307,10 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   return (
     <div
       onClick={handleOverlayClick}
+      /* aria-modal: its tint is an inline style, so this is what lets the
+         background scroll lock in globals.css see it as a modal. */
+      role="dialog"
+      aria-modal="true"
       className="tf-auth-scope fixed inset-0 flex items-center justify-center p-2 sm:p-4"
       style={{
         backgroundColor: 'rgba(16, 24, 40, 0.55)',
@@ -367,13 +371,13 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
               <h2 className="text-lg sm:text-xl md:text-2xl" style={{ fontWeight: 700, color: 'var(--tf-ink)', marginBottom: '4px' }}>
                 Choose Your Plan
               </h2>
-              <p className="text-xs sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>
+              <p className="text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>
                 Select a plan to continue. You can upgrade or change anytime.
               </p>
             </div>
             <button
               onClick={handleViewPricing}
-              className="text-xs sm:text-sm px-3 py-1.5 sm:px-4 sm:py-2 flex-shrink-0 self-start sm:self-auto"
+              className="text-sm px-3 py-1.5 sm:px-4 sm:py-2 flex-shrink-0 self-start sm:self-auto"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -392,7 +396,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
 
           {/* Billing Toggle */}
           <div className="flex items-center gap-2 sm:gap-3 mt-3 sm:mt-4 flex-wrap">
-            <span className="text-xs sm:text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? ('var(--tf-ink)') : ('var(--tf-ink-subtle)') }}>
+            <span className="text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? ('var(--tf-ink)') : ('var(--tf-ink-subtle)') }}>
               Monthly
             </span>
             <button
@@ -423,10 +427,10 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 }}
               />
             </button>
-            <span className="text-xs sm:text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? ('var(--tf-ink)') : ('var(--tf-ink-subtle)') }}>
+            <span className="text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? ('var(--tf-ink)') : ('var(--tf-ink-subtle)') }}>
               Yearly
             </span>
-            <span className="text-[10px] sm:text-xs" style={{
+            <span className="text-xs" style={{
               fontWeight: 500,
               color: 'var(--tf-success-ink)',
               backgroundColor: 'var(--tf-success-tint)',
@@ -445,15 +449,15 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 tf-auth-spin" style={{ color: 'var(--tf-brand)' }} />
-              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>Loading plans...</p>
+              <p className="mt-3 sm:mt-4 text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>Loading plans...</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-10 sm:py-16">
               <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: 'var(--tf-danger)' }} />
-              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: 'var(--tf-danger)', fontWeight: 500 }}>{error}</p>
+              <p className="mt-3 sm:mt-4 text-sm" style={{ color: 'var(--tf-danger)', fontWeight: 500 }}>{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm"
+                className="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 text-sm"
                 style={{
                   backgroundColor: 'var(--tf-brand)',
                   color: 'var(--raw-ffffff)',
@@ -518,7 +522,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                       }}
                     >
                       <IconComponent className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: isFreeTrial ? 'var(--tf-success-ink)' : ('var(--tf-ink-muted)') }} />
-                      <span className="text-[10px] sm:text-xs" style={{ fontWeight: 600, color: isFreeTrial ? 'var(--tf-success-ink)' : ('var(--tf-ink-muted)') }}>
+                      <span className="text-xs" style={{ fontWeight: 600, color: isFreeTrial ? 'var(--tf-success-ink)' : ('var(--tf-ink-muted)') }}>
                         {String(plan.planTier || plan.name || '')}
                       </span>
                     </div>
@@ -529,7 +533,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     </h3>
 
                     {/* Description */}
-                    <p className="text-[11px] sm:text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: 'var(--tf-ink-subtle)', minHeight: '28px' }}>
+                    <p className="text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: 'var(--tf-ink-subtle)', minHeight: '28px' }}>
                       {String(plan.description || '')}
                     </p>
 
@@ -538,7 +542,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                       {isFreeTrial ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                           <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: 'var(--tf-success-ink)' }}>Free</span>
-                          <span className="text-xs sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>for {plan.trialDays} days</span>
+                          <span className="text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>for {plan.trialDays} days</span>
                         </div>
                       ) : displayPrice !== null ? (
                         <div>
@@ -546,7 +550,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                             <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: 'var(--tf-ink)' }}>
                               {formatCurrency(displayPrice, plan.currency)}
                             </span>
-                            <span className="text-[11px] sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>
+                            <span className="text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>
                               /{isYearly ? 'year' : 'month'}
                             </span>
                           </div>

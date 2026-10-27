@@ -20,7 +20,6 @@ const nextConfig: NextConfig = {
   serverExternalPackages: [
     '@mediapipe/hands', '@mediapipe/face_detection', '@mediapipe/face_mesh',
     '@mediapipe/camera_utils', '@mediapipe/drawing_utils',
-    'three', '@react-three/fiber', '@react-three/drei',
   ],
   reactStrictMode: false,
   turbopack: {

@@ -2793,14 +2793,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center">
                 <Lock className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 text-gray-900 fill-amber-400" strokeWidth={2} />
               </div>
-              <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-xs sm:text-sm font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-700">!</span>
+              <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-700">!</span>
             </div>
             <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
             {laptop('red')}
           </div>
 
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold leading-tight text-[#0f1d40] mb-2 sm:mb-3">Already open on another device</h1>
-          <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
+          <p className="text-gray-600 text-base leading-relaxed mb-5 sm:mb-6 max-w-xl mx-auto">
             This interview is currently active in another browser window or device.
             For security, only one device can access the interview at a time.
             Please continue on the active session.
@@ -2815,11 +2815,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <Clock className="hidden md:block w-11 h-11 shrink-0 text-amber-500" strokeWidth={2.25} />
               <div className="hidden md:block self-stretch w-px bg-amber-300" />
               <div className="flex-1 min-w-0">
-                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-sm md:text-base font-semibold text-[#0f1d40] mb-1">
+                <p className="flex items-center justify-center sm:justify-start gap-1.5 text-base font-semibold text-[#0f1d40] mb-1">
                   <Clock className="md:hidden w-4 h-4 shrink-0 text-amber-500" strokeWidth={2.5} />
                   Session releases automatically
                 </p>
-                <p className="text-xs md:text-sm text-gray-600 leading-snug">
+                <p className="text-sm text-gray-600 leading-snug">
                   If you already closed the other session, you don&apos;t need to do anything.
                   This page will unlock automatically once the previous session is released.
                 </p>
@@ -3216,7 +3216,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   </div>
 
                   <h1 className="text-xl md:text-2xl font-bold text-gray-900 text-center">Enter Fullscreen Mode</h1>
-                  <p className="mt-1.5 text-xs md:text-sm text-gray-600 text-center leading-relaxed">
+                  <p className="mt-1.5 text-sm text-gray-600 text-center leading-relaxed">
                     This AI interview runs in fullscreen with Entire Screen sharing and active proctoring, to ensure a focused, fair and secure interview experience.
                   </p>
 
@@ -3418,7 +3418,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           </p>
           {/* Do-not-refresh warning: reloading here drops fullscreen + screen
               sharing and sends the candidate back to re-share. */}
-          <div className="w-fit max-w-full mx-auto mb-3 rounded-2xl sm:rounded-full border border-destructive-line bg-destructive-subtle px-4 py-1.5 text-xs sm:text-sm font-semibold text-destructive flex items-center justify-center gap-2 text-center">
+          <div className="w-fit max-w-full mx-auto mb-3 rounded-2xl sm:rounded-full border border-destructive-line bg-destructive-subtle px-4 py-1.5 text-sm font-semibold text-destructive flex items-center justify-center gap-2 text-center">
             <AlertTriangle data-capture-decor className="w-4 h-4 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </div>
@@ -3459,7 +3459,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               card edge to edge; the tagline's 17px inset is unchanged. */}
           <div className="sticky bottom-0 z-10 -mx-5 md:-mx-7 -mb-4 md:-mb-5 px-5 md:px-7 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-5">
             {/* Two lines: the headline, then the consequence. */}
-            <p className="flex items-start gap-3 sm:pl-[17px] text-2xs sm:text-xs text-gray-500 leading-relaxed">
+            <p className="flex items-start gap-3 sm:pl-[17px] text-xs text-gray-500 leading-relaxed">
               <span className="w-7 flex justify-center flex-shrink-0 pt-px">
                 <Info className="w-4 h-4 text-gray-400" />
               </span>
@@ -3523,7 +3523,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           <h1 className="text-lg md:text-xl font-bold text-gray-900 mb-1 text-center">
             One last step — hide the sharing bar
           </h1>
-          <p className="text-gray-600 mb-2.5 text-center text-xs md:text-sm leading-relaxed max-w-2xl mx-auto">
+          <p className="text-gray-600 mb-2.5 text-center text-sm leading-relaxed max-w-2xl mx-auto">
             Click <b className="text-gray-900">Hide</b> on the sharing bar at the bottom of your screen. Screen sharing stays on.
           </p>
 
@@ -3539,7 +3539,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 Hide highlighted. Hidden during the vision-check frame capture
                 (shareBarMockRef) so it is never mistaken for the real bar. */}
             <div ref={shareBarMockRef} className="rounded-xl border border-brand-blue/15 bg-brand-sky/40 dark:bg-brand-blue/10 p-3 flex flex-col">
-              <p className="flex items-center gap-1.5 text-xs md:text-sm font-semibold text-brand-blue mb-2">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-brand-blue mb-2">
                 <Monitor className="w-4 h-4 shrink-0" />
                 Example: look for this bar and click &ldquo;Hide&rdquo;
               </p>
@@ -3550,7 +3550,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 {/* The sharing bar */}
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-14 w-[96%] max-w-sm flex items-center gap-2 bg-white rounded-lg shadow-lg px-2.5 py-2">
                   <span className="w-4 h-4 rounded-sm bg-brand-blue shrink-0" />
-                  <span className="text-2xs sm:text-xs text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
+                  <span className="text-xs text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
                   <span className="text-2xs font-semibold text-white bg-brand-blue rounded-md px-1.5 py-1 shrink-0">Stop sharing</span>
                   <span className="relative shrink-0">
                     <span className="text-xs font-semibold text-brand-blue underline underline-offset-2 px-1.5 py-0.5 rounded-md ring-2 ring-brand-orange bg-brand-orange/10">Hide</span>

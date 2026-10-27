@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Search, Check } from 'lucide-react';
 import { ApiUser } from '@/lib/services/userService';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface MemberSelectorProps {
   availableUsers: ApiUser[];
@@ -110,18 +111,16 @@ export default function MemberSelector({
       {showTeamLeadSelector && selectedMemberIds.length > 0 && onTeamLeadChange && (
         <div>
           <label className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Team Lead (Optional)</label>
-          <select
+          <FilterSelect
             value={teamLeadId}
-            onChange={(e) => onTeamLeadChange(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-          >
-            <option value="">No team lead</option>
-            {selectedMembers.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name} ({user.email})
-              </option>
-            ))}
-          </select>
+            onChange={(v) => onTeamLeadChange(v)}
+            ariaLabel="Team Lead"
+            options={[
+              { value: '', label: 'No team lead' },
+              ...selectedMembers.map((user) => ({ value: String(user.id), label: `${user.name} (${user.email})` })),
+            ]}
+            className="w-full sm:w-full rounded-lg sm:rounded-lg px-3 sm:px-3 py-2.5 sm:py-2.5 text-sm max-sm:text-[13px]"
+          />
         </div>
       )}
     </div>

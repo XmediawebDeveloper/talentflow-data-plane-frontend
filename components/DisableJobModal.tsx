@@ -45,7 +45,7 @@ export default function DisableJobModal({
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-in zoom-in-95 fade-in duration-200 max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         <div className="px-5 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto">
           {/* Header: red disc + title + the JD this is about */}
-          <div className="flex items-start gap-4 pr-8">
+          <div className="flex items-start gap-4 sm:pr-8">
             <div className="w-12 h-12 shrink-0 rounded-full bg-destructive-subtle flex items-center justify-center">
               <AlertTriangle className="w-6 h-6 text-destructive" />
             </div>
@@ -57,9 +57,10 @@ export default function DisableJobModal({
                 Are you sure you want to disable the following job description?
               </p>
               {/* The house grey pill, so the JD reads as a chip and not as body copy. */}
-              <span className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
-                <Briefcase className="w-4 h-4 shrink-0 text-gray-500 dark:text-slate-400" />
-                <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+              <span className="mt-3 inline-flex max-w-full items-start sm:items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
+                <Briefcase className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0 text-gray-500 dark:text-slate-400" />
+                {/* Wraps on a phone: truncating there cut even "1 Job Description Selected" short. */}
+                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
                   {jobLabel}
                 </span>
               </span>

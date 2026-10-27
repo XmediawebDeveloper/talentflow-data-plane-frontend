@@ -15,6 +15,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -1668,17 +1669,19 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Quota Type *
                 </label>
-                <select
+                <FilterSelect
                   value={recordForm.quota_type}
-                  onChange={(e) => setRecordForm({ ...recordForm, quota_type: e.target.value as RecordUsageRequest['quota_type'] })}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-success-line focus:border-success-line transition-colors"
-                >
-                  <option value="RU">Resume Storage (RU)</option>
-                  <option value="RS">Resume Scoring (RS)</option>
-                  <option value="AS">Assessment (AS)</option>
-                  <option value="AIU">AI Interview Unit (AIU)</option>
-                  {/* <option value="storage_gb">Storage (GB)</option> */}
-                </select>
+                  onChange={(v) => setRecordForm({ ...recordForm, quota_type: v as RecordUsageRequest['quota_type'] })}
+                  ariaLabel="Quota Type"
+                  options={[
+                    { value: 'RU', label: 'Resume Storage (RU)' },
+                    { value: 'RS', label: 'Resume Scoring (RS)' },
+                    { value: 'AS', label: 'Assessment (AS)' },
+                    { value: 'AIU', label: 'AI Interview Unit (AIU)' },
+                    // { value: 'storage_gb', label: 'Storage (GB)' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:px-4 py-3 sm:py-3 rounded-xl sm:rounded-xl border-gray-300 text-base sm:text-base"
+                />
               </div>
 
               {/* Amount */}
@@ -1890,7 +1893,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 {selectedAddonOverage && (
                   <div role="alert" className="flex items-start gap-3 rounded-xl border border-warning-line bg-warning-subtle p-3">
                     <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning" />
-                    <div className="min-w-0 text-xs sm:text-sm">
+                    <div className="min-w-0 text-sm">
                       <p className="font-semibold text-warning-strong">
                         You are {selectedAddonOverage.overBy.toLocaleString()} {selectedAddonOverage.name} units over your limit
                       </p>

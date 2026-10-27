@@ -7,6 +7,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows } from '@/lib/utils/exportUtils';
 import { toast } from 'sonner';
+import FilterSelect from '@/components/ui/filter-select';
 
 const mockActivityLogs = [
   { id: '1', user: 'John Admin', action: 'Created job posting', details: 'Senior Frontend Developer', timestamp: '2 min ago', category: 'jobs' },
@@ -103,8 +104,8 @@ export default function ActivityLogsPage() {
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
+                <p className="text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
               </div>
             </div>
             <button
@@ -136,17 +137,13 @@ export default function ActivityLogsPage() {
               className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm bg-white dark:bg-slate-800 text-black dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
             />
           </div>
-          <select
+          <FilterSelect
             value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="h-10 px-3 sm:px-4 text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
-          >
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat.charAt(0).toUpperCase() + cat.slice(1)}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setFilterCategory(v)}
+            ariaLabel="Filter by category"
+            options={categories.map((cat) => ({ value: cat, label: cat.charAt(0).toUpperCase() + cat.slice(1) }))}
+            className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 pl-3 sm:pl-4 pr-3 sm:pr-4 rounded-lg sm:rounded-lg dark:bg-slate-800 dark:text-slate-100"
+          />
         </div>
 
         {/* Activity Timeline */}
@@ -162,11 +159,11 @@ export default function ActivityLogsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{log.action}</p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
-                        <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
                   </div>

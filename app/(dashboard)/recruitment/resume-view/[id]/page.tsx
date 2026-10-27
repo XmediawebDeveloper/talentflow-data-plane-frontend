@@ -2,7 +2,7 @@
 
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
-import { useState, useEffect, useMemo, useRef, useId } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useId } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
@@ -523,6 +523,24 @@ export default function ResumeViewPage() {
       document.removeEventListener('mousedown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
     };
+  }, [showInviteMenu]);
+
+  /* On a phone the Invite button sits near the bottom of the screen, so a menu
+     hung below it ran off the viewport with its options out of sight. Measured
+     on open: flip above the button when there isn't room below and there is
+     more above; otherwise scroll the page just enough to show the menu. */
+  const inviteDropdownRef = useRef<HTMLDivElement>(null);
+  const [inviteMenuUp, setInviteMenuUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!showInviteMenu) { setInviteMenuUp(false); return; }
+    const menu = inviteDropdownRef.current;
+    const anchor = inviteMenuRef.current;
+    if (!menu || !anchor) return;
+    const a = anchor.getBoundingClientRect();
+    const needed = menu.offsetHeight + 8;
+    const below = window.innerHeight - a.bottom;
+    if (below < needed && a.top > below) setInviteMenuUp(true);
+    else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [showInviteMenu]);
 
   const startInvite = async (intent: 'assessment' | 'ai-interview') => {
@@ -1336,7 +1354,7 @@ Best regards`);
             {/* Body — candidate hero card + section cards */}
             <div className="space-y-6">
               {/* Candidate hero card */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-4 sm:p-6">
                 <div className="flex items-start gap-4">
                   <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" />
                   <div className="flex-1 space-y-2">
@@ -1362,7 +1380,7 @@ Best regards`);
 
               {/* Section cards */}
               {Array.from({ length: 3 }).map((_, card) => (
-                <div key={card} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-6">
+                <div key={card} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-4 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <Skeleton className="w-9 h-9 rounded-lg" />
                     <Skeleton className="h-6 w-48" />
@@ -1451,7 +1469,7 @@ Best regards`);
 
       {/* Content */}
       <div>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
 
           {/* Personal Info Card
               Identity on one line — avatar, name, role, then the facts about the
@@ -1488,9 +1506,9 @@ Best regards`);
             ].filter(Boolean) as { icon: typeof Mail; label: string; value: string; href: string }[];
 
             return (
-              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-5 sm:p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-4 sm:p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
                 {/* Identity row */}
-                <div className="flex items-start gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
                   <NameAvatar name={asText(resume.name)} fallback={email} size="xl" />
 
                   <div className="min-w-0 flex-1">
@@ -1532,7 +1550,7 @@ Best regards`);
                         {facts.map(({ icon: Icon, text }, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs text-gray-700 ring-1 ring-brand-blue/10"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg sm:rounded-full bg-white/70 text-xs text-gray-700 ring-1 ring-brand-blue/10"
                           >
                             <Icon className="w-3.5 h-3.5 text-brand-blue" />
                             {text}
@@ -1630,7 +1648,7 @@ Best regards`);
                         </button>
 
                         {showInviteMenu && (
-                          <div role="menu" className={`absolute left-0 top-full mt-2 ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
+                          <div ref={inviteDropdownRef} role="menu" className={`absolute left-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
                             {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : (
                               <button
                                 role="menuitem"
@@ -1767,7 +1785,7 @@ Best regards`);
 
           {/* Professional Summary */}
           {detailedResume.summary && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
@@ -1780,7 +1798,7 @@ Best regards`);
 
           {/* Work Experience */}
           {detailedResume.experience.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
@@ -1856,7 +1874,7 @@ Best regards`);
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:[&>*:only-child]:col-span-2">
             {/* Education */}
             {detailedResume.education.length > 0 && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
@@ -1902,7 +1920,7 @@ Best regards`);
 
             {/* Skills */}
             {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Code className="w-4 h-4 text-brand-blue" />
@@ -1951,7 +1969,7 @@ Best regards`);
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:[&>*:only-child]:col-span-2">
             {/* Certifications */}
             {detailedResume.certifications.length > 0 && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-5">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                     <Award className="w-4 h-4 text-brand-orange" />
@@ -1986,7 +2004,7 @@ Best regards`);
             {/* Languages — with the Social & Portfolio Links under them; a
                 resume with links but no languages shows the links alone. */}
             {(detailedResume.languages.length > 0 || (resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl)) && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-5">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
                 {detailedResume.languages.length > 0 ? (
                   <>
                     <div className="flex items-center gap-2 mb-4">
@@ -2056,7 +2074,7 @@ Best regards`);
 
           {/* Projects */}
           {resume.projects && resume.projects.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
@@ -2096,7 +2114,7 @@ Best regards`);
 
           {/* Awards */}
           {resume.awards && resume.awards.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
@@ -2130,7 +2148,7 @@ Best regards`);
 
           {/* Achievements */}
           {resume.achievements && resume.achievements.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
@@ -2153,7 +2171,7 @@ Best regards`);
 
           {/* Volunteer Experience */}
           {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand-cyan" />
@@ -2180,7 +2198,7 @@ Best regards`);
 
           {/* Hobbies & Interests */}
           {resume.hobbies && resume.hobbies.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-orange" />
@@ -2199,7 +2217,7 @@ Best regards`);
 
           {/* Objective (if different from summary) */}
           {resume.objective && resume.objective !== resume.professionalSummary && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
@@ -2212,7 +2230,7 @@ Best regards`);
 
           {/* Additional Information */}
           {resume.additionalInfo && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
@@ -2230,7 +2248,7 @@ Best regards`);
 
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
               <div className="flex items-center gap-2 gap-y-2 mb-6 flex-wrap">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
                   <History className="w-4 h-4 text-brand-blue" />
@@ -2448,9 +2466,11 @@ Best regards`);
                   <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                     <FileText className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <div>
+                  {/* min-w-0 + anywhere-wrap: a long underscore-joined file
+                      name has no break points and ran out of the drawer. */}
+                  <div className="min-w-0">
                     <div className="text-xs text-gray-500 mb-1">File Name</div>
-                    <div className="text-sm text-gray-900">{resume.fileName || `${resume.name.replace(' ', '_')}_Resume.pdf`}</div>
+                    <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{resume.fileName || `${resume.name.replace(' ', '_')}_Resume.pdf`}</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -2587,7 +2607,7 @@ Best regards`);
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-scale-in">
             {/* Header */}
-            <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50">
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 p-4 sm:p-6 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <History className="w-5 h-5 text-white" />
@@ -2606,7 +2626,9 @@ Best regards`);
             </div>
 
             {/* Version List */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+              {/* min-w-0 + wrap on each version row: the long file names and
+                  the date · size · uploader line ran out of the card on phones. */}
               <div className="space-y-3">
                 {/* Current Version */}
                 <label
@@ -2624,13 +2646,13 @@ Best regards`);
                       onChange={() => setSelectedVersionForApply(resumeId)}
                       className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
                     />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <File className="w-4 h-4 text-gray-500" />
-                        <span className="font-medium text-gray-900">{resume.fileName || 'Current Version'}</span>
+                        <span className="min-w-0 font-medium text-gray-900 [overflow-wrap:anywhere]">{resume.fileName || 'Current Version'}</span>
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Current</span>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {resume.uploadDate ? formatISTDate(resume.uploadDate) : 'N/A'}
@@ -2668,13 +2690,13 @@ Best regards`);
                         onChange={() => setSelectedVersionForApply(version.id)}
                         className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
                       />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <File className="w-4 h-4 text-gray-400" />
-                          <span className="font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
-                          <span className="text-xs text-gray-500">({version.name})</span>
+                          <span className="whitespace-nowrap font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
+                          <span className="min-w-0 text-xs text-gray-500 [overflow-wrap:anywhere]">({version.name})</span>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {version.uploadDate ? formatISTDate(version.uploadDate) : 'N/A'}
@@ -2698,7 +2720,7 @@ Best regards`);
             </div>
 
             {/* Footer */}
-            <div className="flex-shrink-0 flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-slate-50">
+            <div className="flex-shrink-0 flex items-center justify-end gap-3 p-4 sm:p-6 border-t border-gray-100 bg-slate-50">
               <button
                 onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
                 disabled={!selectedVersionForApply}

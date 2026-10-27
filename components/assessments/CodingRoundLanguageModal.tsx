@@ -5,7 +5,6 @@ import {
   AlertCircle,
   Check,
   CheckCircle2,
-  ChevronDown,
   Code,
   FileText,
   Info,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react';
 import LanguageLogo from '@/components/assessments/LanguageLogo';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 
 /**
  * The coding round's LANGUAGE PICKER — the dialog behind the Coding Round
@@ -171,19 +171,17 @@ export default function CodingRoundLanguageModal({
           className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
         />
       </div>
-      <div className="relative">
-        <select
-          value={filter}
-          onChange={e => setFilter(e.target.value as LanguageFilter)}
-          aria-label="Filter languages"
-          className="appearance-none w-full sm:w-auto text-sm pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-        >
-          <option value="all">All Languages</option>
-          <option value="selected">Selected</option>
-          <option value="unselected">Not selected</option>
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-      </div>
+      <FilterSelect
+        value={filter}
+        onChange={v => setFilter(v as LanguageFilter)}
+        ariaLabel="Filter languages"
+        options={[
+          { value: 'all', label: 'All Languages' },
+          { value: 'selected', label: 'Selected' },
+          { value: 'unselected', label: 'Not selected' },
+        ]}
+        className="py-2 sm:py-2 pl-3 sm:pl-3 pr-2.5 sm:pr-2.5 rounded-lg sm:rounded-lg border-gray-200 bg-white text-sm text-gray-700"
+      />
     </div>
   );
 
@@ -238,7 +236,7 @@ export default function CodingRoundLanguageModal({
                 </span>
               )}
             </div>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 leading-snug">
+            <p className="text-sm text-gray-500 mt-0.5 leading-snug">
               Select up to {maxLanguages} programming languages for the assessment
             </p>
           </div>
@@ -266,7 +264,7 @@ export default function CodingRoundLanguageModal({
                 <p className="text-sm font-medium text-brand-blue">
                   Languages detected from the Job Description are automatically selected.
                 </p>
-                <p className="text-xs sm:text-sm text-gray-600 mt-0.5 leading-snug">
+                <p className="text-sm text-gray-600 mt-0.5 leading-snug">
                   Coding is mandatory for this job role — you can deselect these or add additional
                   languages, but at least one must stay selected.
                 </p>
@@ -279,7 +277,7 @@ export default function CodingRoundLanguageModal({
                 <p className="text-sm font-medium text-indigo-700">
                   Programming languages are not required for this assessment.
                 </p>
-                <p className="text-xs sm:text-sm text-gray-600 mt-0.5 leading-snug">
+                <p className="text-sm text-gray-600 mt-0.5 leading-snug">
                   Coding is handled automatically for this job role and needs no setup. You can
                   enable and select languages if you want to include a coding round anyway.
                 </p>
@@ -311,7 +309,7 @@ export default function CodingRoundLanguageModal({
                     </p>
                   </div>
                 </div>
-                <span className="text-xs sm:text-sm text-gray-500 whitespace-nowrap flex-shrink-0">
+                <span className="text-sm text-gray-500 whitespace-nowrap flex-shrink-0">
                   <span className="font-semibold text-gray-900">{selected.length}</span> /{' '}
                   {maxLanguages} selected
                 </span>
@@ -392,7 +390,7 @@ export default function CodingRoundLanguageModal({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-brand-blue hover:text-destructive transition-colors flex-shrink-0"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-blue hover:text-destructive transition-colors flex-shrink-0"
                 >
                   <Trash2 className="w-4 h-4" />
                   Clear All
@@ -438,7 +436,7 @@ export default function CodingRoundLanguageModal({
               <Users className={`w-4 h-4 ${isRequired ? 'text-indigo-600' : 'text-success'}`} />
             </div>
             <p
-              className={`text-xs sm:text-sm leading-snug ${
+              className={`text-sm leading-snug ${
                 isRequired ? 'text-indigo-700' : 'text-success'
               }`}
             >

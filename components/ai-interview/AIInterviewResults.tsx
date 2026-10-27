@@ -14,6 +14,12 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import FilterSelect from '@/components/ui/filter-select';
+
+/* FilterSelect trigger classes matching the filter bar's other controls:
+   the job tab's 36px field, or the standalone bar's compact field. */
+const RESULTS_JOB_TAB_TRIGGER_CLASS = 'w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 px-3 sm:px-3 rounded-lg sm:rounded-lg text-black dark:text-slate-50 hover:border-brand-blue/40';
+const RESULTS_FILTER_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-black';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
@@ -23,9 +29,10 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { tabPill } from '@/components/ui/filter-pills';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import ResultRowActions, { isPhoneWidth } from './ResultRowActions';
+import ResultRowActions, { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import { downloadSessionReport, downloadSessionReports, canTryReport, NoReportError } from './evaluation-dashboard/downloadSessionReport';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/providers/AuthProvider';
 import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
@@ -302,6 +309,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
+  // Export is RBAC-gated (`ai_interview:export`, also enforced by the audit
+  // endpoint) — greyed with the reason when missing, never hidden.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
+  const EXPORT_DENIED = 'You do not have permission to export AI interviews';
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalSessions, setTotalSessions] = useState(0);
@@ -724,7 +736,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     });
   /* ⋮ › Download Report — ResultRowActions' download, from the menu. */
   const [downloadingReportId, setDownloadingReportId] = useState<string | null>(null);
+  // ai_interview:download_report — the row ⋮ item and the bulk Download PDF Reports.
+  const canDownloadReports = useCanDownloadAIReports();
   const handleDownloadReport = async (sessionId: string) => {
+    if (!canDownloadReports) return;
     setDownloadingReportId(sessionId);
     try {
       await downloadSessionReport(sessionId);
@@ -734,7 +749,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         return;
       }
       console.error('[AIInterviewResults] report download failed:', err);
-      toast.error('Could not download the report. Please try again.');
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the report. Please try again.');
     } finally {
       setDownloadingReportId(null);
     }
@@ -796,6 +811,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   };
 
   const handleExport = async (columnIds: string[]) => {
+    if (!canExport) return;
     setIsExporting(true);
     try {
       const rows = await collectExportRows();
@@ -827,6 +843,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      // Audit trail: the file is built here, so record the export server-side.
+      void aiInterviewService.logListExport({
+        format: exportFormat,
+        recordCount: rows.length,
+        tab: configId,
+        ids: rows.map((row: any) => row.id),
+        exportType: 'ai_interview_results',
+      });
       toast.success(`Exported ${rows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
       setShowExportModal(false);
     } catch (error) {
@@ -891,6 +915,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      toast wording `DownloadPdfsButton` uses. */
   const [downloadingPdfs, setDownloadingPdfs] = useState<{ done: number; total: number } | null>(null);
   const handleDownloadSelectedPdfs = async () => {
+    if (!canDownloadReports) return;
     setDownloadingPdfs({ done: 0, total: 0 });
     try {
       const rows = Array.from(selected.values());
@@ -907,7 +932,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       }
     } catch (err) {
       console.error('[AIInterviewResults] Bulk PDF download failed:', err);
-      toast.error('Could not download the reports. Please try again.');
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
     } finally {
       setDownloadingPdfs(null);
     }
@@ -962,7 +987,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div>
               {/* JD ID, then the job title — one line. The subtitle that
                   repeated the title underneath is gone. */}
-              <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold text-gray-900 tracking-tight">
+              <h1 className="flex flex-wrap items-center gap-3 text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
                 {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                 <span className="min-w-0 break-words">{jdTitle || configTitle || 'AI Interview'}</span>
                 {/* One version's results: the table has no version columns, so
@@ -1096,10 +1121,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       <span>Customize Columns</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                      onSelect={() => setShowExportModal(true)}
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                      aria-disabled={!canExport || undefined}
+                      title={canExport ? undefined : EXPORT_DENIED}
+                      onSelect={(e) => {
+                        if (!canExport) { e.preventDefault(); return; }
+                        setShowExportModal(true);
+                      }}
                     >
-                      <FileDown className="w-4 h-4 text-menu-icon-download" />
+                      <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                       <span>Export</span>
                     </DropdownMenuItem>
                     {revocableSelected.length > 0 && (
@@ -1123,11 +1153,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
                       disabled={!!downloadingPdfs}
-                      onSelect={() => handleDownloadSelectedPdfs()}
+                      aria-disabled={!canDownloadReports || undefined}
+                      title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                      onSelect={(e) => { if (!canDownloadReports) { e.preventDefault(); return; } handleDownloadSelectedPdfs(); }}
                     >
-                      <Download className="w-4 h-4 text-menu-icon-download" />
+                      <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                       <span>
                         {downloadingPdfs
                           ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
@@ -1282,9 +1314,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setShowExportModal(true)}
+              onClick={() => { if (canExport) setShowExportModal(true); }}
+              aria-disabled={!canExport || undefined}
+              title={canExport ? undefined : EXPORT_DENIED}
               icon={<FileDown className="w-4 h-4" />}
-              className="whitespace-nowrap !h-[38px] !text-sm"
+              className={`whitespace-nowrap !h-[38px] !text-sm ${canExport ? '' : 'opacity-50 cursor-not-allowed'}`}
             >
               Export{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
@@ -1372,44 +1406,39 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             {!hideJobVersion && !portaled && (
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Job Version</label>
-              <select
+              <FilterSelect
                 value={search.filters.jobVersion}
-                onChange={(e) => search.setFilter('jobVersion', e.target.value)}
-                aria-label="Job Version"
-                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
-              >
-                <option value="">All job versions</option>
-                {jobVersionChoices.map((v) => <option key={v} value={String(v)}>V{v}</option>)}
-              </select>
+                onChange={(v) => search.setFilter('jobVersion', v)}
+                ariaLabel="Job Version"
+                className={portaled ? RESULTS_JOB_TAB_TRIGGER_CLASS : RESULTS_FILTER_TRIGGER_CLASS}
+                options={[{ value: '', label: 'All job versions' }, ...jobVersionChoices.map((v) => ({ value: String(v), label: `V${v}` }))]}
+              />
             </div>
             )}
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Interview Version</label>
-              <select
+              <FilterSelect
                 value={search.filters.interviewVersion}
-                onChange={(e) => search.setFilter('interviewVersion', e.target.value)}
-                aria-label="Interview Version"
-                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
-              >
-                <option value="">All interview versions</option>
-                {interviewVersionChoices.map((v) => <option key={v} value={String(v)}>V{v}</option>)}
-              </select>
+                onChange={(v) => search.setFilter('interviewVersion', v)}
+                ariaLabel="Interview Version"
+                className={portaled ? RESULTS_JOB_TAB_TRIGGER_CLASS : RESULTS_FILTER_TRIGGER_CLASS}
+                options={[{ value: '', label: 'All interview versions' }, ...interviewVersionChoices.map((v) => ({ value: String(v), label: `V${v}` }))]}
+              />
             </div>
             </>
             )}
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Source</label>
-              <select
+              <FilterSelect
                 value={search.filters.inviteSource}
-                onChange={(e) => search.setFilter('inviteSource', e.target.value)}
-                aria-label="Source"
-                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
-              >
-                <option value="">All sources</option>
-                {INVITE_SOURCE_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
+                onChange={(v) => search.setFilter('inviteSource', v)}
+                ariaLabel="Source"
+                className={portaled ? RESULTS_JOB_TAB_TRIGGER_CLASS : RESULTS_FILTER_TRIGGER_CLASS}
+                options={[
+                  { value: '', label: 'All sources' },
+                  ...INVITE_SOURCE_FILTER_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+                ]}
+              />
             </div>
           </div>
 
@@ -1579,11 +1608,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
-                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                    className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
                     disabled={!!downloadingPdfs}
-                    onSelect={() => handleDownloadSelectedPdfs()}
+                    aria-disabled={!canDownloadReports || undefined}
+                    title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                    onSelect={(e) => { if (!canDownloadReports) { e.preventDefault(); return; } handleDownloadSelectedPdfs(); }}
                   >
-                    <Download className="w-4 h-4 text-menu-icon-download" />
+                    <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
                     <span>
                       {downloadingPdfs
                         ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
@@ -2035,10 +2066,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                     </>
                                   )}
                                   <DropdownMenuItem
-                                    className={ROW_MENU_ITEM_CLASS}
-                                    disabled={!canTryReport(session) || downloadingReportId === session.id}
-                                    title={canTryReport(session) ? undefined : 'Report available once the interview is evaluated'}
-                                    onSelect={() => void handleDownloadReport(session.id)}
+                                    className={`${ROW_MENU_ITEM_CLASS}${canDownloadReports ? '' : ' cursor-not-allowed opacity-60 text-gray-400'}`}
+                                    disabled={(canDownloadReports && !canTryReport(session)) || downloadingReportId === session.id}
+                                    aria-disabled={!canDownloadReports || undefined}
+                                    title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : canTryReport(session) ? undefined : 'Report available once the interview is evaluated'}
+                                    onSelect={(e) => {
+                                      if (!canDownloadReports) { e.preventDefault(); return; }
+                                      void handleDownloadReport(session.id);
+                                    }}
                                   >
                                     {downloadingReportId === session.id
                                       ? <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
@@ -2141,7 +2176,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
           <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="text-xs sm:text-sm text-gray-600">
+              <span className="text-sm text-gray-600">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates

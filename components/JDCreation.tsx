@@ -35,6 +35,7 @@ import { convertSalaryAmount, formatSalaryRange, getSalaryCurrencySymbol, normal
 import { getExchangeRate } from '@/lib/services/exchangeRateService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -955,8 +956,11 @@ const STEP2_REQUIRED_MESSAGES = {
 const STEP2_REQUIRED_FIELD_ORDER = [
   'mustHaveSkills', 'experience', 'industryType', 'salaryRange', 'allowOverqualified', 'locations',
 ] as const;
+// A field group inside a Step 2 section card. Framed from sm only: on a phone a
+// bordered, padded box inside the bordered, padded card was card-in-card and
+// squeezed the inputs by another 26px; there the groups are just spaced apart.
 const STEP2_PANEL_CLASS =
-  'min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-3 sm:p-4';
+  'min-w-0 sm:rounded-lg sm:border sm:border-gray-100 sm:dark:border-slate-700/60 sm:p-4';
 
 /**
  * Where a phrase from the "possibly missed" panel can go.
@@ -1826,6 +1830,991 @@ const buildIndustryPayload = (data: Pick<ExtractedData, 'industryType' | 'indust
  *  rather than silently filing the JD under a fiction. It is swapped for the real code
  *  at Step 3 and must never reach the save payload — see buildIndustryPayload. */
 const PENDING_INDUSTRY_VALUE = '__pending_new_industry__';
+
+/* Trigger classes that keep FilterSelect matching the step-2 form fields. */
+const JD_FIELD_SELECT_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg';
+
+/* India state filter options for the location picker. */
+const IN_LOCATION_STATE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Delhi NCR', label: 'Delhi NCR' },
+  { value: 'Andaman And Nicobar Islands', label: 'Andaman And Nicobar Islands' },
+  { value: 'Andhra Pradesh', label: 'Andhra Pradesh' },
+  { value: 'Arunachal Pradesh', label: 'Arunachal Pradesh' },
+  { value: 'Assam', label: 'Assam' },
+  { value: 'Bihar', label: 'Bihar' },
+  { value: 'Chandigarh', label: 'Chandigarh' },
+  { value: 'Chhattisgarh', label: 'Chhattisgarh' },
+  { value: 'Delhi', label: 'Delhi' },
+  { value: 'Goa', label: 'Goa' },
+  { value: 'Gujarat', label: 'Gujarat' },
+  { value: 'Haryana', label: 'Haryana' },
+  { value: 'Himachal Pradesh', label: 'Himachal Pradesh' },
+  { value: 'Jammu And Kashmir', label: 'Jammu And Kashmir' },
+  { value: 'Jharkhand', label: 'Jharkhand' },
+  { value: 'Karnataka', label: 'Karnataka' },
+  { value: 'Kerala', label: 'Kerala' },
+  { value: 'Ladakh', label: 'Ladakh' },
+  { value: 'Lakshadweep', label: 'Lakshadweep' },
+  { value: 'Madhya Pradesh', label: 'Madhya Pradesh' },
+  { value: 'Maharashtra', label: 'Maharashtra' },
+  { value: 'Manipur', label: 'Manipur' },
+  { value: 'Meghalaya', label: 'Meghalaya' },
+  { value: 'Mizoram', label: 'Mizoram' },
+  { value: 'Nagaland', label: 'Nagaland' },
+  { value: 'Odisha', label: 'Odisha' },
+  { value: 'Puducherry', label: 'Puducherry' },
+  { value: 'Punjab', label: 'Punjab' },
+  { value: 'Rajasthan', label: 'Rajasthan' },
+  { value: 'Sikkim', label: 'Sikkim' },
+  { value: 'Tamil Nadu', label: 'Tamil Nadu' },
+  { value: 'Telangana', label: 'Telangana' },
+  { value: 'The Dadra And Nagar Haveli And Daman And Diu', label: 'The Dadra And Nagar Haveli And Daman And Diu' },
+  { value: 'Tripura', label: 'Tripura' },
+  { value: 'Uttar Pradesh', label: 'Uttar Pradesh' },
+  { value: 'Uttarakhand', label: 'Uttarakhand' },
+  { value: 'West Bengal', label: 'West Bengal' },
+  { value: 'Remote', label: 'Remote/Hybrid' },
+];
+
+/* India city options for the location picker, grouped by the state filter that shows them. */
+const IN_LOCATION_CITY_GROUPS: { state: string; options: { value: string; label: string }[] }[] = [
+  {
+    state: 'Delhi NCR',
+    options: [
+      { value: 'Delhi NCR', label: 'Delhi NCR (All)' },
+      { value: 'New Delhi, Delhi', label: 'New Delhi' },
+      { value: 'Gurugram, Haryana', label: 'Gurugram (Gurgaon)' },
+      { value: 'Gautam Buddha Nagar, Uttar Pradesh', label: 'Noida / Greater Noida' },
+      { value: 'Ghaziabad, Uttar Pradesh', label: 'Ghaziabad' },
+      { value: 'Faridabad, Haryana', label: 'Faridabad' },
+    ],
+  },
+  {
+    state: 'Andaman And Nicobar Islands',
+    options: [
+      { value: 'Nicobars, Andaman And Nicobar Islands', label: 'Nicobars' },
+      { value: 'North And Middle Andaman, Andaman And Nicobar Islands', label: 'North And Middle Andaman' },
+      { value: 'South Andamans, Andaman And Nicobar Islands', label: 'South Andamans' },
+    ],
+  },
+  {
+    state: 'Andhra Pradesh',
+    options: [
+      { value: 'Anantapur, Andhra Pradesh', label: 'Anantapur' },
+      { value: 'Chittoor, Andhra Pradesh', label: 'Chittoor' },
+      { value: 'East Godavari, Andhra Pradesh', label: 'East Godavari' },
+      { value: 'Guntur, Andhra Pradesh', label: 'Guntur' },
+      { value: 'Krishna, Andhra Pradesh', label: 'Krishna' },
+      { value: 'Kurnool, Andhra Pradesh', label: 'Kurnool' },
+      { value: 'Prakasam, Andhra Pradesh', label: 'Prakasam' },
+      { value: 'Spsr Nellore, Andhra Pradesh', label: 'Spsr Nellore' },
+      { value: 'Srikakulam, Andhra Pradesh', label: 'Srikakulam' },
+      { value: 'Visakhapatanam, Andhra Pradesh', label: 'Visakhapatanam' },
+      { value: 'Vizianagaram, Andhra Pradesh', label: 'Vizianagaram' },
+      { value: 'West Godavari, Andhra Pradesh', label: 'West Godavari' },
+      { value: 'Y.S.R., Andhra Pradesh', label: 'Y.S.R.' },
+    ],
+  },
+  {
+    state: 'Arunachal Pradesh',
+    options: [
+      { value: 'Anjaw, Arunachal Pradesh', label: 'Anjaw' },
+      { value: 'Changlang, Arunachal Pradesh', label: 'Changlang' },
+      { value: 'Dibang Valley, Arunachal Pradesh', label: 'Dibang Valley' },
+      { value: 'East Kameng, Arunachal Pradesh', label: 'East Kameng' },
+      { value: 'East Siang, Arunachal Pradesh', label: 'East Siang' },
+      { value: 'Kamle, Arunachal Pradesh', label: 'Kamle' },
+      { value: 'Kra Daadi, Arunachal Pradesh', label: 'Kra Daadi' },
+      { value: 'Kurung Kumey, Arunachal Pradesh', label: 'Kurung Kumey' },
+      { value: 'Leparada, Arunachal Pradesh', label: 'Leparada' },
+      { value: 'Lohit, Arunachal Pradesh', label: 'Lohit' },
+      { value: 'Longding, Arunachal Pradesh', label: 'Longding' },
+      { value: 'Lower Dibang Valley, Arunachal Pradesh', label: 'Lower Dibang Valley' },
+      { value: 'Lower Siang, Arunachal Pradesh', label: 'Lower Siang' },
+      { value: 'Lower Subansiri, Arunachal Pradesh', label: 'Lower Subansiri' },
+      { value: 'Namsai, Arunachal Pradesh', label: 'Namsai' },
+      { value: 'Pakke Kessang, Arunachal Pradesh', label: 'Pakke Kessang' },
+      { value: 'Papum Pare, Arunachal Pradesh', label: 'Papum Pare' },
+      { value: 'Shi Yomi, Arunachal Pradesh', label: 'Shi Yomi' },
+      { value: 'Siang, Arunachal Pradesh', label: 'Siang' },
+      { value: 'Tawang, Arunachal Pradesh', label: 'Tawang' },
+      { value: 'Tirap, Arunachal Pradesh', label: 'Tirap' },
+      { value: 'Upper Siang, Arunachal Pradesh', label: 'Upper Siang' },
+      { value: 'Upper Subansiri, Arunachal Pradesh', label: 'Upper Subansiri' },
+      { value: 'West Kameng, Arunachal Pradesh', label: 'West Kameng' },
+      { value: 'West Siang, Arunachal Pradesh', label: 'West Siang' },
+    ],
+  },
+  {
+    state: 'Assam',
+    options: [
+      { value: 'Baksa, Assam', label: 'Baksa' },
+      { value: 'Barpeta, Assam', label: 'Barpeta' },
+      { value: 'Biswanath, Assam', label: 'Biswanath' },
+      { value: 'Bongaigaon, Assam', label: 'Bongaigaon' },
+      { value: 'Cachar, Assam', label: 'Cachar' },
+      { value: 'Charaideo, Assam', label: 'Charaideo' },
+      { value: 'Chirang, Assam', label: 'Chirang' },
+      { value: 'Darrang, Assam', label: 'Darrang' },
+      { value: 'Dhemaji, Assam', label: 'Dhemaji' },
+      { value: 'Dhubri, Assam', label: 'Dhubri' },
+      { value: 'Dibrugarh, Assam', label: 'Dibrugarh' },
+      { value: 'Dima Hasao, Assam', label: 'Dima Hasao' },
+      { value: 'Goalpara, Assam', label: 'Goalpara' },
+      { value: 'Golaghat, Assam', label: 'Golaghat' },
+      { value: 'Hailakandi, Assam', label: 'Hailakandi' },
+      { value: 'Hojai, Assam', label: 'Hojai' },
+      { value: 'Jorhat, Assam', label: 'Jorhat' },
+      { value: 'Kamrup, Assam', label: 'Kamrup' },
+      { value: 'Kamrup Metro, Assam', label: 'Kamrup Metro' },
+      { value: 'Karbi Anglong, Assam', label: 'Karbi Anglong' },
+      { value: 'Karimganj, Assam', label: 'Karimganj' },
+      { value: 'Kokrajhar, Assam', label: 'Kokrajhar' },
+      { value: 'Lakhimpur, Assam', label: 'Lakhimpur' },
+      { value: 'Majuli, Assam', label: 'Majuli' },
+      { value: 'Marigaon, Assam', label: 'Marigaon' },
+      { value: 'Nagaon, Assam', label: 'Nagaon' },
+      { value: 'Nalbari, Assam', label: 'Nalbari' },
+      { value: 'Sivasagar, Assam', label: 'Sivasagar' },
+      { value: 'Sonitpur, Assam', label: 'Sonitpur' },
+      { value: 'South Salmara Mancachar, Assam', label: 'South Salmara Mancachar' },
+      { value: 'Tinsukia, Assam', label: 'Tinsukia' },
+      { value: 'Udalguri, Assam', label: 'Udalguri' },
+      { value: 'West Karbi Anglong, Assam', label: 'West Karbi Anglong' },
+    ],
+  },
+  {
+    state: 'Bihar',
+    options: [
+      { value: 'Araria, Bihar', label: 'Araria' },
+      { value: 'Arwal, Bihar', label: 'Arwal' },
+      { value: 'Aurangabad, Bihar', label: 'Aurangabad' },
+      { value: 'Banka, Bihar', label: 'Banka' },
+      { value: 'Begusarai, Bihar', label: 'Begusarai' },
+      { value: 'Bhagalpur, Bihar', label: 'Bhagalpur' },
+      { value: 'Bhojpur, Bihar', label: 'Bhojpur' },
+      { value: 'Buxar, Bihar', label: 'Buxar' },
+      { value: 'Darbhanga, Bihar', label: 'Darbhanga' },
+      { value: 'Gaya, Bihar', label: 'Gaya' },
+      { value: 'Gopalganj, Bihar', label: 'Gopalganj' },
+      { value: 'Jamui, Bihar', label: 'Jamui' },
+      { value: 'Jehanabad, Bihar', label: 'Jehanabad' },
+      { value: 'Kaimur (Bhabua), Bihar', label: 'Kaimur (Bhabua)' },
+      { value: 'Katihar, Bihar', label: 'Katihar' },
+      { value: 'Khagaria, Bihar', label: 'Khagaria' },
+      { value: 'Kishanganj, Bihar', label: 'Kishanganj' },
+      { value: 'Lakhisarai, Bihar', label: 'Lakhisarai' },
+      { value: 'Madhepura, Bihar', label: 'Madhepura' },
+      { value: 'Madhubani, Bihar', label: 'Madhubani' },
+      { value: 'Munger, Bihar', label: 'Munger' },
+      { value: 'Muzaffarpur, Bihar', label: 'Muzaffarpur' },
+      { value: 'Nalanda, Bihar', label: 'Nalanda' },
+      { value: 'Nawada, Bihar', label: 'Nawada' },
+      { value: 'Pashchim Champaran, Bihar', label: 'Pashchim Champaran' },
+      { value: 'Patna, Bihar', label: 'Patna' },
+      { value: 'Purbi Champaran, Bihar', label: 'Purbi Champaran' },
+      { value: 'Purnia, Bihar', label: 'Purnia' },
+      { value: 'Rohtas, Bihar', label: 'Rohtas' },
+      { value: 'Saharsa, Bihar', label: 'Saharsa' },
+      { value: 'Samastipur, Bihar', label: 'Samastipur' },
+      { value: 'Saran, Bihar', label: 'Saran' },
+      { value: 'Sheikhpura, Bihar', label: 'Sheikhpura' },
+      { value: 'Sheohar, Bihar', label: 'Sheohar' },
+      { value: 'Sitamarhi, Bihar', label: 'Sitamarhi' },
+      { value: 'Siwan, Bihar', label: 'Siwan' },
+      { value: 'Supaul, Bihar', label: 'Supaul' },
+      { value: 'Vaishali, Bihar', label: 'Vaishali' },
+    ],
+  },
+  {
+    state: 'Chandigarh',
+    options: [
+      { value: 'Chandigarh, Chandigarh', label: 'Chandigarh' },
+    ],
+  },
+  {
+    state: 'Chhattisgarh',
+    options: [
+      { value: 'Balod, Chhattisgarh', label: 'Balod' },
+      { value: 'Baloda Bazar, Chhattisgarh', label: 'Baloda Bazar' },
+      { value: 'Balrampur, Chhattisgarh', label: 'Balrampur' },
+      { value: 'Bastar, Chhattisgarh', label: 'Bastar' },
+      { value: 'Bemetara, Chhattisgarh', label: 'Bemetara' },
+      { value: 'Bijapur, Chhattisgarh', label: 'Bijapur' },
+      { value: 'Bilaspur, Chhattisgarh', label: 'Bilaspur' },
+      { value: 'Dantewada, Chhattisgarh', label: 'Dantewada' },
+      { value: 'Dhamtari, Chhattisgarh', label: 'Dhamtari' },
+      { value: 'Durg, Chhattisgarh', label: 'Durg' },
+      { value: 'Gariyaband, Chhattisgarh', label: 'Gariyaband' },
+      { value: 'Gaurella Pendra Marwahi, Chhattisgarh', label: 'Gaurella Pendra Marwahi' },
+      { value: 'Janjgir-Champa, Chhattisgarh', label: 'Janjgir-Champa' },
+      { value: 'Jashpur, Chhattisgarh', label: 'Jashpur' },
+      { value: 'Kabirdham, Chhattisgarh', label: 'Kabirdham' },
+      { value: 'Kanker, Chhattisgarh', label: 'Kanker' },
+      { value: 'Kondagaon, Chhattisgarh', label: 'Kondagaon' },
+      { value: 'Korba, Chhattisgarh', label: 'Korba' },
+      { value: 'Korea, Chhattisgarh', label: 'Korea' },
+      { value: 'Mahasamund, Chhattisgarh', label: 'Mahasamund' },
+      { value: 'Mungeli, Chhattisgarh', label: 'Mungeli' },
+      { value: 'Narayanpur, Chhattisgarh', label: 'Narayanpur' },
+      { value: 'Raigarh, Chhattisgarh', label: 'Raigarh' },
+      { value: 'Raipur, Chhattisgarh', label: 'Raipur' },
+      { value: 'Rajnandgaon, Chhattisgarh', label: 'Rajnandgaon' },
+      { value: 'Sukma, Chhattisgarh', label: 'Sukma' },
+      { value: 'Surajpur, Chhattisgarh', label: 'Surajpur' },
+      { value: 'Surguja, Chhattisgarh', label: 'Surguja' },
+    ],
+  },
+  {
+    state: 'Delhi',
+    options: [
+      { value: 'Central, Delhi', label: 'Central' },
+      { value: 'East, Delhi', label: 'East' },
+      { value: 'New Delhi, Delhi', label: 'New Delhi' },
+      { value: 'North, Delhi', label: 'North' },
+      { value: 'North East, Delhi', label: 'North East' },
+      { value: 'North West, Delhi', label: 'North West' },
+      { value: 'Shahdara, Delhi', label: 'Shahdara' },
+      { value: 'South, Delhi', label: 'South' },
+      { value: 'South East, Delhi', label: 'South East' },
+      { value: 'South West, Delhi', label: 'South West' },
+      { value: 'West, Delhi', label: 'West' },
+    ],
+  },
+  {
+    state: 'Goa',
+    options: [
+      { value: 'North Goa, Goa', label: 'North Goa' },
+      { value: 'South Goa, Goa', label: 'South Goa' },
+    ],
+  },
+  {
+    state: 'Gujarat',
+    options: [
+      { value: 'Ahmadabad, Gujarat', label: 'Ahmadabad' },
+      { value: 'Amreli, Gujarat', label: 'Amreli' },
+      { value: 'Anand, Gujarat', label: 'Anand' },
+      { value: 'Arvalli, Gujarat', label: 'Arvalli' },
+      { value: 'Banas Kantha, Gujarat', label: 'Banas Kantha' },
+      { value: 'Bharuch, Gujarat', label: 'Bharuch' },
+      { value: 'Bhavnagar, Gujarat', label: 'Bhavnagar' },
+      { value: 'Botad, Gujarat', label: 'Botad' },
+      { value: 'Chhotaudepur, Gujarat', label: 'Chhotaudepur' },
+      { value: 'Dang, Gujarat', label: 'Dang' },
+      { value: 'Devbhumi Dwarka, Gujarat', label: 'Devbhumi Dwarka' },
+      { value: 'Dohad, Gujarat', label: 'Dohad' },
+      { value: 'Gandhinagar, Gujarat', label: 'Gandhinagar' },
+      { value: 'Gir Somnath, Gujarat', label: 'Gir Somnath' },
+      { value: 'Jamnagar, Gujarat', label: 'Jamnagar' },
+      { value: 'Junagadh, Gujarat', label: 'Junagadh' },
+      { value: 'Kachchh, Gujarat', label: 'Kachchh' },
+      { value: 'Kheda, Gujarat', label: 'Kheda' },
+      { value: 'Mahesana, Gujarat', label: 'Mahesana' },
+      { value: 'Mahisagar, Gujarat', label: 'Mahisagar' },
+      { value: 'Morbi, Gujarat', label: 'Morbi' },
+      { value: 'Narmada, Gujarat', label: 'Narmada' },
+      { value: 'Navsari, Gujarat', label: 'Navsari' },
+      { value: 'Panch Mahals, Gujarat', label: 'Panch Mahals' },
+      { value: 'Patan, Gujarat', label: 'Patan' },
+      { value: 'Porbandar, Gujarat', label: 'Porbandar' },
+      { value: 'Rajkot, Gujarat', label: 'Rajkot' },
+      { value: 'Sabar Kantha, Gujarat', label: 'Sabar Kantha' },
+      { value: 'Surat, Gujarat', label: 'Surat' },
+      { value: 'Surendranagar, Gujarat', label: 'Surendranagar' },
+      { value: 'Tapi, Gujarat', label: 'Tapi' },
+      { value: 'Vadodara, Gujarat', label: 'Vadodara' },
+      { value: 'Valsad, Gujarat', label: 'Valsad' },
+    ],
+  },
+  {
+    state: 'Haryana',
+    options: [
+      { value: 'Ambala, Haryana', label: 'Ambala' },
+      { value: 'Bhiwani, Haryana', label: 'Bhiwani' },
+      { value: 'Charki Dadri, Haryana', label: 'Charki Dadri' },
+      { value: 'Faridabad, Haryana', label: 'Faridabad' },
+      { value: 'Fatehabad, Haryana', label: 'Fatehabad' },
+      { value: 'Gurugram, Haryana', label: 'Gurugram' },
+      { value: 'Hisar, Haryana', label: 'Hisar' },
+      { value: 'Jhajjar, Haryana', label: 'Jhajjar' },
+      { value: 'Jind, Haryana', label: 'Jind' },
+      { value: 'Kaithal, Haryana', label: 'Kaithal' },
+      { value: 'Karnal, Haryana', label: 'Karnal' },
+      { value: 'Kurukshetra, Haryana', label: 'Kurukshetra' },
+      { value: 'Mahendragarh, Haryana', label: 'Mahendragarh' },
+      { value: 'Nuh, Haryana', label: 'Nuh' },
+      { value: 'Palwal, Haryana', label: 'Palwal' },
+      { value: 'Panchkula, Haryana', label: 'Panchkula' },
+      { value: 'Panipat, Haryana', label: 'Panipat' },
+      { value: 'Rewari, Haryana', label: 'Rewari' },
+      { value: 'Rohtak, Haryana', label: 'Rohtak' },
+      { value: 'Sirsa, Haryana', label: 'Sirsa' },
+      { value: 'Sonipat, Haryana', label: 'Sonipat' },
+      { value: 'Yamunanagar, Haryana', label: 'Yamunanagar' },
+    ],
+  },
+  {
+    state: 'Himachal Pradesh',
+    options: [
+      { value: 'Bilaspur, Himachal Pradesh', label: 'Bilaspur' },
+      { value: 'Chamba, Himachal Pradesh', label: 'Chamba' },
+      { value: 'Hamirpur, Himachal Pradesh', label: 'Hamirpur' },
+      { value: 'Kangra, Himachal Pradesh', label: 'Kangra' },
+      { value: 'Kinnaur, Himachal Pradesh', label: 'Kinnaur' },
+      { value: 'Kullu, Himachal Pradesh', label: 'Kullu' },
+      { value: 'Lahul And Spiti, Himachal Pradesh', label: 'Lahul And Spiti' },
+      { value: 'Mandi, Himachal Pradesh', label: 'Mandi' },
+      { value: 'Shimla, Himachal Pradesh', label: 'Shimla' },
+      { value: 'Sirmaur, Himachal Pradesh', label: 'Sirmaur' },
+      { value: 'Solan, Himachal Pradesh', label: 'Solan' },
+      { value: 'Una, Himachal Pradesh', label: 'Una' },
+    ],
+  },
+  {
+    state: 'Jammu And Kashmir',
+    options: [
+      { value: 'Anantnag, Jammu And Kashmir', label: 'Anantnag' },
+      { value: 'Bandipora, Jammu And Kashmir', label: 'Bandipora' },
+      { value: 'Baramulla, Jammu And Kashmir', label: 'Baramulla' },
+      { value: 'Budgam, Jammu And Kashmir', label: 'Budgam' },
+      { value: 'Doda, Jammu And Kashmir', label: 'Doda' },
+      { value: 'Ganderbal, Jammu And Kashmir', label: 'Ganderbal' },
+      { value: 'Jammu, Jammu And Kashmir', label: 'Jammu' },
+      { value: 'Kathua, Jammu And Kashmir', label: 'Kathua' },
+      { value: 'Kishtwar, Jammu And Kashmir', label: 'Kishtwar' },
+      { value: 'Kulgam, Jammu And Kashmir', label: 'Kulgam' },
+      { value: 'Kupwara, Jammu And Kashmir', label: 'Kupwara' },
+      { value: 'Poonch, Jammu And Kashmir', label: 'Poonch' },
+      { value: 'Pulwama, Jammu And Kashmir', label: 'Pulwama' },
+      { value: 'Rajouri, Jammu And Kashmir', label: 'Rajouri' },
+      { value: 'Ramban, Jammu And Kashmir', label: 'Ramban' },
+      { value: 'Reasi, Jammu And Kashmir', label: 'Reasi' },
+      { value: 'Samba, Jammu And Kashmir', label: 'Samba' },
+      { value: 'Shopian, Jammu And Kashmir', label: 'Shopian' },
+      { value: 'Srinagar, Jammu And Kashmir', label: 'Srinagar' },
+      { value: 'Udhampur, Jammu And Kashmir', label: 'Udhampur' },
+    ],
+  },
+  {
+    state: 'Jharkhand',
+    options: [
+      { value: 'Bokaro, Jharkhand', label: 'Bokaro' },
+      { value: 'Chatra, Jharkhand', label: 'Chatra' },
+      { value: 'Deoghar, Jharkhand', label: 'Deoghar' },
+      { value: 'Dhanbad, Jharkhand', label: 'Dhanbad' },
+      { value: 'Dumka, Jharkhand', label: 'Dumka' },
+      { value: 'East Singhbum, Jharkhand', label: 'East Singhbum' },
+      { value: 'Garhwa, Jharkhand', label: 'Garhwa' },
+      { value: 'Giridih, Jharkhand', label: 'Giridih' },
+      { value: 'Godda, Jharkhand', label: 'Godda' },
+      { value: 'Gumla, Jharkhand', label: 'Gumla' },
+      { value: 'Hazaribagh, Jharkhand', label: 'Hazaribagh' },
+      { value: 'Jamtara, Jharkhand', label: 'Jamtara' },
+      { value: 'Khunti, Jharkhand', label: 'Khunti' },
+      { value: 'Koderma, Jharkhand', label: 'Koderma' },
+      { value: 'Latehar, Jharkhand', label: 'Latehar' },
+      { value: 'Lohardaga, Jharkhand', label: 'Lohardaga' },
+      { value: 'Pakur, Jharkhand', label: 'Pakur' },
+      { value: 'Palamu, Jharkhand', label: 'Palamu' },
+      { value: 'Ramgarh, Jharkhand', label: 'Ramgarh' },
+      { value: 'Ranchi, Jharkhand', label: 'Ranchi' },
+      { value: 'Sahebganj, Jharkhand', label: 'Sahebganj' },
+      { value: 'Saraikela Kharsawan, Jharkhand', label: 'Saraikela Kharsawan' },
+      { value: 'Simdega, Jharkhand', label: 'Simdega' },
+      { value: 'West Singhbhum, Jharkhand', label: 'West Singhbhum' },
+    ],
+  },
+  {
+    state: 'Karnataka',
+    options: [
+      { value: 'Bagalkote, Karnataka', label: 'Bagalkote' },
+      { value: 'Ballari, Karnataka', label: 'Ballari' },
+      { value: 'Belagavi, Karnataka', label: 'Belagavi' },
+      { value: 'Bengaluru Rural, Karnataka', label: 'Bengaluru Rural' },
+      { value: 'Bengaluru Urban, Karnataka', label: 'Bengaluru Urban' },
+      { value: 'Bidar, Karnataka', label: 'Bidar' },
+      { value: 'Chamarajanagara, Karnataka', label: 'Chamarajanagara' },
+      { value: 'Chikkaballapura, Karnataka', label: 'Chikkaballapura' },
+      { value: 'Chikkamagaluru, Karnataka', label: 'Chikkamagaluru' },
+      { value: 'Chitradurga, Karnataka', label: 'Chitradurga' },
+      { value: 'Dakshina Kannada, Karnataka', label: 'Dakshina Kannada' },
+      { value: 'Davangere, Karnataka', label: 'Davangere' },
+      { value: 'Dharwad, Karnataka', label: 'Dharwad' },
+      { value: 'Gadag, Karnataka', label: 'Gadag' },
+      { value: 'Hassan, Karnataka', label: 'Hassan' },
+      { value: 'Haveri, Karnataka', label: 'Haveri' },
+      { value: 'Kalaburagi, Karnataka', label: 'Kalaburagi' },
+      { value: 'Kodagu, Karnataka', label: 'Kodagu' },
+      { value: 'Kolar, Karnataka', label: 'Kolar' },
+      { value: 'Koppal, Karnataka', label: 'Koppal' },
+      { value: 'Mandya, Karnataka', label: 'Mandya' },
+      { value: 'Mysuru, Karnataka', label: 'Mysuru' },
+      { value: 'Raichur, Karnataka', label: 'Raichur' },
+      { value: 'Ramanagara, Karnataka', label: 'Ramanagara' },
+      { value: 'Shivamogga, Karnataka', label: 'Shivamogga' },
+      { value: 'Tumakuru, Karnataka', label: 'Tumakuru' },
+      { value: 'Udupi, Karnataka', label: 'Udupi' },
+      { value: 'Uttara Kannada, Karnataka', label: 'Uttara Kannada' },
+      { value: 'Vijayapura, Karnataka', label: 'Vijayapura' },
+      { value: 'Yadgir, Karnataka', label: 'Yadgir' },
+    ],
+  },
+  {
+    state: 'Kerala',
+    options: [
+      { value: 'Alappuzha, Kerala', label: 'Alappuzha' },
+      { value: 'Ernakulam, Kerala', label: 'Ernakulam' },
+      { value: 'Idukki, Kerala', label: 'Idukki' },
+      { value: 'Kannur, Kerala', label: 'Kannur' },
+      { value: 'Kasaragod, Kerala', label: 'Kasaragod' },
+      { value: 'Kollam, Kerala', label: 'Kollam' },
+      { value: 'Kottayam, Kerala', label: 'Kottayam' },
+      { value: 'Kozhikode, Kerala', label: 'Kozhikode' },
+      { value: 'Malappuram, Kerala', label: 'Malappuram' },
+      { value: 'Palakkad, Kerala', label: 'Palakkad' },
+      { value: 'Pathanamthitta, Kerala', label: 'Pathanamthitta' },
+      { value: 'Thiruvananthapuram, Kerala', label: 'Thiruvananthapuram' },
+      { value: 'Thrissur, Kerala', label: 'Thrissur' },
+      { value: 'Wayanad, Kerala', label: 'Wayanad' },
+    ],
+  },
+  {
+    state: 'Ladakh',
+    options: [
+      { value: 'Kargil, Ladakh', label: 'Kargil' },
+      { value: 'Leh Ladakh, Ladakh', label: 'Leh Ladakh' },
+    ],
+  },
+  {
+    state: 'Lakshadweep',
+    options: [
+      { value: 'Lakshadweep District, Lakshadweep', label: 'Lakshadweep District' },
+    ],
+  },
+  {
+    state: 'Madhya Pradesh',
+    options: [
+      { value: 'Agar Malwa, Madhya Pradesh', label: 'Agar Malwa' },
+      { value: 'Alirajpur, Madhya Pradesh', label: 'Alirajpur' },
+      { value: 'Anuppur, Madhya Pradesh', label: 'Anuppur' },
+      { value: 'Ashoknagar, Madhya Pradesh', label: 'Ashoknagar' },
+      { value: 'Balaghat, Madhya Pradesh', label: 'Balaghat' },
+      { value: 'Barwani, Madhya Pradesh', label: 'Barwani' },
+      { value: 'Betul, Madhya Pradesh', label: 'Betul' },
+      { value: 'Bhind, Madhya Pradesh', label: 'Bhind' },
+      { value: 'Bhopal, Madhya Pradesh', label: 'Bhopal' },
+      { value: 'Burhanpur, Madhya Pradesh', label: 'Burhanpur' },
+      { value: 'Chhatarpur, Madhya Pradesh', label: 'Chhatarpur' },
+      { value: 'Chhindwara, Madhya Pradesh', label: 'Chhindwara' },
+      { value: 'Damoh, Madhya Pradesh', label: 'Damoh' },
+      { value: 'Datia, Madhya Pradesh', label: 'Datia' },
+      { value: 'Dewas, Madhya Pradesh', label: 'Dewas' },
+      { value: 'Dhar, Madhya Pradesh', label: 'Dhar' },
+      { value: 'Dindori, Madhya Pradesh', label: 'Dindori' },
+      { value: 'East Nimar, Madhya Pradesh', label: 'East Nimar' },
+      { value: 'Guna, Madhya Pradesh', label: 'Guna' },
+      { value: 'Gwalior, Madhya Pradesh', label: 'Gwalior' },
+      { value: 'Harda, Madhya Pradesh', label: 'Harda' },
+      { value: 'Hoshangabad, Madhya Pradesh', label: 'Hoshangabad' },
+      { value: 'Indore, Madhya Pradesh', label: 'Indore' },
+      { value: 'Jabalpur, Madhya Pradesh', label: 'Jabalpur' },
+      { value: 'Jhabua, Madhya Pradesh', label: 'Jhabua' },
+      { value: 'Katni, Madhya Pradesh', label: 'Katni' },
+      { value: 'Khargone, Madhya Pradesh', label: 'Khargone' },
+      { value: 'Mandla, Madhya Pradesh', label: 'Mandla' },
+      { value: 'Mandsaur, Madhya Pradesh', label: 'Mandsaur' },
+      { value: 'Morena, Madhya Pradesh', label: 'Morena' },
+      { value: 'Narsinghpur, Madhya Pradesh', label: 'Narsinghpur' },
+      { value: 'Neemuch, Madhya Pradesh', label: 'Neemuch' },
+      { value: 'Niwari, Madhya Pradesh', label: 'Niwari' },
+      { value: 'Panna, Madhya Pradesh', label: 'Panna' },
+      { value: 'Raisen, Madhya Pradesh', label: 'Raisen' },
+      { value: 'Rajgarh, Madhya Pradesh', label: 'Rajgarh' },
+      { value: 'Ratlam, Madhya Pradesh', label: 'Ratlam' },
+      { value: 'Rewa, Madhya Pradesh', label: 'Rewa' },
+      { value: 'Sagar, Madhya Pradesh', label: 'Sagar' },
+      { value: 'Satna, Madhya Pradesh', label: 'Satna' },
+      { value: 'Sehore, Madhya Pradesh', label: 'Sehore' },
+      { value: 'Seoni, Madhya Pradesh', label: 'Seoni' },
+      { value: 'Shahdol, Madhya Pradesh', label: 'Shahdol' },
+      { value: 'Shajapur, Madhya Pradesh', label: 'Shajapur' },
+      { value: 'Sheopur, Madhya Pradesh', label: 'Sheopur' },
+      { value: 'Shivpuri, Madhya Pradesh', label: 'Shivpuri' },
+      { value: 'Sidhi, Madhya Pradesh', label: 'Sidhi' },
+      { value: 'Singrauli, Madhya Pradesh', label: 'Singrauli' },
+      { value: 'Tikamgarh, Madhya Pradesh', label: 'Tikamgarh' },
+      { value: 'Ujjain, Madhya Pradesh', label: 'Ujjain' },
+      { value: 'Umaria, Madhya Pradesh', label: 'Umaria' },
+      { value: 'Vidisha, Madhya Pradesh', label: 'Vidisha' },
+    ],
+  },
+  {
+    state: 'Maharashtra',
+    options: [
+      { value: 'Ahmednagar, Maharashtra', label: 'Ahmednagar' },
+      { value: 'Akola, Maharashtra', label: 'Akola' },
+      { value: 'Amravati, Maharashtra', label: 'Amravati' },
+      { value: 'Aurangabad, Maharashtra', label: 'Aurangabad' },
+      { value: 'Beed, Maharashtra', label: 'Beed' },
+      { value: 'Bhandara, Maharashtra', label: 'Bhandara' },
+      { value: 'Buldhana, Maharashtra', label: 'Buldhana' },
+      { value: 'Chandrapur, Maharashtra', label: 'Chandrapur' },
+      { value: 'Dhule, Maharashtra', label: 'Dhule' },
+      { value: 'Gadchiroli, Maharashtra', label: 'Gadchiroli' },
+      { value: 'Gondia, Maharashtra', label: 'Gondia' },
+      { value: 'Hingoli, Maharashtra', label: 'Hingoli' },
+      { value: 'Jalgaon, Maharashtra', label: 'Jalgaon' },
+      { value: 'Jalna, Maharashtra', label: 'Jalna' },
+      { value: 'Kolhapur, Maharashtra', label: 'Kolhapur' },
+      { value: 'Latur, Maharashtra', label: 'Latur' },
+      { value: 'Mumbai, Maharashtra', label: 'Mumbai' },
+      { value: 'Mumbai Suburban, Maharashtra', label: 'Mumbai Suburban' },
+      { value: 'Nagpur, Maharashtra', label: 'Nagpur' },
+      { value: 'Nanded, Maharashtra', label: 'Nanded' },
+      { value: 'Nandurbar, Maharashtra', label: 'Nandurbar' },
+      { value: 'Nashik, Maharashtra', label: 'Nashik' },
+      { value: 'Osmanabad, Maharashtra', label: 'Osmanabad' },
+      { value: 'Palghar, Maharashtra', label: 'Palghar' },
+      { value: 'Parbhani, Maharashtra', label: 'Parbhani' },
+      { value: 'Pune, Maharashtra', label: 'Pune' },
+      { value: 'Raigad, Maharashtra', label: 'Raigad' },
+      { value: 'Ratnagiri, Maharashtra', label: 'Ratnagiri' },
+      { value: 'Sangli, Maharashtra', label: 'Sangli' },
+      { value: 'Satara, Maharashtra', label: 'Satara' },
+      { value: 'Sindhudurg, Maharashtra', label: 'Sindhudurg' },
+      { value: 'Solapur, Maharashtra', label: 'Solapur' },
+      { value: 'Thane, Maharashtra', label: 'Thane' },
+      { value: 'Wardha, Maharashtra', label: 'Wardha' },
+      { value: 'Washim, Maharashtra', label: 'Washim' },
+      { value: 'Yavatmal, Maharashtra', label: 'Yavatmal' },
+    ],
+  },
+  {
+    state: 'Manipur',
+    options: [
+      { value: 'Bishnupur, Manipur', label: 'Bishnupur' },
+      { value: 'Chandel, Manipur', label: 'Chandel' },
+      { value: 'Churachandpur, Manipur', label: 'Churachandpur' },
+      { value: 'Imphal East, Manipur', label: 'Imphal East' },
+      { value: 'Imphal West, Manipur', label: 'Imphal West' },
+      { value: 'Jiribam, Manipur', label: 'Jiribam' },
+      { value: 'Kakching, Manipur', label: 'Kakching' },
+      { value: 'Kamjong, Manipur', label: 'Kamjong' },
+      { value: 'Kangpokpi, Manipur', label: 'Kangpokpi' },
+      { value: 'Noney, Manipur', label: 'Noney' },
+      { value: 'Pherzawl, Manipur', label: 'Pherzawl' },
+      { value: 'Senapati, Manipur', label: 'Senapati' },
+      { value: 'Tamenglong, Manipur', label: 'Tamenglong' },
+      { value: 'Tengnoupal, Manipur', label: 'Tengnoupal' },
+      { value: 'Thoubal, Manipur', label: 'Thoubal' },
+      { value: 'Ukhrul, Manipur', label: 'Ukhrul' },
+    ],
+  },
+  {
+    state: 'Meghalaya',
+    options: [
+      { value: 'East Garo Hills, Meghalaya', label: 'East Garo Hills' },
+      { value: 'East Jaintia Hills, Meghalaya', label: 'East Jaintia Hills' },
+      { value: 'East Khasi Hills, Meghalaya', label: 'East Khasi Hills' },
+      { value: 'North Garo Hills, Meghalaya', label: 'North Garo Hills' },
+      { value: 'Ri Bhoi, Meghalaya', label: 'Ri Bhoi' },
+      { value: 'South Garo Hills, Meghalaya', label: 'South Garo Hills' },
+      { value: 'South West Garo Hills, Meghalaya', label: 'South West Garo Hills' },
+      { value: 'South West Khasi Hills, Meghalaya', label: 'South West Khasi Hills' },
+      { value: 'West Garo Hills, Meghalaya', label: 'West Garo Hills' },
+      { value: 'West Jaintia Hills, Meghalaya', label: 'West Jaintia Hills' },
+      { value: 'West Khasi Hills, Meghalaya', label: 'West Khasi Hills' },
+    ],
+  },
+  {
+    state: 'Mizoram',
+    options: [
+      { value: 'Aizawl, Mizoram', label: 'Aizawl' },
+      { value: 'Champhai, Mizoram', label: 'Champhai' },
+      { value: 'Hnahthial, Mizoram', label: 'Hnahthial' },
+      { value: 'Khawzawl, Mizoram', label: 'Khawzawl' },
+      { value: 'Kolasib, Mizoram', label: 'Kolasib' },
+      { value: 'Lawngtlai, Mizoram', label: 'Lawngtlai' },
+      { value: 'Lunglei, Mizoram', label: 'Lunglei' },
+      { value: 'Mamit, Mizoram', label: 'Mamit' },
+      { value: 'Saiha, Mizoram', label: 'Saiha' },
+      { value: 'Saitual, Mizoram', label: 'Saitual' },
+      { value: 'Serchhip, Mizoram', label: 'Serchhip' },
+    ],
+  },
+  {
+    state: 'Nagaland',
+    options: [
+      { value: 'Dimapur, Nagaland', label: 'Dimapur' },
+      { value: 'Kiphire, Nagaland', label: 'Kiphire' },
+      { value: 'Kohima, Nagaland', label: 'Kohima' },
+      { value: 'Longleng, Nagaland', label: 'Longleng' },
+      { value: 'Mokokchung, Nagaland', label: 'Mokokchung' },
+      { value: 'Mon, Nagaland', label: 'Mon' },
+      { value: 'Noklak, Nagaland', label: 'Noklak' },
+      { value: 'Peren, Nagaland', label: 'Peren' },
+      { value: 'Phek, Nagaland', label: 'Phek' },
+      { value: 'Tuensang, Nagaland', label: 'Tuensang' },
+      { value: 'Wokha, Nagaland', label: 'Wokha' },
+      { value: 'Zunheboto, Nagaland', label: 'Zunheboto' },
+    ],
+  },
+  {
+    state: 'Odisha',
+    options: [
+      { value: 'Anugul, Odisha', label: 'Anugul' },
+      { value: 'Balangir, Odisha', label: 'Balangir' },
+      { value: 'Baleshwar, Odisha', label: 'Baleshwar' },
+      { value: 'Bargarh, Odisha', label: 'Bargarh' },
+      { value: 'Bhadrak, Odisha', label: 'Bhadrak' },
+      { value: 'Boudh, Odisha', label: 'Boudh' },
+      { value: 'Cuttack, Odisha', label: 'Cuttack' },
+      { value: 'Deogarh, Odisha', label: 'Deogarh' },
+      { value: 'Dhenkanal, Odisha', label: 'Dhenkanal' },
+      { value: 'Gajapati, Odisha', label: 'Gajapati' },
+      { value: 'Ganjam, Odisha', label: 'Ganjam' },
+      { value: 'Jagatsinghapur, Odisha', label: 'Jagatsinghapur' },
+      { value: 'Jajapur, Odisha', label: 'Jajapur' },
+      { value: 'Jharsuguda, Odisha', label: 'Jharsuguda' },
+      { value: 'Kalahandi, Odisha', label: 'Kalahandi' },
+      { value: 'Kandhamal, Odisha', label: 'Kandhamal' },
+      { value: 'Kendrapara, Odisha', label: 'Kendrapara' },
+      { value: 'Kendujhar, Odisha', label: 'Kendujhar' },
+      { value: 'Khordha, Odisha', label: 'Khordha' },
+      { value: 'Koraput, Odisha', label: 'Koraput' },
+      { value: 'Malkangiri, Odisha', label: 'Malkangiri' },
+      { value: 'Mayurbhanj, Odisha', label: 'Mayurbhanj' },
+      { value: 'Nabarangpur, Odisha', label: 'Nabarangpur' },
+      { value: 'Nayagarh, Odisha', label: 'Nayagarh' },
+      { value: 'Nuapada, Odisha', label: 'Nuapada' },
+      { value: 'Puri, Odisha', label: 'Puri' },
+      { value: 'Rayagada, Odisha', label: 'Rayagada' },
+      { value: 'Sambalpur, Odisha', label: 'Sambalpur' },
+      { value: 'Sonepur, Odisha', label: 'Sonepur' },
+      { value: 'Sundargarh, Odisha', label: 'Sundargarh' },
+    ],
+  },
+  {
+    state: 'Puducherry',
+    options: [
+      { value: 'Karaikal, Puducherry', label: 'Karaikal' },
+      { value: 'Mahe, Puducherry', label: 'Mahe' },
+      { value: 'Pondicherry, Puducherry', label: 'Pondicherry' },
+      { value: 'Yanam, Puducherry', label: 'Yanam' },
+    ],
+  },
+  {
+    state: 'Punjab',
+    options: [
+      { value: 'Amritsar, Punjab', label: 'Amritsar' },
+      { value: 'Barnala, Punjab', label: 'Barnala' },
+      { value: 'Bathinda, Punjab', label: 'Bathinda' },
+      { value: 'Faridkot, Punjab', label: 'Faridkot' },
+      { value: 'Fatehgarh Sahib, Punjab', label: 'Fatehgarh Sahib' },
+      { value: 'Fazilka, Punjab', label: 'Fazilka' },
+      { value: 'Firozepur, Punjab', label: 'Firozepur' },
+      { value: 'Gurdaspur, Punjab', label: 'Gurdaspur' },
+      { value: 'Hoshiarpur, Punjab', label: 'Hoshiarpur' },
+      { value: 'Jalandhar, Punjab', label: 'Jalandhar' },
+      { value: 'Kapurthala, Punjab', label: 'Kapurthala' },
+      { value: 'Ludhiana, Punjab', label: 'Ludhiana' },
+      { value: 'Malerkotla, Punjab', label: 'Malerkotla' },
+      { value: 'Mansa, Punjab', label: 'Mansa' },
+      { value: 'Moga, Punjab', label: 'Moga' },
+      { value: 'Pathankot, Punjab', label: 'Pathankot' },
+      { value: 'Patiala, Punjab', label: 'Patiala' },
+      { value: 'Rupnagar, Punjab', label: 'Rupnagar' },
+      { value: 'S.A.S Nagar, Punjab', label: 'S.A.S Nagar' },
+      { value: 'Sangrur, Punjab', label: 'Sangrur' },
+      { value: 'Shahid Bhagat Singh Nagar, Punjab', label: 'Shahid Bhagat Singh Nagar' },
+      { value: 'Sri Muktsar Sahib, Punjab', label: 'Sri Muktsar Sahib' },
+      { value: 'Tarn Taran, Punjab', label: 'Tarn Taran' },
+    ],
+  },
+  {
+    state: 'Rajasthan',
+    options: [
+      { value: 'Ajmer, Rajasthan', label: 'Ajmer' },
+      { value: 'Alwar, Rajasthan', label: 'Alwar' },
+      { value: 'Banswara, Rajasthan', label: 'Banswara' },
+      { value: 'Baran, Rajasthan', label: 'Baran' },
+      { value: 'Barmer, Rajasthan', label: 'Barmer' },
+      { value: 'Bharatpur, Rajasthan', label: 'Bharatpur' },
+      { value: 'Bhilwara, Rajasthan', label: 'Bhilwara' },
+      { value: 'Bikaner, Rajasthan', label: 'Bikaner' },
+      { value: 'Bundi, Rajasthan', label: 'Bundi' },
+      { value: 'Chittorgarh, Rajasthan', label: 'Chittorgarh' },
+      { value: 'Churu, Rajasthan', label: 'Churu' },
+      { value: 'Dausa, Rajasthan', label: 'Dausa' },
+      { value: 'Dholpur, Rajasthan', label: 'Dholpur' },
+      { value: 'Dungarpur, Rajasthan', label: 'Dungarpur' },
+      { value: 'Ganganagar, Rajasthan', label: 'Ganganagar' },
+      { value: 'Hanumangarh, Rajasthan', label: 'Hanumangarh' },
+      { value: 'Jaipur, Rajasthan', label: 'Jaipur' },
+      { value: 'Jaisalmer, Rajasthan', label: 'Jaisalmer' },
+      { value: 'Jalore, Rajasthan', label: 'Jalore' },
+      { value: 'Jhalawar, Rajasthan', label: 'Jhalawar' },
+      { value: 'Jhunjhunu, Rajasthan', label: 'Jhunjhunu' },
+      { value: 'Jodhpur, Rajasthan', label: 'Jodhpur' },
+      { value: 'Karauli, Rajasthan', label: 'Karauli' },
+      { value: 'Kota, Rajasthan', label: 'Kota' },
+      { value: 'Nagaur, Rajasthan', label: 'Nagaur' },
+      { value: 'Pali, Rajasthan', label: 'Pali' },
+      { value: 'Pratapgarh, Rajasthan', label: 'Pratapgarh' },
+      { value: 'Rajsamand, Rajasthan', label: 'Rajsamand' },
+      { value: 'Sawai Madhopur, Rajasthan', label: 'Sawai Madhopur' },
+      { value: 'Sikar, Rajasthan', label: 'Sikar' },
+      { value: 'Sirohi, Rajasthan', label: 'Sirohi' },
+      { value: 'Tonk, Rajasthan', label: 'Tonk' },
+      { value: 'Udaipur, Rajasthan', label: 'Udaipur' },
+    ],
+  },
+  {
+    state: 'Sikkim',
+    options: [
+      { value: 'East District, Sikkim', label: 'East District' },
+      { value: 'North District, Sikkim', label: 'North District' },
+      { value: 'South District, Sikkim', label: 'South District' },
+      { value: 'West District, Sikkim', label: 'West District' },
+    ],
+  },
+  {
+    state: 'Tamil Nadu',
+    options: [
+      { value: 'Ariyalur, Tamil Nadu', label: 'Ariyalur' },
+      { value: 'Chengalpattu, Tamil Nadu', label: 'Chengalpattu' },
+      { value: 'Chennai, Tamil Nadu', label: 'Chennai' },
+      { value: 'Coimbatore, Tamil Nadu', label: 'Coimbatore' },
+      { value: 'Cuddalore, Tamil Nadu', label: 'Cuddalore' },
+      { value: 'Dharmapuri, Tamil Nadu', label: 'Dharmapuri' },
+      { value: 'Dindigul, Tamil Nadu', label: 'Dindigul' },
+      { value: 'Erode, Tamil Nadu', label: 'Erode' },
+      { value: 'Kallakurichi, Tamil Nadu', label: 'Kallakurichi' },
+      { value: 'Kanchipuram, Tamil Nadu', label: 'Kanchipuram' },
+      { value: 'Kanniyakumari, Tamil Nadu', label: 'Kanniyakumari' },
+      { value: 'Karur, Tamil Nadu', label: 'Karur' },
+      { value: 'Krishnagiri, Tamil Nadu', label: 'Krishnagiri' },
+      { value: 'Madurai, Tamil Nadu', label: 'Madurai' },
+      { value: 'Mayiladuthurai, Tamil Nadu', label: 'Mayiladuthurai' },
+      { value: 'Nagapattinam, Tamil Nadu', label: 'Nagapattinam' },
+      { value: 'Namakkal, Tamil Nadu', label: 'Namakkal' },
+      { value: 'Perambalur, Tamil Nadu', label: 'Perambalur' },
+      { value: 'Pudukkottai, Tamil Nadu', label: 'Pudukkottai' },
+      { value: 'Ramanathapuram, Tamil Nadu', label: 'Ramanathapuram' },
+      { value: 'Ranipet, Tamil Nadu', label: 'Ranipet' },
+      { value: 'Salem, Tamil Nadu', label: 'Salem' },
+      { value: 'Sivaganga, Tamil Nadu', label: 'Sivaganga' },
+      { value: 'Tenkasi, Tamil Nadu', label: 'Tenkasi' },
+      { value: 'Thanjavur, Tamil Nadu', label: 'Thanjavur' },
+      { value: 'The Nilgiris, Tamil Nadu', label: 'The Nilgiris' },
+      { value: 'Theni, Tamil Nadu', label: 'Theni' },
+      { value: 'Thiruvallur, Tamil Nadu', label: 'Thiruvallur' },
+      { value: 'Thiruvarur, Tamil Nadu', label: 'Thiruvarur' },
+      { value: 'Tiruchirappalli, Tamil Nadu', label: 'Tiruchirappalli' },
+      { value: 'Tirunelveli, Tamil Nadu', label: 'Tirunelveli' },
+      { value: 'Tirupathur, Tamil Nadu', label: 'Tirupathur' },
+      { value: 'Tiruppur, Tamil Nadu', label: 'Tiruppur' },
+      { value: 'Tiruvannamalai, Tamil Nadu', label: 'Tiruvannamalai' },
+      { value: 'Tuticorin, Tamil Nadu', label: 'Tuticorin' },
+      { value: 'Vellore, Tamil Nadu', label: 'Vellore' },
+      { value: 'Villupuram, Tamil Nadu', label: 'Villupuram' },
+      { value: 'Virudhunagar, Tamil Nadu', label: 'Virudhunagar' },
+    ],
+  },
+  {
+    state: 'Telangana',
+    options: [
+      { value: 'Adilabad, Telangana', label: 'Adilabad' },
+      { value: 'Bhadradri Kothagudem, Telangana', label: 'Bhadradri Kothagudem' },
+      { value: 'Hyderabad, Telangana', label: 'Hyderabad' },
+      { value: 'Jagitial, Telangana', label: 'Jagitial' },
+      { value: 'Jangoan, Telangana', label: 'Jangoan' },
+      { value: 'Jayashankar Bhupalapally, Telangana', label: 'Jayashankar Bhupalapally' },
+      { value: 'Jogulamba Gadwal, Telangana', label: 'Jogulamba Gadwal' },
+      { value: 'Kamareddy, Telangana', label: 'Kamareddy' },
+      { value: 'Karimnagar, Telangana', label: 'Karimnagar' },
+      { value: 'Khammam, Telangana', label: 'Khammam' },
+      { value: 'Kumuram Bheem Asifabad, Telangana', label: 'Kumuram Bheem Asifabad' },
+      { value: 'Mahabubabad, Telangana', label: 'Mahabubabad' },
+      { value: 'Mahabubnagar, Telangana', label: 'Mahabubnagar' },
+      { value: 'Mancherial, Telangana', label: 'Mancherial' },
+      { value: 'Medak, Telangana', label: 'Medak' },
+      { value: 'Medchal Malkajgiri, Telangana', label: 'Medchal Malkajgiri' },
+      { value: 'Mulugu, Telangana', label: 'Mulugu' },
+      { value: 'Nagarkurnool, Telangana', label: 'Nagarkurnool' },
+      { value: 'Nalgonda, Telangana', label: 'Nalgonda' },
+      { value: 'Narayanpet, Telangana', label: 'Narayanpet' },
+      { value: 'Nirmal, Telangana', label: 'Nirmal' },
+      { value: 'Nizamabad, Telangana', label: 'Nizamabad' },
+      { value: 'Peddapalli, Telangana', label: 'Peddapalli' },
+      { value: 'Rajanna Sircilla, Telangana', label: 'Rajanna Sircilla' },
+      { value: 'Ranga Reddy, Telangana', label: 'Ranga Reddy' },
+      { value: 'Sangareddy, Telangana', label: 'Sangareddy' },
+      { value: 'Siddipet, Telangana', label: 'Siddipet' },
+      { value: 'Suryapet, Telangana', label: 'Suryapet' },
+      { value: 'Vikarabad, Telangana', label: 'Vikarabad' },
+      { value: 'Wanaparthy, Telangana', label: 'Wanaparthy' },
+      { value: 'Warangal Rural, Telangana', label: 'Warangal Rural' },
+      { value: 'Warangal Urban, Telangana', label: 'Warangal Urban' },
+      { value: 'Yadadri Bhuvanagiri, Telangana', label: 'Yadadri Bhuvanagiri' },
+    ],
+  },
+  {
+    state: 'The Dadra And Nagar Haveli And Daman And Diu',
+    options: [
+      { value: 'Dadra And Nagar Haveli, The Dadra And Nagar Haveli And Daman And Diu', label: 'Dadra And Nagar Haveli' },
+      { value: 'Daman, The Dadra And Nagar Haveli And Daman And Diu', label: 'Daman' },
+      { value: 'Diu, The Dadra And Nagar Haveli And Daman And Diu', label: 'Diu' },
+    ],
+  },
+  {
+    state: 'Tripura',
+    options: [
+      { value: 'Dhalai, Tripura', label: 'Dhalai' },
+      { value: 'Gomati, Tripura', label: 'Gomati' },
+      { value: 'Khowai, Tripura', label: 'Khowai' },
+      { value: 'North Tripura, Tripura', label: 'North Tripura' },
+      { value: 'Sepahijala, Tripura', label: 'Sepahijala' },
+      { value: 'South Tripura, Tripura', label: 'South Tripura' },
+      { value: 'Unakoti, Tripura', label: 'Unakoti' },
+      { value: 'West Tripura, Tripura', label: 'West Tripura' },
+    ],
+  },
+  {
+    state: 'Uttar Pradesh',
+    options: [
+      { value: 'Agra, Uttar Pradesh', label: 'Agra' },
+      { value: 'Aligarh, Uttar Pradesh', label: 'Aligarh' },
+      { value: 'Ambedkar Nagar, Uttar Pradesh', label: 'Ambedkar Nagar' },
+      { value: 'Amethi, Uttar Pradesh', label: 'Amethi' },
+      { value: 'Amroha, Uttar Pradesh', label: 'Amroha' },
+      { value: 'Auraiya, Uttar Pradesh', label: 'Auraiya' },
+      { value: 'Ayodhya, Uttar Pradesh', label: 'Ayodhya' },
+      { value: 'Azamgarh, Uttar Pradesh', label: 'Azamgarh' },
+      { value: 'Baghpat, Uttar Pradesh', label: 'Baghpat' },
+      { value: 'Bahraich, Uttar Pradesh', label: 'Bahraich' },
+      { value: 'Ballia, Uttar Pradesh', label: 'Ballia' },
+      { value: 'Balrampur, Uttar Pradesh', label: 'Balrampur' },
+      { value: 'Banda, Uttar Pradesh', label: 'Banda' },
+      { value: 'Barabanki, Uttar Pradesh', label: 'Barabanki' },
+      { value: 'Bareilly, Uttar Pradesh', label: 'Bareilly' },
+      { value: 'Basti, Uttar Pradesh', label: 'Basti' },
+      { value: 'Bhadohi, Uttar Pradesh', label: 'Bhadohi' },
+      { value: 'Bijnor, Uttar Pradesh', label: 'Bijnor' },
+      { value: 'Budaun, Uttar Pradesh', label: 'Budaun' },
+      { value: 'Bulandshahr, Uttar Pradesh', label: 'Bulandshahr' },
+      { value: 'Chandauli, Uttar Pradesh', label: 'Chandauli' },
+      { value: 'Chitrakoot, Uttar Pradesh', label: 'Chitrakoot' },
+      { value: 'Deoria, Uttar Pradesh', label: 'Deoria' },
+      { value: 'Etah, Uttar Pradesh', label: 'Etah' },
+      { value: 'Etawah, Uttar Pradesh', label: 'Etawah' },
+      { value: 'Farrukhabad, Uttar Pradesh', label: 'Farrukhabad' },
+      { value: 'Fatehpur, Uttar Pradesh', label: 'Fatehpur' },
+      { value: 'Firozabad, Uttar Pradesh', label: 'Firozabad' },
+      { value: 'Gautam Buddha Nagar, Uttar Pradesh', label: 'Gautam Buddha Nagar' },
+      { value: 'Ghaziabad, Uttar Pradesh', label: 'Ghaziabad' },
+      { value: 'Ghazipur, Uttar Pradesh', label: 'Ghazipur' },
+      { value: 'Gonda, Uttar Pradesh', label: 'Gonda' },
+      { value: 'Gorakhpur, Uttar Pradesh', label: 'Gorakhpur' },
+      { value: 'Hamirpur, Uttar Pradesh', label: 'Hamirpur' },
+      { value: 'Hapur, Uttar Pradesh', label: 'Hapur' },
+      { value: 'Hardoi, Uttar Pradesh', label: 'Hardoi' },
+      { value: 'Hathras, Uttar Pradesh', label: 'Hathras' },
+      { value: 'Jalaun, Uttar Pradesh', label: 'Jalaun' },
+      { value: 'Jaunpur, Uttar Pradesh', label: 'Jaunpur' },
+      { value: 'Jhansi, Uttar Pradesh', label: 'Jhansi' },
+      { value: 'Kannauj, Uttar Pradesh', label: 'Kannauj' },
+      { value: 'Kanpur Dehat, Uttar Pradesh', label: 'Kanpur Dehat' },
+      { value: 'Kanpur Nagar, Uttar Pradesh', label: 'Kanpur Nagar' },
+      { value: 'Kasganj, Uttar Pradesh', label: 'Kasganj' },
+      { value: 'Kaushambi, Uttar Pradesh', label: 'Kaushambi' },
+      { value: 'Kheri, Uttar Pradesh', label: 'Kheri' },
+      { value: 'Kushi Nagar, Uttar Pradesh', label: 'Kushi Nagar' },
+      { value: 'Lalitpur, Uttar Pradesh', label: 'Lalitpur' },
+      { value: 'Lucknow, Uttar Pradesh', label: 'Lucknow' },
+      { value: 'Maharajganj, Uttar Pradesh', label: 'Maharajganj' },
+      { value: 'Mahoba, Uttar Pradesh', label: 'Mahoba' },
+      { value: 'Mainpuri, Uttar Pradesh', label: 'Mainpuri' },
+      { value: 'Mathura, Uttar Pradesh', label: 'Mathura' },
+      { value: 'Mau, Uttar Pradesh', label: 'Mau' },
+      { value: 'Meerut, Uttar Pradesh', label: 'Meerut' },
+      { value: 'Mirzapur, Uttar Pradesh', label: 'Mirzapur' },
+      { value: 'Moradabad, Uttar Pradesh', label: 'Moradabad' },
+      { value: 'Muzaffarnagar, Uttar Pradesh', label: 'Muzaffarnagar' },
+      { value: 'Pilibhit, Uttar Pradesh', label: 'Pilibhit' },
+      { value: 'Pratapgarh, Uttar Pradesh', label: 'Pratapgarh' },
+      { value: 'Prayagraj, Uttar Pradesh', label: 'Prayagraj' },
+      { value: 'Rae Bareli, Uttar Pradesh', label: 'Rae Bareli' },
+      { value: 'Rampur, Uttar Pradesh', label: 'Rampur' },
+      { value: 'Saharanpur, Uttar Pradesh', label: 'Saharanpur' },
+      { value: 'Sambhal, Uttar Pradesh', label: 'Sambhal' },
+      { value: 'Sant Kabeer Nagar, Uttar Pradesh', label: 'Sant Kabeer Nagar' },
+      { value: 'Shahjahanpur, Uttar Pradesh', label: 'Shahjahanpur' },
+      { value: 'Shamli, Uttar Pradesh', label: 'Shamli' },
+      { value: 'Shravasti, Uttar Pradesh', label: 'Shravasti' },
+      { value: 'Siddharth Nagar, Uttar Pradesh', label: 'Siddharth Nagar' },
+      { value: 'Sitapur, Uttar Pradesh', label: 'Sitapur' },
+      { value: 'Sonbhadra, Uttar Pradesh', label: 'Sonbhadra' },
+      { value: 'Sultanpur, Uttar Pradesh', label: 'Sultanpur' },
+      { value: 'Unnao, Uttar Pradesh', label: 'Unnao' },
+      { value: 'Varanasi, Uttar Pradesh', label: 'Varanasi' },
+    ],
+  },
+  {
+    state: 'Uttarakhand',
+    options: [
+      { value: 'Almora, Uttarakhand', label: 'Almora' },
+      { value: 'Bageshwar, Uttarakhand', label: 'Bageshwar' },
+      { value: 'Chamoli, Uttarakhand', label: 'Chamoli' },
+      { value: 'Champawat, Uttarakhand', label: 'Champawat' },
+      { value: 'Dehradun, Uttarakhand', label: 'Dehradun' },
+      { value: 'Haridwar, Uttarakhand', label: 'Haridwar' },
+      { value: 'Nainital, Uttarakhand', label: 'Nainital' },
+      { value: 'Pauri Garhwal, Uttarakhand', label: 'Pauri Garhwal' },
+      { value: 'Pithoragarh, Uttarakhand', label: 'Pithoragarh' },
+      { value: 'Rudra Prayag, Uttarakhand', label: 'Rudra Prayag' },
+      { value: 'Tehri Garhwal, Uttarakhand', label: 'Tehri Garhwal' },
+      { value: 'Udam Singh Nagar, Uttarakhand', label: 'Udam Singh Nagar' },
+      { value: 'Uttar Kashi, Uttarakhand', label: 'Uttar Kashi' },
+    ],
+  },
+  {
+    state: 'West Bengal',
+    options: [
+      { value: '24 Paraganas North, West Bengal', label: '24 Paraganas North' },
+      { value: '24 Paraganas South, West Bengal', label: '24 Paraganas South' },
+      { value: 'Alipurduar, West Bengal', label: 'Alipurduar' },
+      { value: 'Bankura, West Bengal', label: 'Bankura' },
+      { value: 'Birbhum, West Bengal', label: 'Birbhum' },
+      { value: 'Coochbehar, West Bengal', label: 'Coochbehar' },
+      { value: 'Darjeeling, West Bengal', label: 'Darjeeling' },
+      { value: 'Dinajpur Dakshin, West Bengal', label: 'Dinajpur Dakshin' },
+      { value: 'Dinajpur Uttar, West Bengal', label: 'Dinajpur Uttar' },
+      { value: 'Hooghly, West Bengal', label: 'Hooghly' },
+      { value: 'Howrah, West Bengal', label: 'Howrah' },
+      { value: 'Jalpaiguri, West Bengal', label: 'Jalpaiguri' },
+      { value: 'Jhargram, West Bengal', label: 'Jhargram' },
+      { value: 'Kalimpong, West Bengal', label: 'Kalimpong' },
+      { value: 'Kolkata, West Bengal', label: 'Kolkata' },
+      { value: 'Maldah, West Bengal', label: 'Maldah' },
+      { value: 'Medinipur East, West Bengal', label: 'Medinipur East' },
+      { value: 'Medinipur West, West Bengal', label: 'Medinipur West' },
+      { value: 'Murshidabad, West Bengal', label: 'Murshidabad' },
+      { value: 'Nadia, West Bengal', label: 'Nadia' },
+      { value: 'Paschim Bardhaman, West Bengal', label: 'Paschim Bardhaman' },
+      { value: 'Purba Bardhaman, West Bengal', label: 'Purba Bardhaman' },
+      { value: 'Purulia, West Bengal', label: 'Purulia' },
+    ],
+  },
+  {
+    state: 'Remote',
+    options: [
+      { value: 'Remote - India', label: 'Remote - India' },
+      { value: 'Remote - Anywhere', label: 'Remote - Anywhere' },
+      { value: 'Hybrid - Flexible', label: 'Hybrid - Flexible' },
+    ],
+  },
+];
 
 /** Below this, extraction is telling us its own answer is a stretch. Surfaced as a
  *  hint next to the field rather than a block: a weak match is still an answer, and
@@ -3817,6 +4806,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Works in both AI mode and manual mode during create step
   useEffect(() => {
     if (step !== 'create') return;
+    // Paused while the leave prompt is open: the recruiter is deciding what
+    // happens to the JD, and a timer save behind the dialog flashed the save
+    // status and raced the prompt's own Save as Draft (two creates, two copies).
+    // Cancel closes the prompt and re-arms this; Save / Discard / Delete settle
+    // the record themselves.
+    if (showUnsavedDialog) return;
 
     // Need at least 1 non-space character in job title
     const trimmedJobTitle = jobTitle.trim();
@@ -3891,7 +4886,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(autosaveTimer);
-  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished, isJobTitleValidating]);
+  }, [jobTitle, manualJD, aiPrompt, generatedJD, step, mode, editingId, isSavingDraft, isPublishing, isPublished, isJobTitleValidating, showUnsavedDialog]);
 
   // Track changes for unsaved changes warning
   useEffect(() => {
@@ -3949,6 +4944,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (isPublished || discardedRef.current) return false;
     if (!editingId) return hasUnsavedChanges;
     if (editingId === createdInSessionIdRef.current && !userSavedDraftRef.current) return true;
+    // A new JD's working copy reopened by a refresh: this mount did not create it
+    // (createdInSessionIdRef is empty again), but it is still a never-saved new JD,
+    // so leaving must keep prompting until the recruiter saves it themselves.
+    if (isUnsavedNewCopy && !userSavedDraftRef.current) return true;
     const textChanged = checkpointContentKeyRef.current !== null
       && currentContentKeyRef.current !== checkpointContentKeyRef.current;
     return textChanged || editedSinceCheckpointRef.current;
@@ -6786,6 +7785,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       savedContentKeyRef.current = currentContentKeyRef.current;
       markStepSaveCheckpoint(savedJd, 'the version saved when you finished Step 2 (Extract)');
+
+      // The backend's write-time guard (`JDService._validate_skill_lists_for_write`)
+      // can drop a semantic duplicate `reviewData`/`finalLists` above did not catch
+      // (e.g. a synonym with no shared token) - `savedJd` is the authoritative,
+      // post-dedup list. Without this, Review kept showing the pre-save `reviewData`
+      // snapshot set above, so a duplicate the backend DID strip at save time stayed
+      // visible on screen until the next full reload.
+      setExtractedData(prev => ({
+        ...prev,
+        mustHaveSkills: savedJd.must_have_skills ?? prev.mustHaveSkills,
+        niceToHaveSkills: savedJd.nice_to_have_skills ?? prev.niceToHaveSkills,
+        mustHaveComments: savedJd.must_have_comments ?? prev.mustHaveComments,
+        niceToHaveComments: savedJd.nice_to_have_comments ?? prev.niceToHaveComments,
+      }));
+
       if (jdId) {
         ensureJDCreationUrl(jdId, 'review');
       }
@@ -7446,6 +8460,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // What the leave prompt shows and allows.
   const leaveJobCode = leaveCheckpointMeta?.jobCode ?? effectiveEditingJD?.job_id ?? null;
   const leaveIsPublishedJD = (leaveCheckpointMeta?.status ?? effectiveEditingJD?.status) === 'published';
+  /* New-creation flow — a new JD the recruiter has not saved yet (before its
+     first autosave there is no record at all; after it, an unsaved working
+     copy), or a version made by "New Job Version" in this visit and not yet
+     saved. Its leave prompt is Cancel / Discard / Save as Draft only. Keying on
+     the record alone made a new JD's prompt change with autosave timing: a
+     disabled "Delete this entire JD" before the first autosave, gone after it.
+     Editing an existing draft keeps Delete. */
+  const isNewCreationLeave = !editingId
+    || isUnsavedNewCopy
+    || (jdWorkflow === 'new-version' && !userSavedDraftRef.current);
   const leaveDeleteBlockedReason = !editingId
     ? 'Nothing has been saved yet, so there is no JD to delete.'
     : leaveIsPublishedJD
@@ -7794,7 +8818,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
          border, the same footprint as AI Interview's unclipped indicator)
          without moving the steps, and the Y axis is hidden explicitly. */
       <div className="overflow-x-auto overflow-y-hidden -my-6 py-6 -mx-3 px-3 sm:-mx-5 sm:px-5">
-        <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-2">
+        {/* Phones: labels are hidden, so the four circles fit — the row
+            spans the card (`w-full`, no `min-w-max`) and the connectors
+            stretch (`flex-1`) to share what is left, so nothing scrolls. */}
+        <div className="flex w-fit min-w-max max-sm:w-full max-sm:min-w-0 mx-auto items-center gap-2 sm:gap-4 px-1 sm:px-2">
           {stepLabels.map((label, index) => {
             const stepNumber = index + 1;
             const isCurrent = displayStep === stepNumber;
@@ -7809,13 +8836,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     creation flows read as one component. */}
                 {index > 0 && (
                   <div
-                    className={`w-6 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
+                    className={`w-6 max-sm:w-auto max-sm:flex-1 max-sm:min-w-3 sm:w-12 lg:w-24 h-0.5 rounded-full transition-colors duration-500 ${
                       displayStep > index ? 'bg-brand-blue' : 'bg-gray-200'
                     }`}
                   />
                 )}
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <div className="relative">
                     <div
                       className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 transition-all duration-300 z-10 relative ${
@@ -8228,7 +9255,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">
                       AI-Generated JD
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
                       Let AI create a professional job description based on your inputs
                     </p>
                   </div>
@@ -8250,7 +9277,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">
                       Manual Input
                     </h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
                       Write or paste your own job description
                     </p>
                   </div>
@@ -8270,12 +9297,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <span className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Saving...
-                        </span>
-                      )}
-                      {autosaveStatus === 'saved' && (
-                        <span className="flex items-center gap-1.5 text-success">
-                          <Cloud className="w-4 h-4" />
-                          Draft saved
                         </span>
                       )}
                       {autosaveStatus === 'error' && (
@@ -8300,7 +9321,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse || isTitleLocked}
                         title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
@@ -8341,7 +9362,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Describe the role - responsibilities, must-have skills, experience, location, work mode, salary. e.g., 'Shift supervisor for a 200-bed hospital ward, 5+ years, night rotation, Chennai' or 'Senior full-stack developer with React and Node.js, 5+ years, remote, leading a team of 3'"
                         rows={12}
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black placeholder-gray-500 ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max || Boolean(aiPromptValidationError)
@@ -8445,12 +9466,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           Saving...
                         </span>
                       )}
-                      {autosaveStatus === 'saved' && (
-                        <span className="flex items-center gap-1.5 text-success">
-                          <Cloud className="w-4 h-4" />
-                          Draft saved
-                        </span>
-                      )}
                       {autosaveStatus === 'error' && (
                         <span className="flex items-center gap-1.5 text-destructive">
                           <CloudOff className="w-4 h-4" />
@@ -8473,7 +9488,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse || isTitleLocked}
                         title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
+                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
@@ -8508,7 +9523,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.MANUAL_JD.max}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
+                        className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black placeholder-gray-500 ${
                           manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD) || containsCodePatterns(manualJD) || !isEnglishOnly(manualJD))
                             ? 'border-destructive-line bg-destructive-subtle'
                             : 'border-gray-200'
@@ -8658,7 +9673,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             value={generatedJD}
                             onChange={(e) => setGeneratedJD(e.target.value)}
                             readOnly={isJDInUse}
-                            className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-xs sm:text-sm text-black ${
+                            className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue font-mono text-sm text-black ${
                               generatedJD.length > 0 && !isEnglishOnly(generatedJD)
                                 ? 'border-destructive-line bg-destructive-subtle'
                                 : 'border-gray-200 dark:border-slate-700'
@@ -8686,7 +9701,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="text-center">
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
                         <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">No job description generated yet</p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 px-4">
+                        <p className="text-sm text-gray-500 dark:text-slate-500 px-4">
                           Fill in the job details and click &quot;Generate Job Description&quot;
                         </p>
                       </div>
@@ -8707,7 +9722,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="text-center">
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
                         <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">Start typing your job description</p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 px-4">
+                        <p className="text-sm text-gray-500 dark:text-slate-500 px-4">
                           Paste or write your JD in the left panel
                         </p>
                       </div>
@@ -8717,8 +9732,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
             </div>
 
-            {/* Navigation Buttons */}
-            <div className="flex justify-end mt-4 sm:mt-6">
+            {/* Navigation Buttons — full-width Next on a phone, as on Steps 2
+                and 3, so the wizard's footer reads the same at every step. */}
+            <div className="flex justify-end mt-4 sm:mt-6 [&>button]:w-full sm:[&>button]:w-auto">
               <Button
                 variant="primary"
                 onClick={handleNext}
@@ -8800,7 +9816,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                   <div>
                     <h4 className="text-sm sm:text-base text-brand-blue font-medium">Parameters Modified</h4>
-                    <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <p className="text-sm text-gray-700 dark:text-slate-300">
                       You&apos;ve made changes to skills or comments. The JD will be regenerated when you continue to Review.
                     </p>
                   </div>
@@ -8819,7 +9835,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
                 <div className="min-w-0">
                   <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Extracted Information</h2>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
                     {isRegenerating
                       ? 'Processing... Fields are temporarily read-only.'
                       : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
@@ -9355,7 +10371,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
-                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                      <span className="text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
 
@@ -9513,7 +10529,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
-                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <span className="text-sm text-gray-700 dark:text-slate-300">
                       Evaluate Job Hopping
                     </span>
                   </label>
@@ -9542,37 +10558,35 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
-                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                      <span className="text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
-                  <select
+                  <FilterSelect
                     value={extractedData.industryType}
-                    onChange={(e) => {
-                      setExtractedData(prev => ({ ...prev, industryType: e.target.value }));
+                    onChange={(v) => {
+                      setExtractedData(prev => ({ ...prev, industryType: v }));
                       markExtractedDataModified();
                       // Clear validation error when user makes a selection
-                      if (e.target.value) {
+                      if (v) {
                         setValidationErrors(prev => ({ ...prev, industryType: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
-                      validationErrors.industryType ? 'border-destructive-line' : 'border-gray-200'
+                    ariaLabel="Industry type"
+                    className={`${JD_FIELD_SELECT_CLASS} py-2.5 sm:py-2.5 mb-3 ${
+                      validationErrors.industryType ? 'border-destructive-line dark:border-destructive-line' : ''
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
-                  >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select industry type'}</option>
-                    {industryTypes.map((type) => (
-                      <option key={type.id} value={type.code}>{type.label}</option>
-                    ))}
-                    {/* A proposed industry has no master row yet, so the list cannot
-                        offer it. Without this option the select would fall blank the
-                        moment the recruiter presses Add. */}
-                    {extractedData.industryType === PENDING_INDUSTRY_VALUE && (
-                      <option value={PENDING_INDUSTRY_VALUE}>
-                        {extractedData.industrySuggestedName} (new)
-                      </option>
-                    )}
-                  </select>
+                    options={[
+                      { value: '', label: masterDataLoading ? 'Loading...' : 'Select industry type' },
+                      ...industryTypes.map((type) => ({ value: type.code, label: type.label })),
+                      /* A proposed industry has no master row yet, so the list cannot
+                         offer it. Without this option the select would fall blank the
+                         moment the recruiter presses Add. */
+                      ...(extractedData.industryType === PENDING_INDUSTRY_VALUE
+                        ? [{ value: PENDING_INDUSTRY_VALUE, label: `${extractedData.industrySuggestedName} (new)` }]
+                        : []),
+                    ]}
+                  />
                   {validationErrors.industryType && (
                     <p className="text-destructive text-sm mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
@@ -9806,17 +10820,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         readOnly={isRegenerating}
                       />
                     </div>
-                    <select
+                    <FilterSelect
                       value={extractedData.compensationType}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' })); markExtractedDataModified(); }}
-                      className={`px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      onChange={(v) => { setExtractedData(prev => ({ ...prev, compensationType: v as 'hourly' | 'daily' | 'monthly' | 'yearly' })); markExtractedDataModified(); }}
+                      ariaLabel="Compensation type"
+                      className={`px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       disabled={isRegenerating}
-                    >
-                      <option value="hourly">Hourly</option>
-                      <option value="daily">Daily</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
+                      options={[
+                        { value: 'hourly', label: 'Hourly' },
+                        { value: 'daily', label: 'Daily' },
+                        { value: 'monthly', label: 'Monthly' },
+                        { value: 'yearly', label: 'Yearly' },
+                      ]}
+                    />
                   </div>
                   {validationErrors.salaryRange && (
                     <p className="text-destructive text-sm mt-2 flex items-center gap-1">
@@ -9861,7 +10877,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {!experienceHasCeiling && (
                     <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
                       <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                      <p className="min-w-0 flex-1 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                      <p className="min-w-0 flex-1 text-sm text-gray-700 dark:text-slate-300">
                         <span className="font-semibold">Set to Yes:</span> the experience requirement has no upper limit, so there is no range to exceed. Enter a To (maximum) years value above to choose No.
                       </p>
                     </div>
@@ -9932,7 +10948,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
-                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                    <span className="text-sm text-gray-700 dark:text-slate-300">Required field</span>
                   </label>
                 </div>
 
@@ -9942,1023 +10958,83 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Country Dropdown */}
                   <div className="flex-1">
                     <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Country</label>
-                    <select
+                    <FilterSelect
                       value={locationCountry}
-                      onChange={(e) => {
-                        setLocationCountry(e.target.value as 'IN' | 'US');
+                      onChange={(v) => {
+                        setLocationCountry(v as 'IN' | 'US');
                         setLocationStateFilter('all');
                         setNewLocation(prev => ({ ...prev, city: '' }));
                       }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
-                    >
-                      <option value="IN">India</option>
-                      <option value="US">United States</option>
-                    </select>
+                      ariaLabel="Country"
+                      className={JD_FIELD_SELECT_CLASS}
+                      options={[
+                        { value: 'IN', label: 'India' },
+                        { value: 'US', label: 'United States' },
+                      ]}
+                    />
                   </div>
 
                   {/* State Filter Dropdown */}
                   <div className="flex-1">
                     <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1">State</label>
-                    <select
+                    <FilterSelect
                       value={locationStateFilter}
-                      onChange={(e) => {
-                        setLocationStateFilter(e.target.value);
+                      onChange={(v) => {
+                        setLocationStateFilter(v);
                         setNewLocation(prev => ({ ...prev, city: '' }));
                       }}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
-                    >
-                      <option value="all">All States</option>
-                      {locationCountry === 'US' && usStates.map((s) => (
-                        <option key={s.isoCode} value={s.name}>{s.name}</option>
-                      ))}
-                      {locationCountry === 'IN' && (<>
-                      <option value="Delhi NCR">Delhi NCR</option>
-                      <option value="Andaman And Nicobar Islands">Andaman And Nicobar Islands</option>
-                      <option value="Andhra Pradesh">Andhra Pradesh</option>
-                      <option value="Arunachal Pradesh">Arunachal Pradesh</option>
-                      <option value="Assam">Assam</option>
-                      <option value="Bihar">Bihar</option>
-                      <option value="Chandigarh">Chandigarh</option>
-                      <option value="Chhattisgarh">Chhattisgarh</option>
-                      <option value="Delhi">Delhi</option>
-                      <option value="Goa">Goa</option>
-                      <option value="Gujarat">Gujarat</option>
-                      <option value="Haryana">Haryana</option>
-                      <option value="Himachal Pradesh">Himachal Pradesh</option>
-                      <option value="Jammu And Kashmir">Jammu And Kashmir</option>
-                      <option value="Jharkhand">Jharkhand</option>
-                      <option value="Karnataka">Karnataka</option>
-                      <option value="Kerala">Kerala</option>
-                      <option value="Ladakh">Ladakh</option>
-                      <option value="Lakshadweep">Lakshadweep</option>
-                      <option value="Madhya Pradesh">Madhya Pradesh</option>
-                      <option value="Maharashtra">Maharashtra</option>
-                      <option value="Manipur">Manipur</option>
-                      <option value="Meghalaya">Meghalaya</option>
-                      <option value="Mizoram">Mizoram</option>
-                      <option value="Nagaland">Nagaland</option>
-                      <option value="Odisha">Odisha</option>
-                      <option value="Puducherry">Puducherry</option>
-                      <option value="Punjab">Punjab</option>
-                      <option value="Rajasthan">Rajasthan</option>
-                      <option value="Sikkim">Sikkim</option>
-                      <option value="Tamil Nadu">Tamil Nadu</option>
-                      <option value="Telangana">Telangana</option>
-                      <option value="The Dadra And Nagar Haveli And Daman And Diu">The Dadra And Nagar Haveli And Daman And Diu</option>
-                      <option value="Tripura">Tripura</option>
-                      <option value="Uttar Pradesh">Uttar Pradesh</option>
-                      <option value="Uttarakhand">Uttarakhand</option>
-                      <option value="West Bengal">West Bengal</option>
-                      <option value="Remote">Remote/Hybrid</option>
-                      </>)}
-                    </select>
+                      ariaLabel="State"
+                      className={JD_FIELD_SELECT_CLASS}
+                      options={[
+                        { value: 'all', label: 'All States' },
+                        ...(locationCountry === 'US' ? usStates.map((st) => ({ value: st.name, label: st.name })) : []),
+                        ...(locationCountry === 'IN' ? IN_LOCATION_STATE_OPTIONS : []),
+                      ]}
+                    />
                   </div>
 
                   {/* City Dropdown */}
                   <div className="flex-1">
                     <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1">City</label>
-                    <select
+                    <FilterSelect
                       value={newLocation.city}
-                      onChange={(e) => setNewLocation(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
-                    >
-                      <option value="">Select a city</option>
-                      {locationCountry === 'US' && (() => {
-                        const selectedUsState = locationStateFilter === 'all'
-                          ? null
-                          : usStates.find((s) => s.name === locationStateFilter);
-                        const statesToShow = selectedUsState ? [selectedUsState] : usStates;
-                        return statesToShow.map((s) => {
-                          const cities = usCitiesByState[s.isoCode] || [];
-                          if (!cities.length) return null;
-                          return (
-                            <optgroup key={s.isoCode} label={s.name}>
-                              {cities.map((city, idx) => (
-                                <option key={`${s.isoCode}-${idx}`} value={`${city}, ${s.name}`}>{city}</option>
-                              ))}
-                            </optgroup>
-                          );
-                        });
-                      })()}
-                      {locationCountry === 'IN' && (<>
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Delhi NCR') && (
-                        <optgroup label="Delhi NCR">
-                          <option value="Delhi NCR">Delhi NCR (All)</option>
-                          <option value="New Delhi, Delhi">New Delhi</option>
-                          <option value="Gurugram, Haryana">Gurugram (Gurgaon)</option>
-                          <option value="Gautam Buddha Nagar, Uttar Pradesh">Noida / Greater Noida</option>
-                          <option value="Ghaziabad, Uttar Pradesh">Ghaziabad</option>
-                          <option value="Faridabad, Haryana">Faridabad</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Andaman And Nicobar Islands') && (
-                        <optgroup label="Andaman And Nicobar Islands">
-                          <option value="Nicobars, Andaman And Nicobar Islands">Nicobars</option>
-                          <option value="North And Middle Andaman, Andaman And Nicobar Islands">North And Middle Andaman</option>
-                          <option value="South Andamans, Andaman And Nicobar Islands">South Andamans</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Andhra Pradesh') && (
-                        <optgroup label="Andhra Pradesh">
-                          <option value="Anantapur, Andhra Pradesh">Anantapur</option>
-                          <option value="Chittoor, Andhra Pradesh">Chittoor</option>
-                          <option value="East Godavari, Andhra Pradesh">East Godavari</option>
-                          <option value="Guntur, Andhra Pradesh">Guntur</option>
-                          <option value="Krishna, Andhra Pradesh">Krishna</option>
-                          <option value="Kurnool, Andhra Pradesh">Kurnool</option>
-                          <option value="Prakasam, Andhra Pradesh">Prakasam</option>
-                          <option value="Spsr Nellore, Andhra Pradesh">Spsr Nellore</option>
-                          <option value="Srikakulam, Andhra Pradesh">Srikakulam</option>
-                          <option value="Visakhapatanam, Andhra Pradesh">Visakhapatanam</option>
-                          <option value="Vizianagaram, Andhra Pradesh">Vizianagaram</option>
-                          <option value="West Godavari, Andhra Pradesh">West Godavari</option>
-                          <option value="Y.S.R., Andhra Pradesh">Y.S.R.</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Arunachal Pradesh') && (
-                        <optgroup label="Arunachal Pradesh">
-                          <option value="Anjaw, Arunachal Pradesh">Anjaw</option>
-                          <option value="Changlang, Arunachal Pradesh">Changlang</option>
-                          <option value="Dibang Valley, Arunachal Pradesh">Dibang Valley</option>
-                          <option value="East Kameng, Arunachal Pradesh">East Kameng</option>
-                          <option value="East Siang, Arunachal Pradesh">East Siang</option>
-                          <option value="Kamle, Arunachal Pradesh">Kamle</option>
-                          <option value="Kra Daadi, Arunachal Pradesh">Kra Daadi</option>
-                          <option value="Kurung Kumey, Arunachal Pradesh">Kurung Kumey</option>
-                          <option value="Leparada, Arunachal Pradesh">Leparada</option>
-                          <option value="Lohit, Arunachal Pradesh">Lohit</option>
-                          <option value="Longding, Arunachal Pradesh">Longding</option>
-                          <option value="Lower Dibang Valley, Arunachal Pradesh">Lower Dibang Valley</option>
-                          <option value="Lower Siang, Arunachal Pradesh">Lower Siang</option>
-                          <option value="Lower Subansiri, Arunachal Pradesh">Lower Subansiri</option>
-                          <option value="Namsai, Arunachal Pradesh">Namsai</option>
-                          <option value="Pakke Kessang, Arunachal Pradesh">Pakke Kessang</option>
-                          <option value="Papum Pare, Arunachal Pradesh">Papum Pare</option>
-                          <option value="Shi Yomi, Arunachal Pradesh">Shi Yomi</option>
-                          <option value="Siang, Arunachal Pradesh">Siang</option>
-                          <option value="Tawang, Arunachal Pradesh">Tawang</option>
-                          <option value="Tirap, Arunachal Pradesh">Tirap</option>
-                          <option value="Upper Siang, Arunachal Pradesh">Upper Siang</option>
-                          <option value="Upper Subansiri, Arunachal Pradesh">Upper Subansiri</option>
-                          <option value="West Kameng, Arunachal Pradesh">West Kameng</option>
-                          <option value="West Siang, Arunachal Pradesh">West Siang</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Assam') && (
-                        <optgroup label="Assam">
-                          <option value="Baksa, Assam">Baksa</option>
-                          <option value="Barpeta, Assam">Barpeta</option>
-                          <option value="Biswanath, Assam">Biswanath</option>
-                          <option value="Bongaigaon, Assam">Bongaigaon</option>
-                          <option value="Cachar, Assam">Cachar</option>
-                          <option value="Charaideo, Assam">Charaideo</option>
-                          <option value="Chirang, Assam">Chirang</option>
-                          <option value="Darrang, Assam">Darrang</option>
-                          <option value="Dhemaji, Assam">Dhemaji</option>
-                          <option value="Dhubri, Assam">Dhubri</option>
-                          <option value="Dibrugarh, Assam">Dibrugarh</option>
-                          <option value="Dima Hasao, Assam">Dima Hasao</option>
-                          <option value="Goalpara, Assam">Goalpara</option>
-                          <option value="Golaghat, Assam">Golaghat</option>
-                          <option value="Hailakandi, Assam">Hailakandi</option>
-                          <option value="Hojai, Assam">Hojai</option>
-                          <option value="Jorhat, Assam">Jorhat</option>
-                          <option value="Kamrup, Assam">Kamrup</option>
-                          <option value="Kamrup Metro, Assam">Kamrup Metro</option>
-                          <option value="Karbi Anglong, Assam">Karbi Anglong</option>
-                          <option value="Karimganj, Assam">Karimganj</option>
-                          <option value="Kokrajhar, Assam">Kokrajhar</option>
-                          <option value="Lakhimpur, Assam">Lakhimpur</option>
-                          <option value="Majuli, Assam">Majuli</option>
-                          <option value="Marigaon, Assam">Marigaon</option>
-                          <option value="Nagaon, Assam">Nagaon</option>
-                          <option value="Nalbari, Assam">Nalbari</option>
-                          <option value="Sivasagar, Assam">Sivasagar</option>
-                          <option value="Sonitpur, Assam">Sonitpur</option>
-                          <option value="South Salmara Mancachar, Assam">South Salmara Mancachar</option>
-                          <option value="Tinsukia, Assam">Tinsukia</option>
-                          <option value="Udalguri, Assam">Udalguri</option>
-                          <option value="West Karbi Anglong, Assam">West Karbi Anglong</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Bihar') && (
-                        <optgroup label="Bihar">
-                          <option value="Araria, Bihar">Araria</option>
-                          <option value="Arwal, Bihar">Arwal</option>
-                          <option value="Aurangabad, Bihar">Aurangabad</option>
-                          <option value="Banka, Bihar">Banka</option>
-                          <option value="Begusarai, Bihar">Begusarai</option>
-                          <option value="Bhagalpur, Bihar">Bhagalpur</option>
-                          <option value="Bhojpur, Bihar">Bhojpur</option>
-                          <option value="Buxar, Bihar">Buxar</option>
-                          <option value="Darbhanga, Bihar">Darbhanga</option>
-                          <option value="Gaya, Bihar">Gaya</option>
-                          <option value="Gopalganj, Bihar">Gopalganj</option>
-                          <option value="Jamui, Bihar">Jamui</option>
-                          <option value="Jehanabad, Bihar">Jehanabad</option>
-                          <option value="Kaimur (Bhabua), Bihar">Kaimur (Bhabua)</option>
-                          <option value="Katihar, Bihar">Katihar</option>
-                          <option value="Khagaria, Bihar">Khagaria</option>
-                          <option value="Kishanganj, Bihar">Kishanganj</option>
-                          <option value="Lakhisarai, Bihar">Lakhisarai</option>
-                          <option value="Madhepura, Bihar">Madhepura</option>
-                          <option value="Madhubani, Bihar">Madhubani</option>
-                          <option value="Munger, Bihar">Munger</option>
-                          <option value="Muzaffarpur, Bihar">Muzaffarpur</option>
-                          <option value="Nalanda, Bihar">Nalanda</option>
-                          <option value="Nawada, Bihar">Nawada</option>
-                          <option value="Pashchim Champaran, Bihar">Pashchim Champaran</option>
-                          <option value="Patna, Bihar">Patna</option>
-                          <option value="Purbi Champaran, Bihar">Purbi Champaran</option>
-                          <option value="Purnia, Bihar">Purnia</option>
-                          <option value="Rohtas, Bihar">Rohtas</option>
-                          <option value="Saharsa, Bihar">Saharsa</option>
-                          <option value="Samastipur, Bihar">Samastipur</option>
-                          <option value="Saran, Bihar">Saran</option>
-                          <option value="Sheikhpura, Bihar">Sheikhpura</option>
-                          <option value="Sheohar, Bihar">Sheohar</option>
-                          <option value="Sitamarhi, Bihar">Sitamarhi</option>
-                          <option value="Siwan, Bihar">Siwan</option>
-                          <option value="Supaul, Bihar">Supaul</option>
-                          <option value="Vaishali, Bihar">Vaishali</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Chandigarh') && (
-                        <optgroup label="Chandigarh">
-                          <option value="Chandigarh, Chandigarh">Chandigarh</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Chhattisgarh') && (
-                        <optgroup label="Chhattisgarh">
-                          <option value="Balod, Chhattisgarh">Balod</option>
-                          <option value="Baloda Bazar, Chhattisgarh">Baloda Bazar</option>
-                          <option value="Balrampur, Chhattisgarh">Balrampur</option>
-                          <option value="Bastar, Chhattisgarh">Bastar</option>
-                          <option value="Bemetara, Chhattisgarh">Bemetara</option>
-                          <option value="Bijapur, Chhattisgarh">Bijapur</option>
-                          <option value="Bilaspur, Chhattisgarh">Bilaspur</option>
-                          <option value="Dantewada, Chhattisgarh">Dantewada</option>
-                          <option value="Dhamtari, Chhattisgarh">Dhamtari</option>
-                          <option value="Durg, Chhattisgarh">Durg</option>
-                          <option value="Gariyaband, Chhattisgarh">Gariyaband</option>
-                          <option value="Gaurella Pendra Marwahi, Chhattisgarh">Gaurella Pendra Marwahi</option>
-                          <option value="Janjgir-Champa, Chhattisgarh">Janjgir-Champa</option>
-                          <option value="Jashpur, Chhattisgarh">Jashpur</option>
-                          <option value="Kabirdham, Chhattisgarh">Kabirdham</option>
-                          <option value="Kanker, Chhattisgarh">Kanker</option>
-                          <option value="Kondagaon, Chhattisgarh">Kondagaon</option>
-                          <option value="Korba, Chhattisgarh">Korba</option>
-                          <option value="Korea, Chhattisgarh">Korea</option>
-                          <option value="Mahasamund, Chhattisgarh">Mahasamund</option>
-                          <option value="Mungeli, Chhattisgarh">Mungeli</option>
-                          <option value="Narayanpur, Chhattisgarh">Narayanpur</option>
-                          <option value="Raigarh, Chhattisgarh">Raigarh</option>
-                          <option value="Raipur, Chhattisgarh">Raipur</option>
-                          <option value="Rajnandgaon, Chhattisgarh">Rajnandgaon</option>
-                          <option value="Sukma, Chhattisgarh">Sukma</option>
-                          <option value="Surajpur, Chhattisgarh">Surajpur</option>
-                          <option value="Surguja, Chhattisgarh">Surguja</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Delhi') && (
-                        <optgroup label="Delhi">
-                          <option value="Central, Delhi">Central</option>
-                          <option value="East, Delhi">East</option>
-                          <option value="New Delhi, Delhi">New Delhi</option>
-                          <option value="North, Delhi">North</option>
-                          <option value="North East, Delhi">North East</option>
-                          <option value="North West, Delhi">North West</option>
-                          <option value="Shahdara, Delhi">Shahdara</option>
-                          <option value="South, Delhi">South</option>
-                          <option value="South East, Delhi">South East</option>
-                          <option value="South West, Delhi">South West</option>
-                          <option value="West, Delhi">West</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Goa') && (
-                        <optgroup label="Goa">
-                          <option value="North Goa, Goa">North Goa</option>
-                          <option value="South Goa, Goa">South Goa</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Gujarat') && (
-                        <optgroup label="Gujarat">
-                          <option value="Ahmadabad, Gujarat">Ahmadabad</option>
-                          <option value="Amreli, Gujarat">Amreli</option>
-                          <option value="Anand, Gujarat">Anand</option>
-                          <option value="Arvalli, Gujarat">Arvalli</option>
-                          <option value="Banas Kantha, Gujarat">Banas Kantha</option>
-                          <option value="Bharuch, Gujarat">Bharuch</option>
-                          <option value="Bhavnagar, Gujarat">Bhavnagar</option>
-                          <option value="Botad, Gujarat">Botad</option>
-                          <option value="Chhotaudepur, Gujarat">Chhotaudepur</option>
-                          <option value="Dang, Gujarat">Dang</option>
-                          <option value="Devbhumi Dwarka, Gujarat">Devbhumi Dwarka</option>
-                          <option value="Dohad, Gujarat">Dohad</option>
-                          <option value="Gandhinagar, Gujarat">Gandhinagar</option>
-                          <option value="Gir Somnath, Gujarat">Gir Somnath</option>
-                          <option value="Jamnagar, Gujarat">Jamnagar</option>
-                          <option value="Junagadh, Gujarat">Junagadh</option>
-                          <option value="Kachchh, Gujarat">Kachchh</option>
-                          <option value="Kheda, Gujarat">Kheda</option>
-                          <option value="Mahesana, Gujarat">Mahesana</option>
-                          <option value="Mahisagar, Gujarat">Mahisagar</option>
-                          <option value="Morbi, Gujarat">Morbi</option>
-                          <option value="Narmada, Gujarat">Narmada</option>
-                          <option value="Navsari, Gujarat">Navsari</option>
-                          <option value="Panch Mahals, Gujarat">Panch Mahals</option>
-                          <option value="Patan, Gujarat">Patan</option>
-                          <option value="Porbandar, Gujarat">Porbandar</option>
-                          <option value="Rajkot, Gujarat">Rajkot</option>
-                          <option value="Sabar Kantha, Gujarat">Sabar Kantha</option>
-                          <option value="Surat, Gujarat">Surat</option>
-                          <option value="Surendranagar, Gujarat">Surendranagar</option>
-                          <option value="Tapi, Gujarat">Tapi</option>
-                          <option value="Vadodara, Gujarat">Vadodara</option>
-                          <option value="Valsad, Gujarat">Valsad</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Haryana') && (
-                        <optgroup label="Haryana">
-                          <option value="Ambala, Haryana">Ambala</option>
-                          <option value="Bhiwani, Haryana">Bhiwani</option>
-                          <option value="Charki Dadri, Haryana">Charki Dadri</option>
-                          <option value="Faridabad, Haryana">Faridabad</option>
-                          <option value="Fatehabad, Haryana">Fatehabad</option>
-                          <option value="Gurugram, Haryana">Gurugram</option>
-                          <option value="Hisar, Haryana">Hisar</option>
-                          <option value="Jhajjar, Haryana">Jhajjar</option>
-                          <option value="Jind, Haryana">Jind</option>
-                          <option value="Kaithal, Haryana">Kaithal</option>
-                          <option value="Karnal, Haryana">Karnal</option>
-                          <option value="Kurukshetra, Haryana">Kurukshetra</option>
-                          <option value="Mahendragarh, Haryana">Mahendragarh</option>
-                          <option value="Nuh, Haryana">Nuh</option>
-                          <option value="Palwal, Haryana">Palwal</option>
-                          <option value="Panchkula, Haryana">Panchkula</option>
-                          <option value="Panipat, Haryana">Panipat</option>
-                          <option value="Rewari, Haryana">Rewari</option>
-                          <option value="Rohtak, Haryana">Rohtak</option>
-                          <option value="Sirsa, Haryana">Sirsa</option>
-                          <option value="Sonipat, Haryana">Sonipat</option>
-                          <option value="Yamunanagar, Haryana">Yamunanagar</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Himachal Pradesh') && (
-                        <optgroup label="Himachal Pradesh">
-                          <option value="Bilaspur, Himachal Pradesh">Bilaspur</option>
-                          <option value="Chamba, Himachal Pradesh">Chamba</option>
-                          <option value="Hamirpur, Himachal Pradesh">Hamirpur</option>
-                          <option value="Kangra, Himachal Pradesh">Kangra</option>
-                          <option value="Kinnaur, Himachal Pradesh">Kinnaur</option>
-                          <option value="Kullu, Himachal Pradesh">Kullu</option>
-                          <option value="Lahul And Spiti, Himachal Pradesh">Lahul And Spiti</option>
-                          <option value="Mandi, Himachal Pradesh">Mandi</option>
-                          <option value="Shimla, Himachal Pradesh">Shimla</option>
-                          <option value="Sirmaur, Himachal Pradesh">Sirmaur</option>
-                          <option value="Solan, Himachal Pradesh">Solan</option>
-                          <option value="Una, Himachal Pradesh">Una</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Jammu And Kashmir') && (
-                        <optgroup label="Jammu And Kashmir">
-                          <option value="Anantnag, Jammu And Kashmir">Anantnag</option>
-                          <option value="Bandipora, Jammu And Kashmir">Bandipora</option>
-                          <option value="Baramulla, Jammu And Kashmir">Baramulla</option>
-                          <option value="Budgam, Jammu And Kashmir">Budgam</option>
-                          <option value="Doda, Jammu And Kashmir">Doda</option>
-                          <option value="Ganderbal, Jammu And Kashmir">Ganderbal</option>
-                          <option value="Jammu, Jammu And Kashmir">Jammu</option>
-                          <option value="Kathua, Jammu And Kashmir">Kathua</option>
-                          <option value="Kishtwar, Jammu And Kashmir">Kishtwar</option>
-                          <option value="Kulgam, Jammu And Kashmir">Kulgam</option>
-                          <option value="Kupwara, Jammu And Kashmir">Kupwara</option>
-                          <option value="Poonch, Jammu And Kashmir">Poonch</option>
-                          <option value="Pulwama, Jammu And Kashmir">Pulwama</option>
-                          <option value="Rajouri, Jammu And Kashmir">Rajouri</option>
-                          <option value="Ramban, Jammu And Kashmir">Ramban</option>
-                          <option value="Reasi, Jammu And Kashmir">Reasi</option>
-                          <option value="Samba, Jammu And Kashmir">Samba</option>
-                          <option value="Shopian, Jammu And Kashmir">Shopian</option>
-                          <option value="Srinagar, Jammu And Kashmir">Srinagar</option>
-                          <option value="Udhampur, Jammu And Kashmir">Udhampur</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Jharkhand') && (
-                        <optgroup label="Jharkhand">
-                          <option value="Bokaro, Jharkhand">Bokaro</option>
-                          <option value="Chatra, Jharkhand">Chatra</option>
-                          <option value="Deoghar, Jharkhand">Deoghar</option>
-                          <option value="Dhanbad, Jharkhand">Dhanbad</option>
-                          <option value="Dumka, Jharkhand">Dumka</option>
-                          <option value="East Singhbum, Jharkhand">East Singhbum</option>
-                          <option value="Garhwa, Jharkhand">Garhwa</option>
-                          <option value="Giridih, Jharkhand">Giridih</option>
-                          <option value="Godda, Jharkhand">Godda</option>
-                          <option value="Gumla, Jharkhand">Gumla</option>
-                          <option value="Hazaribagh, Jharkhand">Hazaribagh</option>
-                          <option value="Jamtara, Jharkhand">Jamtara</option>
-                          <option value="Khunti, Jharkhand">Khunti</option>
-                          <option value="Koderma, Jharkhand">Koderma</option>
-                          <option value="Latehar, Jharkhand">Latehar</option>
-                          <option value="Lohardaga, Jharkhand">Lohardaga</option>
-                          <option value="Pakur, Jharkhand">Pakur</option>
-                          <option value="Palamu, Jharkhand">Palamu</option>
-                          <option value="Ramgarh, Jharkhand">Ramgarh</option>
-                          <option value="Ranchi, Jharkhand">Ranchi</option>
-                          <option value="Sahebganj, Jharkhand">Sahebganj</option>
-                          <option value="Saraikela Kharsawan, Jharkhand">Saraikela Kharsawan</option>
-                          <option value="Simdega, Jharkhand">Simdega</option>
-                          <option value="West Singhbhum, Jharkhand">West Singhbhum</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Karnataka') && (
-                        <optgroup label="Karnataka">
-                          <option value="Bagalkote, Karnataka">Bagalkote</option>
-                          <option value="Ballari, Karnataka">Ballari</option>
-                          <option value="Belagavi, Karnataka">Belagavi</option>
-                          <option value="Bengaluru Rural, Karnataka">Bengaluru Rural</option>
-                          <option value="Bengaluru Urban, Karnataka">Bengaluru Urban</option>
-                          <option value="Bidar, Karnataka">Bidar</option>
-                          <option value="Chamarajanagara, Karnataka">Chamarajanagara</option>
-                          <option value="Chikkaballapura, Karnataka">Chikkaballapura</option>
-                          <option value="Chikkamagaluru, Karnataka">Chikkamagaluru</option>
-                          <option value="Chitradurga, Karnataka">Chitradurga</option>
-                          <option value="Dakshina Kannada, Karnataka">Dakshina Kannada</option>
-                          <option value="Davangere, Karnataka">Davangere</option>
-                          <option value="Dharwad, Karnataka">Dharwad</option>
-                          <option value="Gadag, Karnataka">Gadag</option>
-                          <option value="Hassan, Karnataka">Hassan</option>
-                          <option value="Haveri, Karnataka">Haveri</option>
-                          <option value="Kalaburagi, Karnataka">Kalaburagi</option>
-                          <option value="Kodagu, Karnataka">Kodagu</option>
-                          <option value="Kolar, Karnataka">Kolar</option>
-                          <option value="Koppal, Karnataka">Koppal</option>
-                          <option value="Mandya, Karnataka">Mandya</option>
-                          <option value="Mysuru, Karnataka">Mysuru</option>
-                          <option value="Raichur, Karnataka">Raichur</option>
-                          <option value="Ramanagara, Karnataka">Ramanagara</option>
-                          <option value="Shivamogga, Karnataka">Shivamogga</option>
-                          <option value="Tumakuru, Karnataka">Tumakuru</option>
-                          <option value="Udupi, Karnataka">Udupi</option>
-                          <option value="Uttara Kannada, Karnataka">Uttara Kannada</option>
-                          <option value="Vijayapura, Karnataka">Vijayapura</option>
-                          <option value="Yadgir, Karnataka">Yadgir</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Kerala') && (
-                        <optgroup label="Kerala">
-                          <option value="Alappuzha, Kerala">Alappuzha</option>
-                          <option value="Ernakulam, Kerala">Ernakulam</option>
-                          <option value="Idukki, Kerala">Idukki</option>
-                          <option value="Kannur, Kerala">Kannur</option>
-                          <option value="Kasaragod, Kerala">Kasaragod</option>
-                          <option value="Kollam, Kerala">Kollam</option>
-                          <option value="Kottayam, Kerala">Kottayam</option>
-                          <option value="Kozhikode, Kerala">Kozhikode</option>
-                          <option value="Malappuram, Kerala">Malappuram</option>
-                          <option value="Palakkad, Kerala">Palakkad</option>
-                          <option value="Pathanamthitta, Kerala">Pathanamthitta</option>
-                          <option value="Thiruvananthapuram, Kerala">Thiruvananthapuram</option>
-                          <option value="Thrissur, Kerala">Thrissur</option>
-                          <option value="Wayanad, Kerala">Wayanad</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Ladakh') && (
-                        <optgroup label="Ladakh">
-                          <option value="Kargil, Ladakh">Kargil</option>
-                          <option value="Leh Ladakh, Ladakh">Leh Ladakh</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Lakshadweep') && (
-                        <optgroup label="Lakshadweep">
-                          <option value="Lakshadweep District, Lakshadweep">Lakshadweep District</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Madhya Pradesh') && (
-                        <optgroup label="Madhya Pradesh">
-                          <option value="Agar Malwa, Madhya Pradesh">Agar Malwa</option>
-                          <option value="Alirajpur, Madhya Pradesh">Alirajpur</option>
-                          <option value="Anuppur, Madhya Pradesh">Anuppur</option>
-                          <option value="Ashoknagar, Madhya Pradesh">Ashoknagar</option>
-                          <option value="Balaghat, Madhya Pradesh">Balaghat</option>
-                          <option value="Barwani, Madhya Pradesh">Barwani</option>
-                          <option value="Betul, Madhya Pradesh">Betul</option>
-                          <option value="Bhind, Madhya Pradesh">Bhind</option>
-                          <option value="Bhopal, Madhya Pradesh">Bhopal</option>
-                          <option value="Burhanpur, Madhya Pradesh">Burhanpur</option>
-                          <option value="Chhatarpur, Madhya Pradesh">Chhatarpur</option>
-                          <option value="Chhindwara, Madhya Pradesh">Chhindwara</option>
-                          <option value="Damoh, Madhya Pradesh">Damoh</option>
-                          <option value="Datia, Madhya Pradesh">Datia</option>
-                          <option value="Dewas, Madhya Pradesh">Dewas</option>
-                          <option value="Dhar, Madhya Pradesh">Dhar</option>
-                          <option value="Dindori, Madhya Pradesh">Dindori</option>
-                          <option value="East Nimar, Madhya Pradesh">East Nimar</option>
-                          <option value="Guna, Madhya Pradesh">Guna</option>
-                          <option value="Gwalior, Madhya Pradesh">Gwalior</option>
-                          <option value="Harda, Madhya Pradesh">Harda</option>
-                          <option value="Hoshangabad, Madhya Pradesh">Hoshangabad</option>
-                          <option value="Indore, Madhya Pradesh">Indore</option>
-                          <option value="Jabalpur, Madhya Pradesh">Jabalpur</option>
-                          <option value="Jhabua, Madhya Pradesh">Jhabua</option>
-                          <option value="Katni, Madhya Pradesh">Katni</option>
-                          <option value="Khargone, Madhya Pradesh">Khargone</option>
-                          <option value="Mandla, Madhya Pradesh">Mandla</option>
-                          <option value="Mandsaur, Madhya Pradesh">Mandsaur</option>
-                          <option value="Morena, Madhya Pradesh">Morena</option>
-                          <option value="Narsinghpur, Madhya Pradesh">Narsinghpur</option>
-                          <option value="Neemuch, Madhya Pradesh">Neemuch</option>
-                          <option value="Niwari, Madhya Pradesh">Niwari</option>
-                          <option value="Panna, Madhya Pradesh">Panna</option>
-                          <option value="Raisen, Madhya Pradesh">Raisen</option>
-                          <option value="Rajgarh, Madhya Pradesh">Rajgarh</option>
-                          <option value="Ratlam, Madhya Pradesh">Ratlam</option>
-                          <option value="Rewa, Madhya Pradesh">Rewa</option>
-                          <option value="Sagar, Madhya Pradesh">Sagar</option>
-                          <option value="Satna, Madhya Pradesh">Satna</option>
-                          <option value="Sehore, Madhya Pradesh">Sehore</option>
-                          <option value="Seoni, Madhya Pradesh">Seoni</option>
-                          <option value="Shahdol, Madhya Pradesh">Shahdol</option>
-                          <option value="Shajapur, Madhya Pradesh">Shajapur</option>
-                          <option value="Sheopur, Madhya Pradesh">Sheopur</option>
-                          <option value="Shivpuri, Madhya Pradesh">Shivpuri</option>
-                          <option value="Sidhi, Madhya Pradesh">Sidhi</option>
-                          <option value="Singrauli, Madhya Pradesh">Singrauli</option>
-                          <option value="Tikamgarh, Madhya Pradesh">Tikamgarh</option>
-                          <option value="Ujjain, Madhya Pradesh">Ujjain</option>
-                          <option value="Umaria, Madhya Pradesh">Umaria</option>
-                          <option value="Vidisha, Madhya Pradesh">Vidisha</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Maharashtra') && (
-                        <optgroup label="Maharashtra">
-                          <option value="Ahmednagar, Maharashtra">Ahmednagar</option>
-                          <option value="Akola, Maharashtra">Akola</option>
-                          <option value="Amravati, Maharashtra">Amravati</option>
-                          <option value="Aurangabad, Maharashtra">Aurangabad</option>
-                          <option value="Beed, Maharashtra">Beed</option>
-                          <option value="Bhandara, Maharashtra">Bhandara</option>
-                          <option value="Buldhana, Maharashtra">Buldhana</option>
-                          <option value="Chandrapur, Maharashtra">Chandrapur</option>
-                          <option value="Dhule, Maharashtra">Dhule</option>
-                          <option value="Gadchiroli, Maharashtra">Gadchiroli</option>
-                          <option value="Gondia, Maharashtra">Gondia</option>
-                          <option value="Hingoli, Maharashtra">Hingoli</option>
-                          <option value="Jalgaon, Maharashtra">Jalgaon</option>
-                          <option value="Jalna, Maharashtra">Jalna</option>
-                          <option value="Kolhapur, Maharashtra">Kolhapur</option>
-                          <option value="Latur, Maharashtra">Latur</option>
-                          <option value="Mumbai, Maharashtra">Mumbai</option>
-                          <option value="Mumbai Suburban, Maharashtra">Mumbai Suburban</option>
-                          <option value="Nagpur, Maharashtra">Nagpur</option>
-                          <option value="Nanded, Maharashtra">Nanded</option>
-                          <option value="Nandurbar, Maharashtra">Nandurbar</option>
-                          <option value="Nashik, Maharashtra">Nashik</option>
-                          <option value="Osmanabad, Maharashtra">Osmanabad</option>
-                          <option value="Palghar, Maharashtra">Palghar</option>
-                          <option value="Parbhani, Maharashtra">Parbhani</option>
-                          <option value="Pune, Maharashtra">Pune</option>
-                          <option value="Raigad, Maharashtra">Raigad</option>
-                          <option value="Ratnagiri, Maharashtra">Ratnagiri</option>
-                          <option value="Sangli, Maharashtra">Sangli</option>
-                          <option value="Satara, Maharashtra">Satara</option>
-                          <option value="Sindhudurg, Maharashtra">Sindhudurg</option>
-                          <option value="Solapur, Maharashtra">Solapur</option>
-                          <option value="Thane, Maharashtra">Thane</option>
-                          <option value="Wardha, Maharashtra">Wardha</option>
-                          <option value="Washim, Maharashtra">Washim</option>
-                          <option value="Yavatmal, Maharashtra">Yavatmal</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Manipur') && (
-                        <optgroup label="Manipur">
-                          <option value="Bishnupur, Manipur">Bishnupur</option>
-                          <option value="Chandel, Manipur">Chandel</option>
-                          <option value="Churachandpur, Manipur">Churachandpur</option>
-                          <option value="Imphal East, Manipur">Imphal East</option>
-                          <option value="Imphal West, Manipur">Imphal West</option>
-                          <option value="Jiribam, Manipur">Jiribam</option>
-                          <option value="Kakching, Manipur">Kakching</option>
-                          <option value="Kamjong, Manipur">Kamjong</option>
-                          <option value="Kangpokpi, Manipur">Kangpokpi</option>
-                          <option value="Noney, Manipur">Noney</option>
-                          <option value="Pherzawl, Manipur">Pherzawl</option>
-                          <option value="Senapati, Manipur">Senapati</option>
-                          <option value="Tamenglong, Manipur">Tamenglong</option>
-                          <option value="Tengnoupal, Manipur">Tengnoupal</option>
-                          <option value="Thoubal, Manipur">Thoubal</option>
-                          <option value="Ukhrul, Manipur">Ukhrul</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Meghalaya') && (
-                        <optgroup label="Meghalaya">
-                          <option value="East Garo Hills, Meghalaya">East Garo Hills</option>
-                          <option value="East Jaintia Hills, Meghalaya">East Jaintia Hills</option>
-                          <option value="East Khasi Hills, Meghalaya">East Khasi Hills</option>
-                          <option value="North Garo Hills, Meghalaya">North Garo Hills</option>
-                          <option value="Ri Bhoi, Meghalaya">Ri Bhoi</option>
-                          <option value="South Garo Hills, Meghalaya">South Garo Hills</option>
-                          <option value="South West Garo Hills, Meghalaya">South West Garo Hills</option>
-                          <option value="South West Khasi Hills, Meghalaya">South West Khasi Hills</option>
-                          <option value="West Garo Hills, Meghalaya">West Garo Hills</option>
-                          <option value="West Jaintia Hills, Meghalaya">West Jaintia Hills</option>
-                          <option value="West Khasi Hills, Meghalaya">West Khasi Hills</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Mizoram') && (
-                        <optgroup label="Mizoram">
-                          <option value="Aizawl, Mizoram">Aizawl</option>
-                          <option value="Champhai, Mizoram">Champhai</option>
-                          <option value="Hnahthial, Mizoram">Hnahthial</option>
-                          <option value="Khawzawl, Mizoram">Khawzawl</option>
-                          <option value="Kolasib, Mizoram">Kolasib</option>
-                          <option value="Lawngtlai, Mizoram">Lawngtlai</option>
-                          <option value="Lunglei, Mizoram">Lunglei</option>
-                          <option value="Mamit, Mizoram">Mamit</option>
-                          <option value="Saiha, Mizoram">Saiha</option>
-                          <option value="Saitual, Mizoram">Saitual</option>
-                          <option value="Serchhip, Mizoram">Serchhip</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Nagaland') && (
-                        <optgroup label="Nagaland">
-                          <option value="Dimapur, Nagaland">Dimapur</option>
-                          <option value="Kiphire, Nagaland">Kiphire</option>
-                          <option value="Kohima, Nagaland">Kohima</option>
-                          <option value="Longleng, Nagaland">Longleng</option>
-                          <option value="Mokokchung, Nagaland">Mokokchung</option>
-                          <option value="Mon, Nagaland">Mon</option>
-                          <option value="Noklak, Nagaland">Noklak</option>
-                          <option value="Peren, Nagaland">Peren</option>
-                          <option value="Phek, Nagaland">Phek</option>
-                          <option value="Tuensang, Nagaland">Tuensang</option>
-                          <option value="Wokha, Nagaland">Wokha</option>
-                          <option value="Zunheboto, Nagaland">Zunheboto</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Odisha') && (
-                        <optgroup label="Odisha">
-                          <option value="Anugul, Odisha">Anugul</option>
-                          <option value="Balangir, Odisha">Balangir</option>
-                          <option value="Baleshwar, Odisha">Baleshwar</option>
-                          <option value="Bargarh, Odisha">Bargarh</option>
-                          <option value="Bhadrak, Odisha">Bhadrak</option>
-                          <option value="Boudh, Odisha">Boudh</option>
-                          <option value="Cuttack, Odisha">Cuttack</option>
-                          <option value="Deogarh, Odisha">Deogarh</option>
-                          <option value="Dhenkanal, Odisha">Dhenkanal</option>
-                          <option value="Gajapati, Odisha">Gajapati</option>
-                          <option value="Ganjam, Odisha">Ganjam</option>
-                          <option value="Jagatsinghapur, Odisha">Jagatsinghapur</option>
-                          <option value="Jajapur, Odisha">Jajapur</option>
-                          <option value="Jharsuguda, Odisha">Jharsuguda</option>
-                          <option value="Kalahandi, Odisha">Kalahandi</option>
-                          <option value="Kandhamal, Odisha">Kandhamal</option>
-                          <option value="Kendrapara, Odisha">Kendrapara</option>
-                          <option value="Kendujhar, Odisha">Kendujhar</option>
-                          <option value="Khordha, Odisha">Khordha</option>
-                          <option value="Koraput, Odisha">Koraput</option>
-                          <option value="Malkangiri, Odisha">Malkangiri</option>
-                          <option value="Mayurbhanj, Odisha">Mayurbhanj</option>
-                          <option value="Nabarangpur, Odisha">Nabarangpur</option>
-                          <option value="Nayagarh, Odisha">Nayagarh</option>
-                          <option value="Nuapada, Odisha">Nuapada</option>
-                          <option value="Puri, Odisha">Puri</option>
-                          <option value="Rayagada, Odisha">Rayagada</option>
-                          <option value="Sambalpur, Odisha">Sambalpur</option>
-                          <option value="Sonepur, Odisha">Sonepur</option>
-                          <option value="Sundargarh, Odisha">Sundargarh</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Puducherry') && (
-                        <optgroup label="Puducherry">
-                          <option value="Karaikal, Puducherry">Karaikal</option>
-                          <option value="Mahe, Puducherry">Mahe</option>
-                          <option value="Pondicherry, Puducherry">Pondicherry</option>
-                          <option value="Yanam, Puducherry">Yanam</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Punjab') && (
-                        <optgroup label="Punjab">
-                          <option value="Amritsar, Punjab">Amritsar</option>
-                          <option value="Barnala, Punjab">Barnala</option>
-                          <option value="Bathinda, Punjab">Bathinda</option>
-                          <option value="Faridkot, Punjab">Faridkot</option>
-                          <option value="Fatehgarh Sahib, Punjab">Fatehgarh Sahib</option>
-                          <option value="Fazilka, Punjab">Fazilka</option>
-                          <option value="Firozepur, Punjab">Firozepur</option>
-                          <option value="Gurdaspur, Punjab">Gurdaspur</option>
-                          <option value="Hoshiarpur, Punjab">Hoshiarpur</option>
-                          <option value="Jalandhar, Punjab">Jalandhar</option>
-                          <option value="Kapurthala, Punjab">Kapurthala</option>
-                          <option value="Ludhiana, Punjab">Ludhiana</option>
-                          <option value="Malerkotla, Punjab">Malerkotla</option>
-                          <option value="Mansa, Punjab">Mansa</option>
-                          <option value="Moga, Punjab">Moga</option>
-                          <option value="Pathankot, Punjab">Pathankot</option>
-                          <option value="Patiala, Punjab">Patiala</option>
-                          <option value="Rupnagar, Punjab">Rupnagar</option>
-                          <option value="S.A.S Nagar, Punjab">S.A.S Nagar</option>
-                          <option value="Sangrur, Punjab">Sangrur</option>
-                          <option value="Shahid Bhagat Singh Nagar, Punjab">Shahid Bhagat Singh Nagar</option>
-                          <option value="Sri Muktsar Sahib, Punjab">Sri Muktsar Sahib</option>
-                          <option value="Tarn Taran, Punjab">Tarn Taran</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Rajasthan') && (
-                        <optgroup label="Rajasthan">
-                          <option value="Ajmer, Rajasthan">Ajmer</option>
-                          <option value="Alwar, Rajasthan">Alwar</option>
-                          <option value="Banswara, Rajasthan">Banswara</option>
-                          <option value="Baran, Rajasthan">Baran</option>
-                          <option value="Barmer, Rajasthan">Barmer</option>
-                          <option value="Bharatpur, Rajasthan">Bharatpur</option>
-                          <option value="Bhilwara, Rajasthan">Bhilwara</option>
-                          <option value="Bikaner, Rajasthan">Bikaner</option>
-                          <option value="Bundi, Rajasthan">Bundi</option>
-                          <option value="Chittorgarh, Rajasthan">Chittorgarh</option>
-                          <option value="Churu, Rajasthan">Churu</option>
-                          <option value="Dausa, Rajasthan">Dausa</option>
-                          <option value="Dholpur, Rajasthan">Dholpur</option>
-                          <option value="Dungarpur, Rajasthan">Dungarpur</option>
-                          <option value="Ganganagar, Rajasthan">Ganganagar</option>
-                          <option value="Hanumangarh, Rajasthan">Hanumangarh</option>
-                          <option value="Jaipur, Rajasthan">Jaipur</option>
-                          <option value="Jaisalmer, Rajasthan">Jaisalmer</option>
-                          <option value="Jalore, Rajasthan">Jalore</option>
-                          <option value="Jhalawar, Rajasthan">Jhalawar</option>
-                          <option value="Jhunjhunu, Rajasthan">Jhunjhunu</option>
-                          <option value="Jodhpur, Rajasthan">Jodhpur</option>
-                          <option value="Karauli, Rajasthan">Karauli</option>
-                          <option value="Kota, Rajasthan">Kota</option>
-                          <option value="Nagaur, Rajasthan">Nagaur</option>
-                          <option value="Pali, Rajasthan">Pali</option>
-                          <option value="Pratapgarh, Rajasthan">Pratapgarh</option>
-                          <option value="Rajsamand, Rajasthan">Rajsamand</option>
-                          <option value="Sawai Madhopur, Rajasthan">Sawai Madhopur</option>
-                          <option value="Sikar, Rajasthan">Sikar</option>
-                          <option value="Sirohi, Rajasthan">Sirohi</option>
-                          <option value="Tonk, Rajasthan">Tonk</option>
-                          <option value="Udaipur, Rajasthan">Udaipur</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Sikkim') && (
-                        <optgroup label="Sikkim">
-                          <option value="East District, Sikkim">East District</option>
-                          <option value="North District, Sikkim">North District</option>
-                          <option value="South District, Sikkim">South District</option>
-                          <option value="West District, Sikkim">West District</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Tamil Nadu') && (
-                        <optgroup label="Tamil Nadu">
-                          <option value="Ariyalur, Tamil Nadu">Ariyalur</option>
-                          <option value="Chengalpattu, Tamil Nadu">Chengalpattu</option>
-                          <option value="Chennai, Tamil Nadu">Chennai</option>
-                          <option value="Coimbatore, Tamil Nadu">Coimbatore</option>
-                          <option value="Cuddalore, Tamil Nadu">Cuddalore</option>
-                          <option value="Dharmapuri, Tamil Nadu">Dharmapuri</option>
-                          <option value="Dindigul, Tamil Nadu">Dindigul</option>
-                          <option value="Erode, Tamil Nadu">Erode</option>
-                          <option value="Kallakurichi, Tamil Nadu">Kallakurichi</option>
-                          <option value="Kanchipuram, Tamil Nadu">Kanchipuram</option>
-                          <option value="Kanniyakumari, Tamil Nadu">Kanniyakumari</option>
-                          <option value="Karur, Tamil Nadu">Karur</option>
-                          <option value="Krishnagiri, Tamil Nadu">Krishnagiri</option>
-                          <option value="Madurai, Tamil Nadu">Madurai</option>
-                          <option value="Mayiladuthurai, Tamil Nadu">Mayiladuthurai</option>
-                          <option value="Nagapattinam, Tamil Nadu">Nagapattinam</option>
-                          <option value="Namakkal, Tamil Nadu">Namakkal</option>
-                          <option value="Perambalur, Tamil Nadu">Perambalur</option>
-                          <option value="Pudukkottai, Tamil Nadu">Pudukkottai</option>
-                          <option value="Ramanathapuram, Tamil Nadu">Ramanathapuram</option>
-                          <option value="Ranipet, Tamil Nadu">Ranipet</option>
-                          <option value="Salem, Tamil Nadu">Salem</option>
-                          <option value="Sivaganga, Tamil Nadu">Sivaganga</option>
-                          <option value="Tenkasi, Tamil Nadu">Tenkasi</option>
-                          <option value="Thanjavur, Tamil Nadu">Thanjavur</option>
-                          <option value="The Nilgiris, Tamil Nadu">The Nilgiris</option>
-                          <option value="Theni, Tamil Nadu">Theni</option>
-                          <option value="Thiruvallur, Tamil Nadu">Thiruvallur</option>
-                          <option value="Thiruvarur, Tamil Nadu">Thiruvarur</option>
-                          <option value="Tiruchirappalli, Tamil Nadu">Tiruchirappalli</option>
-                          <option value="Tirunelveli, Tamil Nadu">Tirunelveli</option>
-                          <option value="Tirupathur, Tamil Nadu">Tirupathur</option>
-                          <option value="Tiruppur, Tamil Nadu">Tiruppur</option>
-                          <option value="Tiruvannamalai, Tamil Nadu">Tiruvannamalai</option>
-                          <option value="Tuticorin, Tamil Nadu">Tuticorin</option>
-                          <option value="Vellore, Tamil Nadu">Vellore</option>
-                          <option value="Villupuram, Tamil Nadu">Villupuram</option>
-                          <option value="Virudhunagar, Tamil Nadu">Virudhunagar</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Telangana') && (
-                        <optgroup label="Telangana">
-                          <option value="Adilabad, Telangana">Adilabad</option>
-                          <option value="Bhadradri Kothagudem, Telangana">Bhadradri Kothagudem</option>
-                          <option value="Hyderabad, Telangana">Hyderabad</option>
-                          <option value="Jagitial, Telangana">Jagitial</option>
-                          <option value="Jangoan, Telangana">Jangoan</option>
-                          <option value="Jayashankar Bhupalapally, Telangana">Jayashankar Bhupalapally</option>
-                          <option value="Jogulamba Gadwal, Telangana">Jogulamba Gadwal</option>
-                          <option value="Kamareddy, Telangana">Kamareddy</option>
-                          <option value="Karimnagar, Telangana">Karimnagar</option>
-                          <option value="Khammam, Telangana">Khammam</option>
-                          <option value="Kumuram Bheem Asifabad, Telangana">Kumuram Bheem Asifabad</option>
-                          <option value="Mahabubabad, Telangana">Mahabubabad</option>
-                          <option value="Mahabubnagar, Telangana">Mahabubnagar</option>
-                          <option value="Mancherial, Telangana">Mancherial</option>
-                          <option value="Medak, Telangana">Medak</option>
-                          <option value="Medchal Malkajgiri, Telangana">Medchal Malkajgiri</option>
-                          <option value="Mulugu, Telangana">Mulugu</option>
-                          <option value="Nagarkurnool, Telangana">Nagarkurnool</option>
-                          <option value="Nalgonda, Telangana">Nalgonda</option>
-                          <option value="Narayanpet, Telangana">Narayanpet</option>
-                          <option value="Nirmal, Telangana">Nirmal</option>
-                          <option value="Nizamabad, Telangana">Nizamabad</option>
-                          <option value="Peddapalli, Telangana">Peddapalli</option>
-                          <option value="Rajanna Sircilla, Telangana">Rajanna Sircilla</option>
-                          <option value="Ranga Reddy, Telangana">Ranga Reddy</option>
-                          <option value="Sangareddy, Telangana">Sangareddy</option>
-                          <option value="Siddipet, Telangana">Siddipet</option>
-                          <option value="Suryapet, Telangana">Suryapet</option>
-                          <option value="Vikarabad, Telangana">Vikarabad</option>
-                          <option value="Wanaparthy, Telangana">Wanaparthy</option>
-                          <option value="Warangal Rural, Telangana">Warangal Rural</option>
-                          <option value="Warangal Urban, Telangana">Warangal Urban</option>
-                          <option value="Yadadri Bhuvanagiri, Telangana">Yadadri Bhuvanagiri</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'The Dadra And Nagar Haveli And Daman And Diu') && (
-                        <optgroup label="The Dadra And Nagar Haveli And Daman And Diu">
-                          <option value="Dadra And Nagar Haveli, The Dadra And Nagar Haveli And Daman And Diu">Dadra And Nagar Haveli</option>
-                          <option value="Daman, The Dadra And Nagar Haveli And Daman And Diu">Daman</option>
-                          <option value="Diu, The Dadra And Nagar Haveli And Daman And Diu">Diu</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Tripura') && (
-                        <optgroup label="Tripura">
-                          <option value="Dhalai, Tripura">Dhalai</option>
-                          <option value="Gomati, Tripura">Gomati</option>
-                          <option value="Khowai, Tripura">Khowai</option>
-                          <option value="North Tripura, Tripura">North Tripura</option>
-                          <option value="Sepahijala, Tripura">Sepahijala</option>
-                          <option value="South Tripura, Tripura">South Tripura</option>
-                          <option value="Unakoti, Tripura">Unakoti</option>
-                          <option value="West Tripura, Tripura">West Tripura</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Uttar Pradesh') && (
-                        <optgroup label="Uttar Pradesh">
-                          <option value="Agra, Uttar Pradesh">Agra</option>
-                          <option value="Aligarh, Uttar Pradesh">Aligarh</option>
-                          <option value="Ambedkar Nagar, Uttar Pradesh">Ambedkar Nagar</option>
-                          <option value="Amethi, Uttar Pradesh">Amethi</option>
-                          <option value="Amroha, Uttar Pradesh">Amroha</option>
-                          <option value="Auraiya, Uttar Pradesh">Auraiya</option>
-                          <option value="Ayodhya, Uttar Pradesh">Ayodhya</option>
-                          <option value="Azamgarh, Uttar Pradesh">Azamgarh</option>
-                          <option value="Baghpat, Uttar Pradesh">Baghpat</option>
-                          <option value="Bahraich, Uttar Pradesh">Bahraich</option>
-                          <option value="Ballia, Uttar Pradesh">Ballia</option>
-                          <option value="Balrampur, Uttar Pradesh">Balrampur</option>
-                          <option value="Banda, Uttar Pradesh">Banda</option>
-                          <option value="Barabanki, Uttar Pradesh">Barabanki</option>
-                          <option value="Bareilly, Uttar Pradesh">Bareilly</option>
-                          <option value="Basti, Uttar Pradesh">Basti</option>
-                          <option value="Bhadohi, Uttar Pradesh">Bhadohi</option>
-                          <option value="Bijnor, Uttar Pradesh">Bijnor</option>
-                          <option value="Budaun, Uttar Pradesh">Budaun</option>
-                          <option value="Bulandshahr, Uttar Pradesh">Bulandshahr</option>
-                          <option value="Chandauli, Uttar Pradesh">Chandauli</option>
-                          <option value="Chitrakoot, Uttar Pradesh">Chitrakoot</option>
-                          <option value="Deoria, Uttar Pradesh">Deoria</option>
-                          <option value="Etah, Uttar Pradesh">Etah</option>
-                          <option value="Etawah, Uttar Pradesh">Etawah</option>
-                          <option value="Farrukhabad, Uttar Pradesh">Farrukhabad</option>
-                          <option value="Fatehpur, Uttar Pradesh">Fatehpur</option>
-                          <option value="Firozabad, Uttar Pradesh">Firozabad</option>
-                          <option value="Gautam Buddha Nagar, Uttar Pradesh">Gautam Buddha Nagar</option>
-                          <option value="Ghaziabad, Uttar Pradesh">Ghaziabad</option>
-                          <option value="Ghazipur, Uttar Pradesh">Ghazipur</option>
-                          <option value="Gonda, Uttar Pradesh">Gonda</option>
-                          <option value="Gorakhpur, Uttar Pradesh">Gorakhpur</option>
-                          <option value="Hamirpur, Uttar Pradesh">Hamirpur</option>
-                          <option value="Hapur, Uttar Pradesh">Hapur</option>
-                          <option value="Hardoi, Uttar Pradesh">Hardoi</option>
-                          <option value="Hathras, Uttar Pradesh">Hathras</option>
-                          <option value="Jalaun, Uttar Pradesh">Jalaun</option>
-                          <option value="Jaunpur, Uttar Pradesh">Jaunpur</option>
-                          <option value="Jhansi, Uttar Pradesh">Jhansi</option>
-                          <option value="Kannauj, Uttar Pradesh">Kannauj</option>
-                          <option value="Kanpur Dehat, Uttar Pradesh">Kanpur Dehat</option>
-                          <option value="Kanpur Nagar, Uttar Pradesh">Kanpur Nagar</option>
-                          <option value="Kasganj, Uttar Pradesh">Kasganj</option>
-                          <option value="Kaushambi, Uttar Pradesh">Kaushambi</option>
-                          <option value="Kheri, Uttar Pradesh">Kheri</option>
-                          <option value="Kushi Nagar, Uttar Pradesh">Kushi Nagar</option>
-                          <option value="Lalitpur, Uttar Pradesh">Lalitpur</option>
-                          <option value="Lucknow, Uttar Pradesh">Lucknow</option>
-                          <option value="Maharajganj, Uttar Pradesh">Maharajganj</option>
-                          <option value="Mahoba, Uttar Pradesh">Mahoba</option>
-                          <option value="Mainpuri, Uttar Pradesh">Mainpuri</option>
-                          <option value="Mathura, Uttar Pradesh">Mathura</option>
-                          <option value="Mau, Uttar Pradesh">Mau</option>
-                          <option value="Meerut, Uttar Pradesh">Meerut</option>
-                          <option value="Mirzapur, Uttar Pradesh">Mirzapur</option>
-                          <option value="Moradabad, Uttar Pradesh">Moradabad</option>
-                          <option value="Muzaffarnagar, Uttar Pradesh">Muzaffarnagar</option>
-                          <option value="Pilibhit, Uttar Pradesh">Pilibhit</option>
-                          <option value="Pratapgarh, Uttar Pradesh">Pratapgarh</option>
-                          <option value="Prayagraj, Uttar Pradesh">Prayagraj</option>
-                          <option value="Rae Bareli, Uttar Pradesh">Rae Bareli</option>
-                          <option value="Rampur, Uttar Pradesh">Rampur</option>
-                          <option value="Saharanpur, Uttar Pradesh">Saharanpur</option>
-                          <option value="Sambhal, Uttar Pradesh">Sambhal</option>
-                          <option value="Sant Kabeer Nagar, Uttar Pradesh">Sant Kabeer Nagar</option>
-                          <option value="Shahjahanpur, Uttar Pradesh">Shahjahanpur</option>
-                          <option value="Shamli, Uttar Pradesh">Shamli</option>
-                          <option value="Shravasti, Uttar Pradesh">Shravasti</option>
-                          <option value="Siddharth Nagar, Uttar Pradesh">Siddharth Nagar</option>
-                          <option value="Sitapur, Uttar Pradesh">Sitapur</option>
-                          <option value="Sonbhadra, Uttar Pradesh">Sonbhadra</option>
-                          <option value="Sultanpur, Uttar Pradesh">Sultanpur</option>
-                          <option value="Unnao, Uttar Pradesh">Unnao</option>
-                          <option value="Varanasi, Uttar Pradesh">Varanasi</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Uttarakhand') && (
-                        <optgroup label="Uttarakhand">
-                          <option value="Almora, Uttarakhand">Almora</option>
-                          <option value="Bageshwar, Uttarakhand">Bageshwar</option>
-                          <option value="Chamoli, Uttarakhand">Chamoli</option>
-                          <option value="Champawat, Uttarakhand">Champawat</option>
-                          <option value="Dehradun, Uttarakhand">Dehradun</option>
-                          <option value="Haridwar, Uttarakhand">Haridwar</option>
-                          <option value="Nainital, Uttarakhand">Nainital</option>
-                          <option value="Pauri Garhwal, Uttarakhand">Pauri Garhwal</option>
-                          <option value="Pithoragarh, Uttarakhand">Pithoragarh</option>
-                          <option value="Rudra Prayag, Uttarakhand">Rudra Prayag</option>
-                          <option value="Tehri Garhwal, Uttarakhand">Tehri Garhwal</option>
-                          <option value="Udam Singh Nagar, Uttarakhand">Udam Singh Nagar</option>
-                          <option value="Uttar Kashi, Uttarakhand">Uttar Kashi</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'West Bengal') && (
-                        <optgroup label="West Bengal">
-                          <option value="24 Paraganas North, West Bengal">24 Paraganas North</option>
-                          <option value="24 Paraganas South, West Bengal">24 Paraganas South</option>
-                          <option value="Alipurduar, West Bengal">Alipurduar</option>
-                          <option value="Bankura, West Bengal">Bankura</option>
-                          <option value="Birbhum, West Bengal">Birbhum</option>
-                          <option value="Coochbehar, West Bengal">Coochbehar</option>
-                          <option value="Darjeeling, West Bengal">Darjeeling</option>
-                          <option value="Dinajpur Dakshin, West Bengal">Dinajpur Dakshin</option>
-                          <option value="Dinajpur Uttar, West Bengal">Dinajpur Uttar</option>
-                          <option value="Hooghly, West Bengal">Hooghly</option>
-                          <option value="Howrah, West Bengal">Howrah</option>
-                          <option value="Jalpaiguri, West Bengal">Jalpaiguri</option>
-                          <option value="Jhargram, West Bengal">Jhargram</option>
-                          <option value="Kalimpong, West Bengal">Kalimpong</option>
-                          <option value="Kolkata, West Bengal">Kolkata</option>
-                          <option value="Maldah, West Bengal">Maldah</option>
-                          <option value="Medinipur East, West Bengal">Medinipur East</option>
-                          <option value="Medinipur West, West Bengal">Medinipur West</option>
-                          <option value="Murshidabad, West Bengal">Murshidabad</option>
-                          <option value="Nadia, West Bengal">Nadia</option>
-                          <option value="Paschim Bardhaman, West Bengal">Paschim Bardhaman</option>
-                          <option value="Purba Bardhaman, West Bengal">Purba Bardhaman</option>
-                          <option value="Purulia, West Bengal">Purulia</option>
-                        </optgroup>
-                      )}
-                      {(locationStateFilter === 'all' || locationStateFilter === 'Remote') && (
-                        <optgroup label="Remote/Hybrid">
-                          <option value="Remote - India">Remote - India</option>
-                          <option value="Remote - Anywhere">Remote - Anywhere</option>
-                          <option value="Hybrid - Flexible">Hybrid - Flexible</option>
-                        </optgroup>
-                      )}
-                      </>)}
-                    </select>
+                      onChange={(v) => setNewLocation(prev => ({ ...prev, city: v }))}
+                      ariaLabel="City"
+                      className={JD_FIELD_SELECT_CLASS}
+                      options={[
+                        { value: '', label: 'Select a city' },
+                        ...(locationCountry === 'US'
+                          ? (() => {
+                              const selectedUsState = locationStateFilter === 'all'
+                                ? null
+                                : usStates.find((st) => st.name === locationStateFilter);
+                              const statesToShow = selectedUsState ? [selectedUsState] : usStates;
+                              return statesToShow.flatMap((st) =>
+                                (usCitiesByState[st.isoCode] || []).map((city) => ({ value: `${city}, ${st.name}`, label: city, group: st.name })),
+                              );
+                            })()
+                          : []),
+                        ...(locationCountry === 'IN'
+                          ? IN_LOCATION_CITY_GROUPS
+                              .filter((g) => locationStateFilter === 'all' || locationStateFilter === g.state)
+                              .flatMap((g) => g.options.map((o) => ({ ...o, group: g.state })))
+                              // Delhi NCR repeats cities its states also list; keep one entry per value.
+                              .filter((o, i, arr) => arr.findIndex((x) => x.value === o.value) === i)
+                          : []),
+                      ]}
+                    />
                   </div>
 
                   {/* Radius Dropdown */}
                   <div className="w-full sm:w-28">
                     <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Radius</label>
-                    <select
+                    <FilterSelect
                       value={newLocation.radius}
-                      onChange={(e) => setNewLocation(prev => ({ ...prev, radius: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
-                    >
-                      <option value="10">10 km</option>
-                      <option value="25">25 km</option>
-                      <option value="50">50 km</option>
-                      <option value="75">75 km</option>
-                      <option value="100">100 km</option>
-                      <option value="150">150 km</option>
-                      <option value="200">200 km</option>
-                    </select>
+                      onChange={(v) => setNewLocation(prev => ({ ...prev, radius: v }))}
+                      ariaLabel="Radius"
+                      className={JD_FIELD_SELECT_CLASS}
+                      options={['10', '25', '50', '75', '100', '150', '200'].map((r) => ({ value: r, label: `${r} km` }))}
+                    />
                   </div>
 
                   {/* Add Button */}
@@ -11010,42 +11086,44 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Employment Type */}
                 <div className="min-w-0">
                   <label htmlFor="jd-employment-type" className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Employment Type</label>
-                  <select
+                  <FilterSelect
                     id="jd-employment-type"
                     value={extractedData.employmentType}
-                    onChange={(e) => { setExtractedData(prev => ({
+                    onChange={(v) => { setExtractedData(prev => ({
                       ...prev,
-                      employmentType: e.target.value as ExtractedData['employmentType']
+                      employmentType: v as ExtractedData['employmentType']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`${JD_FIELD_SELECT_CLASS} ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
-                  >
-                    <option value="full_time">Full Time</option>
-                    <option value="part_time">Part Time</option>
-                    <option value="contract">Contract</option>
-                    <option value="internship">Internship</option>
-                    <option value="temporary">Temporary / Seasonal</option>
-                  </select>
+                    options={[
+                      { value: 'full_time', label: 'Full Time' },
+                      { value: 'part_time', label: 'Part Time' },
+                      { value: 'contract', label: 'Contract' },
+                      { value: 'internship', label: 'Internship' },
+                      { value: 'temporary', label: 'Temporary / Seasonal' },
+                    ]}
+                  />
                 </div>
 
                 {/* Work Model */}
                 <div className="min-w-0">
                   <label htmlFor="jd-work-mode" className="block text-sm text-gray-700 dark:text-slate-300 mb-1">Work Mode</label>
-                  <select
+                  <FilterSelect
                     id="jd-work-mode"
                     value={extractedData.workModel}
-                    onChange={(e) => { setExtractedData(prev => ({
+                    onChange={(v) => { setExtractedData(prev => ({
                       ...prev,
-                      workModel: e.target.value as ExtractedData['workModel']
+                      workModel: v as ExtractedData['workModel']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`${JD_FIELD_SELECT_CLASS} ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
-                  >
-                    <option value="onsite">Onsite</option>
-                    <option value="remote">Remote</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="field_based">Field-based / Travel</option>
-                  </select>
+                    options={[
+                      { value: 'onsite', label: 'Onsite' },
+                      { value: 'remote', label: 'Remote' },
+                      { value: 'hybrid', label: 'Hybrid' },
+                      { value: 'field_based', label: 'Field-based / Travel' },
+                    ]}
+                  />
                 </div>
               </div>
               </div>
@@ -11304,7 +11382,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
 
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center mt-6 sm:mt-8 gap-3 sm:gap-0">
-              <div className="flex gap-2 sm:gap-3">
+              <div className="flex gap-2 sm:gap-3 [&>button]:w-full sm:[&>button]:w-auto">
                 <Button
                   variant="secondary"
                   onClick={async () => {
@@ -11392,7 +11470,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         navigator.clipboard.writeText(text);
                         toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
                       }}
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm text-black"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm text-black"
                       title="Copy to clipboard"
                     >
                       <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -11403,7 +11481,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                          format is chosen there. */
                       onClick={() => setShowDownloadFormatDialog(true)}
                       aria-haspopup="dialog"
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-xs sm:text-sm text-black"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm text-black"
                     >
                       <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Download
@@ -11411,7 +11489,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 }
               />
-              <div className="min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 sm:p-6 lg:p-8">
+              {/* Document frame from sm only — on a phone a second bordered,
+                  padded box inside the card squeezed the JD text column. */}
+              <div className="min-w-0 sm:rounded-lg sm:border sm:border-gray-100 sm:dark:border-slate-700/60 sm:p-6 lg:p-8">
                 <div className="prose prose-sm max-w-none">
                   {/* Job Title & Quick Info */}
                   <div className="mb-4 sm:mb-6 pb-4 sm:pb-6 border-b border-gray-200 dark:border-slate-700">
@@ -11606,7 +11686,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {salaryText ? (
                       <p className="flex flex-wrap items-center gap-1.5">
                         <span className={fieldValue}>{salaryText}</span>
-                        <span className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">/ {extractedData.compensationType}</span>
+                        <span className="text-gray-600 dark:text-slate-400 text-sm">/ {extractedData.compensationType}</span>
                       </p>
                     ) : (
                       <p className={emptyValue}>Not specified</p>
@@ -11683,7 +11763,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </span>
                     </h4>
                     {extractedData.assessmentGuidance
-                      ? <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.assessmentGuidance}</p>
+                      ? <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.assessmentGuidance}</p>
                       : <p className={emptyValue}>No assessment guidance provided</p>}
                   </div>
                   <div className={tile}>
@@ -11697,7 +11777,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {extractedData.internalRecruiterComments.length > 0 ? (
                       <div className="space-y-2">
                         {extractedData.internalRecruiterComments.map((comment, index) => (
-                          <div key={index} className="bg-warning-subtle p-2.5 sm:p-3 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 border border-warning-line [overflow-wrap:anywhere]">
+                          <div key={index} className="bg-warning-subtle p-2.5 sm:p-3 rounded-lg text-sm text-gray-700 dark:text-slate-300 border border-warning-line [overflow-wrap:anywhere]">
                             {comment}
                           </div>
                         ))}
@@ -11715,7 +11795,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </span>
                     </h4>
                     {extractedData.additionalDetails
-                      ? <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
+                      ? <p className="text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
                       : <p className={emptyValue}>No additional details provided</p>}
                   </div>
                 </div>
@@ -11750,7 +11830,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </div>
                       <div className="min-w-0">
                         <h2 id="jd-download-format-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Download Job Description</h2>
-                        <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Choose a file format</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-400">Choose a file format</p>
                       </div>
                     </div>
                     <Button
@@ -11793,7 +11873,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-between">
-              <div className="flex gap-2 sm:gap-3 order-2 sm:order-1">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3 order-2 sm:order-1">
                 <Button
                   variant="secondary"
                   onClick={() => setStep('extract')}
@@ -11821,7 +11901,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                 </Button>
               </div>
-              <div className="flex gap-2 sm:gap-3 order-1 sm:order-2">
+              <div className="flex gap-2 sm:gap-3 order-1 sm:order-2 [&>button]:w-full sm:[&>button]:w-auto">
                 <Button
                   variant="primary"
                   onClick={handleConfirmPublish}
@@ -11862,7 +11942,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight mb-4 sm:mb-5">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
             <PublishedSummaryCard
-              className="mx-auto mb-5 sm:mb-6 w-fit max-w-full sm:max-w-3xl"
+              /* Capped at 48rem AND the column: `sm:max-w-3xl` alone let a long
+                 job name push it past a 768px tablet's 704px content box. */
+              className="mx-auto mb-5 sm:mb-6 w-fit max-w-[min(100%,48rem)]"
               icon={<Briefcase className="w-5 h-5 text-brand-blue" />}
               jobId={publishedJobCode}
               jobName={jobTitle}
@@ -11910,7 +11992,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         discardTarget={leaveCheckpointMeta?.label ?? null}
         nothingSavedYet={!editingId || isUnsavedNewCopy}
         deleteBlockedReason={leaveDeleteBlockedReason}
-        hideDelete={leaveCheckpointMeta?.isFreshFork === true || isUnsavedNewCopy}
+        hideDelete={leaveCheckpointMeta?.isFreshFork === true || isNewCreationLeave}
         isPublishedJD={leaveIsPublishedJD}
         currentStepLabel={step === 'create' ? 'Step 1 (Create)' : step === 'extract' ? 'Step 2 (Extract)' : 'Step 3 (Review)'}
         busy={leaveBusy}
@@ -11937,7 +12019,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ? 'You already have this industry'
                 : 'This industry may not fit the JD'}
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm space-y-2">
+            <DialogDescription className="text-sm space-y-2">
               <span className="block">
                 You proposed <strong>{extractedData.industrySuggestedName}</strong>.
               </span>
@@ -12016,7 +12098,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
               This JD also welcomes freshers
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm space-y-2">
+            <DialogDescription className="text-sm space-y-2">
               <span className="block">
                 The JD text asks for experience and, in the same breath, invites freshers with
                 internship experience to apply.
@@ -12101,7 +12183,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
           <DialogHeader>
             <DialogTitle className="text-base sm:text-lg">Cancel JD Creation?</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogDescription className="text-sm">
               Are you sure you want to cancel? {editingId && (!isPreExistingDraft || hasUnsavedChanges) ? 'This will delete the current draft and all your progress will be lost.' : 'You will be taken back to the job openings list.'}
             </DialogDescription>
           </DialogHeader>

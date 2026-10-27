@@ -11,7 +11,7 @@ import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import InviteToAssessmentFlow from './InviteToAssessmentFlow';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -969,6 +969,23 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     };
   }, [showInviteMenu]);
 
+  /* Near the bottom of a phone screen a menu hung below the Invite button ran
+     off the viewport. Measured on open: flip above the button when there isn't
+     room below and there is more above; otherwise scroll it into view. */
+  const inviteDropdownRef = useRef<HTMLDivElement>(null);
+  const [inviteMenuUp, setInviteMenuUp] = useState(false);
+  useLayoutEffect(() => {
+    if (!showInviteMenu) { setInviteMenuUp(false); return; }
+    const menu = inviteDropdownRef.current;
+    const anchor = inviteMenuRef.current;
+    if (!menu || !anchor) return;
+    const a = anchor.getBoundingClientRect();
+    const needed = menu.offsetHeight + 8;
+    const below = window.innerHeight - a.bottom;
+    if (below < needed && a.top > below) setInviteMenuUp(true);
+    else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [showInviteMenu]);
+
   // The resume this score belongs to — the API returns the score id as `id`
   // and the resume id separately, so prefer the explicit resume id.
   const viewResumeId = fullResumeData.resumeId || resume.resumeId || resume.id;
@@ -1524,14 +1541,14 @@ Best regards`);
                   flatHeaderActions ? (
                     /* Flat: View Resume as a small eye joined to the version
                        badge — the resume it opens is that version. */
-                    <span className="inline-flex items-stretch rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
+                    <span className="inline-flex items-stretch rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                       <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1">
                         Version {resume.resumeVersion}
                       </span>
                       {renderViewResumeEye(true)}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                       Version {resume.resumeVersion}
                     </span>
                   )
@@ -1543,7 +1560,7 @@ Best regards`);
                     <button
                       type="button"
                       onClick={() => setShowVersionMenu((v) => !v)}
-                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
                       aria-label={`Select resume version, currently Version ${resume.resumeVersion}`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
@@ -1727,12 +1744,13 @@ Best regards`);
 
                 {showInviteMenu && canInvite && (
                   <div
+                    ref={inviteDropdownRef}
                     role="menu"
                     // Anchor left on mobile (the action row wraps and the button
                     // sits near the left edge, so right-0 pushed a 256px menu off
                     // the left of the viewport); keep the original right-0 from sm
                     // up, where the actions are right-aligned on one line.
-                    className="absolute left-0 right-auto sm:left-auto sm:right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                    className={`absolute left-0 right-auto sm:left-auto sm:right-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30`}
                   >
                     {/* Each entry stays visible for anyone permitted to use
                         it and goes disabled when this JD has nothing to
@@ -1833,12 +1851,12 @@ Best regards`);
               </div>
               {fullResumeData.ratingSummaryText ? (
                 <Tooltip content={fullResumeData.ratingSummaryText} position="bottom">
-                  <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                  <span className={`px-2 sm:px-3 py-1 rounded-md text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                     {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
                   </span>
                 </Tooltip>
               ) : (
-                <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                <span className={`px-2 sm:px-3 py-1 rounded-md text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                   {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
                 </span>
               )}
@@ -1849,7 +1867,7 @@ Best regards`);
                   version badges are whitespace-nowrap and can't shrink, so a
                   nowrap+truncate parent overflowed the card on mobile instead of
                   clipping — let the group wrap to a second line below sm. */}
-              <span className="text-xs sm:text-sm font-normal text-gray-700 min-w-0 break-words">
+              <span className="text-sm font-normal text-gray-700 min-w-0 break-words">
                 <span className="font-bold text-gray-800">Job Title :</span>{' '}
                 {/* Read as one: "EDG 267 High Court Judge v3.0" - the job's
                     ID, its title, its version, the ID and version in the JD
@@ -1875,7 +1893,7 @@ Best regards`);
                 )}
               </span>
             </div>
-            <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
+            <div className="text-sm text-gray-600 whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
                 ? formatIST(fullResumeData.scoredDate)
                 : fullResumeData.scoredDate}
@@ -1925,7 +1943,7 @@ Best regards`);
                 onClick={() => setActiveTab(tab.id as DetailTab)}
                 // Both states carry the same borders (transparent when idle)
                 // so switching tabs never shifts the row by a pixel.
-                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
+                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
                   activeTab === tab.id
                     ? 'font-semibold text-brand-blue bg-white border-x-gray-200 border-t-brand-blue'
                     : 'font-medium text-gray-600 border-transparent hover:text-gray-900 hover:bg-white/70'
@@ -3149,9 +3167,9 @@ Best regards`);
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
                 <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <div className="flex items-start justify-between gap-3 mb-6">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 flex-shrink-0 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                         <Mail className="w-5 h-5 text-white" />
                       </div>
                       <div>

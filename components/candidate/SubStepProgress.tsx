@@ -80,7 +80,7 @@ export default function SubStepProgress({
               </StepCircle>
               {/* Wraps on narrow phones (two long labels don't fit one
                   line at 320px); one line from sm. */}
-              <span className={`text-xs sm:text-sm font-semibold leading-tight whitespace-normal sm:whitespace-nowrap ${
+              <span className={`text-sm font-semibold leading-tight whitespace-normal sm:whitespace-nowrap ${
                 active ? 'text-gray-900' : done ? 'text-gray-500' : 'text-gray-400'
               }`}>
                 {label}

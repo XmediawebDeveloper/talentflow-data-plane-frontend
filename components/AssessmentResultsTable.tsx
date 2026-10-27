@@ -4,9 +4,11 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import Pagination from '@/components/Pagination';
+import FilterSelect from '@/components/ui/filter-select';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
@@ -342,7 +344,19 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const [exportStep, setExportStep] = useState<'format' | 'scope'>('format');
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
 
+  /* Export is a server export — the endpoint enforces `assessments:export`
+     and writes the audit row. Without the permission it stays listed,
+     greyed, with this reason. */
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
+  const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
+  const exportErrorMessage = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : '';
+    return /permission|forbidden|403/i.test(msg) ? EXPORT_DENIED_REASON : 'Failed to export results. Please try again.';
+  };
+
   const handleExportExcel = () => {
+    if (!canExportAssessments) return;
     setShowExportModal(true);
   };
 
@@ -392,7 +406,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setExportStep('format');
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error(exportErrorMessage(error));
     }
   };
 
@@ -431,7 +445,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       setExportStep('format');
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error('Failed to export results. Please try again.');
+      toast.error(exportErrorMessage(error));
     }
   };
 
@@ -591,7 +605,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
           <div>
             <h2 className="text-sm sm:text-base text-gray-900">Assessment Results</h2>
-            <p className="text-xs sm:text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 mt-1">
               {filteredResults.length} {filteredResults.length === 1 ? 'result' : 'results'}
               {searchTerm && ` matching "${searchTerm}"`}
               {activeFiltersCount > 0 && ` with ${activeFiltersCount} filter${activeFiltersCount !== 1 ? 's' : ''} applied`}
@@ -605,7 +619,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <div className="relative">
               <button
                 onClick={() => setShowColumnSelector(!showColumnSelector)}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Columns ({enabledColumns.length})
@@ -649,6 +663,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 variant="primary"
                 size="sm"
                 onClick={handleExportExcel}
+                aria-disabled={!canExportAssessments || undefined}
+                title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                className={canExportAssessments ? undefined : 'opacity-60 cursor-not-allowed'}
                 icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               >
                 Export
@@ -677,6 +694,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   variant="primary"
                   size="sm"
                   onClick={handleExportExcel}
+                  aria-disabled={!canExportAssessments || undefined}
+                  title={canExportAssessments ? undefined : EXPORT_DENIED_REASON}
+                  className={canExportAssessments ? undefined : 'opacity-60 cursor-not-allowed'}
                   icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
                   Export
@@ -695,57 +715,63 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
             />
           </div>
 
           {/* Status Filter */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
-            <select
+            <FilterSelect
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Complete' | 'In Progress' | 'Terminated' | 'Pending')}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-            >
-              <option value="all">All</option>
-              <option value="Complete">Complete</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Terminated">Terminated</option>
-              <option value="Pending">Pending</option>
-            </select>
+              onChange={(v) => setStatusFilter(v as 'all' | 'Complete' | 'In Progress' | 'Terminated' | 'Pending')}
+              ariaLabel="Status"
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'Complete', label: 'Complete' },
+                { value: 'In Progress', label: 'In Progress' },
+                { value: 'Terminated', label: 'Terminated' },
+                { value: 'Pending', label: 'Pending' },
+              ]}
+              className="w-auto sm:w-auto sm:py-2 pl-2 sm:pl-3 pr-2 sm:pr-3 rounded-lg sm:rounded-lg text-sm text-black"
+            />
           </div>
 
           {/* Result (Pass/Fail) Filter */}
           <div className="flex items-center gap-2">
             <label className="text-sm text-gray-600 whitespace-nowrap">Result:</label>
-            <select
+            <FilterSelect
               value={filterPassFail}
-              onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
-              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-            >
-              <option value="all">All</option>
-              <option value="Pass">Pass</option>
-              <option value="Fail">Fail</option>
-            </select>
+              onChange={(v) => setFilterPassFail(v as 'all' | 'Pass' | 'Fail')}
+              ariaLabel="Result"
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'Pass', label: 'Pass' },
+                { value: 'Fail', label: 'Fail' },
+              ]}
+              className="w-auto sm:w-auto sm:py-2 pl-2 sm:pl-3 pr-2 sm:pr-3 rounded-lg sm:rounded-lg text-sm text-black"
+            />
           </div>
 
           {/* Tech Score Filter (only if any result has Technical round) */}
           {hasTechnicalRound && (
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-600 whitespace-nowrap">Tech:</label>
-              <select
+              <FilterSelect
                 value={roundFilters.technical || 'all'}
-                onChange={(e) => {
-                  const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                onChange={(v) => {
+                  const value = v as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                 }}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-              >
-                <option value="all">All</option>
-                <option value="50-70">50-70%</option>
-                <option value="70-90">70-90%</option>
-                <option value="90+">90%+</option>
-              </select>
+                ariaLabel="Tech"
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: '50-70', label: '50-70%' },
+                  { value: '70-90', label: '70-90%' },
+                  { value: '90+', label: '90%+' },
+                ]}
+                className="w-auto sm:w-auto sm:py-2 pl-2 sm:pl-3 pr-2 sm:pr-3 rounded-lg sm:rounded-lg text-sm text-black"
+              />
             </div>
           )}
 
@@ -753,19 +779,21 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           {hasCodingRound && (
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-600 whitespace-nowrap">Coding:</label>
-              <select
+              <FilterSelect
                 value={roundFilters.coding || 'all'}
-                onChange={(e) => {
-                  const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                onChange={(v) => {
+                  const value = v as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                 }}
-                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-              >
-                <option value="all">All</option>
-                <option value="50-70">50-70%</option>
-                <option value="70-90">70-90%</option>
-                <option value="90+">90%+</option>
-              </select>
+                ariaLabel="Coding"
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: '50-70', label: '50-70%' },
+                  { value: '70-90', label: '70-90%' },
+                  { value: '90+', label: '90%+' },
+                ]}
+                className="w-auto sm:w-auto sm:py-2 pl-2 sm:pl-3 pr-2 sm:pr-3 rounded-lg sm:rounded-lg text-sm text-black"
+              />
             </div>
           )}
 
@@ -1478,7 +1506,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 <div className="flex items-center justify-between p-3 sm:p-5 border-b border-gray-200">
                   <div>
                     <h3 className="text-base sm:text-lg font-medium text-gray-900">Export Assessment Results</h3>
-                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                    <p className="text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
                   </div>
                   <button
                     onClick={() => {

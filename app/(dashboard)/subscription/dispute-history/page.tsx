@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, X, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, X } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
@@ -15,6 +15,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { DateField } from '@/components/ui/date-field';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import FilterSelect from '@/components/ui/filter-select';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -328,7 +329,7 @@ export default function DisputeHistoryPage() {
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">Dispute History</h1>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Dispute History</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
               Track chargebacks and payment disputes raised against your account, monitor deadlines, and download dispute records.
             </p>
@@ -447,18 +448,13 @@ export default function DisputeHistoryPage() {
             </div>
 
             {/* Status Filter */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full appearance-none rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 pr-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-              >
-                {STATUS_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
-            </div>
+            <FilterSelect
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v)}
+              ariaLabel="Filter by status"
+              options={STATUS_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
+              className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
+            />
 
             {/* Start Date */}
             <DateField

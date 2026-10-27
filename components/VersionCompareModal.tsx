@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X, History, FileText, Check } from 'lucide-react';
 import { buildUnifiedDiff, buildDiffSidePairs, type DiffLine } from '@/lib/utils/textDiff';
 import ReactMarkdown from 'react-markdown';
@@ -117,7 +117,22 @@ const buildMatchOnlyLines = (text: string, otherText: string): DiffLine[] => {
 export default function VersionCompareModal({ older, newer, onClose, title, subtitle, contentFormat = 'plain', highlightMode = 'changes', zIndexClassName = 'z-50' }: VersionCompareModalProps) {
   const olderLabel = older.label || `Version ${older.version || '?'}`;
   const newerLabel = newer.label || `Version ${newer.version || '?'}`;
-  const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
+  /* Phones open on Unified: two side-by-side columns are ~140px each at 320px,
+     too narrow to read a line. Side by Side stays one tap away (and stacks
+     the two versions on a phone — see the panes below). */
+  const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 'unified' : 'side-by-side',
+  );
+  /* And whenever the window narrows to phone width while it is open (a
+     rotated phone, a resized window) — back to Unified. Widening leaves the
+     reader's choice alone. */
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639.98px)');
+    if (mq.matches) setViewMode('unified');
+    const onChange = (e: MediaQueryListEvent) => { if (e.matches) setViewMode('unified'); };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
   const shouldRenderMarkdown = contentFormat === 'markdown';
 
   /* Side-by-side reads as one document split in two, so scrolling one pane
@@ -203,7 +218,9 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
     return (
       <div
         key={idx}
-        className={`markdown-content prose prose-sm max-w-none text-gray-700 leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${diffHighlightClass(line, side)}`}
+        /* Phones: markdown headings one step down — a JD's "# Title" at full
+           h1 size broke into a word per line in a phone-width column. */
+        className={`markdown-content prose prose-sm max-w-none text-gray-700 leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 max-sm:[overflow-wrap:anywhere] max-sm:[&_h1]:text-lg max-sm:[&_h2]:text-base max-sm:[&_h3]:text-sm max-sm:[&_h4]:text-sm ${diffHighlightClass(line, side)}`}
       >
         <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
           {trimmed}
@@ -275,26 +292,29 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
   };
 
   return (
-    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center ${zIndexClassName} p-4`}>
-      <div className={`bg-white rounded-2xl shadow-2xl w-full ${viewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center ${zIndexClassName} p-3 sm:p-4`}>
+      <div className={`bg-white rounded-2xl shadow-2xl w-full ${viewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] max-sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden transition-all duration-300`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+        {/* Stacks below sm: title + view toggle + diff counts in one row
+            pushed the close button off a phone screen. On phones the close
+            button is pinned to the top-right corner (`relative` here). */}
+        <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0 max-sm:pr-10">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue hidden sm:flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <History className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 tracking-tight">{title || 'Version Comparison'}</h2>
-              <p className="text-sm text-gray-500">
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">{title || 'Version Comparison'}</h2>
+              <p className="text-xs sm:text-sm text-gray-500">
                 {subtitle || `${olderLabel} vs ${newerLabel}`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 max-sm:gap-2">
             <div className="flex bg-slate-100 rounded-lg p-0.5">
               <button
                 onClick={() => setViewMode('side-by-side')}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                className={`px-3 max-sm:px-2.5 py-1.5 text-xs rounded-md transition-colors font-medium whitespace-nowrap ${
                   viewMode === 'side-by-side'
                     ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
                     : 'text-gray-500 hover:text-brand-blue'
@@ -304,7 +324,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               </button>
               <button
                 onClick={() => setViewMode('unified')}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                className={`px-3 max-sm:px-2.5 py-1.5 text-xs rounded-md transition-colors font-medium whitespace-nowrap ${
                   viewMode === 'unified'
                     ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
                     : 'text-gray-500 hover:text-brand-blue'
@@ -340,7 +360,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors max-sm:absolute max-sm:top-2 max-sm:right-2"
               aria-label="Close"
             >
               <X className="w-5 h-5 text-gray-500" />
@@ -349,12 +369,18 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden bg-gray-100 flex flex-col">
+        {/* Phones: ONE scroll for the whole body. With the cards, the banner and
+            the pane headers each in fixed slices of a phone-height popup, the
+            document was left a strip a few lines tall. Below sm the body
+            scrolls as a page instead — cards, banner, then the full document —
+            and every inner scroller is released (`max-sm:overflow-visible`,
+            `max-sm:h-auto`). From sm the panes scroll on their own as before. */}
+        <div className="flex-1 overflow-hidden max-sm:overflow-y-auto bg-gray-100 flex flex-col min-h-0">
           {/* The two versions being compared, described in full — same cards the
               host shows when a single version is opened on its own. Older left,
               newer right, matching the diff panes below. */}
           {(older.card || newer.card) && (
-            <div className="flex-shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-2 p-3 border-b border-gray-200 bg-gray-50 dark:bg-slate-950 dark:border-slate-700 max-h-[35%] overflow-y-auto">
+            <div className="flex-shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-2 p-3 max-sm:p-2 border-b border-gray-200 bg-gray-50 dark:bg-slate-950 dark:border-slate-700 max-h-[35%] max-sm:max-h-none overflow-y-auto max-sm:overflow-visible">
               {older.card}
               {newer.card}
             </div>
@@ -362,32 +388,34 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
           {/* Sits with the description cards, above the document and outside
               its scroller, so it stays in view while the document is read. */}
           {isUnchanged && (
-            <div className="flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2.5 border-b border-green-200 bg-green-50">
+            <div className="flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2.5 max-sm:px-3 max-sm:py-2 max-sm:text-center border-b border-green-200 bg-green-50">
               <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
               <p className="text-sm font-medium text-green-800">No changes detected</p>
               <p className="text-xs text-green-700">Content is identical between these versions.</p>
             </div>
           )}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden max-sm:flex-none max-sm:overflow-visible">
           {!hasContent ? (
             <div className="text-center text-gray-500 py-12">
               <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>Extracted text not available for comparison.</p>
             </div>
           ) : viewMode === 'side-by-side' ? (
-            <div className="flex h-full gap-0">
+            /* Phones: the two versions stack (older above, newer below), each
+               at full width, instead of two unreadably narrow columns. */
+            <div className="flex max-sm:flex-col h-full max-sm:h-auto gap-0">
               {/* Older */}
-              <div className="flex-1 flex flex-col border-r border-gray-300 min-w-0">
-                <div className="px-4 py-2.5 bg-red-50 border-b border-gray-200 flex-shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-red-400 rounded-full"></span>
-                    <span className="text-sm font-semibold text-red-800">{olderLabel}</span>
+              <div className="flex-1 max-sm:flex-none flex flex-col border-r max-sm:border-r-0 max-sm:border-b border-gray-300 min-w-0 min-h-0">
+                <div className="px-4 max-sm:px-3 py-2.5 max-sm:py-2 bg-red-50 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="w-2 h-2 bg-red-400 rounded-full flex-shrink-0"></span>
+                    <span className="text-sm max-sm:text-xs font-semibold text-red-800">{olderLabel}</span>
                     <span className="text-xs text-red-600 ml-1">(older)</span>
                   </div>
                   <p className="text-xs text-red-600 mt-0.5 truncate">{older.name}</p>
                 </div>
-                <div ref={leftPaneRef} onScroll={handlePaneScroll('left')} className="flex-1 overflow-y-auto p-4">
-                  <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div ref={leftPaneRef} onScroll={handlePaneScroll('left')} className="flex-1 overflow-y-auto max-sm:overflow-visible p-4 max-sm:p-2">
+                  <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
                     {isMatchesMode
                       ? olderMatchLines.map((line, idx) => renderDiffLine(line, idx, 'left'))
                       : sidePairs.map((pair, idx) => renderDiffLine(pair.left, idx, 'left'))}
@@ -395,17 +423,17 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                 </div>
               </div>
               {/* Newer */}
-              <div className="flex-1 flex flex-col min-w-0">
-                <div className="px-4 py-2.5 bg-green-50 border-b border-gray-200 flex-shrink-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                    <span className="text-sm font-semibold text-green-800">{newerLabel}</span>
+              <div className="flex-1 max-sm:flex-none flex flex-col min-w-0 min-h-0">
+                <div className="px-4 max-sm:px-3 py-2.5 max-sm:py-2 bg-green-50 border-b border-gray-200 flex-shrink-0">
+                  <div className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></span>
+                    <span className="text-sm max-sm:text-xs font-semibold text-green-800">{newerLabel}</span>
                     <span className="text-xs text-green-600 ml-1">(newer)</span>
                   </div>
                   <p className="text-xs text-green-600 mt-0.5 truncate">{newer.name}</p>
                 </div>
-                <div ref={rightPaneRef} onScroll={handlePaneScroll('right')} className="flex-1 overflow-y-auto p-4">
-                  <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div ref={rightPaneRef} onScroll={handlePaneScroll('right')} className="flex-1 overflow-y-auto max-sm:overflow-visible p-4 max-sm:p-2">
+                  <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
                     {isMatchesMode
                       ? newerMatchLines.map((line, idx) => renderDiffLine(line, idx, 'right'))
                       : sidePairs.map((pair, idx) => renderDiffLine(pair.right, idx, 'right'))}
@@ -415,8 +443,8 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
             </div>
           ) : (
             /* Unified */
-            <div className="h-full overflow-y-auto p-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
+            <div className="h-full max-sm:h-auto overflow-y-auto max-sm:overflow-visible p-6 max-sm:p-2">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-sm:p-3 max-w-3xl mx-auto">
                 {shouldRenderMarkdown ? diff.lines.map((line, idx) => (
                   renderMarkdownDiffLine(line, idx, 'unified')
                 )) : diff.lines.map((line, idx) => {

@@ -16,6 +16,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -254,33 +255,37 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
           </div>
 
           {/* Status Filter */}
-          <select
+          <FilterSelect
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as typeof statusFilter);
+            onChange={(v) => {
+              setStatusFilter(v as typeof statusFilter);
               setPage(1);
             }}
-            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">All Status</option>
-            <option value="completed">Completed</option>
-            <option value="in_progress">In Progress</option>
-            <option value="pending">Pending</option>
-          </select>
+            ariaLabel="Filter by status"
+            className="px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+            options={[
+              { value: 'all', label: 'All Status' },
+              { value: 'completed', label: 'Completed' },
+              { value: 'in_progress', label: 'In Progress' },
+              { value: 'pending', label: 'Pending' },
+            ]}
+          />
 
           {/* Passed Filter */}
-          <select
+          <FilterSelect
             value={passedFilter}
-            onChange={(e) => {
-              setPassedFilter(e.target.value as typeof passedFilter);
+            onChange={(v) => {
+              setPassedFilter(v as typeof passedFilter);
               setPage(1);
             }}
-            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">All Results</option>
-            <option value="passed">Passed</option>
-            <option value="failed">Failed</option>
-          </select>
+            ariaLabel="Filter by result"
+            className="px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+            options={[
+              { value: 'all', label: 'All Results' },
+              { value: 'passed', label: 'Passed' },
+              { value: 'failed', label: 'Failed' },
+            ]}
+          />
 
           <Button
             variant="secondary"
@@ -466,7 +471,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                    <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}
@@ -764,7 +769,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                    <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}

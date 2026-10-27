@@ -31,6 +31,7 @@ import {
 } from '@/lib/services/unitPoolService';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import type { ExportFileFormat } from '@/lib/utils/exportUtils';
@@ -292,37 +293,43 @@ export default function MyConsumptionHistory() {
             <span className="text-sm font-medium text-gray-700">Filters:</span>
           </div>
 
-          <select
+          <FilterSelect
             value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value as UnitType | 'all')}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Types</option>
-            <option value="RS">Resume Scoring</option>
-            <option value="AS">Assessment</option>
-            <option value="AIU">AI Interview</option>
-          </select>
+            onChange={(v) => setSelectedType(v as UnitType | 'all')}
+            ariaLabel="Unit type"
+            options={[
+              { value: 'all', label: 'All Types' },
+              { value: 'RS', label: 'Resume Scoring' },
+              { value: 'AS', label: 'Assessment' },
+              { value: 'AIU', label: 'AI Interview' },
+            ]}
+            className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+          />
 
-          <select
+          <FilterSelect
             value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Status</option>
-            <option value="SUCCESS">Success</option>
-            <option value="FAILED">Failed</option>
-          </select>
+            onChange={(v) => setSelectedStatus(v)}
+            ariaLabel="Status"
+            options={[
+              { value: 'all', label: 'All Status' },
+              { value: 'SUCCESS', label: 'Success' },
+              { value: 'FAILED', label: 'Failed' },
+            ]}
+            className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+          />
 
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(Number(e.target.value))}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={60}>Last 60 days</option>
-            <option value={90}>Last 90 days</option>
-          </select>
+          <FilterSelect
+            value={String(dateRange)}
+            onChange={(v) => setDateRange(Number(v))}
+            ariaLabel="Date range"
+            options={[
+              { value: '7', label: 'Last 7 days' },
+              { value: '30', label: 'Last 30 days' },
+              { value: '60', label: 'Last 60 days' },
+              { value: '90', label: 'Last 90 days' },
+            ]}
+            className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+          />
 
           <div className="ml-auto text-sm text-gray-600">
             {filteredHistory.length} records

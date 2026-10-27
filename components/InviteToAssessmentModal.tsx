@@ -5,6 +5,7 @@ import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
 import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks, type PickSource } from '@/lib/utils/resumeSelection';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
@@ -469,7 +470,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
             </div>
             <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-2">Invitations Sent!</h3>
-            <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">
+            <p className="text-gray-600 dark:text-slate-400 text-sm">
               {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate{candidates.length > 1 ? 's' : ''} will receive the assessment invitation
             </p>
           </div>
@@ -505,7 +506,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <AlertTriangle className="w-7 h-7 sm:w-10 sm:h-10 text-amber-600" />
               </div>
-              <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm">
+              <p className="text-gray-600 dark:text-slate-400 text-sm">
                 {duplicateEmails.length === 1 ? (
                   <>An invitation has already been sent to <span className="font-medium text-gray-800 dark:text-slate-100 [overflow-wrap:anywhere]">{duplicateEmails[0]}</span> for this assessment.</>
                 ) : (
@@ -515,15 +516,15 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               {duplicateEmails.length > 1 && (
                 <div className="mt-2 p-2 bg-amber-50 rounded-lg">
                   {duplicateEmails.map((email, idx) => (
-                    <p key={idx} className="text-xs sm:text-sm font-medium text-amber-800 [overflow-wrap:anywhere]">{email}</p>
+                    <p key={idx} className="text-sm font-medium text-amber-800 [overflow-wrap:anywhere]">{email}</p>
                   ))}
                 </div>
               )}
             </div>
 
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 sm:p-4">
-              <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
-              <ul className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 space-y-1">
+              <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
+              <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1">
                 <li>• Try a <span className="font-medium">different email address</span></li>
                 <li>• Send invitation for a <span className="font-medium">different assessment</span></li>
                 <li>• Check the candidate&apos;s existing invitation status in Assessment Results</li>
@@ -611,7 +612,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               </div>
               <div className="min-w-0">
                 <h2 className="text-base sm:text-lg font-semibold text-white truncate">No Assessment Found</h2>
-                <p className="text-gray-300 text-xs sm:text-sm truncate">{jobTitle}</p>
+                <p className="text-gray-300 text-sm truncate">{jobTitle}</p>
               </div>
             </div>
             <button
@@ -663,7 +664,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-white truncate">Invite Candidates</h2>
-              <p className="text-green-100 text-xs sm:text-sm truncate">{jobTitle}</p>
+              <p className="text-green-100 text-sm truncate">{jobTitle}</p>
             </div>
           </div>
           <button
@@ -678,19 +679,20 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Assessment Selection */}
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Select Assessment *</label>
-            <select
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Select Assessment *</label>
+            <FilterSelect
               value={selectedAssessment}
-              onChange={(e) => setSelectedAssessment(e.target.value)}
-              className="w-full min-w-0 h-[38px] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm text-black"
-            >
-              <option value="">-- Choose an assessment --</option>
-              {assessments.map((assessment) => (
-                <option key={assessment.id} value={assessment.id}>
-                  {assessment.title} • {assessment.duration_minutes} min • {assessment.status}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setSelectedAssessment(v)}
+              ariaLabel="Select Assessment"
+              options={[
+                { value: '', label: '-- Choose an assessment --' },
+                ...assessments.map((assessment) => ({
+                  value: String(assessment.id),
+                  label: `${assessment.title} • ${assessment.duration_minutes} min • ${assessment.status}`,
+                })),
+              ]}
+              className="w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:pl-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 focus-visible:ring-green-500 focus-visible:border-transparent"
+            />
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mt-2">
               <p className="text-xs text-gray-500 dark:text-slate-500">
                 {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job
@@ -714,7 +716,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
               return (
                 <div className="rounded-lg p-3 sm:p-4 border bg-blue-50 border-blue-200 flex items-center gap-2">
                   <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                  <span className="text-xs sm:text-sm font-medium text-blue-800">Unlimited assessment units</span>
+                  <span className="text-sm font-medium text-blue-800">Unlimited assessment units</span>
                 </div>
               );
             }
@@ -727,7 +729,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                   : <Info className="w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0" />
                 }
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs sm:text-sm font-medium ${
+                  <p className={`text-sm font-medium ${
                     isInsufficient ? 'text-red-800' : isLow ? 'text-amber-800' : 'text-blue-800'
                   }`}>
                     Assessment Quota
@@ -753,7 +755,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
           {/* Candidates */}
           <div>
             <div className="flex items-center justify-between mb-2 sm:mb-3 flex-wrap gap-2">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">Candidates *</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Candidates *</label>
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => { commitPicks(); setInputMode('manual'); }}
@@ -970,18 +972,20 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
           {/* Expiry Settings */}
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Link Expiry</label>
-            <select
-              value={expiryDays}
-              onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full min-w-0 h-[38px] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm text-black"
-            >
-              <option value={1}>1 day</option>
-              <option value={3}>3 days</option>
-              <option value={7}>7 days</option>
-              <option value={14}>14 days</option>
-              <option value={30}>30 days</option>
-            </select>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Link Expiry</label>
+            <FilterSelect
+              value={String(expiryDays)}
+              onChange={(v) => setExpiryDays(Number(v))}
+              ariaLabel="Link Expiry"
+              options={[
+                { value: '1', label: '1 day' },
+                { value: '3', label: '3 days' },
+                { value: '7', label: '7 days' },
+                { value: '14', label: '14 days' },
+                { value: '30', label: '30 days' },
+              ]}
+              className="w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:pl-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 focus-visible:ring-green-500 focus-visible:border-transparent"
+            />
           </div>
 
           {/* Preview */}
@@ -991,7 +995,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                 <span className="text-sm sm:text-base font-medium text-green-800">Ready to Send</span>
               </div>
-              <div className="text-xs sm:text-sm text-green-700 space-y-1">
+              <div className="text-sm text-green-700 space-y-1">
                 <p className="[overflow-wrap:anywhere]"><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
                 <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
                 <p><strong>Recipients:</strong> {sendCandidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
@@ -1003,7 +1007,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
         {/* Footer */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-between gap-3 shrink-0">
-          <div className="text-xs sm:text-sm text-center sm:text-left">
+          <div className="text-sm text-center sm:text-left">
             {(() => {
               const validRows = sendCandidates.filter(c => c.name.trim() && c.email.trim());
               const validCount = validRows.length;

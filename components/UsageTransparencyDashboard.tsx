@@ -27,6 +27,7 @@ import {
 } from '@/lib/services/unitPoolService';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 
@@ -488,47 +489,53 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               {/* Unit Type Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Unit Type</label>
-                <select
+                <FilterSelect
                   value={selectedUnitType}
-                  onChange={(e) => search.setFilter('unitType', e.target.value as UnitType | '')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
-                >
-                  <option value="">All Types</option>
-                  <option value="RS">Resume Scoring</option>
-                  <option value="AS">Assessment</option>
-                  <option value="AIU">AI Interview</option>
-                </select>
+                  onChange={(v) => search.setFilter('unitType', v as UnitType | '')}
+                  ariaLabel="Unit Type"
+                  options={[
+                    { value: '', label: 'All Types' },
+                    { value: 'RS', label: 'Resume Scoring' },
+                    { value: 'AS', label: 'Assessment' },
+                    { value: 'AIU', label: 'AI Interview' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-base sm:text-base"
+                />
               </div>
 
               {/* Category Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Deduction Category</label>
-                <select
+                <FilterSelect
                   value={selectedCategory}
-                  onChange={(e) => search.setFilter('category', e.target.value as DeductionCategory | '')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
-                >
-                  <option value="">All Categories</option>
-                  <option value="FULL">Full Deduction (1.0)</option>
-                  <option value="PARTIAL">Partial Deduction (0.5)</option>
-                  <option value="NON_DEDUCTION">Non-Deduction (0)</option>
-                </select>
+                  onChange={(v) => search.setFilter('category', v as DeductionCategory | '')}
+                  ariaLabel="Deduction Category"
+                  options={[
+                    { value: '', label: 'All Categories' },
+                    { value: 'FULL', label: 'Full Deduction (1.0)' },
+                    { value: 'PARTIAL', label: 'Partial Deduction (0.5)' },
+                    { value: 'NON_DEDUCTION', label: 'Non-Deduction (0)' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-base sm:text-base"
+                />
               </div>
 
               {/* Time Period */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
-                <select
-                  value={days}
-                  onChange={(e) => search.setFilter('days', parseInt(e.target.value))}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
-                >
-                  <option value={7}>Last 7 Days</option>
-                  <option value={30}>Last 30 Days</option>
-                  <option value={90}>Last 90 Days</option>
-                  <option value={180}>Last 6 Months</option>
-                  <option value={365}>Last Year</option>
-                </select>
+                <FilterSelect
+                  value={String(days)}
+                  onChange={(v) => search.setFilter('days', parseInt(v))}
+                  ariaLabel="Time Period"
+                  options={[
+                    { value: '7', label: 'Last 7 Days' },
+                    { value: '30', label: 'Last 30 Days' },
+                    { value: '90', label: 'Last 90 Days' },
+                    { value: '180', label: 'Last 6 Months' },
+                    { value: '365', label: 'Last Year' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-base sm:text-base"
+                />
               </div>
 
               {/* Checkboxes */}
@@ -700,7 +707,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}

@@ -55,6 +55,7 @@ import { featurePermissionService, UserLimitsResponse } from '@/lib/services/fea
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -403,7 +404,7 @@ function AnalyticsCards({
   };
 
   return (
-    <div className="-mx-3 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-3 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
       {/* Phones: a swipeable row (cards snap into place) instead of five
           stacked cards; sm and up: the grid. */}
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
@@ -1759,7 +1760,7 @@ export default function UsageHistory() {
               icon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
               aria-label="Refresh"
               title="Refresh"
-              className="max-sm:h-8 max-sm:gap-0 max-sm:px-2"
+              className="max-sm:gap-0 max-sm:px-3"
             >
               {/* Icon-only on phones */}
               <span className="hidden sm:inline">Refresh</span>
@@ -1768,7 +1769,6 @@ export default function UsageHistory() {
               variant="primary"
               onClick={() => setShowExportModal(true)}
               icon={<Download className="w-4 h-4" />}
-              className="max-sm:h-8 max-sm:px-3 max-sm:text-xs"
             >
               Export
             </Button>
@@ -1792,10 +1792,10 @@ export default function UsageHistory() {
             {/* Quick Period */}
             <label className="flex items-center gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600">
               Period
-              <select
+              <FilterSelect
                 value={quickPeriod}
-                onChange={(e) => {
-                  const val = e.target.value;
+                ariaLabel="Period"
+                onChange={(val) => {
                   setQuickPeriod(val);
                   if (!val) {
                     setStartDateInput('');
@@ -1817,14 +1817,15 @@ export default function UsageHistory() {
                   setStartDateInput(start);
                   setEndDateInput(end);
                 }}
-                className="h-9 flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
-              >
-                <option value="">All Time</option>
-                <option value="last_week">Last Week</option>
-                <option value="last_month">Last Month</option>
-                <option value="last_quarter">Last Quarter</option>
-                <option value="last_year">Last Year</option>
-              </select>
+                options={[
+                  { value: '', label: 'All Time' },
+                  { value: 'last_week', label: 'Last Week' },
+                  { value: 'last_month', label: 'Last Month' },
+                  { value: 'last_quarter', label: 'Last Quarter' },
+                  { value: 'last_year', label: 'Last Year' },
+                ]}
+                className="h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-auto flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal rounded-lg sm:rounded-lg px-3 sm:px-3 text-gray-700 hover:border-brand-blue/40"
+              />
             </label>
 
             {/* Date Range */}
@@ -1852,18 +1853,20 @@ export default function UsageHistory() {
             {(activeTab === 'feature') && (
               <label className="flex items-center gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600">
                 Status
-                <select
+                <FilterSelect
                   value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="h-9 flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal border border-gray-200 rounded-lg px-3 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all hover:border-brand-blue/40"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="SUCCESS">Success</option>
-                  <option value="FAILED">Failed</option>
-                  <option value="INSUFFICIENT_UNITS">Insufficient Units</option>
-                  <option value="ABANDONED">Abandoned</option>
-                  <option value="INTERRUPTED">Interrupted</option>
-                </select>
+                  onChange={(v) => setFilterStatus(v)}
+                  ariaLabel="Status"
+                  options={[
+                    { value: 'all', label: 'All Statuses' },
+                    { value: 'SUCCESS', label: 'Success' },
+                    { value: 'FAILED', label: 'Failed' },
+                    { value: 'INSUFFICIENT_UNITS', label: 'Insufficient Units' },
+                    { value: 'ABANDONED', label: 'Abandoned' },
+                    { value: 'INTERRUPTED', label: 'Interrupted' },
+                  ]}
+                  className="h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-auto flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal rounded-lg sm:rounded-lg px-3 sm:px-3 text-gray-700 hover:border-brand-blue/40"
+                />
               </label>
             )}
           </div>

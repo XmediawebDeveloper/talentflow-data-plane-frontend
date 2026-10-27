@@ -2,6 +2,7 @@ import { X, Mail, Phone, Calendar, Clock, Send, FileText, Loader2 } from 'lucide
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { DateField } from '@/components/ui/date-field';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface ContactCandidateModalProps {
   candidateName: string;
@@ -28,6 +29,8 @@ export default function ContactCandidateModal({
   const [phoneNotes, setPhoneNotes] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [emailTemplate, setEmailTemplate] = useState('custom');
+  // UI-only: the interview type was an uncontrolled select whose value is never read.
+  const [interviewType, setInterviewType] = useState('Video Call (Zoom/Teams)');
 
   const emailTemplates = {
     interview: {
@@ -95,7 +98,7 @@ export default function ContactCandidateModal({
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">Contact Candidate</h2>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{candidateName}</p>
+              <p className="text-sm text-gray-500 dark:text-slate-500 truncate">{candidateName}</p>
             </div>
           </div>
           <button
@@ -155,16 +158,18 @@ export default function ContactCandidateModal({
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Email Template
                 </label>
-                <select
+                <FilterSelect
                   value={emailTemplate}
-                  onChange={(e) => handleTemplateChange(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                >
-                  <option value="custom">Custom Email</option>
-                  <option value="interview">Interview Invitation</option>
-                  <option value="screening">Screening Call Request</option>
-                  <option value="rejection">Rejection Email</option>
-                </select>
+                  onChange={(v) => handleTemplateChange(v)}
+                  ariaLabel="Email Template"
+                  options={[
+                    { value: 'custom', label: 'Custom Email' },
+                    { value: 'interview', label: 'Interview Invitation' },
+                    { value: 'screening', label: 'Screening Call Request' },
+                    { value: 'rejection', label: 'Rejection Email' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:pl-4 sm:pr-4 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                />
               </div>
 
               {/* Recipient */}
@@ -294,12 +299,18 @@ export default function ContactCandidateModal({
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
                   Interview Type
                 </label>
-                <select className="w-full px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500">
-                  <option>Video Call (Zoom/Teams)</option>
-                  <option>Phone Interview</option>
-                  <option>In-Person Interview</option>
-                  <option>Panel Interview</option>
-                </select>
+                <FilterSelect
+                  value={interviewType}
+                  onChange={setInterviewType}
+                  ariaLabel="Interview Type"
+                  options={[
+                    { value: 'Video Call (Zoom/Teams)', label: 'Video Call (Zoom/Teams)' },
+                    { value: 'Phone Interview', label: 'Phone Interview' },
+                    { value: 'In-Person Interview', label: 'In-Person Interview' },
+                    { value: 'Panel Interview', label: 'Panel Interview' },
+                  ]}
+                  className="w-full sm:w-full px-4 sm:pl-4 sm:pr-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
+                />
               </div>
 
               {/* Additional Notes */}

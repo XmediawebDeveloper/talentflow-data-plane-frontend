@@ -29,7 +29,7 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
                 {error.title || 'Upload Error'}
               </h2>
               {error.error && (
-                <p className="text-xs sm:text-sm text-red-700 font-medium truncate">
+                <p className="text-sm text-red-700 font-medium truncate">
                   {error.error}
                 </p>
               )}

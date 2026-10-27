@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -12,9 +12,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoader';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
+import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -35,7 +36,15 @@ import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
-import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
+import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter, inviteResult, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
+import ExportColumnsModal from '@/components/ExportColumnsModal';
+import { downloadSessionReports, canTryReport } from '@/components/ai-interview/evaluation-dashboard/downloadSessionReport';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
 import {
   interviewVersionOrdinal,
@@ -54,6 +63,8 @@ import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '@/components/ai-interview/ResultRowActions';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
@@ -68,7 +79,8 @@ import AssessmentVersionHistoryPanel, {
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
-import AllInterviewsTable, { VersionPill, JobDisabledBadge, JobArchivedBadge, jobLockBadgeFor } from '@/components/ai-interview/AllInterviewsTable';
+import AllInterviewsTable, { VersionPill, JobDisabledBadge, JobArchivedBadge, jobLockBadgeFor, type BulkActionKind, type BulkSkip, type BulkActionsConfig } from '@/components/ai-interview/AllInterviewsTable';
+import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
@@ -125,7 +137,8 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
 const CONFIG_PAGE_SIZE = 10;
-const AI_FILTER_FIELD_CLASS = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
+/* Trigger classes for the filter panels' Dropdown (ui/filter-select) triggers. */
+const AI_FILTER_FIELD_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100';
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
 /* The Invitation Status tab's filter-bar dropdown needs 'expired' as its own
@@ -161,7 +174,7 @@ const listFilterKey = (v: Record<string, unknown>) =>
 export default function AIInterview() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const canViewAIInterviews = isTenantAdmin || (user?.permissions?.canViewAIInterviews ?? user?.permissions?.canRunAiInterviews ?? false);
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
@@ -173,6 +186,9 @@ export default function AIInterview() {
   const canPublishAIInterviews = isTenantAdmin || !!user?.permissions?.canPublishAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
+  const canExportAIInterviews = isTenantAdmin || hasPermissionCode('ai_interview:export');
+  // ai_interview:download_report — Invitation Status' Download PDF Reports.
+  const canDownloadAIReports = useCanDownloadAIReports();
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
   const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
@@ -186,6 +202,15 @@ export default function AIInterview() {
   // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
   // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  /* ONE List/Card choice for every list tab (Total Jobs, All Interviews,
+     Active/Draft/Archived, Candidate Results, Invitation Status, Activity
+     Logs): switching on one tab switches them all, so the page reads the same
+     whichever tab is open. Phones start on cards — tables only scroll sideways
+     there; the restore below still wins on larger screens. */
+  const [listDisplayMode, setListDisplayMode] = useState<ListDisplayMode>('list');
+  useEffect(() => {
+    if (isPhoneWidth()) setListDisplayMode('grid');
+  }, []);
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
   const consumedListViewRedirectRef = useRef(false);
@@ -407,6 +432,11 @@ export default function AIInterview() {
   const [statusBulkRevokeOpen, setStatusBulkRevokeOpen] = useState(false);
   const [statusBulkResendOpen, setStatusBulkResendOpen] = useState(false);
   const [isStatusBulkResending, setIsStatusBulkResending] = useState(false);
+  // The tab's Actions (N) menu: Export (format + columns popup) and Download
+  // PDF Reports, beside the Resend / Revoke confirms above.
+  const [showStatusExportModal, setShowStatusExportModal] = useState(false);
+  const [statusExportFormat, setStatusExportFormat] = useState<'csv' | 'xls'>('csv');
+  const [downloadingStatusPdfs, setDownloadingStatusPdfs] = useState<{ done: number; total: number } | null>(null);
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -1126,6 +1156,8 @@ export default function AIInterview() {
       inviteStatusPage, inviteStatusItemsPerPage, inviteStatusFilters, inviteStatusColumnFilters,
       // Settings tab's General / Proctoring sub-tab.
       settingsSubTab,
+      // The page-wide List/Card view choice.
+      listDisplayMode,
       // The cards<->list drill-in. Without it the tab, filters and page were
       // all restored but pageView fell back to 'cards', so returning from an
       // interview page showed only the stat tiles — the list looked gone.
@@ -1151,6 +1183,7 @@ export default function AIInterview() {
       const currentKey = listFilterKey({ activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo });
       restoredListKeyRef.current = restoredKey !== currentKey ? restoredKey : null;
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if ((s.listDisplayMode === 'list' || s.listDisplayMode === 'grid') && !isPhoneWidth()) setListDisplayMode(s.listDisplayMode);
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
       if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
@@ -1359,6 +1392,76 @@ export default function AIInterview() {
     } finally {
       setDeleteLoading(false);
     }
+  };
+
+  /* Bulk Archive / Unarchive / Delete — the All / Active / Draft / Archived
+     tables' Actions menu. The table decides which ticked rows qualify (the row
+     menu's rules) and calls `onRun`; this page shows one confirm popup, runs the
+     same per-item service calls the row menu uses (4 at a time), reports one
+     summary and refreshes exactly as the single-item handlers do. `onRun`
+     resolves true once a run went through, false if cancelled, so the table
+     only clears its ticks after a real run. */
+  const [bulkConfirm, setBulkConfirm] = useState<{
+    kind: BulkActionKind;
+    eligible: AIInterviewResponse[];
+    skipped: BulkSkip[];
+    resolve: (ran: boolean) => void;
+  } | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const interviewBulkActions: BulkActionsConfig = {
+    canArchive: canArchiveAIInterviews,
+    canDelete: canDeleteAIInterviews,
+    onRun: (kind, eligible, skipped) =>
+      new Promise<boolean>((resolve) => setBulkConfirm({ kind, eligible, skipped, resolve })),
+  };
+  const cancelBulk = () => {
+    if (bulkRunning || !bulkConfirm) return;
+    bulkConfirm.resolve(false);
+    setBulkConfirm(null);
+  };
+  const confirmBulk = async () => {
+    if (!bulkConfirm || bulkRunning) return;
+    const { kind, eligible, skipped, resolve } = bulkConfirm;
+    setBulkRunning(true);
+    const call = kind === 'archive'
+      ? (id: string) => aiInterviewService.archive(id)
+      : kind === 'unarchive'
+        ? (id: string) => aiInterviewService.unarchive(id)
+        : (id: string) => aiInterviewService.delete(id);
+    let done = 0;
+    let failed = 0;
+    const queue = [...eligible];
+    await Promise.all(
+      Array.from({ length: Math.min(4, queue.length) }, async () => {
+        while (queue.length) {
+          const config = queue.shift()!;
+          try {
+            await call(config.id);
+            done += 1;
+          } catch (error) {
+            console.error(`[AIInterview] bulk ${kind} failed for ${config.id}:`, error);
+            failed += 1;
+          }
+        }
+      }),
+    );
+    try {
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+    } finally {
+      setRefreshSignal((n) => n + 1);
+    }
+    const verb = kind === 'archive' ? 'archived' : kind === 'unarchive' ? 'unarchived' : 'deleted';
+    const skippedCount = skipped.reduce((sum, s) => sum + s.count, 0);
+    const summary = [
+      `${done} ${verb}`,
+      skippedCount ? `${skippedCount} skipped` : null,
+      failed ? `${failed} failed` : null,
+    ].filter(Boolean).join(' · ');
+    if (failed) toast.error(summary);
+    else toast.success(summary);
+    setBulkRunning(false);
+    setBulkConfirm(null);
+    resolve(true);
   };
 
   const handlePublishConfig = async (config: AIInterviewResponse) => {
@@ -2476,18 +2579,11 @@ export default function AIInterview() {
 
   const isConfigListTab = ['all', 'published', 'draft', 'completed', 'archived'].includes(activeTab);
 
-  /* Ticked Invitation Status rows that can still be revoked — drives the
-     Revoke (N) button beside Refresh. The selection is cleared whenever the
-     filters change, so every ticked row is one on screen. */
-  const statusRevocableSelectedCount = selectedStatusInviteIds.size === 0
-    ? 0
-    : inviteStatusRows.filter((inv) => selectedStatusInviteIds.has(inv.id) && isRevocableInvite(inv) && !isInviteJdDisabled(inv)).length;
-
   /* Ticked rows a fresh link can be sent to — the Track Invites popup's bulk
      resend rule: Expired, and never once the candidate started or finished.
-     Offered only under the Expired filter, as on the Assessments page: a
-     resend means nothing for a link that has not lapsed. */
-  const statusResendableSelectedRows = inviteStatusFilters.status !== 'expired' || selectedStatusInviteIds.size === 0
+     Under ANY status bucket (it used to be offered only under the Expired
+     filter): the Actions menu counts the eligible rows — "Resend (3 of 10)". */
+  const statusResendableSelectedRows = selectedStatusInviteIds.size === 0
     ? []
     : inviteStatusRows.filter((inv) =>
         selectedStatusInviteIds.has(inv.id) && isExpiredForActions(inv) && !inv.started_at && !inv.completed_at && !isInviteJdDisabled(inv));
@@ -2520,6 +2616,33 @@ export default function AIInterview() {
     setStatusBulkResendOpen(false);
     setIsStatusBulkResending(false);
     await loadAllInviteStatuses();
+  };
+
+  /* Download PDF Reports from the Invitation Status Actions menu. An
+     invitation row IS its session (View Details opens session_id=inv.id), so
+     the rows go straight to downloadSessionReports — the same zip, progress
+     and toasts as the Candidate Results tab's item. */
+  const handleStatusBulkPdfs = async (rows: any[]) => {
+    if (!canDownloadAIReports) return;
+    setDownloadingStatusPdfs({ done: 0, total: 0 });
+    try {
+      const zipName = `AI_Interview_Invitation_Reports_${new Date().toISOString().slice(0, 10)}.zip`;
+      const { downloaded, skipped, failed } = await downloadSessionReports(
+        rows, zipName, (done, total) => setDownloadingStatusPdfs({ done, total }),
+      );
+      if (downloaded === 0 && failed === 0) {
+        toast.warning('No evaluated candidates to download — reports are available once an interview is evaluated.');
+      } else if (failed > 0) {
+        toast.error(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}; ${failed} could not be generated.`);
+      } else if (skipped > 0) {
+        toast.success(`Downloaded ${downloaded} report${downloaded === 1 ? '' : 's'}. ${skipped} candidate${skipped === 1 ? ' has' : 's have'} no report yet.`);
+      }
+    } catch (err) {
+      console.error('[AIInterview] Invitation Status bulk PDF download failed:', err);
+      toast.error(isForbiddenError(err) ? AI_REPORT_DOWNLOAD_DENIED : 'Could not download the reports. Please try again.');
+    } finally {
+      setDownloadingStatusPdfs(null);
+    }
   };
 
   /** Active/Draft/Archived — each a single, unambiguous status, unlike Total
@@ -2694,7 +2817,7 @@ export default function AIInterview() {
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
                 AI Interview Management
               </h1>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 max-w-xl">
+              <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 max-w-xl">
                 Run live AI-powered interviews where candidates answer in real time
               </p>
             </div>
@@ -2891,6 +3014,7 @@ export default function AIInterview() {
               activeFilterCount={aiFilterCount}
               filtersApplied={aiFiltersActive}
               onClearFilters={clearAIInterviewFilters}
+              trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
             />
             {showAIFilters && (
                 /* No footer: every control commits as it changes, so the
@@ -2902,66 +3026,68 @@ export default function AIInterview() {
                       <label htmlFor="ai-interview-mode" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Mode
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-mode"
                         value={modeFilter}
-                        onChange={(e) => setModeFilter(e.target.value as typeof modeFilter)}
+                        onChange={(v) => setModeFilter(v as typeof modeFilter)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">All modes</option>
-                        <option value="timed">Timed</option>
-                        <option value="conversational">Conversational</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All modes' },
+                          { value: 'timed', label: 'Timed' },
+                          { value: 'conversational', label: 'Conversational' },
+                        ]}
+                      />
                     </div>
                     <div>
                       <label htmlFor="ai-interview-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created by
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-creator"
                         value={creatorFilter}
-                        onChange={(e) => setCreatorFilter(e.target.value)}
+                        onChange={(v) => setCreatorFilter(v)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">Anyone</option>
-                        {creatorOptions.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: 'all', label: 'Anyone' },
+                          ...creatorOptions.map((name) => ({ value: name, label: name })),
+                        ]}
+                      />
                     </div>
                     <div>
                       <label htmlFor="ai-interview-date" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-date"
                         value={dateFilter}
-                        onChange={(e) => setDateFilter(e.target.value as DateFilterKey)}
+                        onChange={(v) => setDateFilter(v as DateFilterKey)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">Any date</option>
-                        <option value="today">Today</option>
-                        <option value="yesterday">Yesterday</option>
-                        <option value="last_week">Last week</option>
-                        <option value="last_month">Last month</option>
-                        <option value="custom">Custom range…</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'Any date' },
+                          { value: 'today', label: 'Today' },
+                          { value: 'yesterday', label: 'Yesterday' },
+                          { value: 'last_week', label: 'Last week' },
+                          { value: 'last_month', label: 'Last month' },
+                          { value: 'custom', label: 'Custom range…' },
+                        ]}
+                      />
                     </div>
                     <div>
                       <label htmlFor="ai-interview-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Status
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-status"
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                        onChange={(v) => setStatusFilter(v as typeof statusFilter)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">All statuses</option>
-                        <option value="published">Active</option>
-                        <option value="draft">Draft</option>
-                        <option value="archived">Archived</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All statuses' },
+                          { value: 'published', label: 'Active' },
+                          { value: 'draft', label: 'Draft' },
+                          { value: 'archived', label: 'Archived' },
+                        ]}
+                      />
                     </div>
                     {dateFilter === 'custom' && (
                       <>
@@ -3005,12 +3131,6 @@ export default function AIInterview() {
             { key: 'published', label: 'Active' },
             { key: 'draft', label: 'Draft' },
             { key: 'archived', label: 'Archived' },
-            // Candidate sessions across every interview — the Assessments
-            // page's tab of the same name, for AI interviews.
-            { key: 'candidate-results', label: 'Candidate Results' },
-            // Every invitation across every interview — the Assessments
-            // page's Invitation Status tab, for AI interviews.
-            { key: 'invitation-status', label: 'Invitation Status' },
           ] as const).map(tab => {
             const isActive = activeTab === tab.key;
             return (
@@ -3018,7 +3138,7 @@ export default function AIInterview() {
                 key={tab.key}
                 onClick={() => openListView(tab.key as TabKey)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                     : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3028,7 +3148,35 @@ export default function AIInterview() {
               </button>
             );
           })}
-          <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l sm:border-gray-200 dark:sm:border-slate-700/60 sm:pl-3">
+          {/* Candidates and invitations — their own group, divided off from
+              the interview lists the way Activity Logs / Settings are. */}
+          <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-3">
+            {([
+              // Candidate sessions across every interview — the Assessments
+              // page's tab of the same name, for AI interviews.
+              { key: 'candidate-results', label: 'Candidate Results' },
+              // Every invitation across every interview — the Assessments
+              // page's Invitation Status tab, for AI interviews.
+              { key: 'invitation-status', label: 'Invitation Status' },
+            ] as const).map(tab => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => openListView(tab.key as TabKey)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
+                    isActive
+                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                      : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-3">
             {([
               { key: 'audit', label: 'Activity Logs' },
               { key: 'settings', label: 'Settings' },
@@ -3039,7 +3187,7 @@ export default function AIInterview() {
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-lg text-sm transition-all whitespace-nowrap ${
                     isActive
                       ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                       : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3054,22 +3202,9 @@ export default function AIInterview() {
 
           <div className="flex items-center gap-2 flex-shrink-0">
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
-          {/* Bulk Revoke — Invitation Status only, beside Refresh, and only
-              once a ticked row can still be revoked (Invited / In Progress):
-              the Assessments page's Revoke (N) button. */}
-          {/* Bulk Resend — the Expired filter's action, same place and shape. */}
-          {activeTab === 'invitation-status' && statusResendableSelectedRows.length > 0 && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setStatusBulkResendOpen(true)}
-              disabled={isStatusBulkResending}
-              title="Resend a fresh link to the selected expired invitations"
-              icon={isStatusBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-            >
-              {isStatusBulkResending ? 'Sending…' : `Resend (${statusResendableSelectedRows.length})`}
-            </Button>
-          )}
+          {/* Invitation Status's Resend / Revoke used to be buttons here,
+              beside Refresh. They now live in the tab's Actions (N) menu in
+              its toolbar row; this confirm is the one Resend opens. */}
           <ConfirmationDialog
             isOpen={statusBulkResendOpen}
             onClose={() => { if (!isStatusBulkResending) setStatusBulkResendOpen(false); }}
@@ -3080,44 +3215,29 @@ export default function AIInterview() {
             cancelText="Cancel"
             variant="info"
           />
-          {activeTab === 'invitation-status' && statusRevocableSelectedCount > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setStatusBulkRevokeOpen(true)}
-              disabled={isBulkRevoking}
-              title="Revoke the selected candidates' interview links"
-              icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
-            >
-              {isBulkRevoking ? 'Revoking…' : `Revoke (${statusRevocableSelectedCount})`}
-            </Button>
-          )}
-
           {/* Sort by — moved out of More Filters to sit before Refresh, in the
-              Job Openings page's sort control (JobsListing.tsx): the tab pills'
-              resting tint, a 28px select on phones, label hidden below sm so the
-              row still fits a 320px screen. The options carry their own
-              direction (Newest / Oldest), so there is no order toggle. Only on
-              the grouped job list, the one list it sorts. */}
+              shared SortByControl's shape (components/ui/select-all-menu.tsx):
+              the label always shown, p-1 + h-7 = the toolbar's 36px band and
+              14px text at every width, like the controls beside it. The
+              options carry their own direction (Newest / Oldest), so there is
+              no order toggle. Only on the grouped job list, the one list it sorts. */}
           {isConfigListTab && !showUngroupedList && (
             <div className="flex items-center gap-2">
-              <label htmlFor="ai-interview-sort" className="hidden sm:inline text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
-              <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-0.5 sm:p-1 transition-all">
-                <div className="relative">
-                  <select
-                    id="ai-interview-sort"
-                    aria-label="Sort by"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                    className="appearance-none h-6 sm:h-7 pl-2 sm:pl-2.5 pr-7 sm:pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 max-sm:!text-xs sm:text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
-                  >
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="active">Active first</option>
-                    <option value="draft">Draft first</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
-                </div>
+              <label htmlFor="ai-interview-sort" className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
+              <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
+                <Dropdown
+                  id="ai-interview-sort"
+                  ariaLabel="Sort by"
+                  value={sortBy}
+                  onChange={(v) => setSortBy(v as typeof sortBy)}
+                  className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300"
+                  options={[
+                    { value: 'newest', label: 'Newest' },
+                    { value: 'oldest', label: 'Oldest' },
+                    { value: 'active', label: 'Active first' },
+                    { value: 'draft', label: 'Draft first' },
+                  ]}
+                />
               </div>
             </div>
           )}
@@ -3147,15 +3267,20 @@ export default function AIInterview() {
             no outer box — and `[&>div]:p-0` drops the inset padding each tab's
             wrapper kept for that box, so the rows line up with the toolbar
             card above. Settings is a form, not a list, so it alone keeps the
-            card. */}
+            card.
+            The min-height keeps a short list (a few Archived rows, an empty
+            result) at least a screen tall: a tab click scrolls the toolbar card
+            to the top, and when the loaded list came in shorter than the
+            loading skeleton the page shrank under that scroll and the browser
+            snapped back up to the stat cards. */}
         <div className={activeTab === 'settings'
           ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5'
-          : '[&>div]:p-0'}>
+          : '[&>div]:p-0 min-h-[calc(100dvh-11rem)]'}>
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -3168,6 +3293,11 @@ export default function AIInterview() {
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
               renderRowActions={renderInterviewVersionActions}
+              displayMode={listDisplayMode}
+              onDisplayModeChange={setListDisplayMode}
+              bulkActions={interviewBulkActions}
+              canExport={canExportAIInterviews}
+              onExported={(info) => void aiInterviewService.logListExport(info)}
             />
           )}
 
@@ -3218,7 +3348,9 @@ export default function AIInterview() {
                 </div>
               ) : (
                 <>
-                <div className="space-y-3">
+                {/* List: one full-width card per job. Card: the same cards in a
+                    grid — each reflows by its own width (@container/ai-row). */}
+                <div className={listDisplayMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start' : 'space-y-3'}>
                   {paginatedConfigs.map((config) => {
                     const normalizedStatus = normalizeConfigStatus(config.status);
                     const statusPillStyles: Record<string, string> = {
@@ -3293,7 +3425,10 @@ export default function AIInterview() {
                            the same thing View Versions does. The interviews
                            themselves, with their own actions, are listed inside. */
                         onClick={() => hasVersionHistory && toggleVersions()}
-                        className={`@container/ai-row relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+                        className={`@container/ai-row relative p-3 sm:p-4 ${
+                          /* The open version history is a wide table — give it the whole row. */
+                          listDisplayMode === 'grid' && openVersionsFor === config.id ? 'col-span-full' : ''
+                        } bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
                           hasVersionHistory
                             ? 'cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
                             : 'cursor-default'
@@ -3339,11 +3474,15 @@ export default function AIInterview() {
 
                           {/* Totals for the job. Two columns on a phone, four in a
                               divided row once there is width for them. */}
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                          <div className={listDisplayMode === 'grid'
+                            ? 'grid grid-cols-2 gap-x-2 gap-y-3'
+                            : 'grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0'}>
                             {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                               <div
                                 key={key}
-                                className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
+                                className={listDisplayMode === 'grid'
+                                  ? 'min-w-0'
+                                  : 'min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0'}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
@@ -3580,17 +3719,17 @@ export default function AIInterview() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
-                          <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{session.jd_title || session.position}</div>
+                          <div className="text-sm text-gray-500 dark:text-slate-500 truncate">{session.jd_title || session.position}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm pl-10 sm:pl-0">
+                      <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-sm pl-10 sm:pl-0">
                         <span className="text-gray-500 dark:text-slate-500">{getInterviewDuration(session.duration_minutes, (session as any).special_instructions)}</span>
                         {session.started_at && (
                           <span className="text-xs text-gray-400 dark:text-slate-500">
                             Started {formatIST(session.started_at)}
                           </span>
                         )}
-                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-2xs sm:text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
+                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                           In Progress
                         </span>
                       </div>
@@ -3614,7 +3753,7 @@ export default function AIInterview() {
               interview, the same table the per-interview results view shows. */}
           {activeTab === 'candidate-results' && (
             <div className="p-3 sm:p-6">
-              <AIInterviewCandidateResults toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} />
+              <AIInterviewCandidateResults toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} />
             </div>
           )}
 
@@ -3625,7 +3764,14 @@ export default function AIInterview() {
               the Assessments page's own Invitation Status layout. */}
           {activeTab === 'invitation-status' && (
             <div className="p-3 sm:p-6">
-              {isLoadingInviteStatus ? (
+              {(() => {
+              /* Loading / error / nothing-sent states are picked here but drawn
+                 BELOW this tab's real toolbar (returned further down), never
+                 instead of it: the toolbar lives in the page's shared slot, and
+                 building it only once the rows had loaded left that slot empty —
+                 the search bar vanished on every load and Refresh, then popped
+                 back in. */
+              const inviteStatusStateBody = isLoadingInviteStatus ? (
                 /* Skeleton — the Assessments page's Invitation Status tab
                    skeleton, shaped to this tab: seven status segments plus the
                    completion-rate meter, the filter bar, then the invite
@@ -3652,13 +3798,16 @@ export default function AIInterview() {
                     </div>
                   </div>
 
-                  {/* Invitations table */}
+                  {/* Invitations — card skeletons in Card view, else the table. */}
+                  {listDisplayMode === 'grid' ? (
+                    <CardGridSkeleton count={8} className="xl:grid-cols-4" />
+                  ) : (
                   <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                     <div className="min-h-[320px] overflow-auto">
-                      <table className="w-full min-w-[1000px] table-auto">
+                      <table className="w-full table-auto">
                         <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr>
-                            {['Select', 'Candidate', 'Timeline', 'Status', 'Score', 'Invite Source', 'CID', 'Job ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
+                            {['Select', 'Candidate', 'Timeline', 'Status', 'Score', 'Invite Source', 'CID', 'JD ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
                               <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                             ))}
                           </tr>
@@ -3697,6 +3846,7 @@ export default function AIInterview() {
                       </table>
                     </div>
                   </div>
+                  )}
                 </>
               ) : inviteStatusError ? (
                 <div className="text-center py-12">
@@ -3715,7 +3865,7 @@ export default function AIInterview() {
                     Invite candidates to an AI interview and their status appears here.
                   </p>
                 </div>
-              ) : (() => {
+              ) : null;
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
                 /* Same resolved status the Invited pill filters on: an invite
@@ -3772,11 +3922,12 @@ export default function AIInterview() {
                   setInviteStatusPage(1);
                 };
 
-                /* Row selection — every row can be ticked, like the other
-                   tabs; Select All covers this page. Revoke acts only on the
-                   ticked rows that can still be revoked (Invited / In
-                   Progress), and says how many that is. */
-                const pageIds = pageItems.map((inv) => inv.id);
+                /* Row selection — every row under every status bucket can be
+                   ticked (bar a Disabled/Archived job's), like the other tabs;
+                   Select All covers this page's tickable rows. Each Actions
+                   item then acts only on the ticked rows it applies to, and
+                   says how many that is. */
+                const pageIds = pageItems.filter((inv) => !isInviteJdDisabled(inv)).map((inv) => inv.id);
                 const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedStatusInviteIds.has(id));
                 const toggleSelectAllOnPage = () =>
                   setSelectedStatusInviteIds((prev) => {
@@ -3793,7 +3944,191 @@ export default function AIInterview() {
                     return next;
                   });
                 const selectedStatusRows = filtered.filter((inv) => selectedStatusInviteIds.has(inv.id));
-                const revocableSelectedRows = selectedStatusRows.filter(isRevocableInvite);
+                const revocableSelectedRows = selectedStatusRows.filter((inv) => isRevocableInvite(inv) && !isInviteJdDisabled(inv));
+                const reportSelectedRows = selectedStatusRows.filter(canTryReport);
+
+                /* Actions (N) — the Candidate Results tab's menu. Each item
+                   counts the ticked rows it applies to ("Revoke (3 of 7)"); with
+                   none it stays listed, greyed, with the reason on hover. */
+                const titleCase = (v: string) => v.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+                const statusBucketName = inviteStatusFilters.status === 'all'
+                  ? 'All'
+                  : titleCase(inviteStatusFilters.status).replace(/ /g, '_');
+                const bulkCountLabel = (name: string, n: number) =>
+                  n === selectedStatusRows.length ? `${name} (${n})` : `${name} (${n} of ${selectedStatusRows.length})`;
+                const statusBulkItems: {
+                  key: string; label: string; Icon: ComponentType<{ className?: string }>; iconClass: string;
+                  reason: string; run: () => void; destructive?: boolean;
+                }[] = [
+                  {
+                    key: 'export', label: 'Export', Icon: FileDown, iconClass: 'text-menu-icon-download',
+                    reason: canExportAIInterviews ? '' : 'You do not have permission to export AI interviews',
+                    run: () => setShowStatusExportModal(true),
+                  },
+                  {
+                    key: 'resend', label: bulkCountLabel('Resend invitation', statusResendableSelectedRows.length), Icon: Mail, iconClass: 'text-menu-icon-score',
+                    reason: !canInviteAIInterviews
+                      ? 'You do not have permission to invite candidates'
+                      : statusResendableSelectedRows.length === 0
+                        ? 'None of the selected invitations can be resent — only expired links that were never started'
+                        : '',
+                    run: () => setStatusBulkResendOpen(true),
+                  },
+                  {
+                    key: 'revoke', label: bulkCountLabel('Revoke', revocableSelectedRows.length), Icon: Ban, iconClass: 'text-destructive', destructive: true,
+                    reason: !canInviteAIInterviews
+                      ? 'You do not have permission to revoke invitations'
+                      : revocableSelectedRows.length === 0
+                        ? 'None of the selected invitations can be revoked — only Invited links that have not expired'
+                        : '',
+                    run: () => setStatusBulkRevokeOpen(true),
+                  },
+                  {
+                    key: 'pdf',
+                    label: downloadingStatusPdfs
+                      ? (downloadingStatusPdfs.total > 1 ? `Preparing ${downloadingStatusPdfs.done}/${downloadingStatusPdfs.total}…` : 'Preparing…')
+                      : bulkCountLabel('Download PDF Reports', reportSelectedRows.length),
+                    Icon: Download, iconClass: 'text-menu-icon-download',
+                    reason: !canDownloadAIReports
+                      ? AI_REPORT_DOWNLOAD_DENIED
+                      : downloadingStatusPdfs
+                      ? 'Preparing reports…'
+                      : reportSelectedRows.length === 0
+                        ? 'No evaluation report yet for the selected candidates — available once an interview is completed and evaluated'
+                        : '',
+                    run: () => void handleStatusBulkPdfs(reportSelectedRows),
+                  },
+                ];
+                const statusBulkActions = selectedStatusRows.length > 0 ? (
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                          aria-label={`Actions for ${selectedStatusRows.length} selected`}
+                        >
+                          <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                            <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                            <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                          </span>
+                          {isBulkRevoking || isStatusBulkResending || downloadingStatusPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                          Actions ({selectedStatusRows.length})
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-72 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                          {selectedStatusRows.length.toLocaleString()} selected
+                        </div>
+                        {statusBulkItems.map(({ key, label, Icon, iconClass, reason, run, destructive }) => (
+                          /* A blocked item stays listed, greyed, with its reason
+                             on hover: aria-disabled rather than Radix `disabled`,
+                             whose pointer-events:none would swallow the title. */
+                          <DropdownMenuItem
+                            key={key}
+                            aria-disabled={reason ? true : undefined}
+                            title={reason || undefined}
+                            onSelect={(e) => { if (reason) { e.preventDefault(); return; } run(); }}
+                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
+                              reason ? 'text-gray-400 cursor-not-allowed opacity-60' : destructive ? 'cursor-pointer text-destructive' : 'cursor-pointer'
+                            }`}
+                          >
+                            <Icon className={`w-4 h-4 ${reason ? 'text-gray-300' : iconClass}`} />
+                            <span>{label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setSelectedStatusInviteIds(new Set())}
+                      icon={<X className="w-4 h-4" />}
+                      className="whitespace-nowrap !h-[38px] !text-sm"
+                    >
+                      Clear
+                    </Button>
+                  </>
+                ) : null;
+
+                /* Export — the ticked rows, with the columns picked in the
+                   popup. Built in the browser, so the audit row is written by
+                   /ai-interview/export/log right after the download. */
+                const STATUS_EXPORT_COLUMNS = [
+                  { id: 'candidate', label: 'Candidate' },
+                  { id: 'email', label: 'Email' },
+                  { id: 'cid', label: 'CID' },
+                  { id: 'invitedAt', label: 'Invited At' },
+                  { id: 'startedAt', label: 'Started At' },
+                  { id: 'completedAt', label: 'Completed At' },
+                  { id: 'status', label: 'Status' },
+                  { id: 'score', label: 'Score' },
+                  { id: 'result', label: 'Result' },
+                  { id: 'inviteSource', label: 'Invite Source' },
+                  { id: 'jdId', label: 'JD ID' },
+                  { id: 'jobTitle', label: 'Job Title' },
+                  { id: 'jobVersion', label: 'Job Version' },
+                  { id: 'interviewVersion', label: 'Interview Version' },
+                ];
+                const statusExportCell = (inv: any, id: string): string => {
+                  const at = (v: any) => (v ? formatIST(v) : '');
+                  switch (id) {
+                    case 'candidate': return inv.candidate_name || '';
+                    case 'email': return inv.candidate_email || '';
+                    case 'cid': return inv.candidate_cid || '';
+                    case 'invitedAt': return at(inv.invitation_sent_at || inv.created_at);
+                    case 'startedAt': return at(inv.started_at);
+                    case 'completedAt': return at(inv.completed_at);
+                    case 'status': return titleCase(resolveInviteStatus(inv) || '');
+                    case 'score': { const sc = displayInviteScore(inv); return sc != null ? `${sc}%` : ''; }
+                    case 'result': return inviteResult(inv, displayInviteScore(inv)) || '';
+                    case 'inviteSource': return inviteSourceLabel(inv) || '';
+                    case 'jdId': return inv._jd_short_id || '';
+                    case 'jobTitle': return inv._config_title || '';
+                    case 'jobVersion': return inv._jd_version != null ? `V${inv._jd_version}` : '';
+                    case 'interviewVersion': return inv._interview_version != null ? `V${inv._interview_version}` : '';
+                    default: return '';
+                  }
+                };
+                const handleStatusExport = (ids: string[]) => {
+                  const rows = selectedStatusRows;
+                  if (rows.length === 0) { toast.warning('No invitations to export'); return; }
+                  const cols = STATUS_EXPORT_COLUMNS.filter((c) => ids.includes(c.id));
+                  const headers = cols.map((c) => c.label);
+                  const data = rows.map((inv) => cols.map((c) => statusExportCell(inv, c.id)));
+                  const baseName = `AI_Interview_Invitations_${statusBucketName}_${new Date().toISOString().slice(0, 10)}`;
+                  let blob: Blob;
+                  let fileName: string;
+                  if (statusExportFormat === 'csv') {
+                    const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+                    const csv = [headers.map(q).join(','), ...data.map((cells) => cells.map(q).join(','))].join('\n');
+                    blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+                    fileName = `${baseName}.csv`;
+                  } else {
+                    const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background:#f0f0f0;font-weight:bold}</style></head><body><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${data.map((cells) => `<tr>${cells.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+                    blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                    fileName = `${baseName}.xls`;
+                  }
+                  const url = window.URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = fileName;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  window.URL.revokeObjectURL(url);
+                  void aiInterviewService.logListExport({
+                    format: statusExportFormat,
+                    recordCount: rows.length,
+                    tab: `invitation-status:${inviteStatusFilters.status}`,
+                    ids: rows.map((inv) => inv.id),
+                    exportType: 'ai_interview_invitation_status',
+                  });
+                  toast.success(`Exported ${rows.length} records to ${statusExportFormat === 'csv' ? 'CSV' : 'Excel'}`);
+                  setShowStatusExportModal(false);
+                };
 
                 /* What More Filters reports: status off 'all' is one, and the
                    date range is one filter however many ends are set. */
@@ -3827,6 +4162,8 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
+                      afterFiltersActions={statusBulkActions}
+                      trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       countBadge={
                         <ListCountBadge
                           filtered={total}
@@ -3867,16 +4204,13 @@ export default function AIInterview() {
                               <label htmlFor="ai-invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                                 Status
                               </label>
-                              <select
+                              <Dropdown
                                 id="ai-invite-status-filter"
                                 value={inviteStatusFilters.status}
-                                onChange={(e) => updateInviteStatusFilters({ status: e.target.value })}
+                                onChange={(v) => updateInviteStatusFilters({ status: v })}
                                 className={AI_FILTER_FIELD_CLASS}
-                              >
-                                {INVITATION_STATUS_TAB_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                              </select>
+                                options={INVITATION_STATUS_TAB_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                              />
                             </div>
                             <div>
                               <label htmlFor="ai-invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
@@ -3911,6 +4245,15 @@ export default function AIInterview() {
                     />
                   </>
                 );
+
+                if (inviteStatusStateBody) {
+                  return (
+                    <>
+                      {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
+                      {inviteStatusStateBody}
+                    </>
+                  );
+                }
 
                 /* Segmented status filter — same shape as the Assessments
                    page's Invitation Status tab: a raised-white selected pill
@@ -3979,7 +4322,7 @@ export default function AIInterview() {
 
                       <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
                         <div className="flex items-center gap-2.5 sm:gap-3">
-                          <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                          <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
                           <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
                             <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
                           </div>
@@ -3999,6 +4342,7 @@ export default function AIInterview() {
                         isLoading={false}
                         hasActiveFilters={filtersActive}
                         showJobColumn
+                        displayMode={listDisplayMode}
                         selectedIds={selectedStatusInviteIds}
                         onToggleSelect={toggleSelectOneInvite}
                         isSelectable={(inv) => !isInviteJdDisabled(inv)}
@@ -4068,6 +4412,25 @@ export default function AIInterview() {
                       cancelText="Cancel"
                       variant="danger"
                     />
+
+                    {/* Export — format, then the columns to include (all ticked
+                        to start), then Cancel / Export. */}
+                    {showStatusExportModal && (
+                      <ExportColumnsModal<'csv' | 'xls'>
+                        title="Export Invitations"
+                        recordCount={selectedStatusRows.length}
+                        formats={[
+                          { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+                          { key: 'xls', title: 'Excel Format (.xls)', description: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+                        ]}
+                        format={statusExportFormat}
+                        onFormatChange={setStatusExportFormat}
+                        columns={STATUS_EXPORT_COLUMNS}
+                        initialColumnIds={STATUS_EXPORT_COLUMNS.map((c) => c.id)}
+                        onExport={handleStatusExport}
+                        onClose={() => setShowStatusExportModal(false)}
+                      />
+                    )}
                   </>
                 );
               })()}
@@ -4077,7 +4440,7 @@ export default function AIInterview() {
           {/* Activity Logs Tab */}
           {activeTab === 'audit' && (
             <div className="p-3 sm:p-6">
-              <AIInterviewAuditTrail toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} />
+              <AIInterviewAuditTrail toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} />
             </div>
           )}
 
@@ -4102,7 +4465,7 @@ export default function AIInterview() {
                   <button
                     key={sub.key}
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
-                    className={`pb-2 sm:pb-3 text-xs sm:text-sm border-b-2 transition-colors ${
+                    className={`pb-2 sm:pb-3 text-sm border-b-2 transition-colors ${
                       settingsSubTab === sub.key
                         ? 'border-brand-blue text-brand-blue font-medium'
                         : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
@@ -4124,31 +4487,30 @@ export default function AIInterview() {
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
                           Default Interview Duration
                         </label>
-                        <select
-                          value={settingsDuration}
-                          onChange={(e) => setSettingsDuration(parseInt(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900"
-                        >
-                          <option value="30">30 minutes</option>
-                          <option value="45">45 minutes</option>
-                          <option value="60">60 minutes</option>
-                        </select>
+                        <Dropdown
+                          value={String(settingsDuration)}
+                          onChange={(v) => setSettingsDuration(parseInt(v))}
+                          ariaLabel="Default Interview Duration"
+                          className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                          options={[
+                            { value: '30', label: '30 minutes' },
+                            { value: '45', label: '45 minutes' },
+                            { value: '60', label: '60 minutes' },
+                          ]}
+                        />
                       </div>
 
                       <div>
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
                           AI Voice Language
                         </label>
-                        <select
+                        <Dropdown
                           value={settingsLanguage}
-                          onChange={(e) => setSettingsLanguage(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900"
-                        >
-                          <option>English (US)</option>
-                          <option>English (UK)</option>
-                          <option>Spanish</option>
-                          <option>French</option>
-                        </select>
+                          onChange={(v) => setSettingsLanguage(v)}
+                          ariaLabel="AI Voice Language"
+                          className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                          options={['English (US)', 'English (UK)', 'Spanish', 'French'].map((l) => ({ value: l, label: l }))}
+                        />
                       </div>
 
                       <div className="flex items-center gap-3">
@@ -4248,8 +4610,8 @@ export default function AIInterview() {
                                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                                   <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                                   <div className="min-w-0">
-                                    <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
-                                    <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
+                                    <div className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
+                                    <div className="text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
                                   </div>
                                 </div>
                                 <input
@@ -4261,7 +4623,7 @@ export default function AIInterview() {
                               </div>
                             ))}
 
-                            <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Thresholds</h4>
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Thresholds</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                               <div>
                                 <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Max Tab Switches</label>
@@ -4298,7 +4660,7 @@ export default function AIInterview() {
                               </div>
                             </div>
 
-                            <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
+                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
                             <p className="text-2xs text-gray-500 dark:text-slate-500 mb-2">Set the score boundaries for Low / Medium / High risk in the Violations tab. Each violation scores 1 pt (Low), 2 pts (Medium), or 3 pts (High).</p>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                               <div>
@@ -4430,7 +4792,7 @@ export default function AIInterview() {
 
               {/* Footer */}
               <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
-                <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <div className="min-w-0 truncate whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                   {!invitePickerSelection ? (
                     'Select an interview to continue'
                   ) : blockedReason ? (
@@ -4580,7 +4942,7 @@ export default function AIInterview() {
           (invitationOverview ? pick(invitationOverview) : '—');
 
         const pageBtn =
-          'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
+          'px-2 sm:px-3 py-1 sm:py-1.5 text-sm border border-gray-200 dark:border-slate-700 ' +
           'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
           'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
@@ -4605,12 +4967,12 @@ export default function AIInterview() {
                       <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                      <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
                         <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                         <span className="sm:hidden">Invite Status</span>
                       </h2>
                       {/* JD ID, then the job title. */}
-                      <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                      <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
                         {viewInvitationsConfig.jd_short_id && (
                           <JobIdBadge className="flex-shrink-0">{viewInvitationsConfig.jd_short_id}</JobIdBadge>
                         )}
@@ -4720,7 +5082,7 @@ export default function AIInterview() {
                     <button
                       type="button"
                       onClick={toggleSelectAll}
-                      className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                      className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                     >
                       <span role="checkbox" aria-checked={allSelectableOnPageSelected} className="p-1 flex-shrink-0">
                         {allSelectableOnPageSelected ? (
@@ -4836,7 +5198,7 @@ export default function AIInterview() {
                     className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
                     aria-live="polite"
                   >
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                       <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                       Refreshing invite statuses...
                     </span>
@@ -4848,14 +5210,14 @@ export default function AIInterview() {
                   Invite More and Close overflowed a 320px row. First/Last drop out
                   below sm — Prev/Next and the indicator are enough there. */}
               <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+                <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                   {invitationResultsLabel}
                 </p>
                 <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                   {invitationTotalPages > 1 && (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                        <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
                         <input
                           type="number"
                           min={1}
@@ -4870,13 +5232,13 @@ export default function AIInterview() {
                           }}
                           onBlur={commitGoToInvitationPage}
                           aria-label="Go to page"
-                          className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-xs sm:text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                          className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                         />
                       </div>
                       <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
                         Prev
                       </button>
-                      <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                      <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                         Page {invitationPage} of {invitationTotalPages}
                       </span>
                       <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>
@@ -4954,6 +5316,49 @@ export default function AIInterview() {
         versionNumber={reviewPreviewTarget?.version}
         onClose={() => setReviewPreviewTarget(null)}
       />
+
+      {/* Bulk Archive / Unarchive / Delete confirmation (Actions menu). */}
+      {bulkConfirm && (() => {
+        const { kind, eligible, skipped } = bulkConfirm;
+        const n = eligible.length;
+        const noun = n === 1 ? 'interview' : 'interviews';
+        const verb = kind === 'archive' ? 'archived' : kind === 'unarchive' ? 'unarchived' : 'permanently deleted';
+        const actionLabel = kind === 'archive' ? `Archive ${n}` : kind === 'unarchive' ? `Unarchive ${n}` : `Delete ${n}`;
+        const BulkIcon = kind === 'archive' ? Archive : kind === 'unarchive' ? ArchiveRestore : Trash2;
+        return (
+          <AppModal
+            open
+            size="sm"
+            icon={<BulkIcon />}
+            title={kind === 'archive' ? 'Archive interviews?' : kind === 'unarchive' ? 'Unarchive interviews?' : 'Delete interviews?'}
+            onCancel={cancelBulk}
+            cancelDisabled={bulkRunning}
+            actions={[{
+              label: bulkRunning ? 'Working…' : actionLabel,
+              variant: kind === 'delete' ? 'destructive' : 'primary',
+              onClick: () => { void confirmBulk(); },
+              loading: bulkRunning,
+              disabled: bulkRunning,
+            }]}
+          >
+            <p className="text-sm text-gray-700 dark:text-slate-300">
+              {n} {noun} will be {verb}.
+              {kind === 'unarchive' && ' Each returns to Draft or Active, as it was before it was archived.'}
+              {kind === 'delete' && ' This cannot be undone.'}
+            </p>
+            {skipped.length > 0 && (
+              <div className="mt-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 p-3">
+                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Skipped</p>
+                <ul className="space-y-0.5 text-xs text-gray-600 dark:text-slate-400">
+                  {skipped.map((s) => (
+                    <li key={s.reason}>{s.count} skipped — {s.reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </AppModal>
+        );
+      })()}
 
       {/* Resend confirmation — regenerates interview_token, invalidates old link */}
       <ConfirmationDialog

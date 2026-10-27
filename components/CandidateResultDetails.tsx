@@ -1130,7 +1130,7 @@ export default function CandidateResultDetails({
               standalone route passes showRecordPager={false} and puts the pager
               in its own breadcrumb instead. */}
           <PageBreadcrumb
-            className="mb-3"
+            className="mb-4 md:mb-6"
             sticky={false}
             items={breadcrumbItems}
             actions={showRecordPager && totalCount != null && totalCount > 0 ? (
@@ -1320,7 +1320,7 @@ export default function CandidateResultDetails({
                       toast.error('Failed to export result PDF. Please try again.');
                     }
                   }}
-                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-brand-blue border border-brand-blue rounded-lg hover:bg-brand-blue-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  className="px-3 sm:px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-brand-blue rounded-lg hover:bg-brand-blue-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
                 >
                   <Download className="w-4 h-4" />
                   <span>Report</span>
@@ -1465,7 +1465,7 @@ export default function CandidateResultDetails({
                     aria-current={isActive ? 'page' : undefined}
                     className={`${
                       tab.danger
-                        ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm whitespace-nowrap transition-all ${
+                        ? `inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap transition-all ${
                             isActive
                               ? 'bg-destructive text-white shadow-sm shadow-destructive/25'
                               : 'bg-destructive-subtle/50 text-gray-600 dark:text-slate-300 hover:bg-destructive-subtle hover:text-destructive'
@@ -1624,7 +1624,7 @@ export default function CandidateResultDetails({
                   <h2 className="text-gray-900 flex items-center gap-2 text-sm sm:text-base tracking-tight font-semibold">
                     AI-Generated Candidate Insights
                   </h2>
-                  <p className="text-gray-600 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                  <p className="text-gray-600 text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
                 </div>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
@@ -2143,7 +2143,7 @@ export default function CandidateResultDetails({
                           })()}
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
-                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
+                          <div className="text-sm text-gray-600 mb-0.5 sm:mb-1">
                             {isHRRound ? 'Section Type' : 'Section Score'}
                           </div>
                           <div className={`text-xl sm:text-3xl font-bold tracking-tight ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
@@ -2849,7 +2849,7 @@ export default function CandidateResultDetails({
                         </p>
                       </div>
                       <div className="shrink-0 text-left sm:text-right">
-                        <div className="text-xs sm:text-sm text-gray-600 mb-1">Integrity Status</div>
+                        <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
                         <span className={`inline-flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
                             ? 'bg-success-subtle text-success-strong ring-success-line'
@@ -2932,7 +2932,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Window Focus Lost</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Window Focus Lost</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -2964,7 +2964,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Mouse Movement</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Mouse Movement</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -2996,7 +2996,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Tab Switch</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Tab Switch</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3028,7 +3028,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Copy Attempts</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Copy Attempts</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3060,7 +3060,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Paste Attempts</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Paste Attempts</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3092,7 +3092,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Camera Obstructed / Off</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Camera Obstructed / Off</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3124,7 +3124,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Face Not Detected</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Face Not Detected</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3156,7 +3156,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Voice Violations</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Voice Violations</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3188,7 +3188,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Multiple Faces</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Multiple Faces</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3220,7 +3220,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Fullscreen Exit</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Fullscreen Exit</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3252,7 +3252,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Screen Capture Attempt</div>
+                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Screen Capture Attempt</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${

@@ -9,7 +9,7 @@ export default function Loading() {
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Hero */}
-          <section className="relative mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-5 sm:p-6">
+          <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="space-y-2">
@@ -20,7 +20,7 @@ export default function Loading() {
             </div>
           </section>
           {/* Category filter chips */}
-          <div className="flex flex-wrap gap-2 mb-5 sm:mb-6">
+          <div className="flex flex-wrap gap-2 mb-4 sm:mb-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-9 w-20 rounded-lg" />
             ))}
@@ -28,7 +28,7 @@ export default function Loading() {
           {/* Integration cards grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5 lg:p-6">
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-4 min-w-0 flex-1">
                     <Skeleton className="w-12 h-12 shrink-0 rounded-lg" />

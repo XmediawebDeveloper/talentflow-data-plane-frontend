@@ -216,7 +216,7 @@ export default function SearchableSelect({
             disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
             variant === 'pill'
               ? cn(
-                  'h-7 pl-2.5 pr-8 rounded-md bg-transparent text-xs sm:text-sm',
+                  'h-7 pl-2.5 pr-8 rounded-md bg-transparent text-sm',
                   'focus:outline-none focus:ring-2 focus:ring-brand-blue/40',
                   value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-700 dark:text-slate-300',
                 )

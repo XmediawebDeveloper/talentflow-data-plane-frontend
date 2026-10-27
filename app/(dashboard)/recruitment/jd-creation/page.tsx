@@ -165,7 +165,7 @@ function AccessBlockedError({
         {/* Show unit details if insufficient units */}
         {errorCode === 'INSUFFICIENT_UNITS' && accessCheck?.units && (
           <div className="bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:ring-brand-blue/30 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
-            <p className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
             <div className="space-y-1 text-sm text-gray-600 dark:text-slate-300">
               <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Resume Storage: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
@@ -366,10 +366,12 @@ function JDCreationSkeleton({ stage }: { stage?: string | null }) {
           {/* 4-step indicator block (shared across all stages) */}
           <div className="mb-4 sm:mb-6 rounded-xl border border-gray-100 bg-gradient-to-br from-slate-50 to-white px-3 py-3 sm:px-5 sm:py-4">
             <div className="overflow-x-auto">
-              <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-1">
+              {/* Phones: spans the card with stretching connectors, as the
+                  real indicator (JDCreation) does, so it never scrolls. */}
+              <div className="flex w-fit min-w-max max-sm:w-full max-sm:min-w-0 mx-auto items-center gap-2 sm:gap-4 px-1">
                 {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-3 sm:gap-4">
-                    {i > 0 && <div className="w-6 sm:w-12 lg:w-24 h-0.5 rounded-full bg-gray-200" />}
+                  <div key={i} className={`flex items-center gap-2 sm:gap-4 ${i > 0 ? 'max-sm:flex-1' : ''}`}>
+                    {i > 0 && <div className="w-6 max-sm:w-auto max-sm:flex-1 sm:w-12 lg:w-24 h-0.5 rounded-full bg-gray-200" />}
                     <div className="flex items-center gap-2.5">
                       <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full bg-gray-200 animate-pulse" />
                       <div className="hidden sm:block h-4 w-16 rounded bg-gray-200 animate-pulse" />
@@ -452,7 +454,7 @@ function JDCreationContent() {
   /* "Being edited by X": another user changed their working copy of this draft in
      the last 30 minutes. View only opens the JD's page; Take over saves THEIR
      unsaved edits onto the draft first, then opens a fresh copy here. */
-  const [beingEdited, setBeingEdited] = useState<{ jdId: string; editorName: string | null; since: string | null } | null>(null);
+  const [beingEdited, setBeingEdited] = useState<{ jdId: string; editorName: string | null; since: string | null; ofPublished?: boolean } | null>(null);
   const [takingOver, setTakingOver] = useState(false);
   const [isJDInUse, setIsJDInUse] = useState(false);
   const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
@@ -587,6 +589,46 @@ function JDCreationContent() {
             }
             setIsTitleLocked(titleLocked);
             if (!titleLocked) setTitleLockedMessage(undefined);
+
+            /* A PUBLISHED JD nobody has used is edited in place - the same JD, no new
+               version - but through a working copy, so the live row changes only on
+               Republish (or Save). The copy is a draft row underneath; the editor is told
+               it is editing a Published JD so it says Republish and cannot delete it.
+               A copy reopened by a refresh is recognised by its origin. If the copy cannot
+               be opened we do NOT fall back to the live row: the editor saves at every
+               step, which is what put half-finished edits live before. */
+            if (jd.status === 'published' && !jdInUse && !jd.is_working_copy) {
+              try {
+                const copy = await jdService.startWorkingCopy(jd.id);
+                if (copy.resumed_working_copy) {
+                  const when = copy.working_copy_updated_at
+                    ? new Date(copy.working_copy_updated_at).toLocaleString()
+                    : 'your last visit';
+                  toast.info({
+                    title: 'Unsaved changes restored',
+                    description: `You have unsaved changes from ${when}. Save to keep them, or Discard to drop them.`,
+                  });
+                }
+                jd = { ...copy, status: 'published' };
+              } catch (copyError) {
+                if (copyError instanceof JDBeingEditedError) {
+                  setBeingEdited({ jdId: jd.id, editorName: copyError.editorName, since: copyError.since, ofPublished: true });
+                  setLoading(false);
+                  return;
+                }
+                console.error('[TalentFlow] Could not open a working copy of the published JD:', copyError);
+                toast.error({
+                  title: 'Could not open this JD for editing',
+                  description: copyError instanceof Error ? copyError.message : 'Please try again.',
+                });
+                router.push('/recruitment/job-openings');
+                setLoading(false);
+                return;
+              }
+            } else if (jd.is_working_copy && jd.working_copy_of) {
+              const origin = await jdService.get(jd.working_copy_of).catch(() => null);
+              if (origin?.status === 'published') jd = { ...jd, status: 'published' };
+            }
 
             setEditingJD(jd);
           } catch (error) {
@@ -865,7 +907,7 @@ function JDCreationContent() {
       setTakingOver(true);
       try {
         const copy = await jdService.startWorkingCopy(beingEdited.jdId, true);
-        setEditingJD(copy);
+        setEditingJD(beingEdited.ofPublished ? { ...copy, status: 'published' } : copy);
         setBeingEdited(null);
       } catch (error) {
         console.error('[TalentFlow] Take over failed:', error);

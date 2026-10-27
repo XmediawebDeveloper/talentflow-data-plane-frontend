@@ -267,6 +267,11 @@ interface FolderTreeProps {
    *  the whole column into a slim rail (md and up), remembered per browser
    *  and shared with every other database view. */
   collapsible?: boolean;
+  /** The tree sits directly on a page panel (no card around it): drop the
+   *  padding on its outer edges so its content lines up with the panel's
+   *  content inset. Below md (a full-width band) both sides; from md (left
+   *  column) the left side only. */
+  flushStart?: boolean;
 }
 
 export default function FolderTree({
@@ -290,6 +295,7 @@ export default function FolderTree({
   canUploadToFolder = true,
   hideDeleteFolder = false,
   collapsible = false,
+  flushStart = false,
 }: FolderTreeProps) {
   // Collapsed folder column (md and up) — shared state, button and rail
   // (components/ui/folder-panel-collapse), the same in every database view.
@@ -318,6 +324,45 @@ export default function FolderTree({
   // ---- Drag-to-resize for the folder column -------------------------------
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [isResizing, setIsResizing] = useState(false);
+
+  /* The panel takes its height from the table beside it (see the note on the
+     panel below), so opening a folder with few or no resumes shrank it to
+     360px: the pinned System Folders kept their room and My Folders was left
+     a sliver too small to use. From md up the panel is therefore held at least
+     as tall as its own tree — fixtures plus every folder row — capped to the
+     visible screen, where the list scrolls as before. A long table still makes
+     it taller. */
+  const contentColRef = useRef<HTMLDivElement | null>(null);
+  const folderListRef = useRef<HTMLDivElement | null>(null);
+  const [treeMinHeight, setTreeMinHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const col = contentColRef.current;
+    const list = folderListRef.current;
+    if (!col || !list) return;
+    const measure = () => {
+      // Page panel only: inside a popup (Select Source) the dialog sizes it.
+      if (window.innerWidth < 768 || col.closest('.fixed')) { setTreeMinHeight(null); return; }
+      const natural = col.clientHeight - list.clientHeight + list.scrollHeight;
+      const cap = window.innerHeight - 128; // app header + page breathing room
+      const next = Math.round(Math.max(360, Math.min(natural, cap)));
+      setTreeMinHeight(prev => (prev === next ? prev : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(list);
+    Array.from(list.children).forEach(child => ro.observe(child));
+    const mo = new MutationObserver(() => {
+      Array.from(list.children).forEach(child => ro.observe(child));
+      measure();
+    });
+    mo.observe(list, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
 
   const clampWidth = (value: number) =>
     Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(value)));
@@ -861,7 +906,12 @@ export default function FolderTree({
     <div
       ref={panelRef}
       className={`relative border-b md:border-b-0 md:border-r border-gray-200 bg-white max-md:!w-full max-md:!max-w-full max-md:!min-w-0 md:min-h-[360px] ${folderColumnClasses(isCollapsed, animateToggle, 'md')}`}
-      style={{ width: `${width}px`, minWidth: `${MIN_PANEL_WIDTH}px`, maxWidth: `${MAX_PANEL_WIDTH}px` }}
+      style={{
+        width: `${width}px`,
+        minWidth: `${MIN_PANEL_WIDTH}px`,
+        maxWidth: `${MAX_PANEL_WIDTH}px`,
+        ...(treeMinHeight && !isCollapsed ? { minHeight: `${treeMinHeight}px` } : {}),
+      }}
     >
       {/* Resize handle — sits on the panel's right edge, over the divider.
           Desktop only: the panel is full-width below md, where there's no
@@ -894,7 +944,7 @@ export default function FolderTree({
       {/* Content column. Static (and self-sized) below md where the panel is a
           full-width band above the table; pinned to the panel's box from md up
           so the tree fills the row rather than defining it. */}
-      <div className="flex flex-col p-3 sm:p-4 md:absolute md:inset-0 md:overflow-hidden">
+      <div ref={contentColRef} className={`flex flex-col md:absolute md:inset-0 md:overflow-hidden ${flushStart ? 'py-3 sm:py-4 md:pr-4' : 'p-3 sm:p-4'}`}>
       {/* Pinned fixtures — All Resumes, root, Archived Resumes. Named as their
           own section so it's clear why they can't be renamed or deleted. */}
       {pinnedFolders.length > 0 && (
@@ -987,6 +1037,7 @@ export default function FolderTree({
           bottom. `scrollbar-gutter: stable` reserves the track so rows don't
           shift when it appears. */}
       <div
+        ref={folderListRef}
         className="space-y-1 overflow-y-auto overscroll-contain pr-1 -mr-1 max-h-[420px] md:max-h-none md:min-h-0 md:flex-1 scrollbar-visible"
         style={{ scrollbarGutter: 'stable' }}
       >

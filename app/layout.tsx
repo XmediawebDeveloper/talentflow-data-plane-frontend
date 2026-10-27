@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 // import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
@@ -13,6 +13,7 @@ import AccessRestrictedModal from "@/components/AccessRestrictedModal";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 import TableScrollbars from "@/components/TableScrollbars";
 import TableRowCap from "@/components/TableRowCap";
+import DropdownViewportGuard from "@/components/DropdownViewportGuard";
 
 // import localFont from "next/font/local";
 
@@ -42,6 +43,17 @@ export const metadata: Metadata = {
     shortcut: "/logos/favicon.png",
     apple: "/logos/favicon.png",
   },
+};
+
+/* `maximumScale: 1` is what stops iOS Safari zooming in when a field under
+   16px is focused. It replaces the old globals.css rule that forced every
+   input/select/textarea to 16px on phones — which kept iOS from zooming but
+   made search boxes and dropdowns visibly bigger than the 14px text around
+   them. iOS still allows pinch-zoom with this set; Android Chrome does not. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -173,6 +185,9 @@ export default function RootLayout({
                   {/* Sizes every data table to header + 10 rows, then scroll.
                       Renders nothing itself; finds tables by class. */}
                   <TableRowCap />
+                  {/* Phones only: flips / nudges hand-rolled dropdowns that
+                      would open off screen. Renders nothing itself. */}
+                  <DropdownViewportGuard />
                 </BulkInviteProgressProvider>
                 </ScoringProgressProvider>
               </GlobalDialogProvider>
