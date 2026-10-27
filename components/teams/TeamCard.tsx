@@ -58,6 +58,8 @@ export function MemberStack({
           key={member.id}
           name={member.name}
           fallback={member.email}
+          src={member.avatar_url}
+          userId={member.id}
           size="sm"
           className={cn('ring-2 ring-white dark:ring-slate-900', size === 'sm' && 'h-7 w-7 text-2xs')}
         />

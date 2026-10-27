@@ -374,6 +374,9 @@ export default function ListToolbar({
           </button>
         )}
 
+        {/* Sort by lands here — see `useListSortSlot`. */}
+        <span data-list-sort-slot className="contents" />
+
         {afterFiltersActions}
 
         {showClear && (

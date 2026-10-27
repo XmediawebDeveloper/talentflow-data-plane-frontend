@@ -27,7 +27,11 @@ export type ProctoringEventType =
   | 'gaze_away'
   | 'camera_frozen'
   | 'identity_mismatch'
-  | 'assessment_terminated';
+  | 'assessment_terminated'
+  // Server proctor vision only (object detection runs on the server, never in
+  // the assessment browser) — toast only, the server records them.
+  | 'phone_detected'
+  | 'unauthorized_object';
 
 export interface ProctoringEvent {
   id: string;
@@ -61,6 +65,8 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   camera_frozen: 'Camera feed appears frozen. Please restore your live camera feed.',
   identity_mismatch: 'Identity mismatch detected. Please ensure the registered candidate remains on camera.',
   assessment_terminated: 'The assessment has been terminated because you left the assessment screen.',
+  phone_detected: 'A mobile phone was detected. Please put it away — phones are not allowed during the assessment.',
+  unauthorized_object: 'An unauthorised item was detected in view. Please remove it from your workspace.',
 };
 
 // Severity mapping
@@ -84,6 +90,8 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
   camera_frozen: 'high',
   identity_mismatch: 'high',
   assessment_terminated: 'high',
+  phone_detected: 'high',
+  unauthorized_object: 'medium',
 };
 
 type Listener = (event: ProctoringEvent) => void;

@@ -387,6 +387,7 @@ interface ApiUser {
   user_display_id?: string;
   name: string;
   email: string;
+  avatar_url?: string | null;
   role: string;  // Dynamic role from RBAC
   permissions: UserPermissions;
   is_active: boolean;
@@ -1613,6 +1614,7 @@ export default function UserManagement() {
         user_display_id: user.user_display_id,
         name: user.name || user.full_name,
         email: user.email,
+        avatar_url: user.avatar_url || null,
         role: user.role || 'viewer',
         permissions: user.permissions || defaultPermissions,
         is_active: user.is_active ?? true,
@@ -3207,7 +3209,7 @@ export default function UserManagement() {
                     <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
                       {/* Inactive users read faded (identity only — toggle/actions stay full strength). */}
                       <div className={`flex items-center gap-2 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
-                        <NameAvatar name={user.name} fallback={user.email} size="md" />
+                        <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
                         <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <span className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
@@ -3320,7 +3322,7 @@ export default function UserManagement() {
                 <div className="flex items-start gap-2.5 sm:gap-3">
                   {/* Inactive users read faded (identity only — the toggle stays full strength). */}
                   <div className={`flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
-                  <NameAvatar name={user.name} fallback={user.email} size="sm" className="sm:h-9 sm:w-9 sm:text-sm" />
+                  <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" className="sm:h-9 sm:w-9 sm:text-sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
                       <span className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>

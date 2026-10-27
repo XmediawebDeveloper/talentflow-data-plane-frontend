@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ListBulkActions } from '@/components/ui/list-toolbar-slot';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -32,6 +33,7 @@ import type { JDLineageVersion } from '@/lib/services/jdService';
 import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
@@ -67,6 +69,8 @@ interface InterviewRow {
   rounds: string[];         // enabled round types, in config order
   invitations: number;      //                        -> column 6
   completed: number;        // completed sessions, filled in by fetchAll
+  /** The Completed figure is still on its way (it comes from a second request). */
+  completedPending?: boolean;
   createdAt: string;        // ISO                    -> column 7
   createdSort: number;      // epoch ms, so the sort never re-parses
   createdBy: string;        //                        -> column 8
@@ -337,6 +341,15 @@ export interface AllInterviewsTableProps {
    * actions. Falls back to rendering above the table when unset.
    */
   sortActionSlot?: HTMLElement | null;
+  /** The host's Sort by dropdown; orders the rows until a column header is clicked. */
+  defaultSort?: 'newest' | 'oldest' | 'active' | 'draft';
+  /**
+   * Every interview (live + archived) the host has ALREADY loaded. Used to draw
+   * the table at once on a first visit instead of asking the server for the
+   * same list again; the table still refetches in the background and swaps the
+   * fresh rows in. Leave unset until the host's own load has finished.
+   */
+  seedConfigs?: AIInterviewResponse[];
   /**
    * Bumped by the host's Refresh button (AIInterview.tsx) to force a
    * reload — this table otherwise only refetches on mount or its own Retry.
@@ -416,14 +429,95 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   return null;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortActionSlot, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
+/**
+ * Every interview as table rows: the list first (handed to `onList` as soon as
+ * it is ready), then each row's Completed count. Module level so the page can
+ * warm the tab (`prefetchInterviewRows`) through the same code the table uses.
+ */
+async function loadInterviewRows(onList: (rows: InterviewRow[]) => void): Promise<InterviewRow[]> {
+  const startedAt = performance.now();
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
+
+  const seen = new Set<string>();
+  const merged: AIInterviewResponse[] = [];
+  for (const config of [...live, ...archived]) {
+    if (seen.has(config.id)) continue;
+    seen.add(config.id);
+    merged.push(config);
+  }
+  const rows = withInterviewVersions(merged);
+
+  /* The list response carries no finished-sessions count, so it is read off
+     the batched `/invitation-counts` endpoint — a SECOND request. The rows
+     are handed to the table first, with Completed marked pending (carrying
+     over the last known figure meanwhile), so the list is on screen as soon
+     as the first request answers instead of after both. */
+  const withInvites = rows.filter((row) => row.invitations > 0);
+  const known = new Map((readListSnapshot<InterviewRow[]>('ai-interviews:rows') ?? []).map((r) => [r.id, r.completed]));
+  for (const row of withInvites) {
+    row.completed = known.get(row.id) ?? 0;
+    row.completedPending = true;
+  }
+  onList([...rows]);
+  perfNote('All Interviews — rows ready', startedAt);
+
+  const COUNTS_BATCH = 200; // backend cap on ids per request
+  for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
+    const batch = withInvites.slice(start, start + COUNTS_BATCH);
+    try {
+      const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
+      for (const row of batch) row.completed = counts[row.id]?.completed || 0;
+    } catch {
+      /* Older backend / transient error: fall back to the per-config probe
+         for this batch, ten at a time. A failed probe leaves that row at 0. */
+      for (let i = 0; i < batch.length; i += 10) {
+        await Promise.all(
+          batch.slice(i, i + 10).map(async (row) => {
+            try {
+              const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
+              row.completed = res.completed || 0;
+            } catch {
+              /* leave at 0 */
+            }
+          }),
+        );
+      }
+    }
+    for (const row of batch) row.completedPending = false;
+  }
+  perfNote('All Interviews — counts complete', startedAt);
+  return rows;
+}
+
+/** Loads the rows (counts included) and remembers them, so the tab draws complete at once. */
+export async function prefetchInterviewRows(): Promise<void> {
+  const rows = await loadInterviewRows(() => {});
+  writeListSnapshot('ai-interviews:rows', rows.map((row) => ({ ...row })));
+}
+
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', seedConfigs, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
 
-  const [rows, setRows] = useState<InterviewRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  /* First paint, best source first: what this table last loaded (any tab of it
+     shares one remembered set), else what the host page already holds. Either
+     way the skeleton is skipped and the background fetch below corrects it. */
+  const [initial] = useState(() => {
+    const remembered = readListSnapshot<InterviewRow[]>('ai-interviews:rows');
+    const seeded = !remembered && seedConfigs && seedConfigs.length > 0
+      ? withInterviewVersions(seedConfigs).map((row) => (row.invitations > 0 ? { ...row, completedPending: true } : row))
+      : null;
+    const start = remembered ?? seeded;
+    return {
+      rows: start ? (fixedStatus ? start.filter((r) => r.rawStatus === fixedStatus) : start) : ([] as InterviewRow[]),
+      hasRows: !!start,
+    };
+  });
+  const hasLoadedOnce = useRef(false);
+  const [rows, setRows] = useState<InterviewRow[]>(initial.rows);
+  const [isLoading, setIsLoading] = useState(!initial.hasRows);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -455,59 +549,31 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
   /* Two requests, not one: `listConfigs` with no status filter excludes
      archived configs (AIInterview.tsx loads them separately for the same
      reason), and "All Interviews" means every version regardless of status. */
-  const fetchAll = useCallback(async (): Promise<InterviewRow[]> => {
-    const { live, archived } = await aiInterviewService.listAllConfigsSplit();
-
-    const seen = new Set<string>();
-    const merged: AIInterviewResponse[] = [];
-    for (const config of [...live, ...archived]) {
-      if (seen.has(config.id)) continue;
-      seen.add(config.id);
-      merged.push(config);
-    }
-    const rows = withInterviewVersions(merged);
-
-    /* The list response carries no finished-sessions count, so read it off
-       the batched `/invitation-counts` endpoint (`completed`) — one request per
-       200 configs, only for configs that have sent at least one invite (the
-       rest are 0). If a batch fails (older backend, transient error) fall back
-       to the per-config page_size-1 probe for that batch, ten at a time. A
-       failed probe just leaves that row at 0. */
-    const withInvites = rows.filter((row) => row.invitations > 0);
-    const COUNTS_BATCH = 200; // backend cap on ids per request
-    for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
-      const batch = withInvites.slice(start, start + COUNTS_BATCH);
-      try {
-        const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
-        for (const row of batch) row.completed = counts[row.id]?.completed || 0;
-      } catch {
-        for (let i = 0; i < batch.length; i += 10) {
-          await Promise.all(
-            batch.slice(i, i + 10).map(async (row) => {
-              try {
-                const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
-                row.completed = res.completed || 0;
-              } catch {
-                /* leave at 0 */
-              }
-            }),
-          );
-        }
-      }
-    }
-    return rows;
-  }, []);
+  const fetchAll = loadInterviewRows;
 
   useEffect(() => {
     let alive = true;
-    fetchAll()
+    // A load after the first follows a change (reload, Retry): drop what other
+    // tabs remembered rather than show it stale.
+    const isRefresh = hasLoadedOnce.current;
+    hasLoadedOnce.current = true;
+    const show = (next: InterviewRow[]) => {
+      if (!alive) return;
+      // Ordinals are computed over the WHOLE set before this filter runs, so a
+      // version's number still reflects its true position in the lineage rather
+      // than shifting once other statuses are hidden.
+      setRows(fixedStatus ? next.filter((r) => r.rawStatus === fixedStatus) : next);
+      setError(null);
+      setIsLoading(false);
+    };
+    fetchAll(show)
       .then((next) => {
         if (!alive) return;
-        // Ordinals are computed above over the WHOLE set before this filter
-        // runs, so a version's number still reflects its true position in
-        // the lineage rather than shifting once other statuses are hidden.
-        setRows(fixedStatus ? next.filter((r) => r.rawStatus === fixedStatus) : next);
-        setError(null);
+        // Fresh objects, so the rows whose Completed just landed re-render.
+        const settled = next.map((row) => ({ ...row }));
+        if (isRefresh) clearListSnapshots();
+        writeListSnapshot('ai-interviews:rows', settled);
+        show(settled);
       })
       .catch((err) => {
         if (!alive) return;
@@ -604,14 +670,24 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
   }, [rows, appliedSearch, filters]);
 
   const sorted = useMemo(() => {
-    if (!sortKey) return [...filtered].sort((a, b) => b.createdSort - a.createdSort);
+    if (!sortKey) {
+      const first = defaultSort === 'active' ? 'Active' : defaultSort === 'draft' ? 'Draft' : null;
+      return [...filtered].sort((a, b) => {
+        if (first) {
+          const aw = a.status === first ? 0 : 1;
+          const bw = b.status === first ? 0 : 1;
+          if (aw !== bw) return aw - bw;
+        }
+        return defaultSort === 'oldest' ? a.createdSort - b.createdSort : b.createdSort - a.createdSort;
+      });
+    }
     const compare = COMPARATORS[sortKey];
     return [...filtered].sort((a, b) => {
       const primary = compare(a, b);
       const result = primary !== 0 ? primary : b.createdSort - a.createdSort;
       return sortDir === 'asc' ? result : -result;
     });
-  }, [filtered, sortKey, sortDir]);
+  }, [filtered, sortKey, sortDir, defaultSort]);
 
   /* The details page's Prev / Next walk THIS table — its rows, sort and
      filters — so "X / N" matches the count shown here. The order is handed
@@ -892,7 +968,7 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
       onClick={clearSort}
       title="Clear the column sort"
       icon={<X className="w-3.5 h-3.5" />}
-      className="flex-shrink-0"
+      className="flex-shrink-0 !h-9 !text-sm"
     >
       Clear Sort
     </Button>
@@ -1050,9 +1126,13 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
       case 'completed':
         return (
           <>
-            <span className="tabular-nums text-gray-900 dark:text-slate-100">
-              {row.completed.toLocaleString()}
-            </span>
+            {row.completedPending
+              ? <span aria-label="Loading" className="inline-block h-4 w-6 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
+              : (
+                <span className="tabular-nums text-gray-900 dark:text-slate-100">
+                  {row.completed.toLocaleString()}
+                </span>
+              )}
           </>
         );
       case 'createdAt':
@@ -1119,75 +1199,6 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
     </div>
   );
 
-  /* Actions (N) + Clear — only while rows are ticked. Rendered inline in the
-     toolbar standalone, or in the host page's tab-pills row (bulkActionSlot). */
-  const selectionControls = selectedRows.length > 0 ? (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            className={`relative ${bulkActionSlot ? 'h-8' : 'h-9'} px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300`}
-            aria-label={`Actions for ${selectedRows.length} selected`}
-          >
-            <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-            </span>
-            Actions ({selectedRows.length})
-            <ChevronDown className="w-4 h-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-          <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-            {selectedRows.length.toLocaleString()} selected
-          </div>
-          <DropdownMenuItem
-            aria-disabled={!canExport || undefined}
-            title={canExport ? undefined : 'You do not have permission to export AI interviews'}
-            onSelect={(e) => { if (!canExport) { e.preventDefault(); return; } setShowExportModal(true); }}
-            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-          >
-            <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
-            <span>Export</span>
-          </DropdownMenuItem>
-          {bulkActions && bulkKinds.map((kind) => {
-            const { label, Icon, className } = BULK_META[kind];
-            const reasons = selectedRows.map((row) => bulkSkipReason(kind, row, bulkActions));
-            const eligibleCount = reasons.filter((r) => r === null).length;
-            const total = selectedRows.length;
-            const none = eligibleCount === 0;
-            // No ticked row qualifies: greyed with the reason, never hidden (RBAC rule).
-            const firstReason = reasons.find((r) => r !== null) ?? '';
-            return (
-              <DropdownMenuItem
-                key={kind}
-                aria-disabled={none || undefined}
-                title={none ? `None of the selected can be ${label === 'Delete' ? 'deleted' : `${label.toLowerCase()}d`} — ${firstReason}` : undefined}
-                onSelect={(e) => { if (none) { e.preventDefault(); return; } void runBulk(kind); }}
-                className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
-                  none ? 'text-gray-400 cursor-not-allowed opacity-60' : kind === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${none ? 'text-gray-300' : className}`} />
-                <span>{label} ({eligibleCount === total ? total : `${eligibleCount} of ${total}`})</span>
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => setSelectedIds(new Set())}
-        icon={<X className="w-4 h-4" />}
-        className={`whitespace-nowrap ${bulkActionSlot ? '!h-8' : '!h-9'} !text-sm`}
-      >
-        Clear
-      </Button>
-    </>
-  ) : null;
-
   const toolbar = (
     <>
 
@@ -1238,12 +1249,74 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
               </span>
             )}
           </button>
-          {/* Actions (N) + Clear — standalone (no host slot): inline beside
-              More Filters. In a host page: its tab-pills row, see below. */}
-          {!bulkActionSlot && selectionControls && (
-            <div className="flex items-center gap-2 flex-shrink-0 animate-in fade-in zoom-in-95 duration-200">
-              {selectionControls}
-            </div>
+          {/* Sort by lands here — see `useListSortSlot`. */}
+          <span data-list-sort-slot className="contents" />
+          {/* Actions (N) + Clear — only while rows are ticked. */}
+          {selectedRows.length > 0 && (
+            <ListBulkActions>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                    aria-label={`Actions for ${selectedRows.length} selected`}
+                  >
+                    <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                      <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                      <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                    </span>
+                    Actions ({selectedRows.length})
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                    {selectedRows.length.toLocaleString()} selected
+                  </div>
+                  <DropdownMenuItem
+                    aria-disabled={!canExport || undefined}
+                    title={canExport ? undefined : 'You do not have permission to export AI interviews'}
+                    onSelect={(e) => { if (!canExport) { e.preventDefault(); return; } setShowExportModal(true); }}
+                    className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                  >
+                    <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                    <span>Export</span>
+                  </DropdownMenuItem>
+                  {bulkActions && bulkKinds.map((kind) => {
+                    const { label, Icon, className } = BULK_META[kind];
+                    const reasons = selectedRows.map((row) => bulkSkipReason(kind, row, bulkActions));
+                    const eligibleCount = reasons.filter((r) => r === null).length;
+                    const total = selectedRows.length;
+                    const none = eligibleCount === 0;
+                    // No ticked row qualifies: greyed with the reason, never hidden (RBAC rule).
+                    const firstReason = reasons.find((r) => r !== null) ?? '';
+                    return (
+                      <DropdownMenuItem
+                        key={kind}
+                        aria-disabled={none || undefined}
+                        title={none ? `None of the selected can be ${label === 'Delete' ? 'deleted' : `${label.toLowerCase()}d`} — ${firstReason}` : undefined}
+                        onSelect={(e) => { if (none) { e.preventDefault(); return; } void runBulk(kind); }}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${
+                          none ? 'text-gray-400 cursor-not-allowed opacity-60' : kind === 'delete' ? 'cursor-pointer text-destructive' : 'cursor-pointer'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${none ? 'text-gray-300' : className}`} />
+                        <span>{label} ({eligibleCount === total ? total : `${eligibleCount} of ${total}`})</span>
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+                icon={<X className="w-4 h-4" />}
+                className="whitespace-nowrap !h-9 !text-sm"
+              >
+                Clear
+              </Button>
+            </ListBulkActions>
           )}
           {onDisplayModeChange && (
             <ListViewToggle value={displayMode} onChange={onDisplayModeChange} className="self-start sm:self-auto" />

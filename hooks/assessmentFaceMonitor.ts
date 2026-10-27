@@ -79,6 +79,17 @@ export interface FaceMonitorOptions {
   identityConfirmations?: number;       // default 2
   identityBootstrapCaptures?: number;   // default 3
   perfLogIntervalMs?: number;           // default 30000
+  /**
+   * 'local' (default): MediaPipe FaceDetection counts faces and reports them
+   * through onFaceCount. 'external': the server proctor-frame pipeline counts
+   * faces (and records face_missing / multiple_faces itself) — FaceDetection
+   * is never loaded, onFaceCount is never called, and the count from
+   * getExternalFaceCount() only gates gaze ("face first, gaze second") and
+   * the identity pass. Same idea as InterviewFaceDetection's faceCountSource.
+   */
+  faceCountSource?: 'local' | 'external';
+  /** Latest server face count (null = no answer yet → treated as 1 face). */
+  getExternalFaceCount?: () => number | null;
 }
 
 export interface AssessmentFaceMonitor {
@@ -176,6 +187,7 @@ export function createAssessmentFaceMonitor(
   const identityConfirmations = options.identityConfirmations ?? 2;
   const bootstrapCaptures = options.identityBootstrapCaptures ?? 3;
   const perf = new PassTimer(options.perfLogIntervalMs ?? 30000);
+  const externalFaces = options.faceCountSource === 'external';
 
   let running = false;
   let busy = false;
@@ -273,6 +285,11 @@ export function createAssessmentFaceMonitor(
   // because it awaits that first pass with no timeout. initialize() makes the
   // order explicit: detector fully loaded, THEN the mesh.
   const initMediaPipe = async (): Promise<boolean> => {
+    if (externalFaces) {
+      // Server counts faces: only the mesh (gaze) loads in the browser.
+      if (enableGaze) await initFaceMesh();
+      return true;
+    }
     try {
       await loadScript(`${MP_FACE_DETECTION_URL}/face_detection.js`);
       const FaceDetectionClass = (window as any).FaceDetection;
@@ -289,24 +306,26 @@ export function createAssessmentFaceMonitor(
       return false;
     }
 
-    if (enableGaze) {
-      try {
-        await loadScript(`${MP_FACE_MESH_URL}/face_mesh.js`);
-        const FaceMeshClass = (window as any).FaceMesh;
-        if (!FaceMeshClass) throw new Error('FaceMesh global missing after CDN load');
-        const fm = new FaceMeshClass({ locateFile: (f: string) => `${MP_FACE_MESH_URL}/${f}` });
-        fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        fm.onResults((r: any) => {
-          try { handleMeshResults(r); } finally { pendingMeshResolve?.(); pendingMeshResolve = null; }
-        });
-        await fm.initialize(); // also before the first tick, so no pass can overlap the download
-        faceMesh = fm;
-      } catch (err) {
-        console.warn('[FACE-MONITOR] FaceMesh unavailable — gaze tracking disabled:', err);
-        faceMesh = null;
-      }
-    }
+    if (enableGaze) await initFaceMesh();
     return true;
+  };
+
+  const initFaceMesh = async (): Promise<void> => {
+    try {
+      await loadScript(`${MP_FACE_MESH_URL}/face_mesh.js`);
+      const FaceMeshClass = (window as any).FaceMesh;
+      if (!FaceMeshClass) throw new Error('FaceMesh global missing after CDN load');
+      const fm = new FaceMeshClass({ locateFile: (f: string) => `${MP_FACE_MESH_URL}/${f}` });
+      fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+      fm.onResults((r: any) => {
+        try { handleMeshResults(r); } finally { pendingMeshResolve?.(); pendingMeshResolve = null; }
+      });
+      await fm.initialize(); // also before the first tick, so no pass can overlap the download
+      faceMesh = fm;
+    } catch (err) {
+      console.warn('[FACE-MONITOR] FaceMesh unavailable — gaze tracking disabled:', err);
+      faceMesh = null;
+    }
   };
 
   const ensureFaceApi = (): Promise<FaceApiModule | null> => {
@@ -342,6 +361,11 @@ export function createAssessmentFaceMonitor(
     });
 
   const runFacePass = async () => {
+    if (externalFaces) {
+      const n = options.getExternalFaceCount?.();
+      lastFaceCount = typeof n === 'number' ? n : 1;
+      return;
+    }
     const t0 = performance.now();
     try {
       if (faceDetector) {
@@ -364,6 +388,11 @@ export function createAssessmentFaceMonitor(
 
   const runGazePass = async () => {
     if (!faceMesh) return;
+    if (externalFaces) {
+      // Freshest server count right before the mesh reading it gates.
+      const n = options.getExternalFaceCount?.();
+      if (typeof n === 'number') lastFaceCount = n;
+    }
     const t0 = performance.now();
     try {
       await sendWithTimeout(() => faceMesh.send({ image: video }), (r) => { pendingMeshResolve = r; }, 1500);
@@ -477,7 +506,7 @@ export function createAssessmentFaceMonitor(
         });
       }
       lastIdentityAt = performance.now(); // first identity pass after one interval, not immediately
-      console.log(`[FACE-MONITOR] started (detector=${faceDetector ? 'mediapipe' : 'face-api-fallback'}, gaze=${faceMesh ? 'on' : 'off'}, identity=${enableIdentity ? `${identityIntervalMs / 1000}s via worker` : 'off'})`);
+      console.log(`[FACE-MONITOR] started (detector=${externalFaces ? 'server' : faceDetector ? 'mediapipe' : 'face-api-fallback'}, gaze=${faceMesh ? 'on' : 'off'}, identity=${enableIdentity ? `${identityIntervalMs / 1000}s via worker` : 'off'})`);
       timer = setTimeout(tick, pollMs);
     },
     stop() {

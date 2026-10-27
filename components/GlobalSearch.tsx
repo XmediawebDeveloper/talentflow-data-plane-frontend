@@ -127,6 +127,25 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Ctrl+K (Cmd+K on Mac) focuses the search from anywhere — listed in the
+  // Keyboard Shortcuts help. Skipped while the bar is hidden (below lg), so the
+  // browser's own Ctrl+K still works there.
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    setIsMac(/Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent));
+    function handleShortcut(e: KeyboardEvent) {
+      if (e.key.toLowerCase() !== 'k' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      const input = inputRef.current;
+      if (!input || input.offsetParent === null) return;
+      e.preventDefault();
+      input.focus();
+      input.select();
+      if (input.value.trim()) setIsOpen(true);
+    }
+    document.addEventListener('keydown', handleShortcut);
+    return () => document.removeEventListener('keydown', handleShortcut);
+  }, []);
+
   function handleSelect(path: string) {
     setIsOpen(false);
     setQuery('');
@@ -166,8 +185,18 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
             if (query.trim()) setIsOpen(true);
           }}
           placeholder="Search folders, resumes, jobs, assessments, interviews or IDs..."
-          className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 [&::-webkit-search-cancel-button]:hidden"
+          aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
+          className="peer w-full pl-8 pr-14 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 [&::-webkit-search-cancel-button]:hidden"
         />
+        {/* Shortcut hint — only while empty and unfocused */}
+        {!isLoading && !query && (
+          <kbd
+            aria-hidden
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-gray-300 bg-white px-1.5 py-px font-sans text-[10px] font-semibold text-gray-500 shadow-[0_1px_0_#e5e7eb] peer-focus:hidden dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:shadow-none"
+          >
+            {isMac ? '⌘K' : 'Ctrl K'}
+          </kbd>
+        )}
         {isLoading && (
           <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />
         )}

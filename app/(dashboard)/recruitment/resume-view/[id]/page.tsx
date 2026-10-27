@@ -2447,7 +2447,7 @@ Best regards`);
         />
         <aside
           role="dialog"
-          aria-modal={showFileProperties || undefined}
+          aria-modal={showFileProperties}
           aria-label="File Properties"
           className={`absolute inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-out ${
             showFileProperties ? 'translate-x-0' : 'translate-x-full'

@@ -4,8 +4,8 @@ import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { Fragment, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Monitor, History, XCircle, FileText, Square, CheckSquare, Timer, ChevronDown,
+  X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil, Check,
+  MoreVertical, Monitor, History, XCircle, FileText, Timer, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -794,10 +794,10 @@ export default function AIInterviewInviteTable({
     if (!selectable) return null;
     // A fixed-width slot even when this row can't be selected, so every avatar
     // below it stays on the same left edge.
-    if (rowLocked(inv) || !(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-6 flex-shrink-0" />;
+    if (rowLocked(inv) || !(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-5 flex-shrink-0" />;
     const checked = !!selectedIds?.has(inv.id);
-    // The CheckSquare / Square checkbox every AI Interviews tab uses, so the
-    // select column looks the same wherever it appears.
+    // Same round pill checkbox the Assessments tracker uses, so the select
+    // column looks the same wherever it appears.
     return (
       <button
         type="button"
@@ -805,13 +805,13 @@ export default function AIInterviewInviteTable({
         aria-checked={checked}
         aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
         onClick={(e) => { e.stopPropagation(); onToggleSelect?.(inv.id); }}
-        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700 flex-shrink-0"
+        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+          checked
+            ? 'bg-brand-blue border-brand-blue'
+            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+        }`}
       >
-        {checked ? (
-          <CheckSquare className="w-4 h-4 text-brand-blue" />
-        ) : (
-          <Square className="w-4 h-4 text-gray-400" />
-        )}
+        {checked && <Check className="w-3 h-3 text-white" />}
       </button>
     );
   };
@@ -1134,13 +1134,13 @@ export default function AIInterviewInviteTable({
                       aria-label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       title={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
                       onClick={onToggleSelectAll}
-                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                        allSelected
+                          ? 'bg-brand-blue border-brand-blue'
+                          : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                      }`}
                     >
-                      {allSelected ? (
-                        <CheckSquare className="w-4 h-4 text-brand-blue" />
-                      ) : (
-                        <Square className="w-4 h-4 text-gray-400" />
-                      )}
+                      {allSelected && <Check className="w-3 h-3 text-white" />}
                     </button>
                   )}
                 </th>

@@ -63,12 +63,6 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamsUsage, setTeamsUsage] = useState<AllTeamsUsageSummary | null>(null);
-  // Drill-in: 'cards' shows only the 7 summary tiles; clicking one expands the
-  // charts + tables below. activeCard highlights which tile was clicked.
-  // Opens with the first card (Resume Scoring) already drilled in.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
-  const [activeCard, setActiveCard] = useState<string | null>('RS');
-  const openList = (card: string) => { setActiveCard(card); setPageView('list'); };
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
   });
@@ -336,8 +330,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         </div>
       </div>
 
-      {/* Summary Cards - Unit Consumption — clicking any card drills into the
-          charts/tables below (cards → list drill-in, matching /recruitment/job-openings). */}
+      {/* Summary Cards - Unit Consumption (display only; charts/tables always show below) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-4">
         {([
           { key: 'RS',        label: 'Resume Scoring',      value: Math.round(totals.RS),        sub: `${actionCounts.RS} actions`,    Icon: FileText,        iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
@@ -348,13 +341,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
           { key: 'ASSESSED',  label: 'Assessments Created', value: creationCounts.assessments,   sub: '',                              Icon: ClipboardCheck,  iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',     iconColor: 'text-brand-blue' },
           { key: 'TOTAL',     label: 'Total Units Used',    value: totals.total.toFixed(1),      sub: `${actionCounts.total} total actions`, Icon: BarChart3, iconBg: 'bg-brand-blue ring-1 ring-brand-blue/15',        iconColor: 'text-white' },
         ] as const).map(({ key, label, value, sub, Icon, iconBg, iconColor }) => {
-          const isActive = pageView === 'list' && activeCard === key;
           return (
-            <button
+            <div
               key={key}
-              type="button"
-              onClick={() => openList(key)}
-              className={`text-left rounded-xl border bg-white dark:bg-slate-900 px-3 py-2.5 sm:p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:shadow-md ${isActive ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+              className="text-left rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-3 py-2.5 sm:p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]"
             >
               {/* Phones: icon · label/sub · value on one line. */}
               <div className="flex items-center gap-3 sm:hidden">
@@ -377,13 +367,11 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                 <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{label}</p>
                 {sub && <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{sub}</p>}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
 
-      {pageView === 'list' && (
-      <>
       {/* justify-end, not justify-between: the Back to overview button that
           used to hold the left slot is gone, and the tally belongs on the
           right. */}
@@ -522,8 +510,6 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             No team usage data available for the selected period.
           </p>
         </div>
-      )}
-      </>
       )}
     </div>
   );

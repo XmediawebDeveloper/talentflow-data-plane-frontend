@@ -139,6 +139,18 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
+      // TalkingHead library (talkinghead.mjs ~2 MB, dynamicbones, lipsync-*,
+      // playback-worklet.js). Unlike /models and /ort these filenames are NOT
+      // content-hashed — the files are edited in place and ship with a deploy —
+      // so no 1-year immutable: a day of fresh caching, then serve-stale while
+      // revalidating (one background ETag check), so a deploy is picked up on
+      // the next load after expiry instead of being pinned for a year.
+      {
+        source: '/talkinghead/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=86400' },
+        ],
+      },
       {
         source: '/:path((?!_next/static|_next/image|favicon.ico|.*\\..*).*)',
         headers: [
