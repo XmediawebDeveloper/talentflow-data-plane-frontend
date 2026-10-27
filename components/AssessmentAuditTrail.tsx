@@ -107,6 +107,15 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
      has none, which is how a 500 here went unnoticed while Export Logs (which
      surfaces its error) was the only visible symptom. */
   const [loadError, setLoadError] = useState<string | null>(null);
+  /* The three segment badges show totals of the WHOLE set (see the comment
+     above the segment control), so they never actually change value when a
+     category chip is clicked — only the table rows do. Blanking them to "—"
+     on every `isLoading` tick made each click shrink the chip then snap it
+     back once the fetch resolved. Gating the placeholder on "never loaded
+     yet" keeps the badges — and therefore the chip widths — stable across
+     filter clicks, while a genuine first load (or a failed one that never
+     populated stats) still shows the placeholder. */
+  const [hasLoadedStatsOnce, setHasLoadedStatsOnce] = useState(false);
   const [stats, setStats] = useState({
     total_lifecycle_events: 0,
     total_candidate_events: 0,
@@ -205,6 +214,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
           candidates_in_progress: response.candidates_in_progress,
           candidates_not_started: response.candidates_not_started,
         });
+        setHasLoadedStatsOnce(true);
       }
       console.log('[TalentFlow] Loaded combined audit trail');
     } catch (error) {
@@ -459,7 +469,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                 <span className="hidden sm:inline">{segment.label}</span>
                 <span className="sm:hidden">{segment.short}</span>
                 <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
-                  {isLoading ? '—' : segment.value.toLocaleString()}
+                  {isLoading && !hasLoadedStatsOnce ? '—' : segment.value.toLocaleString()}
                 </span>
               </button>
             );

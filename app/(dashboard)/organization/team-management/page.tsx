@@ -789,7 +789,7 @@ export default function TeamManagementPage() {
                       <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
                         {sortedMembers.map((row) => (
                           <li key={row.id} className="flex items-center gap-2.5 px-3 py-2.5">
-                            <NameAvatar name={row.name} fallback={row.email} size="sm" />
+                            <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="sm" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
                               <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
@@ -829,7 +829,7 @@ export default function TeamManagementPage() {
                               <tr key={row.id} className="transition-colors hover:bg-brand-blue/[0.04]">
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                    <NameAvatar name={row.name} fallback={row.email} size="md" />
+                                    <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="md" />
                                     <div className="min-w-0">
                                       <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
                                       <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>

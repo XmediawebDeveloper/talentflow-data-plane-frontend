@@ -782,7 +782,7 @@ function UserWiseTab({
         {paginatedUsers.map((u) => (
           <div key={u.userId} className="space-y-2.5 px-3 py-3 sm:px-4">
             <div className="flex items-center gap-2.5">
-              <NameAvatar name={u.userName} fallback={u.userEmail} size="sm" />
+              <NameAvatar name={u.userName} fallback={u.userEmail} userId={u.userId} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{u.userName}</p>
                 <p className="truncate text-xs text-gray-400">{u.userEmail}</p>
@@ -860,7 +860,7 @@ function UserWiseTab({
                 <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <NameAvatar name={u.userName} fallback={u.userEmail} size="sm" />
+                    <NameAvatar name={u.userName} fallback={u.userEmail} userId={u.userId} size="sm" />
                     <div>
                       <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{u.userName}</p>
                       <p className="text-gray-400 text-xs">{u.userEmail}</p>
@@ -1254,7 +1254,7 @@ function InlineTeamMembersUsage({
           return (
             <div key={member.user_id} className="space-y-2 px-3 py-2.5">
               <div className="flex items-center gap-2.5">
-                <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
+                <NameAvatar name={member.user_name} fallback={member.user_email} userId={member.user_id} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900">{member.user_name || 'Unknown User'}</p>
                   <p className="truncate text-xs text-gray-400">
@@ -1313,7 +1313,7 @@ function InlineTeamMembersUsage({
                 <tr key={member.user_id} className="hover:bg-brand-blue/[0.03] transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
+                      <NameAvatar name={member.user_name} fallback={member.user_email} userId={member.user_id} size="sm" />
                       <div>
                         <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{member.user_name || 'Unknown User'}</p>
                         <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>

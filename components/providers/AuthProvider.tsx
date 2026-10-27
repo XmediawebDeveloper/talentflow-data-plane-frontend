@@ -114,7 +114,8 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// Exported for components that read the user optionally (no throw outside the provider).
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Map API feature flags to frontend format
 function mapApiFeatureFlagsToFeatureFlags(apiFlags?: ApiFeatureFlags): FeatureFlags | undefined {
@@ -150,6 +151,7 @@ export function mapApiUserToUser(apiUser: ApiUser): User {
     email: apiUser.email,
     name: apiUser.name,
     role: apiUser.role as UserRole,
+    roleDisplay: apiUser.role_display,
     tenantId: apiUser.tenant_id,
     // These permissions come DIRECTLY from the backend API response
     // No role-based defaults are applied here
