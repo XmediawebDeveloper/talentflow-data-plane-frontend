@@ -913,7 +913,7 @@ export default function TeamChatPage() {
       >
         {dm ? (
           <span className="relative shrink-0">
-            <NameAvatar name={dm.name} fallback={dm.email} size="sm" />
+            <NameAvatar name={dm.name} fallback={dm.email} userId={dm.user_id} size="sm" />
             {dm.is_online && (
               <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-brand-teal ring-2 ring-white dark:ring-slate-900" />
             )}
@@ -1119,7 +1119,7 @@ export default function TeamChatPage() {
                   </button>
                   {partner ? (
                     <span className="relative shrink-0">
-                      <NameAvatar name={partner.name} fallback={partner.email} size="md" />
+                      <NameAvatar name={partner.name} fallback={partner.email} userId={partner.user_id} size="md" />
                       {partner.is_online && (
                         <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-brand-teal ring-2 ring-white dark:ring-slate-900" />
                       )}
@@ -1393,7 +1393,7 @@ export default function TeamChatPage() {
                           <div className={`group flex gap-2.5 ${isSender ? 'justify-end' : ''} ${groupStart ? 'mt-3 first:mt-0' : 'mt-0.5'}`}>
                             {/* Your own messages need no avatar — the right side and blue bubble say it. */}
                             {!isSender && (groupStart ? (
-                              <NameAvatar name={message.user_name} size="md" />
+                              <NameAvatar name={message.user_name} userId={message.user_id} size="md" />
                             ) : (
                               <div className="w-9 shrink-0" aria-hidden />
                             ))}
@@ -1719,7 +1719,7 @@ export default function TeamChatPage() {
               {sortedMembers.map((member) => (
                 <div key={member.id} className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60">
                   <span className="relative shrink-0">
-                    <NameAvatar name={member.name} fallback={member.email} size="md" />
+                    <NameAvatar name={member.name} fallback={member.email} userId={member.user_id} size="md" />
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
                         member.is_online ? 'bg-brand-teal' : 'bg-gray-300'
@@ -1855,7 +1855,7 @@ export default function TeamChatPage() {
                             >
                               {checked && <span className="text-2xs">✓</span>}
                             </span>
-                            <NameAvatar name={user.name} fallback={user.email} size="sm" />
+                            <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
@@ -1919,7 +1919,7 @@ export default function TeamChatPage() {
                             >
                               {checked && <span className="text-2xs">✓</span>}
                             </span>
-                            <NameAvatar name={user.name} fallback={user.email} size="md" />
+                            <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
@@ -1972,7 +1972,7 @@ export default function TeamChatPage() {
                             disabled={isCreatingDM}
                             className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-brand-blue/[0.04] disabled:opacity-50"
                           >
-                            <NameAvatar name={user.name} fallback={user.email} size="lg" />
+                            <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="lg" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>

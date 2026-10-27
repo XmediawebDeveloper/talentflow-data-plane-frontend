@@ -1258,10 +1258,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             }}
             className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-brand-blue/5 rounded-lg px-1.5 sm:px-3 py-1 sm:py-2 transition-colors"
           >
-            <NameAvatar name={user.name} fallback={user.email} size="md" />
+            <NameAvatar name={user.name} fallback={user.email} src={user.avatarUrl} size="md" />
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-2xs lg:text-xs text-gray-500">{prettyRole(user.role)}</div>
+              <div className="text-2xs lg:text-xs text-gray-500">{user.roleDisplay || prettyRole(user.role)}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1289,7 +1289,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   <div className="pointer-events-none absolute -bottom-16 left-16 h-36 w-36 rounded-full bg-white/[0.07] blur-2xl" />
                   <div className="relative flex items-center gap-4">
                     <div className="relative shrink-0">
-                      <NameAvatar name={user.name} fallback={user.email} size="xl" className="bg-white dark:bg-white dark:text-brand-blue" />
+                      <NameAvatar name={user.name} fallback={user.email} src={user.avatarUrl} size="xl" className="bg-white dark:bg-white dark:text-brand-blue" />
                       {/* Presence dot, ringed in the banner's own blue rather
                           than white, so it reads as cut out of the avatar
                           instead of floating over it. */}
@@ -1315,7 +1315,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           {user.role === 'tenant_admin'
                             ? <Crown className="w-3 h-3" />
                             : <Shield className="w-3 h-3" />}
-                          {prettyRole(user.role)}
+                          {user.roleDisplay || prettyRole(user.role)}
                         </span>
 
                         {/* User id — click to copy the FULL uuid. Shown short

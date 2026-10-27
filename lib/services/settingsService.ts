@@ -17,6 +17,8 @@ export interface UserProfile {
   job_title?: string;
   department?: string;
   avatar_url?: string;
+  /** IANA zone, e.g. "Asia/Kolkata"; empty = use the browser's zone. */
+  timezone?: string | null;
   role: string;
   created_at?: string;
   updated_at?: string;
@@ -28,6 +30,7 @@ export interface UserProfileUpdate {
   job_title?: string;
   department?: string;
   avatar_url?: string;
+  timezone?: string;
 }
 
 export interface UserSettings {

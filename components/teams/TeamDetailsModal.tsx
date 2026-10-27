@@ -126,7 +126,7 @@ export default function TeamDetailsModal({
             <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
               {team.members.map((member) => (
                 <div key={member.id} className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/50">
-                  <NameAvatar name={member.name} fallback={member.email} size="sm" />
+                  <NameAvatar name={member.name} fallback={member.email} src={member.avatar_url} userId={member.id} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
                     <p className="truncate text-xs text-gray-500 dark:text-slate-500">{member.email}</p>
