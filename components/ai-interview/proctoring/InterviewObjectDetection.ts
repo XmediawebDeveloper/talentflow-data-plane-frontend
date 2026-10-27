@@ -337,10 +337,13 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         // threshold here is the single most useful tuning signal there is, and
         // it is otherwise completely invisible — the interview just ends with no
         // flag and no explanation.
-        if (det.confidence < def.minConfidence || area < def.minBoxArea) {
+        const minScore = def.smallBoxArea !== undefined && def.smallBoxMinConfidence !== undefined && area < def.smallBoxArea
+          ? def.smallBoxMinConfidence
+          : def.minConfidence;
+        if (det.confidence < minScore || area < def.minBoxArea) {
           console.log(
             `[INTERVIEW_OBJECT_DETECTION] near-miss ${det.object_class} ` +
-            `score=${det.confidence.toFixed(3)}/${def.minConfidence} ` +
+            `score=${det.confidence.toFixed(3)}/${minScore} ` +
             `area=${area.toFixed(4)}/${def.minBoxArea} — filtered`,
           );
           continue;

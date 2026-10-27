@@ -3340,6 +3340,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const candidateAudioFrameCountRef = useRef(0);
   const micLevelLastUpdateRef = useRef(0);
   const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
+  // Mic source feeding processorRef, and the capture generation. Every answer
+  // opens a new source + chunker on the SAME AudioContext; a node that is only
+  // output-disconnected keeps running on its (ended → silent) source and keeps
+  // calling processAudioChunk. Only the current generation may send audio.
+  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioCaptureGenRef = useRef(0);
   const recordingContextRef = useRef<AudioContext | null>(null);
   // Tracks whether 'pcm-processor' has been registered in the current recordingContext.
   // AudioWorklet processors can only be registered once per AudioContext — re-registration
@@ -4501,6 +4507,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
   };
 
+  // Fully stop the answer-capture nodes. disconnect() alone only cut the
+  // chunker's OUTPUT: its input stayed wired to the old mic source, so every
+  // past answer's chunker kept posting (silent) chunks into processAudioChunk.
+  // Staging 2026-10-27: answer N streamed N copies of audio (N-1 of them
+  // zeros) — the server pause clock ran N× fast ("Are you done?" mid-speech,
+  // never closing) and the interleaved zeros garbled ASR into other languages.
+  const releaseAudioCaptureNodes = useCallback(() => {
+    audioCaptureGenRef.current += 1;
+    const proc = processorRef.current;
+    processorRef.current = null;
+    if (proc) {
+      try { proc.disconnect(); } catch { /* already disconnected */ }
+      if (proc instanceof AudioWorkletNode) {
+        try { proc.port.onmessage = null; proc.port.close(); } catch { /* closed */ }
+      } else {
+        try { proc.onaudioprocess = null; } catch { /* gone */ }
+      }
+    }
+    try { micSourceNodeRef.current?.disconnect(); } catch { /* already disconnected */ }
+    micSourceNodeRef.current = null;
+  }, []);
+
   const teardownRecordingMedia = useCallback((clearPinnedDevice: boolean = false) => {
     removeAudioDeviceChangeListener();
     // Keep the answer-capture device pinned across turns so Q2+ stays on the
@@ -4510,10 +4538,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
     mediaStreamRef.current?.getTracks().forEach(t => t.stop());
     mediaStreamRef.current = null;
-    processorRef.current?.disconnect();
-    processorRef.current = null;
+    releaseAudioCaptureNodes();
     micAnalyserRef.current = null;
-  }, []);
+  }, [releaseAudioCaptureNodes]);
 
   // Classify the active mic from its device label. Heuristic (labels vary by
   // OS/browser/locale) but the common ones are stable. Bluetooth is matched
@@ -6516,6 +6543,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // the mic immediately. Consume the arm flag either way.
             const _runGetReady = getReadyArmedRef.current;
             getReadyArmedRef.current = false;
+            if (!_runGetReady) console.log('[INTERVIEW-DEBUG] turn opens without pre-turn countdown (not armed)', { questionNumber: questionNumberRef.current });
             const _openMic = () => {
               setStatus("Your turn - speak now...");
               if (wsRef.current?.readyState === WebSocket.OPEN
@@ -6610,11 +6638,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         avatarState.onAiStopSpeaking();
         saveAiMessage();
         if (!isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
-          setStatus("Your turn - speak now...");
+          // A real question turn still gets its 3-2-1 here, same as finalizePlayback.
+          const _runGetReady = getReadyArmedRef.current;
+          getReadyArmedRef.current = false;
+          setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
           setTimeout(() => {
-            if (wsRef.current?.readyState === WebSocket.OPEN && !isAiSpeakingRef.current) {
-              startRecordingInternalRef.current();
-            }
+            if (wsRef.current?.readyState !== WebSocket.OPEN || isAiSpeakingRef.current) return;
+            const _openMic = () => {
+              setStatus("Your turn - speak now...");
+              if (wsRef.current?.readyState === WebSocket.OPEN
+                  && !isAiSpeakingRef.current
+                  && !isRecordingRef.current) {
+                startRecordingInternalRef.current();
+              }
+            };
+            if (_runGetReady) runPreTurnCountdownRef.current(_openMic);
+            else startRecordingInternalRef.current();
           }, 800);
         }
         break;
@@ -6765,6 +6804,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             playbackEndedCbRef.current = null;
             const _runGetReady = getReadyArmedRef.current;
             getReadyArmedRef.current = false;
+            if (!_runGetReady) console.log('[INTERVIEW-DEBUG] turn opens without pre-turn countdown (not armed)', { questionNumber: questionNumberRef.current });
             setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
@@ -6868,7 +6908,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // A real question turn is about to open (main / follow-up / clarification
         // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
         // finalizePlayback when the mic is about to open. Nudges never send this.
-        getReadyArmedRef.current = true;
+        // The backend re-sends it mid-answer (speech detected → "continuing
+        // timer"); that copy must not arm a countdown for whatever Bina says next.
+        if (!isRecordingRef.current) getReadyArmedRef.current = true;
         // AII-20: question_timer_started fires for EVERY question (unlike
         // question_meta, which only fires for a structured HR one) — use it
         // as the fallback signal to lift a stale yes_no voice block once a
@@ -8298,7 +8340,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
       console.log(`[InterviewUI] AudioContext: rate=${ctx.sampleRate}, state=${ctx.state}`);
 
+      // One capture chain at a time: release any previous answer's nodes
+      // (no-op after a normal teardown), then claim a new generation.
+      if (processorRef.current || micSourceNodeRef.current) {
+        console.warn('[InterviewUI] previous answer capture nodes still attached — releasing');
+      }
+      releaseAudioCaptureNodes();
+      const captureGen = audioCaptureGenRef.current;
+
       const source = ctx.createMediaStreamSource(stream);
+      micSourceNodeRef.current = source;
 
       // Tap a passive AnalyserNode off the mic source for the live recording
       // waveform (MicWaveform). source→analyser only — NOT →destination, so it
@@ -8386,6 +8437,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // ── Shared audio processing (VAD + PCM encode + WS send) ──────────────
       // Defined once, called by both AudioWorklet and ScriptProcessor paths.
       const processAudioChunk = (input: Float32Array) => {
+        // A superseded answer's chunker (see releaseAudioCaptureNodes) must
+        // never send — not even silent frames.
+        if (captureGen !== audioCaptureGenRef.current) return;
         if (!isRecordingRef.current) return;
         if (isMutedRef.current) return;
         // AII-20: a yes_no HR question's buttons are the candidate's only
@@ -9106,6 +9160,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     };
     runPreTurnCountdownRef.current = (onComplete: () => void) => {
       cancelPreTurnCountdownRef.current();
+      console.log('[INTERVIEW-DEBUG] pre-turn countdown shown', { questionNumber: questionNumberRef.current });
       let n = PRE_TURN_COUNTDOWN_FROM;              // 3 (AII14 AC1)
       preTurnCountdownRef.current = n;
       setPreTurnCountdown(n);
