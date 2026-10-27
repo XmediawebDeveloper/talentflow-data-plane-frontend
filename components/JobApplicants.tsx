@@ -1,8 +1,9 @@
-import { ArrowLeft, Search, Filter, Download, Mail, Phone, MapPin, Briefcase, GraduationCap, Calendar, Star, TrendingUp, Users, CheckCircle2, Clock, XCircle, ChevronDown, MoreVertical, Eye, MessageSquare, AlertTriangle, Target } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Download, Mail, Phone, MapPin, Briefcase, GraduationCap, Calendar, Star, TrendingUp, Users, CheckCircle2, Clock, XCircle, MoreVertical, Eye, MessageSquare, AlertTriangle, Target } from 'lucide-react';
 import { useState } from 'react';
 import ResumeAnalysis from './ResumeAnalysis';
 import SkillsList from '@/components/ui/SkillsList';
 import { Button } from '@/components/ui/button';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface Applicant {
   id: string;
@@ -227,51 +228,48 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
             </div>
 
             {/* Status Filter */}
-            <div className="relative">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
-              >
-                <option value="all">All Status</option>
-                <option value="New">New</option>
-                <option value="Reviewing">Reviewing</option>
-                <option value="Shortlisted">Shortlisted</option>
-                <option value="Interview">Interview</option>
-                <option value="Rejected">Rejected</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <FilterSelect
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v)}
+              ariaLabel="Filter by status"
+              className="w-auto min-w-[160px] pl-4 sm:pl-4 pr-3 sm:pr-3 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300"
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'New', label: 'New' },
+                { value: 'Reviewing', label: 'Reviewing' },
+                { value: 'Shortlisted', label: 'Shortlisted' },
+                { value: 'Interview', label: 'Interview' },
+                { value: 'Rejected', label: 'Rejected' },
+              ]}
+            />
 
             {/* Score Filter */}
-            <div className="relative">
-              <select
-                value={scoreFilter}
-                onChange={(e) => setScoreFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
-              >
-                <option value="all">All Scores</option>
-                <option value="high">High (85+)</option>
-                <option value="medium">Medium (70-84)</option>
-                <option value="low">Below 70</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <FilterSelect
+              value={scoreFilter}
+              onChange={(v) => setScoreFilter(v)}
+              ariaLabel="Filter by score"
+              className="w-auto min-w-[160px] pl-4 sm:pl-4 pr-3 sm:pr-3 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300"
+              options={[
+                { value: 'all', label: 'All Scores' },
+                { value: 'high', label: 'High (85+)' },
+                { value: 'medium', label: 'Medium (70-84)' },
+                { value: 'low', label: 'Below 70' },
+              ]}
+            />
 
             {/* Match Filter */}
-            <div className="relative">
-              <select
-                value={matchFilter}
-                onChange={(e) => setMatchFilter(e.target.value)}
-                className="appearance-none pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white cursor-pointer min-w-[160px]"
-              >
-                <option value="all">All Matches</option>
-                <option value="exact">Exact Match</option>
-                <option value="partial">Partial Match</option>
-                <option value="low">Low Match</option>
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-            </div>
+            <FilterSelect
+              value={matchFilter}
+              onChange={(v) => setMatchFilter(v)}
+              ariaLabel="Filter by match"
+              className="w-auto min-w-[160px] pl-4 sm:pl-4 pr-3 sm:pr-3 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300"
+              options={[
+                { value: 'all', label: 'All Matches' },
+                { value: 'exact', label: 'Exact Match' },
+                { value: 'partial', label: 'Partial Match' },
+                { value: 'low', label: 'Low Match' },
+              ]}
+            />
 
             {/* Advanced Filters */}
             <Button variant="secondary" icon={<Filter className="w-4 h-4" />}>

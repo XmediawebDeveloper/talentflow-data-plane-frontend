@@ -9,6 +9,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 interface PaymentMethod {
   id: string;
@@ -662,22 +663,24 @@ export default function PaymentMethodsPage() {
 
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Country</span>
-                  <select
+                  <FilterSelect
                     value={formData.billingCountry}
-                    onChange={(e) => setFormData({ ...formData, billingCountry: e.target.value })}
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
-                  >
-                    <option value="">Select Country</option>
-                    <option value="US">United States</option>
-                    <option value="IN">India</option>
-                    <option value="GB">United Kingdom</option>
-                    <option value="CA">Canada</option>
-                    <option value="AU">Australia</option>
-                    <option value="DE">Germany</option>
-                    <option value="FR">France</option>
-                    <option value="SG">Singapore</option>
-                    <option value="AE">UAE</option>
-                  </select>
+                    onChange={(v) => setFormData({ ...formData, billingCountry: v })}
+                    ariaLabel="Country"
+                    options={[
+                      { value: '', label: 'Select Country' },
+                      { value: 'US', label: 'United States' },
+                      { value: 'IN', label: 'India' },
+                      { value: 'GB', label: 'United Kingdom' },
+                      { value: 'CA', label: 'Canada' },
+                      { value: 'AU', label: 'Australia' },
+                      { value: 'DE', label: 'Germany' },
+                      { value: 'FR', label: 'France' },
+                      { value: 'SG', label: 'Singapore' },
+                      { value: 'AE', label: 'UAE' },
+                    ]}
+                    className="w-full sm:w-full pl-4 sm:pl-4 pr-4 sm:pr-4 py-2.5 sm:py-2.5 rounded-xl sm:rounded-xl"
+                  />
                 </label>
               </div>
 

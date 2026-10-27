@@ -68,6 +68,7 @@ import TabEmptyState from '@/components/ui/tab-empty-state';
    All Assessments table uses for its Job filter — a plain <select> stops
    working once the option list is drawn from data, which a tenant's job list is. */
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
+import FilterSelect from '@/components/ui/filter-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
 
@@ -7009,34 +7010,34 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <label htmlFor="assessment-type" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Type
                       </label>
-                      <select
+                      <FilterSelect
                         id="assessment-type"
                         value={filterType}
-                        onChange={(e) => assessmentListSearch.setFilter('type', e.target.value as typeof filterType)}
-                        className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                      >
-                        <option value="all">All types</option>
-                        <option value="Technical">Technical</option>
-                        <option value="Behavioral">Behavioral</option>
-                        <option value="Aptitude">Aptitude</option>
-                      </select>
+                        onChange={(v) => assessmentListSearch.setFilter('type', v as typeof filterType)}
+                        options={[
+                          { value: 'all', label: 'All types' },
+                          { value: 'Technical', label: 'Technical' },
+                          { value: 'Behavioral', label: 'Behavioral' },
+                          { value: 'Aptitude', label: 'Aptitude' },
+                        ]}
+                        className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                      />
                     </div>
 
                     <div>
                       <label htmlFor="assessment-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created by
                       </label>
-                      <select
+                      <FilterSelect
                         id="assessment-creator"
                         value={filterCreatedBy}
-                        onChange={(e) => assessmentListSearch.setFilter('createdBy', e.target.value)}
-                        className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                      >
-                        <option value="all">Anyone</option>
-                        {assessmentCreators.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => assessmentListSearch.setFilter('createdBy', v)}
+                        options={[
+                          { value: 'all', label: 'Anyone' },
+                          ...assessmentCreators.map((name) => ({ value: String(name), label: String(name) })),
+                        ]}
+                        className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                      />
                     </div>
 
                     <div>
@@ -7501,16 +7502,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="result-outcome" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Outcome
                             </label>
-                            <select
+                            <FilterSelect
                               id="result-outcome"
                               value={filterResultOutcome}
-                              onChange={(e) => completedCandidatesSearch.setFilter('outcome', e.target.value as typeof filterResultOutcome)}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                            >
-                              <option value="all">All outcomes</option>
-                              <option value="pass">Passed</option>
-                              <option value="fail">Failed</option>
-                            </select>
+                              onChange={(v) => completedCandidatesSearch.setFilter('outcome', v as typeof filterResultOutcome)}
+                              options={[
+                                { value: 'all', label: 'All outcomes' },
+                                { value: 'pass', label: 'Passed' },
+                                { value: 'fail', label: 'Failed' },
+                              ]}
+                              className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                            />
                           </div>
 
                           <div>
@@ -8319,22 +8321,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <label htmlFor="invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                               Status
                             </label>
-                            <select
+                            {/* One option per status tab, in tab order and
+                                on the same keys, so a pick here can never
+                                return rows the tabs cannot explain. */}
+                            <FilterSelect
                               id="invite-status-filter"
                               value={inviteStatusFilters.status}
-                              onChange={(e) => {
-                                setInviteStatusFilters({ ...inviteStatusFilters, status: e.target.value });
+                              onChange={(v) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, status: v });
                                 setInviteStatusPage(1);
                               }}
-                              className="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                            >
-                              {/* One option per status tab, in tab order and
-                                  on the same keys, so a pick here can never
-                                  return rows the tabs cannot explain. */}
-                              {INVITATION_STATUS_TAB_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
-                            </select>
+                              options={INVITATION_STATUS_TAB_OPTIONS}
+                              className="w-full sm:w-full min-w-0 py-2 sm:py-2 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                            />
                           </div>
 
                           <div>

@@ -15,6 +15,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
 
@@ -587,38 +588,41 @@ export default function InternalTicketAdmin() {
                     />
                   </div>
 
-                  <select
+                  <FilterSelect
                     value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="open">Open</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="resolved">Resolved</option>
-                    <option value="closed">Closed</option>
-                  </select>
+                    onChange={(v) => setFilterStatus(v)}
+                    options={[
+                      { value: 'all', label: 'All Status' },
+                      { value: 'open', label: 'Open' },
+                      { value: 'in-progress', label: 'In Progress' },
+                      { value: 'resolved', label: 'Resolved' },
+                      { value: 'closed', label: 'Closed' },
+                    ]}
+                    className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                  />
 
-                  <select
+                  <FilterSelect
                     value={filterAssignment}
-                    onChange={(e) => setFilterAssignment(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                  >
-                    <option value="all">All Tickets</option>
-                    <option value="mine">Assigned to Me</option>
-                    <option value="unassigned">Unassigned</option>
-                  </select>
+                    onChange={(v) => setFilterAssignment(v)}
+                    options={[
+                      { value: 'all', label: 'All Tickets' },
+                      { value: 'mine', label: 'Assigned to Me' },
+                      { value: 'unassigned', label: 'Unassigned' },
+                    ]}
+                    className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                  />
 
-                  <select
+                  <FilterSelect
                     value={filterPriority}
-                    onChange={(e) => setFilterPriority(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                  >
-                    <option value="all">All Priority</option>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
+                    onChange={(v) => setFilterPriority(v)}
+                    options={[
+                      { value: 'all', label: 'All Priority' },
+                      { value: 'low', label: 'Low' },
+                      { value: 'medium', label: 'Medium' },
+                      { value: 'high', label: 'High' },
+                    ]}
+                    className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                  />
                 </div>
               </div>
 
@@ -860,15 +864,12 @@ export default function InternalTicketAdmin() {
                 {selectedTicket.status !== 'closed' && (
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h4 className="text-sm font-semibold text-gray-900 mb-4">Update Priority</h4>
-                    <select
+                    <FilterSelect
                       value={selectedTicket.priority}
-                      onChange={(e) => handleUpdatePriority(selectedTicket.id, e.target.value as InternalTicketPriority)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                    >
-                      {priorities.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => handleUpdatePriority(selectedTicket.id, v as InternalTicketPriority)}
+                      options={priorities.map(p => ({ value: p.value, label: p.label }))}
+                      className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
+                    />
                   </div>
                 )}
 

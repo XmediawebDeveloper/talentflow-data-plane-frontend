@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import SearchableSelect from '@/components/ui/searchable-select';
+import FilterSelect from '@/components/ui/filter-select';
 import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, type InviteTargetJob } from './ScoredResumesTable';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
@@ -340,6 +341,10 @@ const RESULTS_FILTER_FIELD_WIDE_CLASS = 'w-full sm:w-auto sm:grow-[1.5] sm:basis
 const RESULTS_FILTER_LABEL_CLASS = 'block text-sm text-gray-700 dark:text-slate-300 mb-1 truncate';
 const RESULTS_FILTER_CONTROL_CLASS =
   'w-full px-3 py-2 text-sm text-gray-900 dark:text-slate-100 border border-gray-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white dark:bg-slate-900';
+/* FilterSelect trigger sized like a full-width px-3 py-2 field. */
+const FIELD_SELECT_CLASS = 'w-full sm:w-full px-3 sm:pl-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg';
+/* FilterSelect trigger matching RESULTS_FILTER_CONTROL_CLASS. */
+const RESULTS_FILTER_SELECT_CLASS = `${FIELD_SELECT_CLASS} rounded-md sm:rounded-md border-gray-300 dark:text-slate-100`;
 
 function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
   if (rating >= 10) return 'exact';
@@ -4317,7 +4322,7 @@ export default function AITalentMatchPage({
                       className="w-full sm:w-52"
                       value={candidateFilterJob === 'all' ? '' : candidateFilterJob}
                       onChange={(val) => candidateSearch.setFilter('job', val || 'all')}
-                      options={candidateJobTitles.map(title => ({ value: title, label: clampOptionLabel(title) }))}
+                      options={candidateJobTitles.map(title => ({ value: title, label: clampOptionLabel(title), title: title }))}
                       allLabel="All Matched Jobs"
                       placeholder="All Matched Jobs"
                       searchPlaceholder="Search job..."
@@ -4371,16 +4376,16 @@ export default function AITalentMatchPage({
                     {candidateLocations.length > 0 && (
                       <div>
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
-                        <select
+                        <FilterSelect
                           value={candidateFilterLocation}
-                          onChange={(e) => candidateSearch.setFilter('location', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
-                        >
-                          <option value="all">All Locations</option>
-                          {candidateLocations.map(loc => (
-                            <option key={loc} value={loc} title={loc}>{clampOptionLabel(loc)}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => candidateSearch.setFilter('location', v)}
+                          ariaLabel="Location"
+                          options={[
+                            { value: 'all', label: 'All Locations' },
+                            ...candidateLocations.map(loc => ({ value: loc, label: clampOptionLabel(loc), title: loc })),
+                          ]}
+                          className={FIELD_SELECT_CLASS}
+                        />
                       </div>
                     )}
 
@@ -5143,19 +5148,17 @@ export default function AITalentMatchPage({
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-500 dark:text-slate-400 hidden sm:inline">Sort by</span>
                   <div className="inline-flex items-center bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-full p-0.5 hover:border-brand-blue/30 transition-colors">
-                    <div className="relative">
-                      <select
-                        value={candidateSortBy}
-                        onChange={(e) => setCandidateSortBy(e.target.value as CandidateSortKey)}
-                        aria-label="Sort resumes by"
-                        className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 dark:text-slate-200 cursor-pointer"
-                      >
-                        <option value="score">Match Rating</option>
-                        <option value="name">Candidate Name</option>
-                        <option value="date">Match Date</option>
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-                    </div>
+                    <FilterSelect
+                      value={candidateSortBy}
+                      onChange={(v) => setCandidateSortBy(v as CandidateSortKey)}
+                      ariaLabel="Sort resumes by"
+                      options={[
+                        { value: 'score', label: 'Match Rating' },
+                        { value: 'name', label: 'Candidate Name' },
+                        { value: 'date', label: 'Match Date' },
+                      ]}
+                      className="w-auto sm:w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 pl-3 sm:pl-3 pr-2 sm:pr-2 border-0 bg-transparent dark:bg-transparent shadow-none rounded-full sm:rounded-full font-medium text-gray-800 dark:text-slate-200"
+                    />
                     <button
                       type="button"
                       onClick={() => setCandidateSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
@@ -5297,48 +5300,50 @@ export default function AITalentMatchPage({
                     {candidateLocations.length > 0 && (
                       <div>
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
-                        <select
+                        <FilterSelect
                           value={candidateFilterLocation}
-                          onChange={(e) => candidateSearch.setFilter('location', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
-                        >
-                          <option value="all">All Locations</option>
-                          {candidateLocations.map(loc => (
-                            <option key={loc} value={loc} title={loc}>{clampOptionLabel(loc)}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => candidateSearch.setFilter('location', v)}
+                          ariaLabel="Location"
+                          options={[
+                            { value: 'all', label: 'All Locations' },
+                            ...candidateLocations.map(loc => ({ value: loc, label: clampOptionLabel(loc), title: loc })),
+                          ]}
+                          className={FIELD_SELECT_CLASS}
+                        />
                       </div>
                     )}
 
                     {candidateJobTitles.length > 0 && (
                       <div>
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched Job</label>
-                        <select
+                        <FilterSelect
                           value={candidateFilterJob}
-                          onChange={(e) => candidateSearch.setFilter('job', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
-                        >
-                          <option value="all">All Jobs</option>
-                          {candidateJobTitles.map(title => (
-                            <option key={title} value={title} title={title}>{clampOptionLabel(title)}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => candidateSearch.setFilter('job', v)}
+                          ariaLabel="Matched Job"
+                          options={[
+                            { value: 'all', label: 'All Jobs' },
+                            ...candidateJobTitles.map(title => ({ value: title, label: clampOptionLabel(title), title: title })),
+                          ]}
+                          className={FIELD_SELECT_CLASS}
+                        />
                       </div>
                     )}
 
                     <div>
                       <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Minimum Match</label>
-                      <select
-                        value={candidateFilterMinScore}
-                        onChange={(e) => candidateSearch.setFilter('minScore', Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
-                      >
-                        <option value={0}>Any score</option>
-                        <option value={5}>5 and above</option>
-                        <option value={7}>7 and above</option>
-                        <option value={8}>8 and above</option>
-                        <option value={9}>9 and above</option>
-                      </select>
+                      <FilterSelect
+                        value={String(candidateFilterMinScore)}
+                        onChange={(v) => candidateSearch.setFilter('minScore', Number(v))}
+                        ariaLabel="Minimum Match"
+                        options={[
+                          { value: '0', label: 'Any score' },
+                          { value: '5', label: '5 and above' },
+                          { value: '7', label: '7 and above' },
+                          { value: '8', label: '8 and above' },
+                          { value: '9', label: '9 and above' },
+                        ]}
+                        className={FIELD_SELECT_CLASS}
+                      />
                     </div>
 
                     <div>
@@ -5922,17 +5927,20 @@ export default function AITalentMatchPage({
             const workModes = [...new Set(records.map(j => j.remoteType).filter(Boolean))] as string[];
             const jobTypes = [...new Set(records.map(j => j.employmentType).filter(Boolean))] as string[];
             const matchedByNames = [...new Set(matchHistory.map(i => i.matchedByName || 'System'))].sort();
-            const selectCls = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 text-sm';
+            const selectCls = FIELD_SELECT_CLASS;
             const labelCls = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5';
             return (
               <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <div>
                     <label className={labelCls}>Matched By</label>
-                    <select value={historyMatchedBy} onChange={e => historySearch.setFilter('matchedBy', e.target.value)} className={selectCls}>
-                      <option value="">All Users</option>
-                      {matchedByNames.map(name => <option key={name} value={name}>{name}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={historyMatchedBy}
+                      onChange={v => historySearch.setFilter('matchedBy', v)}
+                      ariaLabel="Matched By"
+                      options={[{ value: '', label: 'All Users' }, ...matchedByNames.map(name => ({ value: name, label: name }))]}
+                      className={selectCls}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Matched From</label>
@@ -5944,31 +5952,39 @@ export default function AITalentMatchPage({
                   </div>
                   <div>
                     <label className={labelCls}>Work Mode</label>
-                    <select value={historyWorkMode} onChange={e => historySearch.setFilter('workMode', e.target.value)} className={selectCls}>
-                      <option value="">All Work Modes</option>
-                      {workModes.map(m => <option key={m} value={m}>{formatWorkMode(m)}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={historyWorkMode}
+                      onChange={v => historySearch.setFilter('workMode', v)}
+                      ariaLabel="Work Mode"
+                      options={[{ value: '', label: 'All Work Modes' }, ...workModes.map(m => ({ value: m, label: formatWorkMode(m) }))]}
+                      className={selectCls}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Job Type</label>
-                    <select value={historyJobType} onChange={e => historySearch.setFilter('jobType', e.target.value)} className={selectCls}>
-                      <option value="">All Types</option>
-                      {jobTypes.map(t => <option key={t} value={t}>{titleCaseValue(t)}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={historyJobType}
+                      onChange={v => historySearch.setFilter('jobType', v)}
+                      ariaLabel="Job Type"
+                      options={[{ value: '', label: 'All Types' }, ...jobTypes.map(t => ({ value: t, label: titleCaseValue(t) }))]}
+                      className={selectCls}
+                    />
                   </div>
                   <div>
                     <label className={labelCls}>Matched Candidates</label>
-                    <select
-                      value={historyFilterMinMatches}
-                      onChange={(e) => historySearch.setFilter('minMatches', e.target.value === '' ? '' : Number(e.target.value))}
+                    <FilterSelect
+                      value={String(historyFilterMinMatches)}
+                      onChange={(v) => historySearch.setFilter('minMatches', v === '' ? '' : Number(v))}
+                      ariaLabel="Matched Candidates"
+                      options={[
+                        { value: '', label: 'Any number' },
+                        { value: '1', label: 'At least 1' },
+                        { value: '5', label: 'At least 5' },
+                        { value: '10', label: 'At least 10' },
+                        { value: '25', label: 'At least 25' },
+                      ]}
                       className={selectCls}
-                    >
-                      <option value="">Any number</option>
-                      <option value={1}>At least 1</option>
-                      <option value={5}>At least 5</option>
-                      <option value={10}>At least 10</option>
-                      <option value={25}>At least 25</option>
-                    </select>
+                    />
                   </div>
                   {/* Candidate-level: a job stays when ANY of its candidates matches. */}
                   <div>
@@ -7291,42 +7307,44 @@ export default function AITalentMatchPage({
                         </div>
                         <div className="flex-1 min-w-[8rem]">
                           <label className={filterLabelClass}>Matched By</label>
-                          <select
+                          <FilterSelect
                             value={historyModalFilter.matchedBy}
-                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value }))}
-                            className={`${filterInputClass} w-full`}
-                          >
-                            <option value="all">All Sources</option>
-                            {matchedByOptions.map(name => (
-                              <option key={name} value={name} title={name}>{clampOptionLabel(name)}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: v }))}
+                            ariaLabel="Matched By"
+                            options={[
+                              { value: 'all', label: 'All Sources' },
+                              ...matchedByOptions.map(name => ({ value: name, label: clampOptionLabel(name), title: name })),
+                            ]}
+                            className={FIELD_SELECT_CLASS}
+                          />
                         </div>
                         <div className="flex-1 min-w-[7rem]">
                           <label className={filterLabelClass}>Version</label>
-                          <select
+                          <FilterSelect
                             value={historyModalFilter.version === 'all' ? 'all' : String(historyModalFilter.version)}
-                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, version: e.target.value === 'all' ? 'all' : Number(e.target.value) }))}
-                            className={`${filterInputClass} w-full`}
-                          >
-                            <option value="all">All Versions</option>
-                            {versionList.map(v => (
-                              <option key={v.versionNumber} value={v.versionNumber}>v{v.versionNumber}</option>
-                            ))}
-                          </select>
+                            onChange={(val) => setHistoryModalFilter(prev => ({ ...prev, version: val === 'all' ? 'all' : Number(val) }))}
+                            ariaLabel="Version"
+                            options={[
+                              { value: 'all', label: 'All Versions' },
+                              ...versionList.map(v => ({ value: String(v.versionNumber), label: `v${v.versionNumber}` })),
+                            ]}
+                            className={FIELD_SELECT_CLASS}
+                          />
                         </div>
                         <div className="flex-1 min-w-[9rem]">
                           <label className={filterLabelClass}>Rating Range</label>
-                          <select
+                          <FilterSelect
                             value={historyModalFilter.rating}
-                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, rating: e.target.value as MatchHistoryModalFilters['rating'] }))}
-                            className={`${filterInputClass} w-full`}
-                          >
-                            <option value="all">All Ratings</option>
-                            <option value="exact">Rating 10</option>
-                            <option value="partial">Rating 9 – 7</option>
-                            <option value="no_match">Rating Below 7</option>
-                          </select>
+                            onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, rating: v as MatchHistoryModalFilters['rating'] }))}
+                            ariaLabel="Rating Range"
+                            options={[
+                              { value: 'all', label: 'All Ratings' },
+                              { value: 'exact', label: 'Rating 10' },
+                              { value: 'partial', label: 'Rating 9 – 7' },
+                              { value: 'no_match', label: 'Rating Below 7' },
+                            ]}
+                            className={FIELD_SELECT_CLASS}
+                          />
                         </div>
                         <div className="flex-shrink-0">
                           <label className={filterLabelClass}>Date Range</label>
@@ -7537,17 +7555,16 @@ export default function AITalentMatchPage({
                             </div>
                             <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Rating Breakdown</span>
                           </div>
-                          <select
-                            value={breakdownVersion ? breakdownVersion.session.id : 'all'}
-                            onChange={(e) => setHistoryBreakdownVersion(e.target.value)}
-                            aria-label="Rating breakdown version"
-                            className="text-xs px-2 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 flex-shrink-0"
-                          >
-                            <option value="all">All Versions</option>
-                            {versionList.map(v => (
-                              <option key={v.session.id} value={v.session.id}>v{v.versionNumber}</option>
-                            ))}
-                          </select>
+                          <FilterSelect
+                            value={breakdownVersion ? String(breakdownVersion.session.id) : 'all'}
+                            onChange={(v) => setHistoryBreakdownVersion(v)}
+                            ariaLabel="Rating breakdown version"
+                            options={[
+                              { value: 'all', label: 'All Versions' },
+                              ...versionList.map(v => ({ value: String(v.session.id), label: `v${v.versionNumber}` })),
+                            ]}
+                            className="w-auto sm:w-auto text-xs px-2 sm:pl-2 sm:pr-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg dark:text-slate-100 flex-shrink-0"
+                          />
                         </div>
                         <div className="flex flex-col items-center gap-4 flex-1 justify-center">
                           <div className="relative w-[210px] h-[210px] shrink-0">
@@ -8079,28 +8096,32 @@ export default function AITalentMatchPage({
                   <div className="flex flex-wrap gap-4">
                     <div className={RESULTS_FILTER_FIELD_CLASS}>
                       <label className={RESULTS_FILTER_LABEL_CLASS}>Matched Rating</label>
-                      <select
+                      <FilterSelect
                         value={filterRatingBand}
-                        onChange={(e) => setFilterRatingBand(e.target.value as 'all' | 'exact' | 'partial' | 'no_match')}
-                        className={RESULTS_FILTER_CONTROL_CLASS}
-                      >
-                        <option value="all">All Matches</option>
-                        <option value="exact">Rating 10</option>
-                        <option value="partial">Rating 9 – 7</option>
-                        <option value="no_match">Below 7</option>
-                      </select>
+                        onChange={(v) => setFilterRatingBand(v as 'all' | 'exact' | 'partial' | 'no_match')}
+                        ariaLabel="Matched Rating"
+                        options={[
+                          { value: 'all', label: 'All Matches' },
+                          { value: 'exact', label: 'Rating 10' },
+                          { value: 'partial', label: 'Rating 9 – 7' },
+                          { value: 'no_match', label: 'Below 7' },
+                        ]}
+                        className={RESULTS_FILTER_SELECT_CLASS}
+                      />
                     </div>
                     <div className={RESULTS_FILTER_FIELD_CLASS}>
                       <label className={RESULTS_FILTER_LABEL_CLASS}>Scored Status</label>
-                      <select
+                      <FilterSelect
                         value={filterScored}
-                        onChange={(e) => setFilterScored(e.target.value as 'all' | 'scored' | 'not_scored')}
-                        className={RESULTS_FILTER_CONTROL_CLASS}
-                      >
-                        <option value="all">All Statuses</option>
-                        <option value="scored">Scored</option>
-                        <option value="not_scored">Not Scored</option>
-                      </select>
+                        onChange={(v) => setFilterScored(v as 'all' | 'scored' | 'not_scored')}
+                        ariaLabel="Scored Status"
+                        options={[
+                          { value: 'all', label: 'All Statuses' },
+                          { value: 'scored', label: 'Scored' },
+                          { value: 'not_scored', label: 'Not Scored' },
+                        ]}
+                        className={RESULTS_FILTER_SELECT_CLASS}
+                      />
                     </div>
                     {/* Experience — two inputs sharing one field, like Resume
                         Scoring's Score Range. */}
@@ -8131,16 +8152,18 @@ export default function AITalentMatchPage({
                         badge or gets reset by Clear. */}
                     <div className={RESULTS_FILTER_FIELD_CLASS}>
                       <label className={RESULTS_FILTER_LABEL_CLASS}>Sort By</label>
-                      <select
+                      <FilterSelect
                         value={sortBy}
-                        onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                        className={RESULTS_FILTER_CONTROL_CLASS}
-                      >
-                        <option value="rank">Rating (High to Low)</option>
-                        <option value="name">Name (A to Z)</option>
-                        <option value="score">Score</option>
-                        <option value="experience">Experience</option>
-                      </select>
+                        onChange={(v) => setSortBy(v as 'rank' | 'name' | 'score' | 'experience')}
+                        ariaLabel="Sort By"
+                        options={[
+                          { value: 'rank', label: 'Rating (High to Low)' },
+                          { value: 'name', label: 'Name (A to Z)' },
+                          { value: 'score', label: 'Score' },
+                          { value: 'experience', label: 'Experience' },
+                        ]}
+                        className={RESULTS_FILTER_SELECT_CLASS}
+                      />
                     </div>
                   </div>
                   {/* Controls commit as they change, so Done just closes —

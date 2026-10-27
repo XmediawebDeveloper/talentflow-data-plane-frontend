@@ -15,6 +15,7 @@ import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoad
 import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
+import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -136,7 +137,8 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
 const CONFIG_PAGE_SIZE = 10;
-const AI_FILTER_FIELD_CLASS = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
+/* Trigger classes for the filter panels' Dropdown (ui/filter-select) triggers. */
+const AI_FILTER_FIELD_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100';
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
 /* The Invitation Status tab's filter-bar dropdown needs 'expired' as its own
@@ -3024,66 +3026,68 @@ export default function AIInterview() {
                       <label htmlFor="ai-interview-mode" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Mode
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-mode"
                         value={modeFilter}
-                        onChange={(e) => setModeFilter(e.target.value as typeof modeFilter)}
+                        onChange={(v) => setModeFilter(v as typeof modeFilter)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">All modes</option>
-                        <option value="timed">Timed</option>
-                        <option value="conversational">Conversational</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All modes' },
+                          { value: 'timed', label: 'Timed' },
+                          { value: 'conversational', label: 'Conversational' },
+                        ]}
+                      />
                     </div>
                     <div>
                       <label htmlFor="ai-interview-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created by
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-creator"
                         value={creatorFilter}
-                        onChange={(e) => setCreatorFilter(e.target.value)}
+                        onChange={(v) => setCreatorFilter(v)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">Anyone</option>
-                        {creatorOptions.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
+                        options={[
+                          { value: 'all', label: 'Anyone' },
+                          ...creatorOptions.map((name) => ({ value: name, label: name })),
+                        ]}
+                      />
                     </div>
                     <div>
                       <label htmlFor="ai-interview-date" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Created
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-date"
                         value={dateFilter}
-                        onChange={(e) => setDateFilter(e.target.value as DateFilterKey)}
+                        onChange={(v) => setDateFilter(v as DateFilterKey)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">Any date</option>
-                        <option value="today">Today</option>
-                        <option value="yesterday">Yesterday</option>
-                        <option value="last_week">Last week</option>
-                        <option value="last_month">Last month</option>
-                        <option value="custom">Custom range…</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'Any date' },
+                          { value: 'today', label: 'Today' },
+                          { value: 'yesterday', label: 'Yesterday' },
+                          { value: 'last_week', label: 'Last week' },
+                          { value: 'last_month', label: 'Last month' },
+                          { value: 'custom', label: 'Custom range…' },
+                        ]}
+                      />
                     </div>
                     <div>
                       <label htmlFor="ai-interview-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                         Status
                       </label>
-                      <select
+                      <Dropdown
                         id="ai-interview-status"
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+                        onChange={(v) => setStatusFilter(v as typeof statusFilter)}
                         className={AI_FILTER_FIELD_CLASS}
-                      >
-                        <option value="all">All statuses</option>
-                        <option value="published">Active</option>
-                        <option value="draft">Draft</option>
-                        <option value="archived">Archived</option>
-                      </select>
+                        options={[
+                          { value: 'all', label: 'All statuses' },
+                          { value: 'published', label: 'Active' },
+                          { value: 'draft', label: 'Draft' },
+                          { value: 'archived', label: 'Archived' },
+                        ]}
+                      />
                     </div>
                     {dateFilter === 'custom' && (
                       <>
@@ -3221,21 +3225,19 @@ export default function AIInterview() {
             <div className="flex items-center gap-2">
               <label htmlFor="ai-interview-sort" className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</label>
               <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
-                <div className="relative">
-                  <select
-                    id="ai-interview-sort"
-                    aria-label="Sort by"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                    className="appearance-none h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
-                  >
-                    <option value="newest">Newest</option>
-                    <option value="oldest">Oldest</option>
-                    <option value="active">Active first</option>
-                    <option value="draft">Draft first</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-                </div>
+                <Dropdown
+                  id="ai-interview-sort"
+                  ariaLabel="Sort by"
+                  value={sortBy}
+                  onChange={(v) => setSortBy(v as typeof sortBy)}
+                  className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300"
+                  options={[
+                    { value: 'newest', label: 'Newest' },
+                    { value: 'oldest', label: 'Oldest' },
+                    { value: 'active', label: 'Active first' },
+                    { value: 'draft', label: 'Draft first' },
+                  ]}
+                />
               </div>
             </div>
           )}
@@ -4202,16 +4204,13 @@ export default function AIInterview() {
                               <label htmlFor="ai-invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
                                 Status
                               </label>
-                              <select
+                              <Dropdown
                                 id="ai-invite-status-filter"
                                 value={inviteStatusFilters.status}
-                                onChange={(e) => updateInviteStatusFilters({ status: e.target.value })}
+                                onChange={(v) => updateInviteStatusFilters({ status: v })}
                                 className={AI_FILTER_FIELD_CLASS}
-                              >
-                                {INVITATION_STATUS_TAB_OPTIONS.map((option) => (
-                                  <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                              </select>
+                                options={INVITATION_STATUS_TAB_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                              />
                             </div>
                             <div>
                               <label htmlFor="ai-invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
@@ -4488,31 +4487,30 @@ export default function AIInterview() {
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
                           Default Interview Duration
                         </label>
-                        <select
-                          value={settingsDuration}
-                          onChange={(e) => setSettingsDuration(parseInt(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900"
-                        >
-                          <option value="30">30 minutes</option>
-                          <option value="45">45 minutes</option>
-                          <option value="60">60 minutes</option>
-                        </select>
+                        <Dropdown
+                          value={String(settingsDuration)}
+                          onChange={(v) => setSettingsDuration(parseInt(v))}
+                          ariaLabel="Default Interview Duration"
+                          className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                          options={[
+                            { value: '30', label: '30 minutes' },
+                            { value: '45', label: '45 minutes' },
+                            { value: '60', label: '60 minutes' },
+                          ]}
+                        />
                       </div>
 
                       <div>
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
                           AI Voice Language
                         </label>
-                        <select
+                        <Dropdown
                           value={settingsLanguage}
-                          onChange={(e) => setSettingsLanguage(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900"
-                        >
-                          <option>English (US)</option>
-                          <option>English (UK)</option>
-                          <option>Spanish</option>
-                          <option>French</option>
-                        </select>
+                          onChange={(v) => setSettingsLanguage(v)}
+                          ariaLabel="AI Voice Language"
+                          className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg"
+                          options={['English (US)', 'English (UK)', 'Spanish', 'French'].map((l) => ({ value: l, label: l }))}
+                        />
                       </div>
 
                       <div className="flex items-center gap-3">

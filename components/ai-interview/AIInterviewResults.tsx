@@ -14,6 +14,12 @@ import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import FilterSelect from '@/components/ui/filter-select';
+
+/* FilterSelect trigger classes matching the filter bar's other controls:
+   the job tab's 36px field, or the standalone bar's compact field. */
+const RESULTS_JOB_TAB_TRIGGER_CLASS = 'w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 px-3 sm:px-3 rounded-lg sm:rounded-lg text-black dark:text-slate-50 hover:border-brand-blue/40';
+const RESULTS_FILTER_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-black';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
@@ -1400,44 +1406,39 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             {!hideJobVersion && !portaled && (
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Job Version</label>
-              <select
+              <FilterSelect
                 value={search.filters.jobVersion}
-                onChange={(e) => search.setFilter('jobVersion', e.target.value)}
-                aria-label="Job Version"
-                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
-              >
-                <option value="">All job versions</option>
-                {jobVersionChoices.map((v) => <option key={v} value={String(v)}>V{v}</option>)}
-              </select>
+                onChange={(v) => search.setFilter('jobVersion', v)}
+                ariaLabel="Job Version"
+                className={portaled ? RESULTS_JOB_TAB_TRIGGER_CLASS : RESULTS_FILTER_TRIGGER_CLASS}
+                options={[{ value: '', label: 'All job versions' }, ...jobVersionChoices.map((v) => ({ value: String(v), label: `V${v}` }))]}
+              />
             </div>
             )}
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Interview Version</label>
-              <select
+              <FilterSelect
                 value={search.filters.interviewVersion}
-                onChange={(e) => search.setFilter('interviewVersion', e.target.value)}
-                aria-label="Interview Version"
-                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
-              >
-                <option value="">All interview versions</option>
-                {interviewVersionChoices.map((v) => <option key={v} value={String(v)}>V{v}</option>)}
-              </select>
+                onChange={(v) => search.setFilter('interviewVersion', v)}
+                ariaLabel="Interview Version"
+                className={portaled ? RESULTS_JOB_TAB_TRIGGER_CLASS : RESULTS_FILTER_TRIGGER_CLASS}
+                options={[{ value: '', label: 'All interview versions' }, ...interviewVersionChoices.map((v) => ({ value: String(v), label: `V${v}` }))]}
+              />
             </div>
             </>
             )}
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[180px]'}>
               <label className={filterLabelClass}>Source</label>
-              <select
+              <FilterSelect
                 value={search.filters.inviteSource}
-                onChange={(e) => search.setFilter('inviteSource', e.target.value)}
-                aria-label="Source"
-                className={portaled ? JOB_TAB_FILTER_CONTROL_CLASS : "w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"}
-              >
-                <option value="">All sources</option>
-                {INVITE_SOURCE_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
+                onChange={(v) => search.setFilter('inviteSource', v)}
+                ariaLabel="Source"
+                className={portaled ? RESULTS_JOB_TAB_TRIGGER_CLASS : RESULTS_FILTER_TRIGGER_CLASS}
+                options={[
+                  { value: '', label: 'All sources' },
+                  ...INVITE_SOURCE_FILTER_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+                ]}
+              />
             </div>
           </div>
 

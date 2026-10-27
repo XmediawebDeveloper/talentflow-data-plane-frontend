@@ -50,6 +50,7 @@ import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import UserPermissionsSummary from './UserPermissionsSummary';
 import AddSeatsModal from './AddSeatsModal';
+import FilterSelect from '@/components/ui/filter-select';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -1670,21 +1671,20 @@ export default function UserManagement() {
   // second line on phones) so the phone search box keeps its full width.
   const renderRoleFilter = (className: string) =>
     hasRoleFilter ? (
-      <select
+      <FilterSelect
         value={roleFilter}
-        onChange={(e) => setRoleFilter(e.target.value)}
-        aria-label="Filter by role"
-        className={`h-9 w-36 shrink-0 cursor-pointer truncate rounded-[6.6px] border bg-white px-2 text-sm outline-none transition-colors hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none sm:w-40 dark:bg-slate-900 ${
+        onChange={(v) => setRoleFilter(v)}
+        ariaLabel="Filter by role"
+        options={[
+          { value: 'all', label: 'All roles' },
+          ...roleFilterOptions.map(([code, label]) => ({ value: code, label })),
+        ]}
+        className={`h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-36 shrink-0 rounded-[6.6px] sm:rounded-[6.6px] px-2 sm:px-2 text-sm transition-colors hover:border-brand-blue/40 sm:w-40 ${
           roleFilter === 'all'
             ? 'border-gray-200 text-gray-700 dark:border-slate-700 dark:text-slate-300'
-            : 'border-brand-blue/40 text-brand-blue'
+            : 'border-brand-blue/40 text-brand-blue dark:border-brand-blue/40 dark:text-brand-blue'
         } ${className}`}
-      >
-        <option value="all">All roles</option>
-        {roleFilterOptions.map(([code, label]) => (
-          <option key={code} value={code}>{label}</option>
-        ))}
-      </select>
+      />
     ) : null;
 
   const sortedUsers = sortRows(filteredUsers, userSort.sortKey, userSort.sortDir, {
@@ -3048,7 +3048,7 @@ export default function UserManagement() {
                 />
               </div>
               {/* Role filter: here from sm up (one row); phones show it on the second line. */}
-              {renderRoleFilter('hidden sm:block')}
+              {renderRoleFilter('hidden sm:flex')}
             </div>
             {/* Right: clear-sort chip (desktop) + count. On phones with a role filter this
                 becomes the full-width second line: role filter left, count right. */}

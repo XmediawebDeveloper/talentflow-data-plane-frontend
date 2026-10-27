@@ -26,6 +26,7 @@ import type { PendingVerification, VerificationStatus } from '@/lib/services/aud
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import FilterSelect from '@/components/ui/filter-select';
 
 const STATUS_CONFIG: Record<VerificationStatus, { label: string; color: string; icon: LucideIcon }> = {
   PENDING: { label: 'Pending', color: 'bg-gray-100 text-gray-700 border border-gray-200', icon: Clock },
@@ -361,21 +362,20 @@ export default function LogVerificationPage() {
                   />
                 </div>
               </div>
-              <div className="relative w-full sm:w-auto">
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="appearance-none w-full sm:w-auto h-10 pl-3 sm:pl-4 pr-10 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue transition-all text-sm cursor-pointer"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="MATCH">Match</option>
-                  <option value="MISMATCH">Mismatch</option>
-                  <option value="NOT_FOUND">Not Found</option>
-                  <option value="ERROR">Error</option>
-                </select>
-                <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 rotate-90 pointer-events-none" />
-              </div>
+              <FilterSelect
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v)}
+                ariaLabel="Filter by status"
+                options={[
+                  { value: '', label: 'All Statuses' },
+                  { value: 'PENDING', label: 'Pending' },
+                  { value: 'MATCH', label: 'Match' },
+                  { value: 'MISMATCH', label: 'Mismatch' },
+                  { value: 'NOT_FOUND', label: 'Not Found' },
+                  { value: 'ERROR', label: 'Error' },
+                ]}
+                className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 pl-3 sm:pl-4"
+              />
             </div>
           </div>
 

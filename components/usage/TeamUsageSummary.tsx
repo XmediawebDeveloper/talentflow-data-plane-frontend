@@ -14,6 +14,7 @@ import { Users, BarChart3, FileText, ClipboardCheck, Upload, Briefcase, AlertCir
 import teamService, { TeamUsageSummary, AllTeamsUsageSummary, MyTeamsUsageSummary } from '@/lib/services/teamService';
 import TeamMemberUsage from '@/components/teams/TeamMemberUsage';
 import { Skeleton } from '@/components/ui/skeleton';
+import FilterSelect from '@/components/ui/filter-select';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 // Unit type labels for display
@@ -281,18 +282,20 @@ function DaysPicker({ selectedDays, onChange }: { selectedDays: number; onChange
   return (
     <div className="flex items-center gap-2">
       <Calendar className="w-4 h-4 text-gray-500" />
-      <select
-        value={selectedDays}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
-      >
-        <option value={7}>Last 7 days</option>
-        <option value={30}>Last 30 days</option>
-        <option value={60}>Last 60 days</option>
-        <option value={90}>Last 90 days</option>
-        <option value={180}>Last 6 months</option>
-        <option value={365}>Last year</option>
-      </select>
+      <FilterSelect
+        value={String(selectedDays)}
+        onChange={(v) => onChange(Number(v))}
+        ariaLabel="Period"
+        options={[
+          { value: '7', label: 'Last 7 days' },
+          { value: '30', label: 'Last 30 days' },
+          { value: '60', label: 'Last 60 days' },
+          { value: '90', label: 'Last 90 days' },
+          { value: '180', label: 'Last 6 months' },
+          { value: '365', label: 'Last year' },
+        ]}
+        className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
+      />
     </div>
   );
 }

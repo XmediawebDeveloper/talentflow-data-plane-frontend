@@ -13,6 +13,7 @@ import {
   Users,
   Headphones,
 } from "lucide-react";
+import FilterSelect from '@/components/ui/filter-select';
 
 interface ContactPageProps {
   onNavigate: (page: string) => void;
@@ -414,17 +415,12 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                   </div>
                   <div style={formGroupStyle}>
                     <label style={labelStyle}>Subject *</label>
-                    <select
-                      style={selectStyle}
+                    <FilterSelect
                       value={formData.subject}
-                      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    >
-                      <option>General Inquiry</option>
-                      <option>Sales Question</option>
-                      <option>Technical Support</option>
-                      <option>Partnership</option>
-                      <option>Press/Media</option>
-                    </select>
+                      onChange={(v) => setFormData({ ...formData, subject: v })}
+                      options={['General Inquiry', 'Sales Question', 'Technical Support', 'Partnership', 'Press/Media'].map(s => ({ value: s, label: s }))}
+                      className="w-full sm:w-full px-4 sm:px-4 py-3 sm:py-3 rounded-[10px] sm:rounded-[10px] text-base border-[var(--raw-d1d5db)] dark:border-[var(--raw-4b5563)] bg-[var(--raw-ffffff)] dark:bg-[var(--raw-374151)] text-[var(--raw-111827)] dark:text-[var(--raw-f9fafb)]"
+                    />
                   </div>
                   <div style={formGroupStyle}>
                     <label style={labelStyle}>Message *</label>

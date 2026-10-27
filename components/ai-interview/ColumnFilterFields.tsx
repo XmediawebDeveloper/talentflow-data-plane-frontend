@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react';
 import type { SearchableSelectOption } from '@/components/ui/searchable-select';
 import { DateField } from '@/components/ui/date-field';
+// Aliased: this module exports its own FilterSelect field wrapper.
+import Dropdown from '@/components/ui/filter-select';
 
 /**
  * The fields the Invitation Status and Candidate Results filter panels are
@@ -41,12 +43,16 @@ export function FilterSelect({
 }) {
   return (
     <FilterField id={id} label={label}>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={FILTER_FIELD_CLASS}>
-        <option value="">{anyLabel}</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
+      <Dropdown
+        id={id}
+        value={value}
+        onChange={(v) => onChange(v)}
+        className="w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+        options={[
+          { value: '', label: anyLabel },
+          ...options.map((option) => ({ value: option.value, label: option.label })),
+        ]}
+      />
     </FilterField>
   );
 }

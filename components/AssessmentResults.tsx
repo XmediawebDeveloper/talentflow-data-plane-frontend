@@ -42,6 +42,7 @@ import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '
 import { Badge } from '@/components/ui/badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import SearchableSelect from '@/components/ui/searchable-select';
+import FilterSelect from '@/components/ui/filter-select';
 import { tabPill } from '@/components/ui/filter-pills';
 import { DateField } from '@/components/ui/date-field';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
@@ -2010,16 +2011,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <div key={id} className={filterFieldClass}>
             <label htmlFor={portaled ? id : undefined} className={filterLabelClass}>{label}</label>
             {portaled ? (
-              <select
+              <FilterSelect
                 id={id}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={onChange}
                 disabled={disabled}
-                className={JOB_TAB_FILTER_CONTROL_CLASS}
-              >
-                <option value={allValue}>{allLabel}</option>
-                {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+                options={[{ value: allValue, label: allLabel }, ...options]}
+                className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-3 sm:pl-3 pr-3 sm:pr-3 rounded-lg sm:rounded-lg hover:border-brand-blue/40 transition-colors text-sm text-black dark:text-slate-50"
+              />
             ) : (
               <SearchableSelect
                 value={value === allValue ? '' : value}
