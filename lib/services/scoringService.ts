@@ -267,6 +267,29 @@ export const scoringService = {
   },
 
   /**
+   * Resume version of every scored candidate across many JDs — the batched
+   * replacement for reading `resume_version` off getJDScoredResumes() once per
+   * job. Returns {jdId: {lowercased email: version}}. The backend takes up to
+   * 200 ids per request, so longer lists go in chunks.
+   */
+  async getResumeVersions(jdIds: string[]): Promise<Record<string, Record<string, number>>> {
+    const CHUNK = 200;
+    try {
+      const merged: Record<string, Record<string, number>> = {};
+      for (let i = 0; i < jdIds.length; i += CHUNK) {
+        const response = await api.get<{ versions: Record<string, Record<string, number>> }>(
+          '/scoring/resume-versions',
+          { params: { jd_ids: jdIds.slice(i, i + CHUNK).join(',') } },
+        );
+        Object.assign(merged, response.data?.versions ?? {});
+      }
+      return merged;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Get all scored resumes across all JDs (Global Search)
    */
   async getAllScoredResumes(

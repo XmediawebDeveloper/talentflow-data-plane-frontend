@@ -259,6 +259,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       let mounted = true;
       let rafId: number | null = null;
+      // Set once the FPS watchdog permanently degrades to the static image —
+      // the enforce loop and TalkingHead's render loop stop for good.
+      let renderHalted = false;
       let workletPreload: Promise<void> = Promise.resolve();
       // Track head locally so cleanup can stop it even before headRef is set.
       // Without this, React StrictMode's double-invoke creates two TalkingHead
@@ -555,7 +558,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // ── Per-frame: eye contact + behavior guard + amplitude lip sync ──
           let lastLipFrameAt = performance.now();
           const enforce = () => {
-            if (!mounted || !headRef.current) return;
+            if (!mounted || renderHalted || !headRef.current) return;
             const h = headRef.current;
             const frameNow = performance.now();
             // Clamp so a background-tab pause doesn't make one giant step.
@@ -832,6 +835,28 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                   console.warn(
                     `[TalkingHead][FPS-watchdog] ${slowWindows} slow windows in a row — degrading to static fallback`
                   );
+                  // This fallback is PERMANENT (onFallback → avatar3DCantRun:
+                  // the parent never shows the 3D again), so stop paying for a
+                  // hidden canvas: end our per-frame enforce loop and halt
+                  // TalkingHead's own animate/render loop. NOT dispose()/stop():
+                  // Bina's voice streams through this head's playback worklet
+                  // (a mid-turn dispose would cut the audio and drop its
+                  // onAudioEnd), and stop() suspends the SHARED interview
+                  // AudioContext. With isRunning=false, render() is a no-op and
+                  // animate() never re-arms; the worklet callbacks
+                  // (playback-started / -ended) don't depend on it. Full
+                  // dispose still happens on unmount. (The parent's 12 s
+                  // slow-load timer never reaches here — it only sets
+                  // avatarFailed, and a slow 3D still takes over when ready.)
+                  renderHalted = true;
+                  if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+                  const hh = headRef.current;
+                  if (hh) {
+                    try {
+                      hh.isRunning = false;
+                      if (hh._raf != null) { cancelAnimationFrame(hh._raf); hh._raf = null; }
+                    } catch {}
+                  }
                   onFallback?.();
                   return;
                 }

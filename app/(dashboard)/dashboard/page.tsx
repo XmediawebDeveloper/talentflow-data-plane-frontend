@@ -23,6 +23,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { readListSnapshot, writeListSnapshot } from '@/lib/utils/listSnapshot';
 import {
   Activity,
   ArrowRight,
@@ -429,10 +430,18 @@ function DashboardSkeleton() {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, tenant, hasPermission, isTenantAdmin } = useAuth();
-  const [loading, setLoading] = useState(true);
+  /* The last response this session got (kept in memory per signed-in user), so a
+     repeat visit draws at once instead of waiting behind the skeleton. The
+     requests below still run every time and replace it. Only the very first
+     visit, with nothing remembered, shows the skeleton. */
+  const [remembered] = useState(() => readListSnapshot<{
+    dashboard: DashboardResponse | null;
+    interview: AIInterviewStatsResponse | null;
+  }>('dashboard:data'));
+  const [loading, setLoading] = useState(remembered === null);
   const [error, setError] = useState<string | null>(null);
-  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
-  const [interviewStats, setInterviewStats] = useState<AIInterviewStatsResponse | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(remembered?.dashboard ?? null);
+  const [interviewStats, setInterviewStats] = useState<AIInterviewStatsResponse | null>(remembered?.interview ?? null);
 
   // Restore scroll position when returning to the dashboard (scroll-only — the
   // page has no persisted view state; tabs/toggles here are all commented out).
@@ -451,11 +460,19 @@ export default function DashboardPage() {
 
       if (dashboardRes.status === 'fulfilled') {
         setDashboardData(dashboardRes.value);
-      } else {
+      } else if (remembered === null) {
+        // With a remembered response on screen, a failed refresh keeps it rather
+        // than putting an error over data that is still good.
         setError('We could not load some workspace data. Some widgets may be empty.');
       }
       if (interviewRes.status === 'fulfilled') {
         setInterviewStats(interviewRes.value);
+      }
+      if (dashboardRes.status === 'fulfilled' || interviewRes.status === 'fulfilled') {
+        writeListSnapshot('dashboard:data', {
+          dashboard: dashboardRes.status === 'fulfilled' ? dashboardRes.value : remembered?.dashboard ?? null,
+          interview: interviewRes.status === 'fulfilled' ? interviewRes.value : remembered?.interview ?? null,
+        });
       }
       setLoading(false);
     })();

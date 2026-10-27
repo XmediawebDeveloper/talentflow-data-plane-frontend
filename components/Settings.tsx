@@ -9,7 +9,6 @@ import ApiManagementPage from '@/app/(dashboard)/settings/api-management/page';
 import BrandingPage from '@/app/(dashboard)/settings/branding/page';
 import SecurityPage from '@/app/(dashboard)/settings/security/page';
 import LegalCompliancePage from '@/app/(dashboard)/settings/legal/page';
-import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
@@ -51,7 +50,6 @@ const errorMessage = (error: unknown, fallback: string) =>
 
 export default function Settings() {
   const { user, logout, hasPermission, hasPermissionCode, isTenantAdmin, refreshUser } = useAuth();
-  const { setTheme, theme: currentTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -138,44 +136,10 @@ export default function Settings() {
     default_view: 'dashboard',
   });
 
-  // A picked theme is only stored and applied by Save Changes.
-  const [savedTheme, setSavedTheme] = useState('light');
-  const isThemeDirty = (settings.theme || 'light') !== savedTheme;
-  const applyTheme = (value: string) => setTheme(value === 'auto' ? 'system' : value);
-  const isProfileDirty = isAvatarDirty || isThemeDirty || (Object.keys(emptyProfile) as (keyof typeof emptyProfile)[])
+  // Theme lives in the header's Light / Dark / Auto button (saved per browser),
+  // not on this page — so nothing here reads or applies it.
+  const isProfileDirty = isAvatarDirty || (Object.keys(emptyProfile) as (keyof typeof emptyProfile)[])
     .some(k => (profileData[k] || '') !== savedProfile[k]);
-
-  // Shared by My Profile and Appearance (same `settings.theme` state).
-  const themePicker = (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-      {[
-        { value: 'light', label: 'Light', desc: 'Classic bright theme' },
-        { value: 'dark', label: 'Dark', desc: 'Easy on the eyes' },
-        { value: 'auto', label: 'Auto', desc: 'Match system' },
-      ].map((theme) => (
-        <button
-          key={theme.value}
-          type="button"
-          // Selecting only marks the card; the theme is applied on Save Changes.
-          onClick={() => setSettings(prev => ({ ...prev, theme: theme.value }))}
-          className={`p-4 rounded-lg border-2 transition-all ${
-            settings.theme === theme.value
-              ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/15'
-              : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
-          }`}
-        >
-          <div className={`w-full h-20 rounded-md mb-3 ${
-            theme.value === 'light' ? 'bg-white dark:bg-slate-900 border-2 border-gray-200 dark:border-slate-700' :
-            theme.value === 'dark' ? 'bg-gray-900' :
-            // Auto: half light, half dark — it follows the system either way.
-            'border-2 border-gray-200 dark:border-slate-700 bg-[linear-gradient(90deg,#ffffff_50%,#111827_50%)]'
-          }`}></div>
-          <div className="text-sm font-semibold text-gray-900 dark:text-slate-50">{theme.label}</div>
-          <div className="text-xs text-gray-600 dark:text-slate-400">{theme.desc}</div>
-        </button>
-      ))}
-    </div>
-  );
 
   // Load user profile and settings on mount
   useEffect(() => {
@@ -235,11 +199,6 @@ export default function Settings() {
           time_format: userSettings.time_format,
           default_view: userSettings.default_view,
         });
-        // Apply saved theme preference to next-themes
-        if (userSettings.theme) {
-          setTheme(userSettings.theme === 'auto' ? 'system' : userSettings.theme);
-        }
-        setSavedTheme(userSettings.theme || 'light');
       } catch (error) {
         console.error('Error loading settings:', error);
         // Use default values on error
@@ -282,12 +241,6 @@ export default function Settings() {
       setSavedProfile(form);
       setAvatarUrl(updated.avatar_url || null);
       setSavedAvatarUrl(updated.avatar_url || null);
-      if (isThemeDirty) {
-        const savedSettings = await userSettingsApi.updateSettings({ theme: settings.theme });
-        const nextTheme = savedSettings.theme || settings.theme || 'light';
-        setSavedTheme(nextTheme);
-        applyTheme(nextTheme);
-      }
       setSaveSuccess(true);
       toast.success('Profile updated');
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -364,8 +317,6 @@ export default function Settings() {
     try {
       // Save settings
       await userSettingsApi.updateSettings(settings);
-      setSavedTheme(settings.theme || 'light');
-      applyTheme(settings.theme || 'light');
 
       setSaveSuccess(true);
       toast.success('Settings saved successfully');
@@ -870,10 +821,6 @@ export default function Settings() {
                       </HoverCard>
                     </div>
 
-                    <div>
-                      <Label className="mb-3">Appearance</Label>
-                      {themePicker}
-                    </div>
                   </div>
                 </fieldset>
               </div>
@@ -1238,12 +1185,6 @@ export default function Settings() {
 
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                 <div className="space-y-6">
-                  {/* Theme */}
-                  <div>
-                    <Label className="mb-3">Theme</Label>
-                    {themePicker}
-                  </div>
-
                   {/* Language */}
                   <div>
                     <Label className="mb-1.5">Language</Label>
@@ -1448,7 +1389,6 @@ export default function Settings() {
                     onClick={() => {
                       setProfileData(prev => ({ ...savedProfile, email: prev.email }));
                       setAvatarUrl(savedAvatarUrl);
-                      if (isThemeDirty) setSettings(prev => ({ ...prev, theme: savedTheme }));
                     }}
                     className="w-full sm:w-auto"
                   >
