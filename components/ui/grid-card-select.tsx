@@ -6,7 +6,8 @@ import { Check } from 'lucide-react';
 /**
  * Selection control for grid-view cards app-wide (the card half of the
  * shared List/Grid toggle). List rows keep their square checkbox; a card gets
- * a round "corner seal" pinned over its top-left corner instead:
+ * a round "corner seal" pinned just inside its top-left corner instead
+ * (inside the border — straddling the corner, it read as spilling out of the card):
  *
  *  - idle: hidden, so a grid at rest reads as clean cards;
  *  - card hovered / focused, or anything already selected: an empty ring
@@ -36,6 +37,7 @@ export default function GridCardSelect({
     e.stopPropagation();
     onToggle();
   };
+  // Touch screens have no hover to reveal it, so there it always shows.
   const visible = selected || selectionActive;
   return (
     <span
@@ -46,15 +48,15 @@ export default function GridCardSelect({
       tabIndex={0}
       onClick={toggle}
       onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') toggle(e); }}
-      className={`absolute -top-2 -left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer
-        ring-[3px] ring-white dark:ring-slate-900 shadow-sm transition-all duration-150
+      className={`absolute top-1.5 left-1.5 z-10 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer
+        ring-2 ring-white dark:ring-slate-900 shadow-sm transition-all duration-150
         focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue
         ${selected
           ? 'bg-brand-blue text-white shadow-brand-blue/30 scale-100 opacity-100'
           : `bg-white dark:bg-slate-900 text-transparent border-2 border-gray-300 dark:border-slate-600 hover:border-brand-blue hover:text-brand-blue/50
-             ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100'}`}`}
+             ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100 group-focus-within:opacity-100 group-focus-within:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100'}`}`}
     >
-      <Check className="w-3.5 h-3.5" strokeWidth={3} />
+      <Check className="w-3 h-3" strokeWidth={3} />
     </span>
   );
 }

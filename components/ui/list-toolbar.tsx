@@ -163,6 +163,46 @@ export interface ListToolbarProps {
   className?: string;
 }
 
+/**
+ * The stacked (narrow) layout for a row with a trailing switch, keyed by the
+ * width at which the row goes single-line: the viewport's `sm`, or the
+ * toolbar's own `@4xl` / `@5xl` in container mode. While stacked:
+ *
+ *   [Select All]            [≡ ⊞]      ← with a lead (`beforeSearch`)
+ *   [search ....................]
+ *   [ filter ▾ ][ ⚙ Filters ]          ← each line split evenly, edge to edge
+ *   [Sort by [ field        ▾ ][⇅]]    ← the widest control, last, full line
+ *
+ * Without a lead the switch sits beside the search box on the first line.
+ * Stacked one per line instead, the switch floated alone on a row of its own
+ * and every control sat at a different width down the left edge. Filter
+ * dropdowns are found by `data-toolbar-filter`, Sort by `data-toolbar-sort`.
+ * Literal class strings per breakpoint so Tailwind sees every one of them.
+ */
+const STACKED = {
+  sm: {
+    row: 'flex flex-wrap items-center gap-3 mb-3 sm:flex-nowrap',
+    searchUnderLead: 'order-3 basis-full sm:order-none sm:basis-auto',
+    searchBesideTrailing: 'order-1 flex-1 min-w-0 sm:order-none',
+    controls: 'order-4 w-full [&>*]:grow [&>[data-toolbar-sort]]:order-last [&>[data-toolbar-sort]]:basis-full [&_[data-toolbar-sort]>div]:flex-1 [&_[data-toolbar-sort]>div>div:first-child]:flex-1 [&_[data-toolbar-sort]_select]:!w-full [&_[data-toolbar-filter]>*]:!w-full sm:order-none sm:w-auto sm:[&>*]:grow-0 sm:[&>[data-toolbar-sort]]:order-none sm:[&>[data-toolbar-sort]]:basis-auto sm:[&_[data-toolbar-sort]>div]:flex-none sm:[&_[data-toolbar-sort]_select]:!w-[9.5rem] sm:[&_[data-toolbar-filter]>*]:!w-auto',
+    trailing: 'ml-auto order-2 sm:order-none',
+  },
+  '4xl': {
+    row: 'flex flex-wrap items-center gap-3 mb-3 @4xl/toolbar:flex-nowrap',
+    searchUnderLead: 'order-3 basis-full @4xl/toolbar:order-none @4xl/toolbar:basis-auto',
+    searchBesideTrailing: 'order-1 flex-1 min-w-0 @4xl/toolbar:order-none',
+    controls: 'order-4 w-full [&>*]:grow [&>[data-toolbar-sort]]:order-last [&>[data-toolbar-sort]]:basis-full [&_[data-toolbar-sort]>div]:flex-1 [&_[data-toolbar-sort]>div>div:first-child]:flex-1 [&_[data-toolbar-sort]_select]:!w-full [&_[data-toolbar-filter]>*]:!w-full @4xl/toolbar:order-none @4xl/toolbar:w-auto @4xl/toolbar:[&>*]:grow-0 @4xl/toolbar:[&>[data-toolbar-sort]]:order-none @4xl/toolbar:[&>[data-toolbar-sort]]:basis-auto @4xl/toolbar:[&_[data-toolbar-sort]>div]:flex-none @4xl/toolbar:[&_[data-toolbar-sort]_select]:!w-[9.5rem] @4xl/toolbar:[&_[data-toolbar-filter]>*]:!w-auto',
+    trailing: 'ml-auto order-2 @4xl/toolbar:order-none',
+  },
+  '5xl': {
+    row: 'flex flex-wrap items-center gap-3 mb-3 @5xl/toolbar:flex-nowrap',
+    searchUnderLead: 'order-3 basis-full @5xl/toolbar:order-none @5xl/toolbar:basis-auto',
+    searchBesideTrailing: 'order-1 flex-1 min-w-0 @5xl/toolbar:order-none',
+    controls: 'order-4 w-full [&>*]:grow [&>[data-toolbar-sort]]:order-last [&>[data-toolbar-sort]]:basis-full [&_[data-toolbar-sort]>div]:flex-1 [&_[data-toolbar-sort]>div>div:first-child]:flex-1 [&_[data-toolbar-sort]_select]:!w-full [&_[data-toolbar-filter]>*]:!w-full @5xl/toolbar:order-none @5xl/toolbar:w-auto @5xl/toolbar:[&>*]:grow-0 @5xl/toolbar:[&>[data-toolbar-sort]]:order-none @5xl/toolbar:[&>[data-toolbar-sort]]:basis-auto @5xl/toolbar:[&_[data-toolbar-sort]>div]:flex-none @5xl/toolbar:[&_[data-toolbar-sort]_select]:!w-[9.5rem] @5xl/toolbar:[&_[data-toolbar-filter]>*]:!w-auto',
+    trailing: 'ml-auto order-2 @5xl/toolbar:order-none',
+  },
+} as const;
+
 export default function ListToolbar({
   searchValue,
   onSearchChange,
@@ -200,6 +240,12 @@ export default function ListToolbar({
         search: 'relative w-full @5xl/toolbar:flex-1 @5xl/toolbar:min-w-[220px]',
         controls: '@5xl/toolbar:ml-auto',
       };
+  // A row with a trailing switch stacks as `STACKED` describes until it is
+  // wide enough for one line.
+  const stacked = !singleLine && trailing
+    ? STACKED[fitToContainer ? containerBreakpoint : 'sm']
+    : null;
+  const hasLead = !!beforeSearch;
   /* ---- Debounced search -------------------------------------------------
    * The input is uncontrolled by the parent between keystrokes: typing updates
    * local state, and only the settled value is handed up. Every consumer either
@@ -257,6 +303,8 @@ export default function ListToolbar({
           // `p-0.5` (offset by the negative margins) gives the controls' focus
           // rings room inside the scroll box, which would otherwise clip them.
           ? cn('flex flex-nowrap items-center gap-2 mb-3 p-0.5 -mx-0.5 -mt-0.5', overflowVisible ? 'overflow-visible' : 'overflow-x-auto scrollbar-hide')
+          : stacked
+          ? stacked.row
           : fitToContainer
           ? container.row
           : 'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
@@ -266,7 +314,7 @@ export default function ListToolbar({
       )}
     >
       {beforeSearch && <div className="flex flex-wrap items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
-      <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
+      <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', stacked && (hasLead ? stacked.searchUnderLead : stacked.searchBesideTrailing), searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
           type="text"
@@ -291,6 +339,7 @@ export default function ListToolbar({
             ? 'flex flex-nowrap items-center gap-2 flex-shrink-0 whitespace-nowrap [&>*]:flex-shrink-0'
             : 'flex flex-wrap items-center gap-2',
           singleLine ? undefined : fitToContainer ? container.controls : 'sm:ml-auto',
+          stacked?.controls,
           // Controls follow the search box on desktop — see `controlsFollowSearch`.
           controlsFollowSearch && 'lg:ml-0',
         )}
@@ -302,7 +351,7 @@ export default function ListToolbar({
             type="button"
             onClick={onToggleFilters}
             className={cn(
-              'rounded-lg font-medium transition-all flex items-center gap-2 text-sm',
+              'rounded-lg font-medium transition-all flex items-center justify-center gap-2 text-sm',
               buttonSize,
               filtersApplied
                 ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
@@ -355,7 +404,14 @@ export default function ListToolbar({
       </div>
 
       {/* Pinned right — see `trailing`. ml-auto takes the row's spare width. */}
-      {trailing && <div className="flex items-center flex-shrink-0 self-end sm:self-auto sm:ml-auto">{trailing}</div>}
+      {trailing && (
+        <div className={cn(
+          'flex items-center flex-shrink-0',
+          stacked ? stacked.trailing : 'self-end sm:self-auto sm:ml-auto',
+        )}>
+          {trailing}
+        </div>
+      )}
     </div>
   );
 

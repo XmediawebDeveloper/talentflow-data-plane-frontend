@@ -275,8 +275,10 @@ export default function ResumeVersionsModal({
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
+                  {/* Phones stack the details over the actions — side by side,
+                      the buttons squeezed the name and date into a sliver. */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-3 min-w-0 w-full sm:w-auto">
                       {/* Tick any two, compare from the header. */}
                       {!selectionMode && versions.length > 1 && (
                         <input
@@ -295,7 +297,7 @@ export default function ResumeVersionsModal({
                       }`}>
                         <FileText className={`w-5 h-5 ${index === 0 ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-400'}`} />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-brand-blue">
                             Version {version.version}
@@ -309,8 +311,8 @@ export default function ResumeVersionsModal({
                         {version.file_name && (
                           <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{version.file_name}</p>
                         )}
-                        <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
-                          <span className="flex items-center gap-1">
+                        <div className="flex items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
+                          <span className="flex items-center gap-1 whitespace-nowrap">
                             <Calendar className="w-3.5 h-3.5" />
                             {formatISTDate(version.created_at)}
                           </span>
@@ -329,12 +331,12 @@ export default function ResumeVersionsModal({
                           e.stopPropagation();
                           onSelectVersion?.(version);
                         }}
-                        className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium"
+                        className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium"
                       >
                         Select
                       </button>
                     ) : (
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center justify-end gap-2 flex-shrink-0 flex-wrap border-t border-gray-100 dark:border-slate-800 pt-3 sm:border-0 sm:pt-0">
                         {/* Straight to the diff against the version before it —
                             the common case, without ticking anything. The first
                             version has nothing behind it to compare against.
@@ -444,7 +446,7 @@ export default function ResumeVersionsModal({
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-4 bg-gray-50 dark:bg-slate-800/50">
+        <div className="border-t border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-center gap-3">
             <p className="text-sm text-gray-600 dark:text-slate-400">
               {!selectionMode && versions.length > 1 && compareChecked.length > 0

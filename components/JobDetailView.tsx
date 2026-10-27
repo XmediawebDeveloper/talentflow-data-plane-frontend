@@ -6040,164 +6040,6 @@ function AIMatchTabContent({
                 onSelectAll={selectAllCandidates}
                 onClear={clearSelection}
               />
-
-              {/* Actions — appears once something is ticked; holds the bulk
-                  operations: Score, plus Invite to Assessment / AI Interview
-                  (the Scored Resumes tab's Actions menu pattern — ready, or a
-                  "+ Create" offer when this job has none yet). */}
-              {selectedIds.size > 0 && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
-                      aria-label={`Actions for ${selectedIds.size} selected`}
-                    >
-                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-                      </span>
-                      Actions ({selectedIds.size})
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                      {selectedIds.size.toLocaleString()} selected
-                    </div>
-                    {/* (N) is the ticked candidates still unscored for this
-                        job version — not the selection size — and only they
-                        are sent. Nothing left to score (or the scored list
-                        still loading) greys it out with the reason, the AI
-                        Talent Match page's disabled Score Resumes row. */}
-                    {(() => {
-                      /* All three from the same lists the count and the run
-                         use — the selection and its unscored subset. */
-                      const selectedCount = selectedCandidates.length;
-                      const eligibleCount = scoreEligibleCandidates.length;
-                      const alreadyCount = selectedCount - eligibleCount;
-                      const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-                      if (jobLockedReason) {
-                        return (
-                          <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                            <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
-                            <span className="min-w-0">
-                              <span className="block">Score Selected</span>
-                              <span className="block text-2xs text-gray-400 normal-case whitespace-normal">{jobLockedReason}</span>
-                            </span>
-                          </DropdownMenuItem>
-                        );
-                      }
-                      if (!scoredResumesLoaded || eligibleCount === 0) {
-                        // Disabled items take no pointer events, so the reason
-                        // is spelled out on the row itself, not behind an ⓘ.
-                        return (
-                          <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                            <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
-                            <span className="min-w-0">
-                              <span className="block">Score Selected{scoredResumesLoaded ? ' (0)' : ''}</span>
-                              <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
-                                {!scoredResumesLoaded
-                                  ? 'Checking scored status…'
-                                  : selectedCount === 1
-                                    ? 'This candidate has already been scored for this job version, so there is no one to score.'
-                                    : `All ${selectedCount.toLocaleString()} selected candidates have already been scored for this job version, so none are eligible.`}
-                              </span>
-                            </span>
-                          </DropdownMenuItem>
-                        );
-                      }
-                      // Only when some of the selection is excluded — a fully
-                      // eligible selection needs no explanation.
-                      const explanation = alreadyCount > 0
-                        ? `You selected ${plural(selectedCount, 'candidate', 'candidates')}, but only ${eligibleCount.toLocaleString()} ${eligibleCount === 1 ? 'is' : 'are'} eligible for scoring. The remaining ${plural(alreadyCount, 'candidate has', 'candidates have')} already been scored for this job version.`
-                        : null;
-                      return (
-                        <DropdownMenuItem
-                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                          aria-describedby={explanation ? 'ai-match-score-selected-why' : undefined}
-                          onSelect={() => {
-                            if (alreadyCount > 0) toast.info(`${alreadyCount} already scored — scoring the other ${eligibleCount}.`);
-                            onScoreSelected(scoreEligibleCandidates);
-                          }}
-                        >
-                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                          <span>Score Selected ({eligibleCount.toLocaleString()})</span>
-                          {explanation && (
-                            <>
-                              <span id="ai-match-score-selected-why" className="sr-only">{explanation}</span>
-                              <ScoreSelectedInfo message={explanation} />
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })()}
-                    {/* Create / Send — the version drawer, on that type. The
-                        same icons and permission reads the invite items used. */}
-                    <DropdownMenuItem
-                      aria-disabled={!canCreateAssessments || undefined}
-                      title={!canCreateAssessments ? assessmentDeniedReason : undefined}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
-                      onSelect={(e) => {
-                        if (!canCreateAssessments) {
-                          // Locked: tooltip only, no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        onOpenInviteDrawer('assessment', selectedCandidates);
-                      }}
-                    >
-                      <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-                      <span>Create / Send Assessment </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      aria-disabled={!mayInviteAIInterview || undefined}
-                      title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
-                      onSelect={(e) => {
-                        if (!mayInviteAIInterview) {
-                          // Locked: tooltip only, no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        onOpenInviteDrawer('interview', selectedCandidates);
-                      }}
-                    >
-                      <Video className="w-4 h-4 text-menu-icon-ai" />
-                      <span>Create / Send AI Interview </span>
-                    </DropdownMenuItem>
-                    {/* Export, last — the ticked candidates, through the AI
-                        Talent Match page's CSV / Excel picker. */}
-                    <DropdownMenuItem
-                      aria-disabled={!canExport || undefined}
-                      title={!canExport ? 'You do not have permission to export matched candidates' : undefined}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
-                      onSelect={(e) => {
-                        if (!canExport) {
-                          // Locked: tooltip only, no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        setShowExportModal(true);
-                      }}
-                    >
-                      <FileDown className="w-4 h-4 text-menu-icon-download" />
-                      <span>Export</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
-                >
-                  <X className="w-4 h-4" />
-                  Clear
-                </button>
-              </div>
-              )}
             </>
           }
           /* Order: Select All → Search → All Matches → Sort → More Filters
@@ -6299,9 +6141,167 @@ function AIMatchTabContent({
           }
           />
         );
+        /* Actions + Clear — once something is ticked, their own full-width
+           row under the toolbar (Score, Invite to Assessment / AI Interview,
+           Export). Rendered outside ListToolbar: its `beforeSearch` slot is
+           a shrink-wrapped box beside Select All, so a row inside it
+           wrapped cramped and misaligned. h-9 matches the toolbar band. */
+        const bulkActionsRow = selectedIds.size > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                  aria-label={`Actions for ${selectedIds.size} selected`}
+                >
+                  <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                  </span>
+                  Actions ({selectedIds.size})
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                  {selectedIds.size.toLocaleString()} selected
+                </div>
+                {/* (N) is the ticked candidates still unscored for this
+                    job version — not the selection size — and only they
+                    are sent. Nothing left to score (or the scored list
+                    still loading) greys it out with the reason, the AI
+                    Talent Match page's disabled Score Resumes row. */}
+                {(() => {
+                  /* All three from the same lists the count and the run
+                     use — the selection and its unscored subset. */
+                  const selectedCount = selectedCandidates.length;
+                  const eligibleCount = scoreEligibleCandidates.length;
+                  const alreadyCount = selectedCount - eligibleCount;
+                  const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+                  if (jobLockedReason) {
+                    return (
+                      <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                        <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <span className="min-w-0">
+                          <span className="block">Score Selected</span>
+                          <span className="block text-2xs text-gray-400 normal-case whitespace-normal">{jobLockedReason}</span>
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  }
+                  if (!scoredResumesLoaded || eligibleCount === 0) {
+                    // Disabled items take no pointer events, so the reason
+                    // is spelled out on the row itself, not behind an ⓘ.
+                    return (
+                      <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                        <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <span className="min-w-0">
+                          <span className="block">Score Selected{scoredResumesLoaded ? ' (0)' : ''}</span>
+                          <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
+                            {!scoredResumesLoaded
+                              ? 'Checking scored status…'
+                              : selectedCount === 1
+                                ? 'This candidate has already been scored for this job version, so there is no one to score.'
+                                : `All ${selectedCount.toLocaleString()} selected candidates have already been scored for this job version, so none are eligible.`}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  }
+                  // Only when some of the selection is excluded — a fully
+                  // eligible selection needs no explanation.
+                  const explanation = alreadyCount > 0
+                    ? `You selected ${plural(selectedCount, 'candidate', 'candidates')}, but only ${eligibleCount.toLocaleString()} ${eligibleCount === 1 ? 'is' : 'are'} eligible for scoring. The remaining ${plural(alreadyCount, 'candidate has', 'candidates have')} already been scored for this job version.`
+                    : null;
+                  return (
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      aria-describedby={explanation ? 'ai-match-score-selected-why' : undefined}
+                      onSelect={() => {
+                        if (alreadyCount > 0) toast.info(`${alreadyCount} already scored — scoring the other ${eligibleCount}.`);
+                        onScoreSelected(scoreEligibleCandidates);
+                      }}
+                    >
+                      <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                      <span>Score Selected ({eligibleCount.toLocaleString()})</span>
+                      {explanation && (
+                        <>
+                          <span id="ai-match-score-selected-why" className="sr-only">{explanation}</span>
+                          <ScoreSelectedInfo message={explanation} />
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })()}
+                {/* Create / Send — the version drawer, on that type. The
+                    same icons and permission reads the invite items used. */}
+                <DropdownMenuItem
+                  aria-disabled={!canCreateAssessments || undefined}
+                  title={!canCreateAssessments ? assessmentDeniedReason : undefined}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                  onSelect={(e) => {
+                    if (!canCreateAssessments) {
+                      // Locked: tooltip only, no toast.
+                      e.preventDefault();
+                      return;
+                    }
+                    onOpenInviteDrawer('assessment', selectedCandidates);
+                  }}
+                >
+                  <ClipboardList className="w-4 h-4 text-menu-icon-view" />
+                  <span>Create / Send Assessment </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  aria-disabled={!mayInviteAIInterview || undefined}
+                  title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                  onSelect={(e) => {
+                    if (!mayInviteAIInterview) {
+                      // Locked: tooltip only, no toast.
+                      e.preventDefault();
+                      return;
+                    }
+                    onOpenInviteDrawer('interview', selectedCandidates);
+                  }}
+                >
+                  <Video className="w-4 h-4 text-menu-icon-ai" />
+                  <span>Create / Send AI Interview </span>
+                </DropdownMenuItem>
+                {/* Export, last — the ticked candidates, through the AI
+                    Talent Match page's CSV / Excel picker. */}
+                <DropdownMenuItem
+                  aria-disabled={!canExport || undefined}
+                  title={!canExport ? 'You do not have permission to export matched candidates' : undefined}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                  onSelect={(e) => {
+                    if (!canExport) {
+                      // Locked: tooltip only, no toast.
+                      e.preventDefault();
+                      return;
+                    }
+                    setShowExportModal(true);
+                  }}
+                >
+                  <FileDown className="w-4 h-4 text-menu-icon-download" />
+                  <span>Export</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              type="button"
+              onClick={clearSelection}
+              title="Clear the selection"
+              className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          </div>
+        ) : null;
         return toolbarPortal
-          ? createPortal(toolbar, toolbarPortal)
-          : <div className="space-y-3">{toolbar}</div>;
+          ? createPortal(<>{toolbar}{bulkActionsRow}</>, toolbarPortal)
+          : <div className="space-y-3">{toolbar}{bulkActionsRow}</div>;
       })()}
 
       {/* Table / Grid */}

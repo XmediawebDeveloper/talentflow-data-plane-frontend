@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
-import { ArrowUpRight, Rocket, LayoutGrid, Lock } from 'lucide-react';
+import { ArrowUpRight, Rocket, LayoutGrid, Lock, UsersRound } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { buildMenuSections, filterMenuSections, DISABLED_REASON_MESSAGE, type NavItem } from '@/lib/navigation/menuSections';
@@ -37,6 +37,7 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'audit-trail': 'Activity log',
   'support-tickets': 'Help & tickets',
   'help-desk': 'Internal desk',
+  teams: 'Teams & team chat',
 };
 
 // Short, always-visible reason under a disabled tile; the full sentence is in
@@ -105,7 +106,8 @@ const toneFor = (index: number): TileTone => TILE_TONES[Math.floor(index / 2) % 
 const CANONICAL_TOOL_ORDER: string[] = buildMenuSections(true)
   .filter((s) => !HIDDEN_SECTIONS.has(s.id))
   .flatMap((s) => s.items.map((i) => i.id))
-  .filter((id) => id !== 'dashboard');
+  .filter((id) => id !== 'dashboard')
+  .concat('teams'); // the Teams tile, always appended last
 
 const toneForTool = (id: string, fallbackIndex: number): TileTone => {
   const index = CANONICAL_TOOL_ORDER.indexOf(id);
@@ -251,7 +253,23 @@ export default function DashboardQuickAccess() {
     [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature],
   );
 
-  const totalItems = sections.reduce((acc, s) => acc + s.items.length, 0);
+  /* Teams + Chat, as one tile at the end (they used to be tabs on User
+     Management). Chat is open to everyone, so the tile is never locked: it
+     opens Teams when the plan and permissions allow it, otherwise Chat. */
+  const teamsTile: NavItem = useMemo(() => {
+    const canUseTeams = hasPlanFeature('teams') && hasPerm('canViewTeams');
+    return {
+      id: 'teams',
+      label: 'Teams',
+      icon: UsersRound,
+      href: canUseTeams ? '/organization/team-management' : '/organization/team-chat',
+      pending: planFeaturesLoading,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature]);
+  const tiles = [...sections.flatMap((section) => section.items), teamsTile];
+
+  const totalItems = tiles.length;
 
 
   return (
@@ -289,7 +307,7 @@ export default function DashboardQuickAccess() {
         {/* Flattened first so the colour run counts tiles as they appear on
             screen, not as they are grouped by section. */}
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {sections.flatMap((section) => section.items).map((item, index) => (
+          {tiles.map((item, index) => (
             <li key={item.id}>
               <TileCard item={item} tone={toneForTool(item.id, index)} />
             </li>

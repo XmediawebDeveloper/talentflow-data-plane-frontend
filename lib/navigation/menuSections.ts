@@ -117,7 +117,8 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       label: 'USER MANAGEMENT',
       items: [
         { id: 'user-management', label: 'User Management', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
-        // Usage History, Roles & Permissions, Teams and Chat are reached from the quick links on the Users (/organization/user-management) page.
+        // Usage History and Roles & Permissions are tabs on the Users (/organization/user-management) page;
+        // Teams and Chat have their own tab pair, opened from the dashboard's "Teams" Quick Access tile.
       ],
     },
 
