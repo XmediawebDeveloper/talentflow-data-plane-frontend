@@ -1,6 +1,6 @@
 'use client';
 
-import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, SlidersHorizontal } from 'lucide-react';
+import { User, Bell, Info, Shield, Palette, Mail, Save, Check, Lock, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound, Key, ScrollText, SlidersHorizontal } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useSyncExternalStore } from 'react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 // Workspace & admin pages — rendered inline in the right panel (they keep their own routes too).
@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import CountryPhoneInput, { phoneError } from '@/components/ui/country-phone-input';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { browserTimeZone, timeZoneOptions } from '@/lib/utils/timezones';
 import { Label } from '@/components/ui/label';
 import {
@@ -90,6 +91,7 @@ export default function Settings() {
     timezone: profile.timezone || '',
   });
   const timeZoneChoices = useMemo(() => timeZoneOptions(), []);
+  const [tzInfoOpen, setTzInfoOpen] = useState(false);
   // Browser-only value; the server render shows the generic text instead of its own zone.
   const detectedTimeZone = useSyncExternalStore(noopSubscribe, browserTimeZone, () => 'your browser time zone');
   const isAvatarDirty = avatarUrl !== savedAvatarUrl;
@@ -742,7 +744,25 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <Label className="mb-1.5">Time Zone</Label>
+                      {/* Hovering the ⓘ beside the label shows the explainer. Keep it truthful: today the
+                          saved zone is NOT applied to displays — lib/utils/dateUtils.ts formats
+                          every date in Asia/Kolkata and the backend stores IST (app/utils/tz.py).
+                          Update this text if that changes. */}
+                      <HoverCard open={tzInfoOpen} onOpenChange={setTzInfoOpen} openDelay={100} closeDelay={150}>
+                      <div className="mb-1.5 flex items-center gap-1.5">
+                        <Label>Time Zone</Label>
+                        <HoverCardTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="How does the time zone work?"
+                            // Hover/focus opens it; a tap toggles it on touch screens (no hover there).
+                            onClick={() => setTzInfoOpen(open => !open)}
+                            className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                          >
+                            <Info className="h-4 w-4" />
+                          </button>
+                        </HoverCardTrigger>
+                      </div>
                       <SearchableSelect
                         value={profileData.timezone || ''}
                         onChange={(timezone) => setProfileData({ ...profileData, timezone })}
@@ -754,6 +774,51 @@ export default function Settings() {
                         ariaLabel="Time zone"
                         className="w-full"
                       />
+
+                      <HoverCardContent align="start" collisionPadding={8} className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-3 text-sm text-gray-600 dark:text-slate-400">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does the time zone work?</h3>
+                          <div>
+                            <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What this setting is</h4>
+                            <p>
+                              Your time zone tells TalentFlow where you work, so your account knows your local time.
+                              It is saved to your profile, so it follows you to every device you sign in on.
+                            </p>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Auto-detect or pick one</h4>
+                            <ul className="list-disc pl-5 space-y-1">
+                              <li><span className="font-medium text-gray-900 dark:text-slate-50">Auto-detect</span> uses the time zone your computer or phone is set to (right now: {detectedTimeZone.replace(/_/g, ' ')}). If you travel and your device changes zone, this follows it.</li>
+                              <li><span className="font-medium text-gray-900 dark:text-slate-50">Pick a zone</span> if you want a fixed one — for example, you work Indian hours while abroad. Search by city (&ldquo;Kolkata&rdquo;, &ldquo;Dubai&rdquo;) or by name (&ldquo;India Standard Time&rdquo;).</li>
+                            </ul>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Reading the list</h4>
+                            <p>
+                              Each zone shows its current difference from UTC, e.g. <span className="font-medium text-gray-900 dark:text-slate-50">(UTC+05:30) Asia/Kolkata</span>.
+                              Zones with daylight saving time (such as London or New York) move by an hour during the year; the list always shows the offset in effect today.
+                            </p>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">How dates and times are shown today</h4>
+                            <p>
+                              For now, TalentFlow shows dates and times across the app — activity and audit logs, tickets, invites, results and
+                              reports — in <span className="font-medium text-gray-900 dark:text-slate-50">India Standard Time (IST, UTC+05:30)</span> for everyone,
+                              whatever zone is selected here. Keep this in mind if you work in another zone: a time shown as 6:00 PM is 6:00 PM IST.
+                            </p>
+                          </div>
+                          <div className="flex items-start gap-2 rounded-lg border border-brand-blue/20 bg-brand-blue/5 p-2.5">
+                            <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                            <p>
+                              Your selection is saved now so that, as time-zone support rolls out to dates, scheduling and reminders,
+                              they can use your zone without you having to set it again.
+                            </p>
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Changing it</h4>
+                            <p>Choose a zone (or Auto-detect) and click <span className="font-medium text-gray-900 dark:text-slate-50">Save Changes</span>. Nothing changes until you save.</p>
+                          </div>
+                      </HoverCardContent>
+                      </HoverCard>
                     </div>
 
                   </div>
