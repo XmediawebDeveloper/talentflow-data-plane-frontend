@@ -594,6 +594,8 @@ interface JobVersionGroup {
    *  Undefined until this version's own JD record lands, or when it states no
    *  experience at all; the cell draws a dash for both. */
   experience?: string;
+  /** The version's JD record has not landed yet, so Experience is unknown rather than empty. */
+  experiencePending?: boolean;
   createdOn?: string;
   createdBy?: string;
   assessments: AssessmentVersionRow[];
@@ -674,14 +676,17 @@ const sumKnown = (values: (number | undefined)[]): number | null =>
 const UnknownMetric = () => <span className="text-sm text-gray-400">—</span>;
 
 function MetricCell({ value, label }: { value: number; label: string }) {
-  // Number and label on one line, never wrapped — the Assessments / Invitations
-  // Sent / Completed columns read as a single "1 Assessment" phrase rather than
-  // a value stacked above a word.
+  // The number alone: the column header already names the metric, so repeating
+  // "Assessments" / "Invitation" / "Candidates" beside every figure was noise.
+  // The word stays as the hover title and the accessible name.
   return (
-    <div className="flex items-baseline gap-1 whitespace-nowrap">
-      <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{value}</span>
-      <span className="text-xs text-gray-500 dark:text-slate-400">{label}</span>
-    </div>
+    <span
+      className="text-sm font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap"
+      title={`${value} ${label}`}
+      aria-label={`${value} ${label}`}
+    >
+      {value}
+    </span>
   );
 }
 
@@ -829,6 +834,9 @@ export default function AssessmentVersionHistoryPanel({
   paginated = false,
 }: AssessmentVersionHistoryPanelProps) {
   const childColumns = childColumnsFor(vocabulary);
+  /* The three count columns hold a bare number, so header and cells centre. */
+  const isCountColumn = (label: string) =>
+    label === vocabulary.childPlural || label === 'Invitations Sent' || label === 'Completed';
   /* `paginated` state. The Job Versions table has one page; each job version's
      Assessment Versions table has its own, keyed by job version, so turning a
      page in one never moves another. */
@@ -1040,6 +1048,7 @@ export default function AssessmentVersionHistoryPanel({
       /* `detail` is keyed by this version's own JD row id (`lineageEntry.id`),
          which is what maps the value to the right job version. */
       experience: formatJobVersionExperience(detail),
+      experiencePending: !!lineageEntry && !detail,
       /* When the version itself was made, not when it was published — the
          column says Created On. */
       createdOn: lineageEntry?.created_at || detail?.created_at,
@@ -1067,7 +1076,11 @@ export default function AssessmentVersionHistoryPanel({
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-      {loading && !assessments ? (
+      {/* Loading until there is something to draw. This used to read
+          `loading && !assessments`, but hosts always pass `assessments` (an
+          array, empty at worst), so the spinner never showed and the panel
+          printed "No version history" until the lineage request landed. */}
+      {loading && groups.length === 0 ? (
         <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
@@ -1128,7 +1141,7 @@ export default function AssessmentVersionHistoryPanel({
                          sideways-scrolling table keeps every column, Actions and
                          Completed alike, fully readable at some scroll position
                          on every screen. */
-                      className={`sticky top-0 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
+                      className={`sticky top-0 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${isCountColumn(label) ? 'text-center' : ''} ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
                     >
                       <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                     </th>
@@ -1258,20 +1271,22 @@ export default function AssessmentVersionHistoryPanel({
                           className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle"
                           title={group.experience || ''}
                         >
-                          {group.experience || <span className="text-gray-500 dark:text-slate-400">&mdash;</span>}
+                          {group.experience || (group.experiencePending
+                            ? <span aria-label="Loading experience" className="inline-block h-4 w-16 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
+                            : <span className="text-gray-500 dark:text-slate-400">&mdash;</span>)}
                         </td>
                         <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
                           <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} />
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle text-center">
                           <MetricCell value={count} label={count === 1 ? vocabulary.childSingular : vocabulary.childPlural} />
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle text-center">
                           {group.totalInvitations === null
                             ? <UnknownMetric />
                             : <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />}
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle text-center">
                           {group.totalCompleted === null
                             ? <UnknownMetric />
                             : <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />}
@@ -1426,7 +1441,7 @@ export default function AssessmentVersionHistoryPanel({
                                             ].map(({ label, minW }) => (
                                               <th
                                                 key={label}
-                                                className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
+                                                className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${isCountColumn(label) ? 'text-center' : ''} ${minW}`}
                                               >
                                                 <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                                               </th>
@@ -1569,13 +1584,13 @@ export default function AssessmentVersionHistoryPanel({
                                                     {renderChildExtraDetail ? renderChildExtraDetail(assessment) : '—'}
                                                   </td>
                                                 )}
-                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle text-center">
                                                   {typeof invitations === 'number'
                                                     ? <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
                                                     : <UnknownMetric />}
                                                 </td>
                                                 {vocabulary.childCompletedColumn && (
-                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle text-center">
                                                     {typeof assessment.completed_count === 'number'
                                                       ? <MetricCell value={assessment.completed_count} label={assessment.completed_count === 1 ? 'Candidate' : 'Candidates'} />
                                                       : <span className="text-sm text-gray-400">—</span>}
