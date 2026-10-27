@@ -1631,7 +1631,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     coding_scoring_type: 'scored',
   });
   const [isLoadingTopics, setIsLoadingTopics] = useState(false);
-  const [isSavingTopics, setIsSavingTopics] = useState(false);
+  // Tracks which individual topic key(s) are currently being saved, so only
+  // the toggle the user actually touched shows a disabled/busy state instead
+  // of every toggle in the section.
+  const [savingTopicsKeys, setSavingTopicsKeys] = useState<Set<string>>(new Set());
   const [topicsError, setTopicsError] = useState<string | null>(null);
 
   // Stats from API
@@ -3612,7 +3615,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Update topic settings
   const updateTopicSettings = async (updates: Partial<TopicSettings>) => {
-    setIsSavingTopics(true);
+    const keys = Object.keys(updates);
+    setSavingTopicsKeys(prev => new Set([...prev, ...keys]));
     setTopicsError(null);
 
     // Optimistically update local state
@@ -3630,7 +3634,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       // Rollback on error
       setTopicSettings(previousSettings);
     } finally {
-      setIsSavingTopics(false);
+      setSavingTopicsKeys(prev => {
+        const next = new Set(prev);
+        keys.forEach(k => next.delete(k));
+        return next;
+      });
     }
   };
 
@@ -9163,12 +9171,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </p>
                               </div>
                             </div>
-                            {isSavingTopics && (
-                              <span className="text-xs text-white/80 flex items-center gap-1">
-                                <RefreshCw className="w-3 h-3 animate-spin" />
-                                Saving...
-                              </span>
-                            )}
                           </div>
                         </div>
 
@@ -9202,14 +9204,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   if (!canUpdateAssessment) return;
                                   updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled });
                                 }}
-                                disabled={isSavingTopics}
-                                aria-disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={savingTopicsKeys.has('hr_enabled')}
+                                aria-disabled={savingTopicsKeys.has('hr_enabled') || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(savingTopicsKeys.has('hr_enabled') || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.hr_enabled
@@ -9254,14 +9256,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   if (!canUpdateAssessment) return;
                                   updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled });
                                 }}
-                                disabled={isSavingTopics}
-                                aria-disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={savingTopicsKeys.has('technical_enabled')}
+                                aria-disabled={savingTopicsKeys.has('technical_enabled') || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(savingTopicsKeys.has('technical_enabled') || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.technical_enabled
@@ -9306,14 +9308,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   if (!canUpdateAssessment) return;
                                   updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled });
                                 }}
-                                disabled={isSavingTopics}
-                                aria-disabled={isSavingTopics || !canUpdateAssessment}
+                                disabled={savingTopicsKeys.has('coding_enabled')}
+                                aria-disabled={savingTopicsKeys.has('coding_enabled') || !canUpdateAssessment}
                                 title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(savingTopicsKeys.has('coding_enabled') || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.coding_enabled
