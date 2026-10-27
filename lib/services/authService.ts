@@ -91,6 +91,8 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  /** Display name of the assigned role — the custom role's name if one is set in User Management. */
+  role_display?: string;
   phone?: string;
   avatar_url?: string;
   is_active: boolean;

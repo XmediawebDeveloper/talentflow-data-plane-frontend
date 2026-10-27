@@ -452,11 +452,17 @@ export function describeViolation(v: ViolationRecord): string {
     }
     case 'face_identity_changed':
     case 'face_mismatch': {
-      // Face uses euclidean distance: higher = LESS like the enrolled candidate.
-      const dist = num(d.distance);
       const tail = v.event_type === 'face_identity_changed'
         ? 'clearly a different face'
         : 'somewhat off from the candidate — could be lighting or angle';
+      // Server proctor frames (SFace): cosine similarity, higher = MORE like
+      // the candidate (its `distance` is 1 - cosine, so don't show that one).
+      if (d.metric === 'sface_cosine') {
+        const cos = num(d.cosine) ?? (num(d.distance) != null ? 1 - (num(d.distance) as number) : null);
+        if (cos != null) return `Face similarity ${cos.toFixed(2)} (higher = more like the candidate) — ${tail}.`;
+      }
+      // Browser face-api: euclidean distance, higher = LESS like the candidate.
+      const dist = num(d.distance);
       if (dist != null) return `Face match distance ${dist.toFixed(2)} (higher = less like the candidate) — ${tail}.`;
       return v.event_type === 'face_identity_changed'
         ? 'The face on camera did not match the enrolled candidate.'

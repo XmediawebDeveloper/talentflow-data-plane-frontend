@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, Save, Edit2, Loader2, X, AlertCircle, CheckCircle2, MapPin, FileText, Globe, Mail, Phone, Briefcase, Users, CalendarDays, ExternalLink, Copy, Check, Navigation, Map as MapIcon, LocateFixed, type LucideIcon } from 'lucide-react';
+import { Building2, Save, Edit2, Loader2, X, AlertCircle, CheckCircle2, MapPin, FileText, Globe, Mail, Phone, Briefcase, Users, CalendarDays, ExternalLink, Copy, Check, Navigation, Map as MapIcon, LocateFixed, ChevronRight, type LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -565,23 +565,24 @@ export default function CompanyProfilePage() {
         )}
 
         {/* ── Hero: identity + completeness (live preview while editing) ── */}
-        <section className="relative mb-5 overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:mb-6 sm:p-6 dark:border-slate-700/60 dark:bg-slate-900">
+        {/* Phones: flat (no card frame) — the details below are a list, not boxes. */}
+        <section className="relative mb-5 overflow-hidden sm:mb-6 sm:rounded-2xl sm:border sm:border-gray-200 sm:bg-white sm:p-6 sm:shadow-sm sm:dark:border-slate-700/60 sm:dark:bg-slate-900">
           {/* Subtle dot grid for depth */}
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-40 dark:opacity-20"
+            className="pointer-events-none absolute inset-0 hidden opacity-40 sm:block dark:opacity-20"
             style={{
               backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.18) 1px, transparent 1px)',
               backgroundSize: '16px 16px',
             }}
           />
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
-            <div className="flex min-w-0 items-center gap-4 sm:gap-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue to-slate-900 text-2xl font-extrabold tracking-wider text-white shadow-md ring-4 ring-slate-50 sm:h-20 sm:w-20 sm:text-3xl dark:ring-slate-800">
+          <div className="relative flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-5">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue to-slate-900 text-xl font-extrabold tracking-wider text-white shadow-md sm:h-20 sm:w-20 sm:text-3xl sm:ring-4 sm:ring-slate-50 sm:dark:ring-slate-800">
                 {initials}
               </div>
-              <div className="min-w-0 space-y-1.5 sm:space-y-2">
-                <h2 className="truncate text-lg font-bold tracking-tight text-gray-900 sm:text-xl dark:text-slate-50">
+              <div className="min-w-0 space-y-1 sm:space-y-2">
+                <h2 className="truncate text-base font-bold tracking-tight text-gray-900 sm:text-xl dark:text-slate-50">
                   {companyData.name || 'Your company'}
                 </h2>
                 {websiteHref ? (
@@ -598,8 +599,9 @@ export default function CompanyProfilePage() {
                 ) : (
                   <p className="text-xs text-gray-400 dark:text-slate-500">No website added</p>
                 )}
+                {/* Tags hidden on phones — the details list repeats them. */}
                 {(industryLabel || companyData.size || companyData.founded) && (
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <div className="hidden flex-wrap items-center gap-2 pt-1 sm:flex">
                     {industryLabel && <HeroTag icon={Briefcase}>{industryLabel}</HeroTag>}
                     {companyData.size && <HeroTag icon={Users}>{companyData.size} employees</HeroTag>}
                     {companyData.founded && <HeroTag icon={CalendarDays}>Founded {companyData.founded}</HeroTag>}
@@ -609,7 +611,7 @@ export default function CompanyProfilePage() {
             </div>
 
             {/* Completeness */}
-            <div className="w-full rounded-xl border border-gray-200/80 bg-slate-50/80 p-4 lg:w-80 dark:border-slate-700 dark:bg-slate-800/60">
+            <div className="w-full border-t border-gray-100 pt-3 dark:border-slate-800 sm:rounded-xl sm:border sm:border-gray-200/80 sm:bg-slate-50/80 sm:p-4 lg:w-80 sm:dark:border-slate-700 sm:dark:bg-slate-800/60">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium text-gray-600 dark:text-slate-300">Profile completeness</span>
                 <span className="rounded border border-brand-blue/20 bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-bold tabular-nums text-brand-blue dark:bg-brand-blue/20 dark:text-blue-200">
@@ -786,7 +788,73 @@ export default function CompanyProfilePage() {
           </div>
         ) : (
           /* ── View mode: read-only details ── */
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
+          <>
+          {/* Phones: grouped list (label above, rows with dividers) instead of cards */}
+          <div className="space-y-5 sm:hidden">
+            <MobileGroup title="Contact" onEdit={() => openEditAt('cp-edit-basic')}>
+              <MobileRow
+                icon={Mail}
+                label="Email"
+                href={companyData.email ? `mailto:${companyData.email}` : undefined}
+                trailing={companyData.email ? <CopyButton text={companyData.email} label="email" /> : undefined}
+              >
+                {companyData.email}
+              </MobileRow>
+              <MobileRow
+                icon={Phone}
+                label="Phone"
+                href={companyData.phone ? `tel:${toE164(companyData.phone) || companyData.phone.replace(/\s/g, '')}` : undefined}
+              >
+                {companyData.phone ? formatPhoneForDisplay(companyData.phone) : ''}
+              </MobileRow>
+              <MobileRow icon={Globe} label="Website" href={websiteHref || undefined} external>
+                {websiteLabel}
+              </MobileRow>
+            </MobileGroup>
+
+            <MobileGroup title="Company details" onEdit={() => openEditAt('cp-edit-basic')}>
+              <MobileRow icon={Briefcase} label="Industry">{industryLabel}</MobileRow>
+              <MobileRow icon={Users} label="Company size">{companyData.size ? `${companyData.size} employees` : ''}</MobileRow>
+              <MobileRow icon={CalendarDays} label="Founded">
+                {companyData.founded
+                  ? `${companyData.founded}${yearsActive !== null && yearsActive > 0 ? ` · ${yearsActive} ${yearsActive === 1 ? 'year' : 'years'}` : ''}`
+                  : ''}
+              </MobileRow>
+            </MobileGroup>
+
+            <MobileGroup title="Headquarters" onEdit={() => openEditAt('cp-edit-address')}>
+              <MobileRow
+                icon={MapPin}
+                label="Address"
+                wrap
+                trailing={addressLines.length > 0 ? <CopyButton text={addressLines.join(', ')} label="address" /> : undefined}
+              >
+                {addressLines.join('\n')}
+              </MobileRow>
+              {addressLines.length > 0 && (
+                <MobileRow
+                  icon={MapIcon}
+                  label="Directions"
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressLines.join(', '))}`}
+                  external
+                >
+                  View on Google Maps
+                </MobileRow>
+              )}
+            </MobileGroup>
+
+            <MobileGroup title="About" onEdit={() => openEditAt('cp-edit-about')} editLabel="Update">
+              {companyData.description ? (
+                <p className="whitespace-pre-line break-words px-3 py-3 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                  {companyData.description}
+                </p>
+              ) : (
+                <MobileRow icon={FileText} label="Description">{''}</MobileRow>
+              )}
+            </MobileGroup>
+          </div>
+
+          <div className="hidden grid-cols-1 gap-4 sm:grid sm:gap-6 lg:grid-cols-2">
             <Section
               icon={Mail}
               title="Contact information"
@@ -926,6 +994,7 @@ export default function CompanyProfilePage() {
               )}
             </Section>
           </div>
+          </>
         )}
 
       </div>
@@ -992,11 +1061,12 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="flex scroll-mt-4 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:border-gray-300 sm:p-6 dark:border-slate-700/60 dark:bg-slate-900 dark:hover:border-slate-600">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-4 dark:border-slate-700/60">
+    // Phones: no card frame — sections are separated by a rule, like a list.
+    <section id={id} className="flex scroll-mt-4 flex-col border-b border-gray-100 pb-5 dark:border-slate-800 sm:rounded-2xl sm:border sm:border-gray-200 sm:bg-white sm:p-6 sm:shadow-sm sm:transition-colors sm:hover:border-gray-300 sm:dark:border-slate-700/60 sm:dark:bg-slate-900 sm:dark:hover:border-slate-600">
+      <div className="flex items-start justify-between gap-3 sm:border-b sm:border-gray-100 sm:pb-4 sm:dark:border-slate-700/60">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-blue/10 bg-brand-blue/[0.06] text-brand-blue dark:bg-brand-blue/20 dark:text-blue-200">
-            <Icon className="h-5 w-5" />
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-blue/10 bg-brand-blue/[0.06] text-brand-blue sm:h-10 sm:w-10 sm:rounded-xl dark:bg-brand-blue/20 dark:text-blue-200">
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
@@ -1005,13 +1075,102 @@ function Section({
         </div>
         {action}
       </div>
-      <div className="mt-5 flex-1">{children}</div>
+      <div className="mt-4 flex-1 sm:mt-5">{children}</div>
       {footer && (
         <div className="mt-6 flex items-center justify-between gap-3 border-t border-gray-100 pt-3 dark:border-slate-700/60">
           {footer}
         </div>
       )}
     </section>
+  );
+}
+
+/** Phone view: small uppercase group label + Edit link above one bordered list. */
+function MobileGroup({
+  title,
+  onEdit,
+  editLabel = 'Edit',
+  children,
+}: {
+  title: string;
+  onEdit: () => void;
+  editLabel?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="mb-1.5 flex items-center justify-between px-1">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">{title}</h3>
+        <button type="button" onClick={onEdit} className="text-xs font-semibold text-brand-blue">
+          {editLabel}
+        </button>
+      </div>
+      <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white dark:divide-slate-800 dark:border-slate-700/60 dark:bg-slate-900">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+/** Phone view row: icon, label over value, optional trailing action. A row
+    with `href` is tappable as a whole (chevron / external icon on the right). */
+function MobileRow({
+  icon: Icon,
+  label,
+  href,
+  external,
+  wrap,
+  trailing,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  href?: string;
+  external?: boolean;
+  wrap?: boolean;
+  trailing?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const empty = !children;
+  const body = (
+    <>
+      <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-medium text-gray-500 dark:text-slate-400">{label}</p>
+        <p
+          className={`text-sm ${wrap ? 'whitespace-pre-line break-words' : 'truncate'} ${
+            empty
+              ? 'text-gray-400 dark:text-slate-500'
+              : href
+              ? 'font-medium text-brand-blue'
+              : 'font-medium text-gray-900 dark:text-slate-50'
+          }`}
+        >
+          {empty ? 'Not added' : children}
+        </p>
+      </div>
+    </>
+  );
+  const rowClass = 'flex min-h-[52px] items-center gap-3 px-3 py-2.5';
+  return (
+    <div className="flex items-center">
+      {href && !empty ? (
+        <a
+          href={href}
+          target={external ? '_blank' : undefined}
+          rel={external ? 'noopener noreferrer' : undefined}
+          className={`${rowClass} min-w-0 flex-1 active:bg-gray-50 dark:active:bg-slate-800`}
+        >
+          {body}
+          {!trailing && (external
+            ? <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-300 dark:text-slate-600" />
+            : <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-600" />)}
+        </a>
+      ) : (
+        <div className={`${rowClass} min-w-0 flex-1`}>{body}</div>
+      )}
+      {trailing && !empty && <div className="shrink-0 pr-3">{trailing}</div>}
+    </div>
   );
 }
 

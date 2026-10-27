@@ -1278,7 +1278,11 @@ export default function StepSystemCheck({
 
     const measureDownloadMbps = async (): Promise<number | null> => {
       const MAX_MS = 4000;
-      const MAX_BYTES = 25_000_000;
+      // Was 25 MB — a full 4 s download on every fast connection. 4 MB is
+      // plenty against a 1 Mbps pass bar: slow links still stop on MAX_MS,
+      // and the rate is timed from the FIRST byte (below) so the shorter
+      // transfer isn't skewed low by connection setup / TTFB.
+      const MAX_BYTES = 4_000_000;
       const MIN_BYTES = 250_000;
       const sources = [`https://speed.cloudflare.com/__down?bytes=${MAX_BYTES}`];
       for (const base of sources) {
@@ -1291,11 +1295,19 @@ export default function StepSystemCheck({
           if (!res.ok || !res.body) { clearTimeout(hardStop); continue; }
           const reader = res.body.getReader();
           let bytes = 0;
+          // Throughput window: from the first body chunk's arrival, counting
+          // only the bytes that arrive after it (TTFB excluded).
+          let firstChunkAt: number | null = null;
+          let bytesAfterFirst = 0;
           // eslint-disable-next-line no-constant-condition
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (value) bytes += value.length;
+            if (value) {
+              bytes += value.length;
+              if (firstChunkAt === null) firstChunkAt = performance.now();
+              else bytesAfterFirst += value.length;
+            }
             if (performance.now() - start >= MAX_MS || bytes >= MAX_BYTES) {
               try { await reader.cancel(); } catch { /* ignore */ }
               controller.abort();
@@ -1303,7 +1315,14 @@ export default function StepSystemCheck({
             }
           }
           clearTimeout(hardStop);
-          const elapsedSec = (performance.now() - start) / 1000;
+          const end = performance.now();
+          const transferSec = firstChunkAt !== null ? (end - firstChunkAt) / 1000 : 0;
+          if (bytes >= MIN_BYTES && transferSec > 0.15 && bytesAfterFirst > 0) {
+            return (bytesAfterFirst * 8) / (transferSec * 1_000_000);
+          }
+          // Too short a transfer window to time reliably — fall back to the
+          // whole-request rate (the previous behaviour).
+          const elapsedSec = (end - start) / 1000;
           if (bytes >= MIN_BYTES && elapsedSec > 0.15) {
             return (bytes * 8) / (elapsedSec * 1_000_000);
           }

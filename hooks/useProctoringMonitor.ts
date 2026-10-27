@@ -23,6 +23,13 @@ import {
   writeAssessmentFaceBaseline,
 } from '@/lib/proctoring/assessmentFaceBaseline';
 import { createAssessmentFaceMonitor, type AssessmentFaceMonitor } from '@/hooks/assessmentFaceMonitor';
+import {
+  useServerProctorFrames,
+  type ProctorFrameRejection,
+  type ProctorFrameService,
+} from '@/components/ai-interview/proctoring/useServerProctorFrames';
+import type { ProctorFrameResponse, ProctorFrameServerEvent } from '@/lib/services/candidateAIInterviewService';
+import { candidateService } from '@/lib/services/candidateService';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from '@/lib/ProctoringEventBus';
@@ -90,6 +97,32 @@ const EVENT_COOLDOWN_MS: Partial<Record<ProctoringEventType, number>> = {
   identity_mismatch: 15000,
 };
 const CONTINUOUS_WARNING_INTERVAL_MS = 3000;
+
+// ── Server proctor frames (PROCTOR_VISION_SERVER_ENABLED +
+// PROCTOR_VISION_ASSESSMENT_ENABLED) — same hook as the AI interview, pointed
+// at /candidate/assessment/{token}/proctor-frame.
+const ASSESSMENT_FRAME_SERVICE: ProctorFrameService = {
+  getProctorFrameConfig: (t) => candidateService.getProctorFrameConfig(t),
+  sendProctorFrame: (t, b, ts) => candidateService.sendProctorFrame(t, b, ts),
+  endProctorFrames: (t) => candidateService.endProctorFrames(t),
+};
+// Attempt statuses before / during the test (backend _LIVE_ATTEMPT_STATUSES).
+// A 409 with one of these means "not started yet" → keep retrying; anything
+// else (completed / terminated / abandoned …) means the attempt is over.
+const PRE_LIVE_ATTEMPT_STATUSES = new Set([
+  'not_started', 'pending_system_check', 'ready', 'pending_lang_choice',
+  'generating', 'generation_failed', 'in_progress',
+]);
+const NOT_LIVE_RETRY_MS = 5000;
+const assessmentFrameRejection = (status: number, body: ProctorFrameResponse | null): ProctorFrameRejection | undefined => {
+  if (status === 403) return { action: 'stop' };            // session_mismatch — another device owns the attempt
+  if (status === 409) {
+    const st = String((body as { status?: string } | null)?.status ?? '').toLowerCase();
+    return PRE_LIVE_ATTEMPT_STATUSES.has(st) ? { action: 'retry', retryMs: NOT_LIVE_RETRY_MS } : { action: 'stop' };
+  }
+  return undefined;
+};
+type ServerHeldType = 'face_missing' | 'multiple_faces';
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Legacy type kept for compatibility with existing imports
@@ -592,6 +625,7 @@ export function useProctoringMonitor({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const faceVideoRef = useRef<HTMLVideoElement | null>(null);
   const faceMonitorRef = useRef<AssessmentFaceMonitor | null>(null);
+  const faceSetupGenRef = useRef(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
@@ -717,11 +751,84 @@ export function useProctoringMonitor({
     }, CONTINUOUS_WARNING_INTERVAL_MS);
   }, [clearContinuousViolation]);
 
+  // Held toasts raised by SERVER episodes (server mode) — see handleServerProctorEvents.
+  const serverHeldRef = useRef<Set<ServerHeldType>>(new Set());
+  const releaseServerHeld = useCallback(() => {
+    serverHeldRef.current.forEach(kind => ProctoringEventBus.release(kind));
+    serverHeldRef.current.clear();
+  }, []);
+
   const clearAllContinuousViolations = useCallback(() => {
     (Object.keys(continuousViolationStateRef.current) as ContinuousViolationType[])
       .forEach(clearContinuousViolation);
     ProctoringEventBus.release('gaze_away'); // monitoring stopped — no held toast may linger
-  }, [clearContinuousViolation]);
+    releaseServerHeld();
+  }, [clearContinuousViolation, releaseServerHeld]);
+
+  // ==================== SERVER PROCTOR FRAMES ====================
+  // Server events are ALREADY persisted by the server (through the same
+  // /proctor-event recorder): here they only drive the candidate toasts —
+  // ProctoringEventBus directly, never emitEvent (which would re-post them).
+  //   face_missing / multiple_faces  → held toast for the server episode
+  //   camera_obstructed / phone_detected / unauthorized_object → toast
+  //   face_mismatch / face_identity_changed → identity_mismatch toast
+  //   identity / detector diagnostics → console only
+  const handleServerProctorEvents = useCallback((events: ProctorFrameServerEvent[]) => {
+    if (!enabledRef.current) return;
+    for (const ev of events) {
+      const type = ev.event_type || '';
+      const isEnd = ev.phase === 'end' || type.endsWith('_ended');
+      const base = type.replace(/_ended$/, '');
+      const details: Record<string, any> = { ...(ev.details ?? {}), __server: true };
+      switch (base) {
+        case 'face_missing':
+        case 'multiple_faces':
+          if (isEnd) {
+            serverHeldRef.current.delete(base);
+            ProctoringEventBus.release(base);
+          } else {
+            // Face first, gaze second: no face means no "looking away".
+            if (base === 'face_missing') faceMonitorRef.current?.resetGaze('face_missing');
+            serverHeldRef.current.add(base);
+            ProctoringEventBus.emitHeld(base, base, details);
+          }
+          break;
+        case 'camera_obstructed':
+          if (!isEnd) {
+            faceMonitorRef.current?.resetGaze('camera_obstructed');
+            ProctoringEventBus.emit('camera_obstructed', details);
+          }
+          break;
+        case 'phone_detected':
+        case 'unauthorized_object':
+          if (!isEnd) ProctoringEventBus.emit(base, details);
+          break;
+        case 'face_mismatch':
+        case 'face_identity_changed':
+          if (!isEnd) ProctoringEventBus.emit('identity_mismatch', details);
+          break;
+        default:
+          if (base.endsWith('_unavailable') || base === 'face_unverifiable') {
+            console.warn(`[PROCTORING] Server proctoring: ${base}`, ev.details?.reason ?? '');
+          }
+          break;
+      }
+    }
+  }, []);
+
+  const proctorVision = useServerProctorFrames({
+    token,
+    streaming: enabled && state.isMonitoring && !!stream,
+    // Proctoring switched off (test submitted / left the test step) → /end once.
+    ended: !enabled,
+    getVideoElement: () => faceVideoRef.current ?? videoRef.current,
+    onServerEvents: handleServerProctorEvents,
+    service: ASSESSMENT_FRAME_SERVICE,
+    logTag: '[PROCTORING]',
+    classifyRejection: assessmentFrameRejection,
+  });
+  const proctorVisionModeRef = proctorVision.modeRef;
+  const serverFaceReadingRef = proctorVision.latestRef;
 
   const beginNavigationSequence = useCallback((durationMs = 1500) => {
     navigationSuppressionUntilRef.current = Date.now() + durationMs;
@@ -926,7 +1033,10 @@ export function useProctoringMonitor({
             setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
             // Face can't be seen → gaze isn't judged; close any looking-away episode.
             faceMonitorRef.current?.resetGaze('camera_obstructed');
-            syncContinuousViolation('camera_obstructed', true, {
+            // Server mode: the server judges + records camera_obstructed (and
+            // raises the toast through handleServerProctorEvents) — the local
+            // worker only drives the overlay state here.
+            if (proctorVisionModeRef.current !== 'server') syncContinuousViolation('camera_obstructed', true, {
               reason: data.reason,
               avgBrightness: data.avgBrightness,
               brightnessRange: data.brightnessRange,
@@ -1114,6 +1224,9 @@ export function useProctoringMonitor({
     faceDetectionCancelledRef.current = false;
     faceMonitorRef.current?.stop();
     faceMonitorRef.current = null;
+    // A later call (e.g. server → browser fallback) supersedes this one.
+    const setupGen = ++faceSetupGenRef.current;
+    const superseded = () => faceDetectionCancelledRef.current || setupGen !== faceSetupGenRef.current;
 
     const video = document.createElement('video');
     video.srcObject = currentStream;
@@ -1122,7 +1235,14 @@ export function useProctoringMonitor({
     faceVideoRef.current = video;
 
     video.play().then(async () => {
-      if (faceDetectionCancelledRef.current) return;
+      if (superseded()) return;
+      // Server or browser face counting? Never warm a detector while the
+      // proctor-frame config is still pending (the hook caps it at 5 s).
+      while (proctorVisionModeRef.current === 'pending' && !superseded()) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (superseded()) return;
+      const serverFaces = proctorVisionModeRef.current === 'server';
 
       const NO_FACE_THRESHOLD = 2;          // 2 x 1.5 s = 3 s without a face before face_missing
       const DETECTION_FAILURE_THRESHOLD = 2;
@@ -1214,20 +1334,41 @@ export function useProctoringMonitor({
         identityMismatchThreshold: IDENTITY_MISMATCH_THRESHOLD,
         identityConfirmations: IDENTITY_MISMATCH_CONFIRMATIONS,
         identityBootstrapCaptures: IDENTITY_BOOTSTRAP_CAPTURES,
+        // Server mode: the server counts faces and records face_missing /
+        // multiple_faces; FaceDetection never loads and handleFaceCount never
+        // runs. Gaze (FaceMesh) stays here, gated by the server's face count.
+        // Identity stays a browser check: assessments keep no server-side
+        // reference photo, so the server cannot verify identity.
+        faceCountSource: serverFaces ? 'external' : 'local',
+        getExternalFaceCount: () => serverFaceReadingRef.current?.faces ?? null,
       });
 
       faceMonitorRef.current = monitor;
       await monitor.start();
-      if (faceDetectionCancelledRef.current) {
+      if (superseded()) {
         monitor.stop();
         if (faceMonitorRef.current === monitor) faceMonitorRef.current = null;
         return;
       }
-      console.log('[PROCTORING] Face detection started (assessmentFaceMonitor / MediaPipe)');
+      console.log(`[PROCTORING] Face detection started (assessmentFaceMonitor / MediaPipe, faces=${serverFaces ? 'server' : 'browser'})`);
     }).catch(err => {
       console.error('[PROCTORING] Face detection video failed to play:', err);
     });
   }, []); // uses refs internally
+
+  // Fell back server → browser mid-session (404/503/network): take down any
+  // held server episode and restart face detection with browser face counting
+  // (it re-raises the episode if the condition is still true).
+  const prevVisionModeRef = useRef(proctorVision.mode);
+  useEffect(() => {
+    const prev = prevVisionModeRef.current;
+    prevVisionModeRef.current = proctorVision.mode;
+    if (prev !== 'server' || proctorVision.mode !== 'local') return;
+    releaseServerHeld();
+    if (!isMonitoringRef.current || !streamRef.current) return;
+    if (faceVideoRef.current) faceVideoRef.current.srcObject = null; // setup makes a fresh one
+    setupFaceDetection();
+  }, [proctorVision.mode, releaseServerHeld, setupFaceDetection]);
 
   // ==================== EVENT-DRIVEN DETECTIONS (main thread, cheap) ====================
 
@@ -2079,6 +2220,8 @@ function getSeverity(type: ProctoringEventType): string {
     gaze_away: 'medium',
     identity_mismatch: 'high',
     assessment_terminated: 'high',
+    phone_detected: 'high',
+    unauthorized_object: 'medium',
   };
   return map[type] || 'low';
 }
