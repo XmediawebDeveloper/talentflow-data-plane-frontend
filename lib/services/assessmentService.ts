@@ -815,6 +815,21 @@ export const assessmentService = {
   },
 
   /**
+   * Completed results of every assessment in one request — the Results tab's
+   * replacement for one listResults() call per assessment. Each row carries
+   * its `assessment_id`; rows are exactly those listResults(status_filter:
+   * 'completed') returns.
+   */
+  async getAllResults(): Promise<any[]> {
+    try {
+      const response = await api.get<{ items: any[]; total: number }>('/assessments/all-results');
+      return response.data?.items ?? [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * List assessment results
    */
   async listResults(

@@ -287,15 +287,30 @@ export default function AIInterview() {
   };
   const [customDateFrom, setCustomDateFrom] = useState<string>(''); // YYYY-MM-DD
   const [customDateTo, setCustomDateTo] = useState<string>('');     // YYYY-MM-DD
-  const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
-  const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>([]);
-  const [stats, setStats] = useState<AIInterviewStatsResponse | null>(null);
+  /* What this page last finished loading. A return visit paints it straight
+     away (like the Assessments page) and refreshes quietly; only a first visit
+     with nothing remembered shows the full-page skeleton. */
+  const [remembered] = useState(() => readListSnapshot<{
+    configs: AIInterviewResponse[];
+    archivedConfigs: AIInterviewResponse[];
+    stats: AIInterviewStatsResponse;
+    interviewedCount: number | null;
+  }>('ai-interview:page'));
+  const [configs, setConfigs] = useState<AIInterviewResponse[]>(() => remembered?.configs ?? []);
+  const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>(() => remembered?.archivedConfigs ?? []);
+  const [stats, setStats] = useState<AIInterviewStatsResponse | null>(() => remembered?.stats ?? null);
   /* Completed + Terminated sessions — the same rows Candidate Results lists
      (a terminated interview still has its partial report). `stats.completed`
      alone left the card short of that list's count. */
-  const [interviewedCount, setInterviewedCount] = useState<number | null>(null);
+  const [interviewedCount, setInterviewedCount] = useState<number | null>(() => remembered?.interviewedCount ?? null);
   const [settings, setSettings] = useState<AIInterviewSettingsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(remembered === null);
+
+  // Keep the remembered page current (incl. after row actions) for the next visit.
+  useEffect(() => {
+    if (loading || !stats) return;
+    writeListSnapshot('ai-interview:page', { configs, archivedConfigs, stats, interviewedCount });
+  }, [loading, configs, archivedConfigs, stats, interviewedCount]);
 
   // Share modal
   const [shareConfig, setShareConfig] = useState<AIInterviewResponse | null>(null);
@@ -716,7 +731,8 @@ export default function AIInterview() {
        showing the live-only figure and then jumping when they land. */
     const archivedLoad = firstLoad ? loadArchivedConfigs() : null;
     try {
-      if (firstLoad) setLoading(true);
+      // Remembered data already on screen: refresh quietly, no skeleton.
+      if (firstLoad && remembered === null) setLoading(true);
       /* The stats and the interviewed count do not depend on the config list,
          so they are asked for NOW, beside it, instead of one after another
          behind it (three serial round trips before the page could settle). */
@@ -775,7 +791,7 @@ export default function AIInterview() {
         setLoading(false);
       }
     }
-  }, [loadAllConfigs, loadArchivedConfigs]);
+  }, [loadAllConfigs, loadArchivedConfigs, remembered]);
 
   const loadSettings = useCallback(async () => {
     try {

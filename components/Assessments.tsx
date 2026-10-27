@@ -1649,7 +1649,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [topicsError, setTopicsError] = useState<string | null>(null);
 
   // Stats from API
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState(() => {
+    const defaults = {
     total_assessments: 0,
     total_jobs_with_assessments: 0,
     total_ever_created: 0,
@@ -1671,11 +1672,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     average_pass_rate: null as number | null,
     average_score: null as number | null,
     units_consumed: 0,
+    };
+    // The last stats this page loaded, so a return visit shows real numbers at once.
+    return { ...defaults, ...(readListSnapshot<Partial<typeof defaults>>('assessments:stats') ?? {}) };
   });
-  /* Starts true: the mount effect (`loadAllData`) is what fills `stats`, and
-     until it has run the five cards would otherwise print their 0 defaults
-     for a frame. Its `finally` always clears this, on every path. */
-  const [isLoadingStats, setIsLoadingStats] = useState(true);
+  /* Starts true when nothing is remembered: the mount effect (`loadAllData`) is
+     what fills `stats`, and until it has run the five cards would otherwise
+     print their 0 defaults for a frame. Remembered stats skip that placeholder
+     and the load refreshes them quietly. Its `finally` always clears this, on
+     every path. */
+  const [isLoadingStats, setIsLoadingStats] = useState(() => readListSnapshot('assessments:stats') === null);
 
   // Persist scroll position + view state so returning from a detail/results
   // page lands the user exactly where they left off. Re-detect the scroll
@@ -2797,7 +2803,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      click reuses a fresh one (and refreshes a stale one quietly behind it)
      instead of downloading every assessment again behind a skeleton; anything
      that changes data reloads for real and clears them. */
-  const assessmentsCacheRef = useRef(new Map<string, { rows: any[]; at: number }>());
+  const [initialAssessmentsCache] = useState(
+    () => new Map(readListSnapshot<[string, { rows: any[]; at: number }][]>('assessments:page-cache') ?? []),
+  );
+  const assessmentsCacheRef = useRef(initialAssessmentsCache);
   const ASSESSMENTS_FRESH_MS = 60_000;
   const loadAssessmentsPage = async (page: number, mode: 'reload' | 'tab' = 'reload') => {
     const seq = ++assessmentsFetchSeqRef.current;
@@ -2812,7 +2821,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
     const cacheKey = JSON.stringify(filters);
     const cached = mode === 'tab' ? assessmentsCacheRef.current.get(cacheKey) : undefined;
-    if (mode === 'reload') assessmentsCacheRef.current.clear();
+    if (mode === 'reload') {
+      assessmentsCacheRef.current.clear();
+      writeListSnapshot('assessments:page-cache', []);
+    }
     if (cached) {
       setApiAssessments(cached.rows);
       setIsLoading(false);
@@ -2844,6 +2856,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const collected = await fetchAllAssessments(filters);
         if (isStale()) return;
         assessmentsCacheRef.current.set(cacheKey, { rows: collected, at: Date.now() });
+        writeListSnapshot('assessments:page-cache', Array.from(assessmentsCacheRef.current.entries()));
         setApiAssessments(collected);
         /* The count of everything that matched, before the browser-side
            filters and the version collapse narrow it further. What the footer
@@ -3137,9 +3150,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          instead of paging every assessment's results only to get an empty
          list. An id missing from the answer, or a failed batch, is fetched
          as before, so nothing is dropped on a count error. */
+      /* Fast path: every completed result in ONE request (backend
+         /assessments/all-results), instead of the counts + per-assessment
+         fan-out below. Any failure leaves `fastAttempts` null and the original
+         path runs unchanged. */
+      let fastAttempts: any[] | null = null;
+      try {
+        fastAttempts = await assessmentService.getAllResults();
+      } catch {
+        fastAttempts = null;
+      }
       const knownEmpty = new Set<string>();
       const COUNT_BATCH = 200;
-      for (let start = 0; start < items.length; start += COUNT_BATCH) {
+      for (let start = 0; !fastAttempts && start < items.length; start += COUNT_BATCH) {
         const batch = items.slice(start, start + COUNT_BATCH).map((a: any) => a.id);
         try {
           const counts = await assessmentService.getCompletedCounts(batch);
@@ -3152,14 +3175,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       }
       // Results rather than invitations: the attempt carries the scores and the
       // pass/fail verdict this tab is about.
-      const results = await Promise.all(
-        items.map(async (a: any) => {
-          if (knownEmpty.has(a.id)) return [];
-          try {
-            const attempts = await collectAllPages((page, page_size) =>
-              assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
-            );
-            return attempts.map((attempt): CandidateResultRow => ({
+      const assessmentById = new Map<string, any>(items.map((a: any) => [a.id, a]));
+      const stampAttempt = (a: any, attempt: any): CandidateResultRow => ({
               ...attempt,
               _assessment_id: a.id,
               _assessment_short_id: a.short_id,
@@ -3180,12 +3197,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  disagree with the assessment it came from. Same field, same
                  name, as the Invitation Status rows use. */
               _assessment_version: a.version,
-            }));
-          } catch {
-            return [];
-          }
-        })
-      );
+      });
+      const results = fastAttempts
+        // A row whose assessment is not in `items` has nothing to stamp it with.
+        ? [fastAttempts.flatMap((attempt: any) => {
+            const a = assessmentById.get(attempt.assessment_id);
+            return a ? [stampAttempt(a, attempt)] : [];
+          })]
+        : await Promise.all(
+            items.map(async (a: any) => {
+              if (knownEmpty.has(a.id)) return [];
+              try {
+                const attempts = await collectAllPages((page, page_size) =>
+                  assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
+                );
+                return attempts.map((attempt) => stampAttempt(a, attempt));
+              } catch {
+                return [];
+              }
+            })
+          );
       const merged = results.flat();
 
       /* ── Resume Version ────────────────────────────────────────────────
@@ -3214,7 +3245,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const resumeVersionByKey = new Map<string, number>();
       if (jdIds.length > 0) {
         const scoreKey = (jdId: string, email?: string) => `${jdId}|${(email || '').trim().toLowerCase()}`;
-        await Promise.all(
+        /* Fast path: one request per 200 jobs (backend /scoring/resume-versions)
+           instead of a page of full scoring records per job. Same value, same
+           (job, email) key. On any failure the per-job reads below run as before. */
+        let resumeVersionsBatched = false;
+        try {
+          const batched = await scoringService.getResumeVersions(jdIds);
+          for (const [jdId, byEmail] of Object.entries(batched)) {
+            for (const [email, version] of Object.entries(byEmail)) {
+              resumeVersionByKey.set(scoreKey(jdId, email), version);
+            }
+          }
+          resumeVersionsBatched = true;
+        } catch {
+          resumeVersionsBatched = false;
+        }
+        if (!resumeVersionsBatched) await Promise.all(
           jdIds.map(async (jdId) => {
             try {
               const scored = await scoringService.getJDScoredResumes(jdId, { page_size: 1000 });
@@ -3476,7 +3522,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
     const loadAllData = async () => {
-      setIsLoadingStats(true);
+      // Remembered stats are already on screen: refresh without the placeholder.
+      if (readListSnapshot('assessments:stats') === null) setIsLoadingStats(true);
 
       // Everything below reads `.value` off three settled results and writes
       // several pieces of state, ending in `setIsLoadingStats(false)`. That
@@ -3510,7 +3557,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         // the quota block or the final `setIsLoadingStats(false)`.
         if (statsResult.status === 'fulfilled' && statsResult.value) {
           const response = statsResult.value;
-          setStats({
+          const freshStats = {
             total_assessments: response.total_assessments,
             total_jobs_with_assessments: response.total_jobs_with_assessments || 0,
             total_ever_created: response.total_ever_created || response.total_assessments,
@@ -3524,7 +3571,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             average_pass_rate: response.average_pass_rate,
             average_score: response.average_score,
             units_consumed: response.units_consumed || 0,
-          });
+          };
+          setStats(freshStats);
+          writeListSnapshot('assessments:stats', freshStats);
           console.log('[TalentFlow] Loaded assessment stats from API');
         } else {
           console.log(
@@ -6735,6 +6784,75 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       </>
     );
   };
+
+  /* First load: a full-page skeleton (same shape as the AI Interviews page)
+     until the stats are in, instead of a page of "..." placeholders. Remembered
+     stats from an earlier visit skip it — `isLoadingStats` then starts false. */
+  if (isLoadingStats) {
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
+            {/* Header */}
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
+              <div className="flex items-start gap-3 min-w-0">
+                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-56" />
+                  <Skeleton className="h-4 w-80 max-w-full" />
+                </div>
+              </div>
+              <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+                <Skeleton className="h-9 w-36 rounded-lg" />
+                <Skeleton className="h-9 w-32 rounded-lg" />
+                <Skeleton className="h-9 w-40 rounded-lg" />
+              </div>
+            </div>
+            {/* Stats cards */}
+            <div className="grid gap-2.5 sm:gap-3 mb-5 sm:mb-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-brand-blue/15 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex items-start gap-2.5">
+                    <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
+                    <div className="min-w-0 space-y-1.5 flex-1">
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-6 w-10" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Assessment rows */}
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="p-3 sm:p-4 bg-white rounded-xl border border-gray-300 shadow-sm shadow-brand-blue/5">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                    <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
+                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                    <div className="flex-shrink-0 lg:w-[104px]">
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 lg:flex-1 lg:min-w-0">
+                      {Array.from({ length: 4 }).map((_, j) => (
+                        <div key={j} className="space-y-1.5">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-4 w-10" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
