@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -32,6 +32,12 @@ const MAX_BADGE_COUNT = 9;
    height: a row is as tall as its message wraps, and that differs between the
    phone-width sheet and the desktop dropdown. */
 const VISIBLE_NOTIFICATIONS = 2;
+
+/* Header theme button cycles Light → Dark → Auto (follows the OS setting). */
+const THEME_CYCLE = ['light', 'dark', 'system'] as const;
+const THEME_LABEL: Record<string, string> = { light: 'Light', dark: 'Dark', system: 'Auto (system)' };
+const nextTheme = (current?: string) =>
+  THEME_CYCLE[(THEME_CYCLE.indexOf((current ?? 'light') as (typeof THEME_CYCLE)[number]) + 1) % THEME_CYCLE.length];
 
 /* Chat messages have their own unread badges in Team Chat, so they're kept out
    of the header popup. The backend has no dedicated chat category (they come in
@@ -74,7 +80,12 @@ export default function Header(props: HeaderProps) {
 function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps & { user: UserType }) {
   const router = useRouter();
   const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme: storedTheme, setTheme } = useTheme();
+  // The saved theme only exists in the browser; until mount, render as Light so
+  // the server and first client render agree (no hydration mismatch on the icon).
+  const [themeMounted, setThemeMounted] = useState(false);
+  useEffect(() => setThemeMounted(true), []);
+  const theme = themeMounted ? storedTheme : 'light';
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1234,17 +1245,18 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           )}
         </div>
 
-        {/* Dark mode toggle */}
-        <Tooltip content={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'} position="bottom">
+        {/* Theme: Light → Dark → Auto. The icon shows the current mode. */}
+        <Tooltip content={`Theme: ${THEME_LABEL[theme ?? 'light'] ?? 'Light'} — click for ${THEME_LABEL[nextTheme(theme)]}`} position="bottom">
           <button
-            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            onClick={() => setTheme(nextTheme(theme))}
             className="p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-            aria-label="Toggle dark mode"
+            aria-label={`Theme: ${THEME_LABEL[theme ?? 'light'] ?? 'Light'}. Switch to ${THEME_LABEL[nextTheme(theme)]}`}
           >
-            {resolvedTheme === 'dark'
-              ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
-              : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
-            }
+            {theme === 'system'
+              ? <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
+              : theme === 'dark'
+                ? <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
+                : <Sun className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
         </Tooltip>
 
