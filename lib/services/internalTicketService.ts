@@ -98,6 +98,8 @@ export interface InternalTicketFilterParams {
   created_by_id?: string;
   assigned_to_me?: boolean;
   unassigned?: boolean;
+  /** Server-side order: newest (created), updated (default), or priority (high first). */
+  sort?: 'newest' | 'updated' | 'priority';
   page?: number;
   page_size?: number;
 }
@@ -133,6 +135,9 @@ function buildQueryString(params: InternalTicketFilterParams): string {
   }
   if (params.unassigned !== undefined) {
     queryParams.append('unassigned', String(params.unassigned));
+  }
+  if (params.sort) {
+    queryParams.append('sort', params.sort);
   }
   if (params.page) {
     queryParams.append('page', String(params.page));
