@@ -1311,13 +1311,17 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 </span>
                 {typeof assessment.jd_version === 'number' && (
                   <span className="inline-flex items-center gap-1.5 flex-shrink-0" title="Job version">
-                    -
+                    {/* Phones: a word label instead of a bare "-", which wrapped
+                        onto a line of its own ahead of the chip. */}
+                    <span className="max-sm:hidden">-</span>
+                    <span className="sm:hidden text-xs text-gray-500 dark:text-slate-400">Job</span>
                     <VersionChip kind="job" version={assessment.jd_version} />
                   </span>
                 )}
                 {typeof assessment.version === 'number' && (
                   <span className="inline-flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
-                    Assessment Version -
+                    <span className="max-sm:hidden">Assessment Version -</span>
+                    <span className="sm:hidden text-xs text-gray-500 dark:text-slate-400">Assessment</span>
                     <VersionChip kind="assessment" version={assessment.version} />
                   </span>
                 )}
@@ -1478,7 +1482,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   : 'bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 border-brand-blue/15'
               }`;
             const iconTile = (tone: 'ok' | 'low' | 'out') => (
-              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 flex items-center justify-center ${
+              /* Phones: no tile — it took a 36px column and squeezed the
+                 counts and the note beside it into a strip. */
+              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 max-sm:hidden flex items-center justify-center ${
                 tone === 'out' ? 'bg-destructive/10 ring-destructive/20' : tone === 'low' ? 'bg-brand-orange/10 ring-brand-orange/20' : 'bg-brand-blue/10 ring-brand-blue/15'
               }`}>
                 {tone === 'out'
@@ -1549,9 +1555,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         <div className={`h-full transition-all duration-300 ${tone === 'out' ? 'bg-red-600' : tone === 'low' ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
                         <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
                       </div>
-                      <div className="flex items-start justify-between gap-2 mt-1.5">
-                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400">
-                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
+                      {/* Phones: the pill goes above the breakdown
+                          (flex-col-reverse) instead of taking a side column. */}
+                      <div className="flex items-start justify-between gap-2 mt-1.5 max-sm:flex-col-reverse max-sm:gap-1.5">
+                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400 max-sm:w-full">
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums max-sm:[&>span]:whitespace-nowrap">
                             <span>Total: {total_quota}</span>
                             <span>Attended (consumed): {consumed}</span>
                             {/* Always shown, 0 included, so the breakdown reads
@@ -1563,7 +1571,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                               other way a held unit comes back. */}
                           {/* A pill on wide screens; on a phone the sentence
                               wraps to three lines, so a rounded box instead. */}
-                          <p className="mt-1.5 inline-flex items-start sm:items-center gap-1.5 rounded-lg sm:rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-1 sm:py-0.5 text-brand-blue dark:text-slate-200">
+                          <p className="mt-1.5 inline-flex max-sm:flex items-start sm:items-center gap-1.5 rounded-lg sm:rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-1 sm:py-0.5 text-brand-blue dark:text-slate-200">
                             <Info className="w-3 h-3 flex-shrink-0 mt-0.5 sm:mt-0" />
                             <span>
                               <span className="font-semibold">Note:</span>{' '}
@@ -2149,21 +2157,25 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               type="button"
               onClick={() => setShowEmailPreview(v => !v)}
               aria-expanded={showEmailPreview}
-              className="w-full flex items-center justify-between gap-3 px-4 sm:px-6 py-4 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
+              /* Phones: the title and the "Exact email format" pill stack (the
+                 pill under the title) and the chevron stays at the right — one
+                 row of all four ran past the card. */
+              className="w-full flex items-center justify-between gap-3 px-4 sm:px-6 py-4 max-sm:px-3 max-sm:py-3 text-left rounded-lg hover:bg-slate-100/70 dark:hover:bg-slate-900 transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <Mail className="w-5 h-5 text-brand-blue" />
-                <h3 className="text-gray-900 dark:text-slate-50 font-semibold">Email Preview</h3>
+              <div className="flex items-center gap-2 min-w-0 max-sm:flex-wrap max-sm:gap-y-1">
+                <Mail className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                <h3 className="text-gray-900 dark:text-slate-50 font-semibold whitespace-nowrap max-sm:text-sm">Email Preview</h3>
+                <span className="sm:hidden basis-full pl-7 text-2xs text-brand-blue font-medium">Exact email format</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-3 py-1 rounded-full font-medium whitespace-nowrap">
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span className="max-sm:hidden text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-3 py-1 rounded-full font-medium whitespace-nowrap">
                   Exact email format
                 </span>
                 <ChevronDown className={`w-5 h-5 text-gray-500 dark:text-slate-400 transition-transform duration-200 ${showEmailPreview ? 'rotate-180' : ''}`} />
               </div>
             </button>
             {showEmailPreview && (
-            <div className="px-4 sm:px-6 pb-6">
+            <div className="px-4 sm:px-6 pb-6 max-sm:px-3 max-sm:pb-3">
             <p className="text-xs text-gray-600 dark:text-slate-400 mb-4 bg-white dark:bg-slate-900 rounded-lg px-3 py-2 border border-gray-200 dark:border-slate-700">
               This is exactly how the email will appear to candidates. Edit the message above to see live changes.
             </p>
@@ -2171,33 +2183,33 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {/* Actual Email Template Preview */}
             <div className="bg-white rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden max-w-xl mx-auto">
               {/* Brand Header */}
-              <div className="bg-brand-blue px-6 sm:px-8 py-8 text-center">
-                <h1 className="text-white text-xl sm:text-2xl font-bold mb-2">Assessment Invitation</h1>
-                <p className="text-white/80 text-sm">TalentFlow</p>
+              <div className="bg-brand-blue px-6 sm:px-8 py-8 max-sm:px-4 max-sm:py-5 text-center">
+                <h1 className="text-white text-xl sm:text-2xl max-sm:text-base font-bold mb-2 max-sm:mb-1">Assessment Invitation</h1>
+                <p className="text-white/80 text-sm max-sm:text-xs">TalentFlow</p>
               </div>
 
               {/* Email Body */}
-              <div className="p-6 sm:p-8">
-                <div className="mb-6 text-gray-700 text-base leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">
+              <div className="p-6 sm:p-8 max-sm:p-4">
+                <div className="mb-6 max-sm:mb-4 text-gray-700 text-base max-sm:text-sm leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">
                   {customMessage}
                 </div>
 
                 {/* Assessment Title Box */}
-                <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-5 text-center mb-6">
-                  <div className="text-xl font-bold text-brand-blue [overflow-wrap:anywhere]">
+                <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-5 max-sm:p-3 text-center mb-6 max-sm:mb-4">
+                  <div className="text-xl max-sm:text-sm font-bold text-brand-blue [overflow-wrap:anywhere]">
                     {assessmentTitleForEmail}
                   </div>
                 </div>
 
                 {/* CTA Button */}
-                <div className="text-center mb-6">
-                  <div className="inline-block bg-brand-blue text-white px-8 py-3 rounded-lg font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                <div className="text-center mb-6 max-sm:mb-4">
+                  <div className="inline-block bg-brand-blue text-white px-8 max-sm:px-5 py-3 max-sm:py-2 max-sm:text-sm rounded-lg font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     Start Assessment
                   </div>
                 </div>
 
                 {/* Expiry Info */}
-                <p className="text-center text-gray-600 text-sm mb-6">
+                <p className="text-center text-gray-600 text-sm max-sm:text-xs mb-6 max-sm:mb-0">
                   This invitation expires on:{' '}
                   <strong>
                     {expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'No expiry'}
@@ -2206,7 +2218,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               </div>
 
               {/* Footer */}
-              <div className="bg-gray-50 px-6 sm:px-8 py-6 text-center border-t border-gray-200">
+              <div className="bg-gray-50 px-6 sm:px-8 py-6 max-sm:px-4 max-sm:py-4 text-center border-t border-gray-200">
                 <p className="text-gray-500 text-xs mb-2">© 2026 TalentFlow. All rights reserved.</p>
                 <p className="text-gray-400 text-xs">If you did not expect this email, please ignore it.</p>
               </div>
@@ -2248,7 +2260,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+            {/* Phones: the tile is dropped so the title and the job / version
+                line use the header's full width. */}
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hidden sm:flex items-center justify-center flex-shrink-0">
               <Mail className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">

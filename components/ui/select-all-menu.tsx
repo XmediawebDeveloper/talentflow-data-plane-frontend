@@ -137,7 +137,7 @@ export function SortByControl<T extends string>({
   onToggleOrder: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div data-toolbar-sort="" className="flex items-center gap-2">
       {/* Styled to the AI Talent Match reference's tinted "Sort by" pill: no
           border, the label always shown, and a single ArrowUpDown that flips
           180° on descending. */}

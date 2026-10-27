@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { ArrowUpRight, Rocket, LayoutGrid } from 'lucide-react';
+import { ArrowUpRight, Rocket, LayoutGrid, UsersRound } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { buildMenuSections, filterMenuSections, DISABLED_REASON_MESSAGE, type NavItem } from '@/lib/navigation/menuSections';
@@ -24,6 +24,7 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'audit-trail': 'Activity log',
   'support-tickets': 'Help & tickets',
   'help-desk': 'Internal desk',
+  teams: 'Teams & team chat',
 };
 
 /**
@@ -220,7 +221,23 @@ export default function DashboardQuickAccess() {
     [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature],
   );
 
-  const totalItems = sections.reduce((acc, s) => acc + s.items.length, 0);
+  /* Teams + Chat, as one tile at the end (they used to be tabs on User
+     Management). Chat is open to everyone, so the tile is never locked: it
+     opens Teams when the plan and permissions allow it, otherwise Chat. */
+  const teamsTile: NavItem = useMemo(() => {
+    const canUseTeams = hasPlanFeature('teams') && hasPerm('canViewTeams');
+    return {
+      id: 'teams',
+      label: 'Teams',
+      icon: UsersRound,
+      href: canUseTeams ? '/organization/team-management' : '/organization/team-chat',
+      pending: planFeaturesLoading,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTenantAdmin, user?.permissions, planFeaturesLoading, hasPlanFeature]);
+  const tiles = [...sections.flatMap((section) => section.items), teamsTile];
+
+  const totalItems = tiles.length;
 
   if (totalItems === 0) return null;
 
@@ -237,7 +254,7 @@ export default function DashboardQuickAccess() {
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-2xs font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
           <LayoutGrid className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-          {sections.length} {sections.length === 1 ? 'category' : 'categories'} · {totalItems} tools
+          {sections.length + 1} categories · {totalItems} tools
         </span>
       </header>
 
@@ -246,7 +263,7 @@ export default function DashboardQuickAccess() {
         {/* Flattened first so the colour run counts tiles as they appear on
             screen, not as they are grouped by section. */}
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {sections.flatMap((section) => section.items).map((item, index) => (
+          {tiles.map((item, index) => (
             <li key={item.id}>
               <TileCard item={item} tone={toneFor(index)} />
             </li>

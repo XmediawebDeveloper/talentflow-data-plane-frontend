@@ -19,9 +19,30 @@ const normalizeExperienceLevel = (value?: string | null): string => (
   value?.trim().toLowerCase().replace(/[\s-]+/g, '_') || ''
 );
 
-export const getStandardExperienceLevelLabel = (value?: string | null): string | undefined => (
-  STANDARD_EXPERIENCE_LEVEL_LABELS[normalizeExperienceLevel(value)]
-);
+// Populated once per session (see the dashboard layout's bootstrapper) from
+// Configuration > Experience Levels, keyed by normalized code. Consulted ahead
+// of the hardcoded dictionary above so a JD's experience badge/text always
+// matches what Configuration actually says for that code today - a tenant's
+// renamed label, or a level the dictionary never knew about (e.g. "Fresher") -
+// rather than a fixed word list that can drift from it.
+let configuredExperienceLevelLabels: Record<string, string> | null = null;
+
+export const setConfiguredExperienceLevels = (
+  levels: Array<{ code?: string | null; label?: string | null }> | null | undefined
+): void => {
+  const next: Record<string, string> = {};
+  for (const level of levels || []) {
+    const key = normalizeExperienceLevel(level?.code);
+    if (key && level?.label) next[key] = level.label;
+  }
+  configuredExperienceLevelLabels = next;
+};
+
+export const getStandardExperienceLevelLabel = (value?: string | null): string | undefined => {
+  const key = normalizeExperienceLevel(value);
+  if (!key) return undefined;
+  return configuredExperienceLevelLabels?.[key] ?? STANDARD_EXPERIENCE_LEVEL_LABELS[key];
+};
 
 export const isStandardExperienceLevel = (value?: string | null): boolean => (
   Boolean(getStandardExperienceLevelLabel(value))
@@ -79,7 +100,11 @@ export const formatJobExperienceBadge = ({
 
   const standardLabel = getStandardExperienceLevelLabel(trimmedJobLevel);
   if (!standardLabel) {
-    return trimmedJobLevel;
+    // Not a level word Configuration or the built-in standard set recognises -
+    // this stored value doesn't correspond to anything on file, most likely a
+    // stray/corrupted save rather than a level a recruiter meant candidates to
+    // see. Never surface it raw; fall back to the plain years, if any.
+    return trimmedExperienceText || undefined;
   }
 
   return trimmedExperienceText ? `${standardLabel} (${trimmedExperienceText})` : standardLabel;

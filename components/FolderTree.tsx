@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive, FolderRoot } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, MoreVertical, Upload, Edit2, Trash2, LayoutGrid, Archive, FolderRoot } from 'lucide-react';
 import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useFolderPanelCollapsed, folderColumnClasses, FolderCollapseButton, FolderPanelRail } from '@/components/ui/folder-panel-collapse';
 import { createPortal } from 'react-dom';
@@ -214,7 +214,7 @@ function DroppableFolderItem({
           }`}
           aria-label="Folder actions" title="Folder actions"
         >
-          <Plus className="w-3.5 h-3.5" />
+          <MoreVertical className="w-4 h-4" />
         </button>
       )}
       {children}

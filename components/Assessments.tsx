@@ -7105,7 +7105,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               value={isLoadingStats ? '...' : totalJobs.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('jobs')}
-            />
+            >
+              {/* The versions behind the job count: every assessment row is
+                  one version of a job's assessment (Total Assessments). */}
+              {!isLoadingStats && (
+                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                  {stats.total_assessments} {stats.total_assessments === 1 ? 'version' : 'versions'}
+                </span>
+              )}
+            </StatsCard>
             {/* Total Assessments now opens the All Assessments TAB on this page
                 rather than routing to /recruitment/assessments/all. That route
                 still exists and still works if opened directly — nothing about

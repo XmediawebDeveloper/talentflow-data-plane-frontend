@@ -79,19 +79,50 @@ export function MemberStack({
   );
 }
 
+/** Amber "needs attention" pill — a team with no lead or no members. */
+export function AttentionChip({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center rounded-full bg-amber-50 px-2 py-0.5 text-2xs font-medium text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-400/25',
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Thin bar: this team's size relative to the largest team. */
+export function TeamSizeBar({ count, max, className }: { count: number; max: number; className?: string }) {
+  if (max <= 0 || count <= 0) return null;
+  const pct = Math.max(4, Math.round((count / max) * 100));
+  return (
+    <div
+      className={cn('h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800', className)}
+      title={`${count} of ${max} members (largest team)`}
+      aria-hidden
+    >
+      <div className="h-full rounded-full bg-brand-blue/60 dark:bg-blue-400/60" style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
 export interface TeamActionHandlers {
   /** Opens the Team popup (details, with Edit and Delete inside). */
   onViewDetails: (teamId: string) => void;
   /** Opens the Team popup straight in edit mode — used by "Add members". */
   onManageTeam: (teamId: string) => void;
   canManage?: boolean;
+  /** Member count of the largest team — scales the size bar. */
+  maxMembers?: number;
 }
 
 interface TeamCardProps extends TeamActionHandlers {
   team: Team;
 }
 
-export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false }: TeamCardProps) {
+export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false, maxMembers = 0 }: TeamCardProps) {
   const created = formatTeamDate(team.created_at);
   const metrics = [
     { icon: Users, value: team.member_count, label: plural(team.member_count, 'member') },
@@ -122,7 +153,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
                 <span className="truncate">{team.team_lead.name}</span>
               </>
             ) : (
-              <span className="italic">No lead assigned</span>
+              <AttentionChip>No lead assigned</AttentionChip>
             )}
           </p>
         </div>
@@ -145,6 +176,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
           </li>
         ))}
       </ul>
+      <TeamSizeBar count={team.member_count} max={maxMembers} className="mt-3" />
 
       {/* pt-4 keeps the gap; mt-auto pins the footer to the bottom of a stretched card. */}
       <div className="mt-auto pt-4">
@@ -161,7 +193,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
             Add members
           </button>
         ) : (
-          <span className="text-sm max-sm:text-[13px] italic text-gray-400 dark:text-slate-500">No members yet</span>
+          <AttentionChip>No members yet</AttentionChip>
         )}
         {created && <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500">Created {created}</span>}
       </div>

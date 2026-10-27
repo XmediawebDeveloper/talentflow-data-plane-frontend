@@ -32,6 +32,8 @@ export interface TeamStats {
   total_teams: number;
   total_members: number;
   avg_members_per_team: number;
+  /** Returned by /teams/stats; optional so older responses still type-check. */
+  pending_invitations?: number;
 }
 
 // Team-Level Usage Visibility interfaces
