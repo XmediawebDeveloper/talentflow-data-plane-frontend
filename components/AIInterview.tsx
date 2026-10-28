@@ -599,7 +599,6 @@ export default function AIInterview() {
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
   /* The line under the tab pills: each tab's Actions (N) + Clear portal into
      it while rows are ticked. */
-  const [bulkActionSlotEl, setBulkActionSlotEl] = useState<HTMLDivElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -3625,15 +3624,20 @@ export default function AIInterview() {
                                 onClick={(e) => { e.stopPropagation(); toggleVersions(); }}
                                 aria-expanded={openVersionsFor === config.id}
                                 title={openVersionsFor === config.id ? 'Hide version history' : 'View version history'}
-                                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                /* The Job Descriptions list's View Versions
+                                   (JobsListing.tsx): solid brand blue while
+                                   closed, the version table's brand-sky tint
+                                   while open, label shown at every width.
+                                   h-8 keeps it level with Track / Result. */
+                                className={`h-8 px-3 inline-flex items-center gap-1 whitespace-nowrap border rounded-lg text-xs font-medium transition-all duration-200 ${
                                   openVersionsFor === config.id
-                                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                                    : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                                    ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
+                                    : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'
                                 }`}
                               >
-                                <span className="hidden sm:inline">{openVersionsFor === config.id ? 'Hide' : 'View'} Versions</span>
+                                {openVersionsFor === config.id ? 'Hide Versions' : 'View Versions'}
                                 <ChevronDown
-                                  className={`w-3.5 h-3.5 transition-transform ${
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
                                     openVersionsFor === config.id ? 'rotate-180' : ''
                                   }`}
                                 />
@@ -3694,11 +3698,12 @@ export default function AIInterview() {
                         </div>
 
                         {openVersionsFor === config.id && config.jd_id && (
-                          <div
-                            className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60"
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          /* No divider of its own: the panel draws the one
+                             line above its heading, as on the JD list. */
+                          <div onClick={(e) => e.stopPropagation()}>
                             <AssessmentVersionHistoryPanel
+                              /* Drawn as the Job Descriptions list's version table. */
+                              jdStyle
                               /* Same rule the Assessments Job List panel uses:
                                  a Draft is not yet a version of the job, and
                                  the row's count beside Layers reads `active`
@@ -4280,6 +4285,7 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
+                      afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       /* Shown only while rows are ticked ("N selected"): the
                          tab pills already carry the totals. */
@@ -4454,9 +4460,6 @@ export default function AIInterview() {
                     </div>
 
                     {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
-                    {/* Actions + Clear — on the line under the tab pills (the
-                        page's bulk slot), at the pills' h-8 height. */}
-                    {bulkActionSlotEl && statusBulkActions && createPortal(statusBulkActions, bulkActionSlotEl)}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable
