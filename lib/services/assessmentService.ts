@@ -400,6 +400,8 @@ export interface AssessmentStatsResponse {
   archived_assessments: number;
   total_invitations: number;
   total_candidates_tested: number;
+  /** Distinct candidate emails with a completed attempt (one per person). */
+  total_unique_candidates?: number;
   total_passed: number;
   total_failed: number;
   average_pass_rate: number | null;

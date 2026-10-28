@@ -189,14 +189,14 @@ const STACKED = {
   },
   '4xl': {
     row: 'flex flex-wrap items-center gap-3 mb-3 @4xl/toolbar:flex-nowrap',
-    searchUnderLead: 'order-3 basis-full @4xl/toolbar:order-none @4xl/toolbar:basis-auto',
+    searchUnderLead: 'order-3 basis-full @4xl/toolbar:order-none @4xl/toolbar:basis-0',
     searchBesideTrailing: 'order-1 flex-1 min-w-0 @4xl/toolbar:order-none',
     controls: 'order-4 w-full [&>*]:grow [&>[data-toolbar-sort]]:order-last [&>[data-toolbar-sort]]:basis-full [&_[data-toolbar-sort]>div]:flex-1 [&_[data-toolbar-sort]>div>div:first-child]:flex-1 [&_[data-toolbar-sort]_select]:!w-full [&_[data-toolbar-filter]>*]:!w-full @4xl/toolbar:order-none @4xl/toolbar:w-auto @4xl/toolbar:[&>*]:grow-0 @4xl/toolbar:[&>[data-toolbar-sort]]:order-none @4xl/toolbar:[&>[data-toolbar-sort]]:basis-auto @4xl/toolbar:[&_[data-toolbar-sort]>div]:flex-none @4xl/toolbar:[&_[data-toolbar-sort]_select]:!w-[9.5rem] @4xl/toolbar:[&_[data-toolbar-filter]>*]:!w-auto',
     trailing: 'ml-auto order-2 @4xl/toolbar:order-none',
   },
   '5xl': {
     row: 'flex flex-wrap items-center gap-3 mb-3 @5xl/toolbar:flex-nowrap',
-    searchUnderLead: 'order-3 basis-full @5xl/toolbar:order-none @5xl/toolbar:basis-auto',
+    searchUnderLead: 'order-3 basis-full @5xl/toolbar:order-none @5xl/toolbar:basis-0',
     searchBesideTrailing: 'order-1 flex-1 min-w-0 @5xl/toolbar:order-none',
     controls: 'order-4 w-full [&>*]:grow [&>[data-toolbar-sort]]:order-last [&>[data-toolbar-sort]]:basis-full [&_[data-toolbar-sort]>div]:flex-1 [&_[data-toolbar-sort]>div>div:first-child]:flex-1 [&_[data-toolbar-sort]_select]:!w-full [&_[data-toolbar-filter]>*]:!w-full @5xl/toolbar:order-none @5xl/toolbar:w-auto @5xl/toolbar:[&>*]:grow-0 @5xl/toolbar:[&>[data-toolbar-sort]]:order-none @5xl/toolbar:[&>[data-toolbar-sort]]:basis-auto @5xl/toolbar:[&_[data-toolbar-sort]>div]:flex-none @5xl/toolbar:[&_[data-toolbar-sort]_select]:!w-[9.5rem] @5xl/toolbar:[&_[data-toolbar-filter]>*]:!w-auto',
     trailing: 'ml-auto order-2 @5xl/toolbar:order-none',

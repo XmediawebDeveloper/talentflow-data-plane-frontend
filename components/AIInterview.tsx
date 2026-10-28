@@ -585,7 +585,6 @@ export default function AIInterview() {
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
   /* The line under the tab pills: each tab's Actions (N) + Clear portal into
      it while rows are ticked. */
-  const [bulkActionSlotEl, setBulkActionSlotEl] = useState<HTMLDivElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -3046,6 +3045,7 @@ export default function AIInterview() {
             {
               label: 'Total Interviews',
               value: allConfigs.length || (stats?.total_configs ?? 0),
+              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
               icon: FileText,
               tab: 'all-interviews' as TabKey,
               cardKey: 'interviews' as OverviewCardKey,
@@ -3059,13 +3059,20 @@ export default function AIInterview() {
               value: configs.length
                 ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
                 : (stats?.published_configs ?? 0),
+              versions: (configs.length
+                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
+                : (stats?.published_configs ?? 0)) as number | undefined,
               icon: Globe,
               tab: 'published' as TabKey,
               cardKey: 'active' as OverviewCardKey,
             },
             {
               label: 'Total Interviewed',
-              value: interviewedCount ?? stats?.completed ?? 0,
+              // One per candidate email; the session count (what the Results
+              // tab lists) rides beside it as the pill.
+              value: stats?.candidates_interviewed ?? interviewedCount ?? stats?.completed ?? 0,
+              versions: undefined as number | undefined,
+              attempts: (stats?.interview_sessions ?? interviewedCount ?? undefined) as number | undefined,
               icon: Users,
               tab: 'candidate-results' as TabKey,
               cardKey: 'interviewed' as OverviewCardKey,
@@ -3073,7 +3080,7 @@ export default function AIInterview() {
           ];
           return (
             <StatsCardGrid className="mb-5 sm:mb-8" columns={4}>
-              {cards.map(({ label, value, versions, icon: Icon, tab, cardKey }) => (
+              {cards.map(({ label, value, versions, attempts, icon: Icon, tab, cardKey }) => (
                 <StatsCard
                   key={label}
                   tone="neutral"
@@ -3088,6 +3095,11 @@ export default function AIInterview() {
                   {versions !== undefined && (
                     <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                       {versions} {versions === 1 ? 'version' : 'versions'}
+                    </span>
+                  )}
+                  {attempts !== undefined && (
+                    <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                      {attempts} {attempts === 1 ? 'interview' : 'interviews'}
                     </span>
                   )}
                 </StatsCard>
@@ -3669,15 +3681,20 @@ export default function AIInterview() {
                                 onClick={(e) => { e.stopPropagation(); toggleVersions(); }}
                                 aria-expanded={openVersionsFor === config.id}
                                 title={openVersionsFor === config.id ? 'Hide version history' : 'View version history'}
-                                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                /* The Job Descriptions list's View Versions
+                                   (JobsListing.tsx): solid brand blue while
+                                   closed, the version table's brand-sky tint
+                                   while open, label shown at every width.
+                                   h-8 keeps it level with Track / Result. */
+                                className={`h-8 px-3 inline-flex items-center gap-1 whitespace-nowrap border rounded-lg text-xs font-medium transition-all duration-200 ${
                                   openVersionsFor === config.id
-                                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                                    : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                                    ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
+                                    : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'
                                 }`}
                               >
-                                <span className="hidden sm:inline">{openVersionsFor === config.id ? 'Hide' : 'View'} Versions</span>
+                                {openVersionsFor === config.id ? 'Hide Versions' : 'View Versions'}
                                 <ChevronDown
-                                  className={`w-3.5 h-3.5 transition-transform ${
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
                                     openVersionsFor === config.id ? 'rotate-180' : ''
                                   }`}
                                 />
@@ -3738,11 +3755,12 @@ export default function AIInterview() {
                         </div>
 
                         {openVersionsFor === config.id && config.jd_id && (
-                          <div
-                            className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60"
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          /* No divider of its own: the panel draws the one
+                             line above its heading, as on the JD list. */
+                          <div onClick={(e) => e.stopPropagation()}>
                             <AssessmentVersionHistoryPanel
+                              /* Drawn as the Job Descriptions list's version table. */
+                              jdStyle
                               /* Same rule the Assessments Job List panel uses:
                                  a Draft is not yet a version of the job, and
                                  the row's count beside Layers reads `active`
@@ -4032,12 +4050,24 @@ export default function AIInterview() {
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
                 /* Same resolved status the Invited pill filters on: an invite
                    past its deadline is counted under Expired only, not both. */
-                const invitedCount = bucketCount((inv) => resolveInviteStatus(inv) === 'invited');
-                const expiredCount = bucketCount((inv) => resolveInviteStatus(inv) === 'expired');
-                const inProgressCount = bucketCount((inv) => inv.status === 'in_progress');
-                const completedCount = bucketCount((inv) => inv.status === 'completed');
-                const terminatedCount = bucketCount((inv) => inv.status === 'terminated');
-                const revokedCount = bucketCount((inv) => inv.status === 'revoked');
+                /* Exactly one chip per invitation, so the chips add up to Total.
+                   Past-deadline rows count as Expired even when the status
+                   never left system_check / consent_pending (the row's own
+                   Expired flag); cancelled invites sit with Revoked; the other
+                   pre-start statuses sit with Invited. */
+                const bucketOf = (inv: any): string => {
+                  const s = inv.status;
+                  if (s === 'completed' || s === 'terminated' || s === 'revoked' || s === 'in_progress') return s;
+                  if (isExpiredForActions(inv)) return 'expired';
+                  if (s === 'cancelled') return 'revoked';
+                  return 'invited';
+                };
+                const invitedCount = bucketCount((inv) => bucketOf(inv) === 'invited');
+                const expiredCount = bucketCount((inv) => bucketOf(inv) === 'expired');
+                const inProgressCount = bucketCount((inv) => bucketOf(inv) === 'in_progress');
+                const completedCount = bucketCount((inv) => bucketOf(inv) === 'completed');
+                const terminatedCount = bucketCount((inv) => bucketOf(inv) === 'terminated');
+                const revokedCount = bucketCount((inv) => bucketOf(inv) === 'revoked');
                 const completionRate = totalInvites > 0 ? Math.round((completedCount / totalInvites) * 100) : 0;
 
                 const search = inviteStatusFilters.search.trim().toLowerCase();
@@ -4047,7 +4077,7 @@ export default function AIInterview() {
                 const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
                 const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
                 const filtered = (sortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
-                  if (inviteStatusFilters.status !== 'all' && resolveInviteStatus(inv) !== inviteStatusFilters.status) return false;
+                  if (inviteStatusFilters.status !== 'all' && bucketOf(inv) !== inviteStatusFilters.status) return false;
                   if (search) {
                     const haystack = [inv.candidate_name, inv.candidate_email, inv.candidate_cid, inv._config_title, inv._jd_short_id]
                       .filter(Boolean).join(' ').toLowerCase();
@@ -4324,6 +4354,7 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
+                      afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       /* Shown only while rows are ticked ("N selected"): the
                          tab pills already carry the totals. */
@@ -4498,9 +4529,6 @@ export default function AIInterview() {
                     </div>
 
                     {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
-                    {/* Actions + Clear — on the line under the tab pills (the
-                        page's bulk slot), at the pills' h-8 height. */}
-                    {bulkActionSlotEl && statusBulkActions && createPortal(statusBulkActions, bulkActionSlotEl)}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable
