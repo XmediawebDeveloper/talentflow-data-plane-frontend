@@ -37,7 +37,7 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
 import AIInterviewResults from './AIInterviewResults';
-import ShareAIInterviewModal from './ShareAIInterviewModal';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import AIInterviewTrackInvitesModal from '../AIInterviewTrackInvitesModal';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
@@ -225,7 +225,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
-  // Share and Invite are the same action (both open ShareAIInterviewModal to
+  // Share and Invite are the same action (both open THE invite popup to
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
@@ -245,10 +245,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
      metadata about the same interview, just read-only). */
   const [detailsSubTab, setDetailsSubTab] = useUrlTab<'configure' | 'info'>('detailSubTab', ['configure', 'info'], 'configure', !configureOnly);
   const [actionLoading, setActionLoading] = useState(false);
-  // Share — a dialog off the header's Share button (Assessment Details'
-  // pattern) rather than a tab of its own; ShareAIInterviewModal already
-  // supports this as its non-embedded (default) mode.
-  const [showShareModal, setShowShareModal] = useState(false);
+  // Invite — THE invite popup (the one Assessments uses), for this job and
+  // this interview version (its version cards are left out).
+  const { open: openInvite } = useInviteDialog();
   // CSV / Excel picker for the clusters & HR questions export.
   const [showExportModal, setShowExportModal] = useState(false);
 
@@ -409,6 +408,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     void onRefresh?.();
     setInviteRefreshTick((t) => t + 1);
   }, [loadActivity, onRefresh]);
+  // The popup lives in the dashboard provider and may call onSent after a
+  // re-render — always run the latest refresher.
+  const refreshAfterInviteRef = useRef(refreshAfterInvite);
+  refreshAfterInviteRef.current = refreshAfterInvite;
 
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
@@ -1549,7 +1552,20 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       return;
                     }
                     if (!canShareAIInterviews) return;
-                    setShowShareModal(true);
+                    openInvite({
+                      kind: 'interview',
+                      job: config.jd_id
+                        ? {
+                            jdId: config.jd_id,
+                            jdTitle: config.jd_title || config.position || '',
+                            jdCode: config.jd_short_id,
+                            versionNumber: config.jd_version,
+                            status: jdDisabled ? 'Disabled' : config.jd_status,
+                          }
+                        : undefined,
+                      versionId: config.id,
+                      onSent: () => refreshAfterInviteRef.current(),
+                    });
                   }}
                   aria-disabled={jdDisabled || !canShareAIInterviews}
                   className={jdDisabled || !canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
@@ -2393,19 +2409,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
         </div>
       </div>
-      )}
-
-      {/* Share — a dialog off the header's Share button / Invites tab's
-          "Invite More", not embedded in a tab. */}
-      {config.status === 'published' && canShareAIInterviews && !jdDisabled && (
-        <ShareAIInterviewModal
-          isOpen={showShareModal}
-          config={config}
-          interviewVersion={interviewVersionOrdinal}
-          onClose={() => setShowShareModal(false)}
-          onInvitesChanged={refreshAfterInvite}
-          onInviteSent={refreshAfterInvite}
-        />
       )}
 
       {/* Confirmation Dialog */}

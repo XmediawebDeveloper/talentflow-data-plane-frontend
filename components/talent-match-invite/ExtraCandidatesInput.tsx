@@ -1,25 +1,17 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Edit3, FileSpreadsheet, Plus, Trash2, Upload } from 'lucide-react';
+import { CheckCircle, Copy, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import readXlsxFile from 'read-excel-file/browser';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
+import InviteEntryModeTabs, { DEFAULT_INVITE_ENTRY_MODE, type InviteEntryMode } from './InviteEntryModeTabs';
 
 /** The backend takes at most this many typed-in candidates per send. */
 export const MAX_EXTRA_CANDIDATES = 500;
 
 const SECTION = 'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
-
-/* Manual / Upload Excel — the invite modal's own switcher: plain buttons,
-   only the icons carry colour, the active one darker-bordered. */
-const modeTabClass = (active: boolean) =>
-  `flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
-    active
-      ? 'bg-gray-100 dark:bg-slate-800 border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-50 font-medium'
-      : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-  } disabled:opacity-50 disabled:cursor-not-allowed`;
 
 const INPUT = 'w-full h-10 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-inset disabled:opacity-60';
 const INPUT_OK = 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent';
@@ -35,6 +27,8 @@ interface EntryRow {
   email: string;
   phone: string;
   origin: 'manual' | 'excel';
+  /** Copy Link already invited this row by link — it is not emailed. */
+  linked?: boolean;
 }
 
 const newRow = (partial: Partial<EntryRow> = {}): EntryRow => ({
@@ -95,6 +89,7 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
   const seen = new Set<string>();
   const out: BulkExtraCandidate[] = [];
   for (const r of rows) {
+    if (r.linked) continue;
     const email = r.email.trim().toLowerCase();
     const name = r.name.trim();
     if (!email || !name || !isValidEmailFormat(email) || seen.has(email)) continue;
@@ -106,7 +101,7 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
 
 /**
  * The invite modal's Manual / Upload Excel entry, inside the bulk Create /
- * Send popup: candidate cards with Full Name, Email Address and Phone, "Add
+ * Send popup: candidate cards with Full Name and Email Address, "Add
  * Candidate" for another, and an .xlsx / .csv import that fills the same
  * cards. The valid rows are handed up as `extra_candidates`, sent on top of
  * whatever is ticked in the lists above; the backend applies the same skips
@@ -115,27 +110,46 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
 export default function ExtraCandidatesInput({
   onChange,
   disabled = false,
+  onCopyLink,
 }: {
   onChange: (next: BulkExtraCandidate[]) => void;
   disabled?: boolean;
+  /** Per-row Copy Link: creates this candidate's invitation without an email
+   *  and resolves to the link; the row is then left out of the email send. */
+  onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
 }) {
-  const [mode, setMode] = useState<'manual' | 'excel' | null>(null);
-  const [rows, setRows] = useState<EntryRow[]>([]);
+  const [linking, setLinking] = useState<string | null>(null);
+  // Opens on Manual with one empty card, like every other invite popup.
+  // Upload Excel only opens the file chooser; its rows land in these cards.
+  const mode: InviteEntryMode = DEFAULT_INVITE_ENTRY_MODE;
+  const [rows, setRows] = useState<EntryRow[]>(() => [newRow()]);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  // Manual never goes empty: removing the last card leaves a blank one.
   const commit = (next: EntryRow[]) => {
-    setRows(next);
-    onChange(toCandidates(next));
+    const kept = next.length > 0 ? next : [newRow()];
+    setRows(kept);
+    onChange(toCandidates(kept));
   };
 
-  const openManual = () => {
-    setMode('manual');
-    if (rows.length === 0) commit([newRow()]);
-  };
   const addRow = () => commit([...rows, newRow()]);
   const updateRow = (id: string, field: 'name' | 'email' | 'phone', value: string) =>
     commit(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   const removeRow = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const copyLink = async (row: EntryRow) => {
+    if (!onCopyLink) return;
+    setLinking(row.id);
+    try {
+      const link = await onCopyLink({ name: row.name.trim(), email: row.email.trim().toLowerCase() });
+      try { await navigator.clipboard.writeText(link); } catch { /* shown in the toast below */ }
+      commit(rows.map((r) => (r.id === row.id ? { ...r, linked: true } : r)));
+      toast.success(`Invitation link for ${row.name.trim()} copied`, { description: link });
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not create the link. Please try again.');
+    } finally {
+      setLinking(null);
+    }
+  };
   const clearAll = () => commit([]);
 
   const emailOf = (r: EntryRow) => r.email.trim().toLowerCase();
@@ -170,7 +184,7 @@ export default function ExtraCandidatesInput({
         }
       }
       if (!anyEmailColumn) {
-        toast.error('Could not find an "Email" column in the file. Expected headers: Name, Email, Phone (optional).');
+        toast.error('Could not find an "Email" column in the file. Expected headers: Name, Email.');
         return;
       }
       const have = new Set(rows.map(emailOf).filter(Boolean));
@@ -189,7 +203,6 @@ export default function ExtraCandidatesInput({
       }
       // Imported rows join the cards; an untouched blank card is dropped.
       commit([...rows.filter((r) => r.name || r.email || r.phone), ...kept]);
-      setMode('manual');
       const notes = [repeated ? `${repeated} already in the list` : '', fresh.length > kept.length ? `${fresh.length - kept.length} over the ${MAX_EXTRA_CANDIDATES} limit` : ''].filter(Boolean);
       toast.success(`Added ${kept.length} candidate${kept.length === 1 ? '' : 's'} from ${file.name}${notes.length ? ` · ${notes.join(', ')}` : ''}`);
     } catch {
@@ -205,34 +218,16 @@ export default function ExtraCandidatesInput({
         <h3 id="extra-candidates-heading" className={SECTION}>
           Add candidates directly{ready > 0 ? ` · ${ready.toLocaleString()} ready` : ''}
         </h3>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={openManual} disabled={disabled} className={modeTabClass(mode === 'manual')}>
-            <Edit3 className="w-4 h-4 text-brand-blue" aria-hidden="true" />
-            Manual
-          </button>
-          <button type="button" onClick={() => { setMode('excel'); fileRef.current?.click(); }} disabled={disabled} className={modeTabClass(mode === 'excel')}>
-            <Upload className="w-4 h-4 text-success" aria-hidden="true" />
-            Upload Excel
-          </button>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
-        </div>
+        <InviteEntryModeTabs
+          mode={mode}
+          onManual={() => {}}
+          onExcel={() => fileRef.current?.click()}
+          disabled={disabled}
+        />
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
       </div>
 
-      {mode === 'excel' && rows.length === 0 && (
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={disabled}
-          className="w-full rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-600 px-4 py-6 text-center hover:border-brand-blue/50 hover:bg-brand-blue/5 transition-colors disabled:opacity-50"
-        >
-          <FileSpreadsheet className="w-6 h-6 mx-auto mb-1.5 text-success" aria-hidden="true" />
-          <span className="block text-sm font-medium text-gray-900 dark:text-slate-50">Choose an .xlsx, .xls or .csv file</span>
-          <span className="block text-xs text-gray-500 dark:text-slate-400 mt-0.5">Columns: Name, Email, Phone (optional). Every sheet is read.</span>
-        </button>
-      )}
-
-      {rows.length > 0 && (
-        <>
+      <>
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-600 dark:text-slate-400">Enter candidate details manually</p>
             <div className="flex items-center gap-3">
@@ -267,7 +262,7 @@ export default function ExtraCandidatesInput({
                     {row.origin === 'excel' ? 'Excel' : 'Manual'}
                   </span>
                   <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="min-w-0">
                         <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                         <input
@@ -275,7 +270,7 @@ export default function ExtraCandidatesInput({
                           value={row.name}
                           onChange={(e) => updateRow(row.id, 'name', e.target.value)}
                           placeholder="e.g., John Doe"
-                          disabled={disabled}
+                          disabled={disabled || row.linked}
                           aria-invalid={missingName || undefined}
                           className={`${INPUT} ${missingName ? INPUT_BAD : INPUT_OK}`}
                         />
@@ -288,25 +283,31 @@ export default function ExtraCandidatesInput({
                           value={row.email}
                           onChange={(e) => updateRow(row.id, 'email', e.target.value)}
                           placeholder="e.g., john.doe@example.com"
-                          disabled={disabled}
+                          disabled={disabled || row.linked}
                           aria-invalid={badEmail || dup || undefined}
                           className={`${INPUT} ${badEmail || dup ? INPUT_BAD : INPUT_OK}`}
                         />
                         {badEmail && <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>}
                         {dup && <p className="text-xs text-destructive mt-1">This email is already in the list</p>}
                       </div>
-                      <div className="min-w-0">
-                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Phone</label>
-                        <input
-                          type="tel"
-                          value={row.phone}
-                          onChange={(e) => updateRow(row.id, 'phone', e.target.value)}
-                          placeholder="Optional"
-                          disabled={disabled}
-                          className={`${INPUT} ${INPUT_OK}`}
-                        />
-                      </div>
                     </div>
+                    {onCopyLink && (
+                      <button
+                        type="button"
+                        onClick={() => { if (!row.linked) void copyLink(row); }}
+                        disabled={disabled || linking === row.id || (!row.linked && (!row.name.trim() || !email || badEmail || dup))}
+                        title={row.linked ? 'Invited by link — not emailed' : "Create and copy this candidate’s invitation link (no email is sent)"}
+                        className={`mt-6 shrink-0 flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-xs border transition-colors whitespace-nowrap disabled:opacity-50 ${
+                          row.linked
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {linking === row.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : row.linked ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></> : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => removeRow(row.id)}
@@ -322,8 +323,7 @@ export default function ExtraCandidatesInput({
               );
             })}
           </div>
-        </>
-      )}
+      </>
     </section>
   );
 }

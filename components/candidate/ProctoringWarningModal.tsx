@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, MousePointer } from 'lucide-react';
+import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, MousePointer, Smartphone, PackageX } from 'lucide-react';
 import { ProctoringEventBus, ProctoringEvent, ProctoringEventType } from '@/lib/ProctoringEventBus';
 
 interface WarningItem {
@@ -44,6 +44,8 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   gaze_away: <ScanEye className="w-6 h-6" />,
   identity_mismatch: <UserX className="w-6 h-6" />,
   assessment_terminated: <UserX className="w-6 h-6" />,
+  phone_detected: <Smartphone className="w-6 h-6" />,
+  unauthorized_object: <PackageX className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -66,6 +68,8 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   gaze_away: 'Looking Away Detected',
   identity_mismatch: 'Identity Mismatch Detected',
   assessment_terminated: 'Assessment Terminated',
+  phone_detected: 'Mobile Phone Detected',
+  unauthorized_object: 'Unauthorised Item Detected',
 };
 
 const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {

@@ -160,6 +160,8 @@ interface JobsListingProps {
   /** RBAC: the viewer may not manage the job masters. Config stays VISIBLE but
    *  greyed out with a hover tooltip (never hidden) and does not navigate. */
   configDisabled?: boolean;
+  /** Refetches the job list. When given, the toolbar shows a Refresh button. */
+  onRefresh?: () => Promise<unknown> | void;
 }
 
 /**
@@ -194,7 +196,17 @@ const StatVersionsPlaceholder = () => (
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false }: JobsListingProps) {
+export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false, onRefresh }: JobsListingProps) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    if (isRefreshing || !onRefresh) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
@@ -573,15 +585,6 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     sortOrder,
   );
 
-  // Debug: Log sorted jobs order - show first 5 with their departments
-  console.log('Sorted by:', sortBy, 'Order:', sortOrder);
-  console.table(sortedJobs.slice(0, 10).map((j, i) => ({
-    '#': i + 1,
-    title: j.title?.substring(0, 30),
-    department: j.department || '(empty)',
-    industry: j.industry_type || '(empty)'
-  })));
-
   // Bulk action handlers
   /* The single Select All control offers both scopes through its dropdown:
      - current page: add the jobs visible on the active page (count tracks the
@@ -842,6 +845,26 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, pill)));
   const versionsWithStatus = (pill: string) =>
     jobs.filter(job => matchesStatusFilter(job, pill)).length;
+  /* Count badges for the toolbar pills. Same rule as the cards above: each
+     status badge is the row count its tab shows, filters aside. The creation
+     method badges count the jobs in the CURRENT status tab, so All = AI +
+     Manual reads straight off the list. */
+  const statusPillCount = (pill: string) =>
+    pill === 'all' ? distinctJobs.length : jobsInStatusTab(pill.toLowerCase()).length;
+  const methodTabJobs = statusFilter === 'all'
+    ? collapseToLatestVersions(jobs)
+    : jobsInStatusTab(statusFilter.toLowerCase());
+  const methodPillCount = (method: 'ai' | 'manual' | null) =>
+    method === null
+      ? methodTabJobs.length
+      : methodTabJobs.filter((j) => (j as any).creation_method === (method === 'ai' ? 'ai_generated' : 'manual')).length;
+  const pillCountBadge = (active: boolean, n: number) => (
+    <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums ${
+      active ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
+    }`}>
+      {n.toLocaleString()}
+    </span>
+  );
   const publishedTabJobs = jobsInStatusTab('published');
   const draftTabJobs = jobsInStatusTab('draft');
   const archivedTabJobs = jobsInStatusTab('archived');
@@ -1177,6 +1200,48 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
             onClearFilters={clearAllFilters}
+            // Sort by sits right after More Filters, in the search row.
+            afterFiltersActions={
+            sortedJobs.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-700">Sort by</span>
+                {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
+                    the sort control belongs to the same pill system. One size at
+                    every width (36px, 14px text) — the toolbar type standard. */}
+                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
+                  <FilterSelect
+                    value={sortBy}
+                    onChange={(v) => {
+                      const value = v as JobSortBy;
+                      setSortBy(value);
+                    }}
+                    ariaLabel="Sort jobs by"
+                    className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
+                    options={[
+                      { value: 'date', label: 'Date Posted' },
+                      { value: 'applicants', label: 'Scored' },
+                      { value: 'assessed', label: 'Assessed' },
+                      { value: 'interviewed', label: 'Interviewed' },
+                      { value: 'title', label: 'Job Title' },
+                      { value: 'status', label: 'Status' },
+                      { value: 'industry', label: 'Industry Type' },
+                    ]}
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+                    }}
+                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
+                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
+                  >
+                    <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
+                  </button>
+                </div>
+              </div>
+            ) : null
+            }
           />
 
           {/* More Filters Panel (collapsible) */}
@@ -1265,7 +1330,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     onClick={() => setShowSelectMenu((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={showSelectMenu}
-                    className={tabPill(selectedJobs.size > 0)}
+                    className={`${tabPill(selectedJobs.size > 0)} h-9`}
                   >
                     {allPagesSelected ? (
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -1352,7 +1417,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       type="button"
                       onClick={() => setShowBulkActions(!showBulkActions)}
                       aria-label={`Actions for ${selectedJobs.size} selected`}
-                      className={`relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm animate-in fade-in zoom-in-95 duration-300 ${showBulkActions ? 'bg-gray-200' : ''}`}
+                      className={`relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm animate-in fade-in zoom-in-95 duration-300 ${showBulkActions ? 'bg-gray-200' : ''}`}
                     >
                       <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
                         <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
@@ -1459,7 +1524,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     type="button"
                     onClick={clearSelection}
                     title="Clear the selection"
-                    className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                    className="h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm"
                   >
                     <X className="w-4 h-4" />
                     Clear
@@ -1473,9 +1538,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <button
                 key={status}
                 onClick={() => search.setFilter('status', status.toLowerCase())}
-                className={tabPill(statusFilter.toLowerCase() === status.toLowerCase())}
+                className={`${tabPill(statusFilter.toLowerCase() === status.toLowerCase())} h-9`}
               >
                 {status === 'all' ? 'All Jobs' : status}
+                {pillCountBadge(statusFilter.toLowerCase() === status.toLowerCase(), statusPillCount(status))}
               </button>
             ))}
 
@@ -1489,6 +1555,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   className={segmentBtn(creationMethodFilter === null)}
                 >
                   All
+                  {pillCountBadge(false, methodPillCount(null))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
@@ -1497,6 +1564,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <Sparkles className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">AI Generated</span>
                   <span className="sm:hidden">AI</span>
+                  {pillCountBadge(false, methodPillCount('ai'))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
@@ -1504,49 +1572,25 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 >
                   <Edit className="w-3.5 h-3.5" />
                   Manual
+                  {pillCountBadge(false, methodPillCount('manual'))}
                 </button>
               </div>
             </div>
 
-            {/* Sort by — pushed to the row's end */}
-            {sortedJobs.length > 0 && (
-              <div className="flex items-center gap-2 sm:ml-auto">
-                <span className="text-sm text-gray-700">Sort by</span>
-                {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
-                    the sort control belongs to the same pill system. One size at
-                    every width (36px, 14px text) — the toolbar type standard. */}
-                <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
-                  <FilterSelect
-                    value={sortBy}
-                    onChange={(v) => {
-                      const value = v as JobSortBy;
-                      setSortBy(value);
-                    }}
-                    ariaLabel="Sort jobs by"
-                    className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
-                    options={[
-                      { value: 'date', label: 'Date Posted' },
-                      { value: 'applicants', label: 'Scored' },
-                      { value: 'assessed', label: 'Assessed' },
-                      { value: 'interviewed', label: 'Interviewed' },
-                      { value: 'title', label: 'Job Title' },
-                      { value: 'status', label: 'Status' },
-                      { value: 'industry', label: 'Industry Type' },
-                    ]}
-                  />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-                    }}
-                    className="ml-0.5 h-7 w-7 flex items-center justify-center rounded-md bg-white text-gray-700 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors cursor-pointer"
-                    title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
-                  >
-                    <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />
-                  </button>
-                </div>
-              </div>
+            {/* Refresh — right corner of the pill row, as on AI Interviews. */}
+            {onRefresh && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                title="Refresh"
+                aria-label="Refresh"
+                icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
+                className="flex-shrink-0 !h-9 sm:ml-auto"
+              >
+                <span className="hidden 2xl:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+              </Button>
             )}
           </div>
         </div>

@@ -7,13 +7,14 @@ import {
   BarChart3,
   TrendingUp,
   History,
+  UserMinus,
+  Download,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
-import authService, { User } from '@/lib/services/authService';
 import userService, { ApiUser } from '@/lib/services/userService';
 import {
   TeamStatsCards,
@@ -40,12 +41,28 @@ import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import FadeIn from '@/components/ui/fade-in';
 import ListPagination from '@/components/ListPagination';
+import ExportFormatModal from '@/components/ExportFormatModal';
+import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import NameAvatar from '@/components/ui/name-avatar';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
 import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
+
+// Members / Unassigned lists — plain rows, so the usual list sizes.
+const PEOPLE_PAGE_SIZES = [10, 25, 50, 100];
+
+type TeamListView = 'teams-all' | 'members' | 'teams-by-jobs' | 'unassigned';
+const TEAM_LIST_VIEWS: TeamListView[] = ['teams-all', 'members', 'teams-by-jobs', 'unassigned'];
+// '' = all teams; the other two are the "needs attention" slices.
+type TeamAttention = '' | 'no-lead' | 'empty';
+
+const TEAMS_EXPORT_HEADERS = ['Team', 'Description', 'Team Lead', 'Lead Email', 'Members', 'Member Names', 'Active Jobs', 'Resumes', 'Created'];
+const MEMBERS_EXPORT_HEADERS = ['Member', 'Email', 'Team', 'Role', 'Team Lead'];
+const UNASSIGNED_EXPORT_HEADERS = ['Name', 'Email', 'Role'];
+
+const formatRole = (role?: string) => (role ? role.replace(/_/g, ' ').toLowerCase() : '');
 
 type TeamSort = TeamListSortKey;
 // Each key's natural direction (what its dropdown option means): names A–Z,
@@ -70,7 +87,7 @@ const getErrorDetail = (error: unknown): string | undefined => {
 
 export default function TeamManagementPage() {
   const router = useRouter();
-  const { hasPermissionCode } = useAuth();
+  const { user: authUser, isLoading: authLoading, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [stats, setStats] = useState<TeamStats>({
     total_teams: 0,
@@ -78,8 +95,12 @@ export default function TeamManagementPage() {
     avg_members_per_team: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [availableUsers, setAvailableUsers] = useState<ApiUser[]>([]);
+  // Every active user, for the Unassigned view. null = not loaded / no access to
+  // the user list — the Unassigned card and view are then left out.
+  const [allUsers, setAllUsers] = useState<ApiUser[] | null>(null);
+  // Users for the member picker — popups open first and show this while loading.
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   // One Team popup for view + edit (+ delete): null = closed.
@@ -103,7 +124,15 @@ export default function TeamManagementPage() {
   // /organization/role-management.
   // Opens on the first card (Total Teams) already drilled in.
   const [pageView, setPageView] = useState<'cards' | 'list'>('list');
-  const [listView, setListView] = useState<'teams-all' | 'members' | 'teams-by-jobs'>('teams-all');
+  const [listView, setListView] = useState<TeamListView>('teams-all');
+  const isTeamsView = listView === 'teams-all' || listView === 'teams-by-jobs';
+  const [attentionFilter, setAttentionFilter] = useState<TeamAttention>('');
+  // Members + Unassigned views: their own team filter and pagination.
+  const [memberTeamFilter, setMemberTeamFilter] = useState('');
+  const [peoplePageSize, setPeoplePageSize] = useState(PEOPLE_PAGE_SIZES[0]);
+  const [showExportModal, setShowExportModal] = useState(false);
+  // Team clicked in Analytics — Team Usage opens with it expanded.
+  const [usageFocusTeamId, setUsageFocusTeamId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<TeamSort>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   // Dropdown / card drill-in: pick a key in its natural direction.
@@ -118,8 +147,8 @@ export default function TeamManagementPage() {
     setCurrentPage(1);
   };
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('grid');
-  const openListView = (card: 'total' | 'members' | 'jobs') => {
-    setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : 'teams-by-jobs');
+  const openListView = (card: 'total' | 'members' | 'jobs' | 'unassigned') => {
+    setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : card === 'unassigned' ? 'unassigned' : 'teams-by-jobs');
     // The Active Jobs card lands on the busiest teams first.
     if (card === 'jobs') applyTeamSort('jobs');
     setPageView('list');
@@ -134,16 +163,17 @@ export default function TeamManagementPage() {
   // mount, so a restored page would be immediately clobbered.
   useListStatePersistence(
     'org-team-management',
-    { activeTab, pageView, listView, searchQuery, filterTeamLead, sortBy, sortDir, displayMode, itemsPerPage },
+    { activeTab, pageView, listView, searchQuery, filterTeamLead, attentionFilter, memberTeamFilter, sortBy, sortDir, displayMode, itemsPerPage, peoplePageSize },
     (s) => {
       if (s.activeTab === 'teams' || s.activeTab === 'usage' || s.activeTab === 'analytics' || s.activeTab === 'history') {
         setActiveTab(s.activeTab as typeof activeTab);
       }
       // A 'cards' value saved before the list became the default is ignored.
       if (s.pageView === 'list') setPageView(s.pageView);
-      if (s.listView === 'teams-all' || s.listView === 'members' || s.listView === 'teams-by-jobs') {
-        setListView(s.listView as typeof listView);
-      }
+      if (TEAM_LIST_VIEWS.includes(s.listView as TeamListView)) setListView(s.listView as TeamListView);
+      if (s.attentionFilter === '' || s.attentionFilter === 'no-lead' || s.attentionFilter === 'empty') setAttentionFilter(s.attentionFilter);
+      if (typeof s.memberTeamFilter === 'string') setMemberTeamFilter(s.memberTeamFilter);
+      if (typeof s.peoplePageSize === 'number' && PEOPLE_PAGE_SIZES.includes(s.peoplePageSize)) setPeoplePageSize(s.peoplePageSize);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.filterTeamLead === 'string') setFilterTeamLead(s.filterTeamLead);
       if (TEAM_SORTS.some((o) => o.value === s.sortBy)) {
@@ -158,37 +188,41 @@ export default function TeamManagementPage() {
   );
 
   useEffect(() => {
+    // The signed-in user comes from AuthProvider (already loaded for the app
+    // shell) — no second /auth/me call just to read permissions.
+    if (authLoading || !authUser) return;
     let isMounted = true;
 
     const initializePage = async () => {
+      // Mirrors routeAccess.ts's rule for this prefix (canViewTeams OR
+      // canCreateTeams) — a create-only user must not be let in by the
+      // route guard/menu and then bounced back out by this re-check.
+      const hasAccess =
+        isTenantAdmin ||
+        hasPermission('canViewTeams') ||
+        hasPermission('canCreateTeams') ||
+        hasPermission('canManageUsers');
+
+      if (!hasAccess) {
+        toast.error('You do not have permission to access Teams');
+        router.push('/dashboard');
+        return;
+      }
+
       setIsLoading(true);
       try {
-        const [userData, teamsData, statsData] = await Promise.all([
-          authService.getCurrentUser(),
+        const [teamsData, statsData] = await Promise.all([
           teamService.getTeams(),
           teamService.getTeamStats(),
         ]);
 
         if (!isMounted) return;
-
-        // Mirrors routeAccess.ts's rule for this prefix (canViewTeams OR
-        // canCreateTeams) — a create-only user must not be let in by the
-        // route guard/menu and then bounced back out by this re-check.
-        const hasPermission =
-          userData.role === 'tenant_admin' ||
-          userData.permissions?.can_view_teams ||
-          userData.permissions?.can_create_teams ||
-          userData.permissions?.can_manage_users;
-
-        if (!hasPermission) {
-          toast.error('You do not have permission to access Team Management');
-          router.push('/dashboard');
-          return;
-        }
-
-        setCurrentUser(userData);
         setTeams(teamsData);
         setStats(statsData);
+        // Unassigned view — optional, so it never blocks or fails the page.
+        userService.listUsers({ is_active: true })
+          .then((users) => { if (isMounted) setAllUsers(users); })
+          .catch(() => { /* no access to the user list: card stays hidden */ });
       } catch (error: unknown) {
         console.error('Error fetching data:', error);
         if (!isMounted) return;
@@ -204,23 +238,33 @@ export default function TeamManagementPage() {
     return () => {
       isMounted = false;
     };
-  }, [router]);
+    // Keyed on the user's id, so a background permission refresh doesn't reload the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, authUser?.id, router]);
 
   const filteredTeams = useMemo(() => {
     let result = teams;
 
     if (searchQuery) {
+      // Also matches the lead and any member, so "which team is Priya in?" works.
       const query = searchQuery.toLowerCase();
       result = result.filter(
         (team) =>
           team.name.toLowerCase().includes(query) ||
-          (team.description && team.description.toLowerCase().includes(query))
+          (team.description && team.description.toLowerCase().includes(query)) ||
+          team.team_lead?.name?.toLowerCase().includes(query) ||
+          (team.members || []).some(
+            (m) => m.name?.toLowerCase().includes(query) || m.email?.toLowerCase().includes(query),
+          )
       );
     }
 
     if (filterTeamLead) {
       result = result.filter((team) => team.team_lead?.id === filterTeamLead);
     }
+
+    if (attentionFilter === 'no-lead') result = result.filter((team) => !team.team_lead);
+    else if (attentionFilter === 'empty') result = result.filter((team) => (team.member_count || 0) === 0);
 
     const byName = (a: Team, b: Team) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     const sorters: Record<TeamSort, (a: Team, b: Team) => number> = {
@@ -233,22 +277,35 @@ export default function TeamManagementPage() {
     // sortDir opposite to the key's natural direction reverses the sorter.
     const sign = sortDir === naturalTeamSortDir(sortBy) ? 1 : -1;
     return [...result].sort((a, b) => sign * sorters[sortBy](a, b));
-  }, [teams, searchQuery, filterTeamLead, sortBy, sortDir]);
+  }, [teams, searchQuery, filterTeamLead, attentionFilter, sortBy, sortDir]);
+
+  const attentionCounts = useMemo(() => ({
+    noLead: teams.filter((t) => !t.team_lead).length,
+    empty: teams.filter((t) => (t.member_count || 0) === 0).length,
+  }), [teams]);
+  const maxMembers = useMemo(() => teams.reduce((max, t) => Math.max(max, t.member_count || 0), 0), [teams]);
+  // Teams that exist now — History only links these (a deleted team can't open).
+  const existingTeamIds = useMemo(() => new Set(teams.map((t) => t.id)), [teams]);
 
   const activeJobsTotal = useMemo(
     () => teams.reduce((sum, team) => sum + (team.active_jobs_count || 0), 0),
     [teams],
   );
 
+  // Deleting the last team on the last page used to leave an empty page — the
+  // page shown is clamped to the last one that still has rows.
+  const lastTeamPage = Math.max(1, Math.ceil(filteredTeams.length / itemsPerPage));
+  const teamPage = Math.min(currentPage, lastTeamPage);
+
   const paginatedTeams = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
+    const start = (teamPage - 1) * itemsPerPage;
     return filteredTeams.slice(start, start + itemsPerPage);
-  }, [filteredTeams, currentPage, itemsPerPage]);
+  }, [filteredTeams, teamPage, itemsPerPage]);
 
   const teamsPagination = (attached: boolean) => (
     <ListPagination
       attached={attached}
-      currentPage={currentPage}
+      currentPage={teamPage}
       itemsPerPage={itemsPerPage}
       totalItems={filteredTeams.length}
       onPageChange={setCurrentPage}
@@ -278,15 +335,16 @@ export default function TeamManagementPage() {
         isLead: team.team_lead?.id === m.id,
       })),
     );
-    if (!searchQuery) return rows;
+    const inTeam = memberTeamFilter ? rows.filter((r) => r.teamId === memberTeamFilter) : rows;
+    if (!searchQuery) return inTeam;
     const q = searchQuery.toLowerCase();
-    return rows.filter(
+    return inTeam.filter(
       (r) =>
         r.name.toLowerCase().includes(q) ||
         r.email.toLowerCase().includes(q) ||
         r.teamName.toLowerCase().includes(q),
     );
-  }, [teams, searchQuery]);
+  }, [teams, searchQuery, memberTeamFilter]);
 
   const memberSort = useTableSort<'name' | 'team' | 'role' | 'lead'>({ descFirst: ['lead'] });
   const sortedMembers = useMemo(
@@ -300,15 +358,70 @@ export default function TeamManagementPage() {
     [flattenedMembers, memberSort.sortKey, memberSort.sortDir],
   );
 
+  // Active users who are in no team (one user belongs to at most one team).
+  const unassignedUsers = useMemo(() => {
+    if (!allUsers) return [];
+    const assigned = new Set(teams.flatMap((t) => (t.members || []).map((m) => m.id)));
+    return allUsers
+      .filter((u) => !assigned.has(u.id))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }, [allUsers, teams]);
+  const filteredUnassigned = useMemo(() => {
+    if (!searchQuery) return unassignedUsers;
+    const q = searchQuery.toLowerCase();
+    return unassignedUsers.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
+  }, [unassignedUsers, searchQuery]);
+
+  // Members and Unassigned share one pager (only one is on screen at a time).
+  const peopleTotal = listView === 'unassigned' ? filteredUnassigned.length : sortedMembers.length;
+  const lastPeoplePage = Math.max(1, Math.ceil(peopleTotal / peoplePageSize));
+  // The page is remembered with the view/search/filter/sort it was picked under;
+  // change any of those and it falls back to page 1. Clamped to the last page.
+  const peopleKey = `${listView}|${searchQuery}|${memberTeamFilter}|${memberSort.sortKey}|${memberSort.sortDir}`;
+  const [peoplePager, setPeoplePager] = useState({ key: '', page: 1 });
+  const peoplePage = Math.min(peoplePager.key === peopleKey ? peoplePager.page : 1, lastPeoplePage);
+  const setPeoplePage = (page: number) => setPeoplePager({ key: peopleKey, page });
+  const pageSlice = <T,>(rows: T[]) => rows.slice((peoplePage - 1) * peoplePageSize, peoplePage * peoplePageSize);
+  const pagedMembers = useMemo(() => pageSlice(sortedMembers), [sortedMembers, peoplePage, peoplePageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pagedUnassigned = useMemo(() => pageSlice(filteredUnassigned), [filteredUnassigned, peoplePage, peoplePageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+  const peoplePagination = (noun: string) => (
+    <ListPagination
+      attached
+      currentPage={peoplePage}
+      itemsPerPage={peoplePageSize}
+      totalItems={peopleTotal}
+      onPageChange={setPeoplePage}
+      onItemsPerPageChange={(size) => {
+        setPeoplePageSize(size);
+        setPeoplePage(1);
+      }}
+      pageSizeOptions={PEOPLE_PAGE_SIZES}
+      itemLabel={noun}
+    />
+  );
+
+  // Switching between the Teams / Members / Active Jobs views starts on page 1 too.
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterTeamLead, sortBy]);
+  }, [searchQuery, filterTeamLead, attentionFilter, sortBy, listView]);
 
   // Two teams with the same name are indistinguishable in every picker and
   // report, so names must be unique (case-insensitive).
   const isDuplicateTeamName = (name: string, excludeId?: string) => {
     const normalized = name.trim().toLowerCase();
     return teams.some((team) => team.id !== excludeId && team.name.trim().toLowerCase() === normalized);
+  };
+
+  // Create and Edit share these rules (Edit used to demand a member and skip
+  // the length check; Create skipped the member check). A team may be empty —
+  // members can be added later from the card's "Add members".
+  const validateTeamForm = (data: TeamFormData, excludeId?: string): string | null => {
+    const name = data.name.trim();
+    if (!name) return 'Please enter a team name';
+    if (name.length < 2) return 'Team name must be at least 2 characters';
+    if (isDuplicateTeamName(name, excludeId)) return `A team named "${name}" already exists`;
+    if (data.teamLeadId && !data.memberIds.includes(data.teamLeadId)) return 'Team lead must be a member of the team';
+    return null;
   };
 
   const teamLeads = useMemo(() => {
@@ -319,16 +432,20 @@ export default function TeamManagementPage() {
   }, [teams]);
 
   const fetchAvailableUsers = async () => {
+    setIsLoadingUsers(true);
     try {
       const users = await userService.listUsers({ is_active: true });
       setAvailableUsers(users);
+      setAllUsers(users);
     } catch (error: unknown) {
       console.error('Error fetching users:', error);
       toast.error('Failed to load available users');
+    } finally {
+      setIsLoadingUsers(false);
     }
   };
 
-  const refreshData = async () => {
+  const refreshData = async (): Promise<boolean> => {
     try {
       const [teamsData, statsData] = await Promise.all([
         teamService.getTeams(),
@@ -336,15 +453,20 @@ export default function TeamManagementPage() {
       ]);
       setTeams(teamsData);
       setStats(statsData);
+      return true;
     } catch (error) {
       console.error('Error refreshing data:', error);
+      // The save itself worked — say the list may be out of date and offer a retry.
+      toast.error('Could not refresh the team list', {
+        action: { label: 'Retry', onClick: () => { void refreshData(); } },
+      });
+      return false;
     }
   };
 
-  const isTenantAdmin = currentUser?.role === 'tenant_admin';
-  const canCreateTeams = isTenantAdmin || !!currentUser?.permissions?.can_create_teams;
-  const canEditTeams = isTenantAdmin || !!currentUser?.permissions?.can_update_teams;
-  const canDeleteTeams = isTenantAdmin || !!currentUser?.permissions?.can_delete_teams;
+  const canCreateTeams = isTenantAdmin || hasPermission('canCreateTeams');
+  const canEditTeams = isTenantAdmin || hasPermission('canUpdateTeams');
+  const canDeleteTeams = isTenantAdmin || hasPermission('canDeleteTeams');
   const canViewUsageTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
   const canViewAnalyticsTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
 
@@ -363,32 +485,47 @@ export default function TeamManagementPage() {
     setActiveTab(t.key);
   };
 
+  // Exports what the current list shows (its search and filters applied).
+  const exportTitle = listView === 'members' ? 'Export Team Members' : listView === 'unassigned' ? 'Export Unassigned Users' : 'Export Teams';
+  const exportHeaders = listView === 'members' ? MEMBERS_EXPORT_HEADERS : listView === 'unassigned' ? UNASSIGNED_EXPORT_HEADERS : TEAMS_EXPORT_HEADERS;
+  const exportCount = listView === 'members' ? sortedMembers.length : listView === 'unassigned' ? filteredUnassigned.length : filteredTeams.length;
+  const runExport = async (format: ExportFileFormat) => {
+    const date = new Date().toISOString().split('T')[0];
+    if (listView === 'members') {
+      const rows = sortedMembers.map((r) => [r.name, r.email, r.teamName, formatRole(r.role), r.isLead ? 'Yes' : 'No']);
+      await exportRows(format, MEMBERS_EXPORT_HEADERS, rows, `team-members-${date}`, { sheetName: 'Team Members' });
+    } else if (listView === 'unassigned') {
+      const rows = filteredUnassigned.map((u) => [u.name, u.email, formatRole(u.role)]);
+      await exportRows(format, UNASSIGNED_EXPORT_HEADERS, rows, `unassigned-users-${date}`, { sheetName: 'Unassigned Users' });
+    } else {
+      const rows = filteredTeams.map((t) => [
+        t.name,
+        t.description || '',
+        t.team_lead?.name || '',
+        t.team_lead?.email || '',
+        t.member_count || 0,
+        (t.members || []).map((m) => m.name).join('; '),
+        t.active_jobs_count || 0,
+        t.resumes_count || 0,
+        t.created_at ? new Date(t.created_at).toLocaleDateString() : '',
+      ]);
+      await exportRows(format, TEAMS_EXPORT_HEADERS, rows, `teams-${date}`, { sheetName: 'Teams' });
+    }
+    setShowExportModal(false);
+  };
+
   const handleOpenCreateModal = async () => {
     // Locked: the button is greyed with a hover tooltip; click is a no-op.
     if (!canCreateTeams) return;
 
-    await fetchAvailableUsers();
     setShowCreateModal(true);
+    void fetchAvailableUsers();
   };
 
   const handleCreateTeam = async (data: TeamFormData) => {
-    if (!data.name.trim()) {
-      toast.error('Please enter a team name');
-      return;
-    }
-
-    if (data.name.length < 2) {
-      toast.error('Team name must be at least 2 characters');
-      return;
-    }
-
-    if (isDuplicateTeamName(data.name)) {
-      toast.error(`A team named "${data.name.trim()}" already exists`);
-      return;
-    }
-
-    if (data.teamLeadId && !data.memberIds.includes(data.teamLeadId)) {
-      toast.error('Team lead must be a member of the team');
+    const problem = validateTeamForm(data);
+    if (problem) {
+      toast.error(problem);
       return;
     }
 
@@ -412,27 +549,34 @@ export default function TeamManagementPage() {
     }
   };
 
-  const handleViewDetails = async (teamId: string) => {
+  /* Opens the Team popup straight away from the row's data, then swaps in the
+     fresh copy from the API (the click used to do nothing until that returned).
+     A team not in the list (rare) still waits for the fetch. */
+  const openTeamPopup = async (teamId: string, mode: 'view' | 'edit') => {
+    const listed = teams.find((t) => t.id === teamId);
+    if (listed) {
+      setSelectedTeam(listed);
+      setTeamModal(mode);
+    }
     try {
       const team = await teamService.getTeam(teamId);
-      setSelectedTeam(team);
-      setTeamModal('view');
+      if (listed) setSelectedTeam((prev) => (prev?.id === teamId ? team : prev));
+      else {
+        setSelectedTeam(team);
+        setTeamModal(mode);
+      }
     } catch {
-      toast.error('Failed to load team details');
+      if (!listed) toast.error(mode === 'view' ? 'Failed to load team details' : 'Failed to load team data');
     }
   };
 
+  const handleViewDetails = (teamId: string) => openTeamPopup(teamId, 'view');
+
   // "Add members" on a card: open the popup straight in edit mode.
-  const handleManageTeam = async (teamId: string) => {
+  const handleManageTeam = (teamId: string) => {
     if (!canEditTeams) return;
-    try {
-      const team = await teamService.getTeam(teamId);
-      setSelectedTeam(team);
-      await fetchAvailableUsers();
-      setTeamModal('edit');
-    } catch {
-      toast.error('Failed to load team data');
-    }
+    void fetchAvailableUsers();
+    return openTeamPopup(teamId, 'edit');
   };
 
   // Edit button inside the popup: load the user list, then flip to the form.
@@ -455,18 +599,9 @@ export default function TeamManagementPage() {
   const handleUpdateTeam = async (data: TeamFormData) => {
     if (!selectedTeam) return;
 
-    if (!data.name.trim()) {
-      toast.error('Please enter a team name');
-      return;
-    }
-
-    if (data.memberIds.length === 0) {
-      toast.error('Please select at least one team member');
-      return;
-    }
-
-    if (isDuplicateTeamName(data.name, selectedTeam.id)) {
-      toast.error(`A team named "${data.name.trim()}" already exists`);
+    const problem = validateTeamForm(data, selectedTeam.id);
+    if (problem) {
+      toast.error(problem);
       return;
     }
 
@@ -503,6 +638,7 @@ export default function TeamManagementPage() {
     onViewDetails: handleViewDetails,
     onManageTeam: handleManageTeam,
     canManage: canEditTeams,
+    maxMembers,
   };
 
   const handleDeleteTeam = async () => {
@@ -523,6 +659,12 @@ export default function TeamManagementPage() {
     }
   };
 
+  // Member pickers: a user can be in one team, so others' members are left out.
+  const inOtherTeam = (userId: string, exceptTeamId?: string) =>
+    teams.some((team) => team.id !== exceptTeamId && team.members?.some((member) => member.id === userId));
+  const createPickerUsers = availableUsers.filter((user) => !inOtherTeam(user.id));
+  const editPickerUsers = availableUsers.filter((user) => !inOtherTeam(user.id, selectedTeam?.id));
+
   if (isLoading) {
     return <TeamManagementSkeleton />;
   }
@@ -534,7 +676,7 @@ export default function TeamManagementPage() {
       <div ref={rootRef}>
             <PageHeader
               icon={<Users className="h-5 w-5" />}
-              title="Team Management"
+              title="Teams"
               description="Group users into teams, assign leads, and track each team's hiring activity."
               actions={
                 <Button
@@ -643,16 +785,20 @@ export default function TeamManagementPage() {
 
               <div className="p-3 sm:p-5">
             {activeTab === 'usage' ? (
-              <TeamUsageAnalytics />
+              <TeamUsageAnalytics focusTeamId={usageFocusTeamId} onFocusHandled={() => setUsageFocusTeamId(null)} />
             ) : activeTab === 'analytics' ? (
-              <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
+              <TeamAnalyticsDashboard
+                userRole={authUser?.role || 'standard_user'}
+                onOpenTeam={canViewUsageTab ? (teamId) => { setUsageFocusTeamId(teamId); setActiveTab('usage'); } : undefined}
+              />
             ) : activeTab === 'history' ? (
-              <TeamHistory />
+              <TeamHistory onOpenTeam={handleViewDetails} openableTeamIds={existingTeamIds} />
             ) : (
               <>
                 <TeamStatsCards
                   stats={stats}
                   activeJobs={activeJobsTotal}
+                  unassignedUsers={allUsers ? unassignedUsers.length : null}
                   onCardClick={openListView}
                   activeCard={
                     pageView === 'list'
@@ -660,7 +806,9 @@ export default function TeamManagementPage() {
                         ? 'total'
                         : listView === 'members'
                           ? 'members'
-                          : 'jobs'
+                          : listView === 'unassigned'
+                            ? 'unassigned'
+                            : 'jobs'
                       : null
                   }
                 />
@@ -668,34 +816,55 @@ export default function TeamManagementPage() {
                 {pageView === 'list' && (
                 <>
 
-                {/* One toolbar row: search, lead filter, sort, count, grid/list. */}
-                {teams.length > 0 && (
+                {/* One toolbar row: search, filters, sort, count, export, grid/list. */}
+                {(teams.length > 0 || listView === 'unassigned') && (
                   <ListToolbar
                     className="mb-4"
                     // rounded-lg (8px) +10%
                     searchInputClassName="rounded-[8.8px]"
                     searchValue={searchQuery}
                     onSearchChange={setSearchQuery}
-                    searchPlaceholder={listView === 'members' ? 'Search members by name, email, or team...' : 'Search teams by name or description...'}
-                    filtersApplied={listView !== 'members' && !!filterTeamLead}
+                    searchPlaceholder={
+                      listView === 'members'
+                        ? 'Search members by name, email, or team...'
+                        : listView === 'unassigned'
+                          ? 'Search users by name or email...'
+                          : 'Search teams, leads or members...'
+                    }
+                    filtersApplied={(isTeamsView && (!!filterTeamLead || !!attentionFilter)) || (listView === 'members' && !!memberTeamFilter)}
                     onClearFilters={() => {
                       setSearchQuery('');
                       setFilterTeamLead('');
+                      setAttentionFilter('');
+                      setMemberTeamFilter('');
                     }}
                     countBadge={
                       listView === 'members' ? (
                         <ListCountBadge filtered={flattenedMembers.length} total={stats.total_members} noun="member" />
+                      ) : listView === 'unassigned' ? (
+                        <ListCountBadge filtered={filteredUnassigned.length} total={unassignedUsers.length} noun="user" />
                       ) : (
                         <ListCountBadge filtered={filteredTeams.length} total={teams.length} noun="team" />
                       )
                     }
                     trailing={
-                      listView !== 'members' ? (
-                        <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />
-                      ) : undefined
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="sm:h-9"
+                          onClick={() => setShowExportModal(true)}
+                          disabled={exportCount === 0}
+                          icon={<Download className="h-4 w-4" />}
+                          title={exportCount === 0 ? 'Nothing to export' : exportTitle}
+                        >
+                          <span className="hidden sm:inline">Export</span>
+                        </Button>
+                        {isTeamsView && <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />}
+                      </div>
                     }
                   >
-                    {listView !== 'members' && teamLeads.length > 0 && (
+                    {isTeamsView && teamLeads.length > 0 && (
                       <ToolbarFilterSelect value={filterTeamLead} onChange={setFilterTeamLead} ariaLabel="Filter by team lead">
                         <option value="">All team leads</option>
                         {teamLeads.map((lead) => (
@@ -705,7 +874,27 @@ export default function TeamManagementPage() {
                         ))}
                       </ToolbarFilterSelect>
                     )}
-                    {listView !== 'members' && (
+                    {/* Needs attention: teams with no lead, or no members. */}
+                    {isTeamsView && (attentionCounts.noLead > 0 || attentionCounts.empty > 0 || !!attentionFilter) && (
+                      <ToolbarFilterSelect value={attentionFilter} onChange={(v) => setAttentionFilter(v as TeamAttention)} ariaLabel="Filter teams needing attention">
+                        <option value="">All teams</option>
+                        <option value="no-lead">No lead ({attentionCounts.noLead})</option>
+                        <option value="empty">No members ({attentionCounts.empty})</option>
+                      </ToolbarFilterSelect>
+                    )}
+                    {listView === 'members' && teams.length > 1 && (
+                      <ToolbarFilterSelect value={memberTeamFilter} onChange={setMemberTeamFilter} ariaLabel="Filter members by team">
+                        <option value="">All teams</option>
+                        {[...teams]
+                          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+                          .map((team) => (
+                            <option key={team.id} value={team.id}>
+                              {team.name}
+                            </option>
+                          ))}
+                      </ToolbarFilterSelect>
+                    )}
+                    {isTeamsView && (
                       <ToolbarFilterSelect value={sortBy} onChange={(v) => applyTeamSort(v as TeamSort)} ariaLabel="Sort teams">
                         {TEAM_SORTS.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -716,24 +905,24 @@ export default function TeamManagementPage() {
                     )}
                     {/* Clear sort: shown only away from the default order (Teams: Name A–Z;
                         Members: unsorted). */}
-                    {listView !== 'members' ? (
+                    {isTeamsView ? (
                       <ClearSortChip
                         sort={{ sortKey: sortBy, sortDir }}
                         labels={{ name: 'Team', newest: 'Created', members: 'Members', jobs: 'Active Jobs', resumes: 'Resumes' }}
                         isDefault={sortBy === 'name' && sortDir === 'asc'}
                         onClear={() => { applyTeamSort('name'); setCurrentPage(1); }}
                       />
-                    ) : (
+                    ) : listView === 'members' ? (
                       <ClearSortChip
                         sort={memberSort}
                         labels={{ name: 'Member', team: 'Team', role: 'Role', lead: 'Lead' }}
                         onClear={() => memberSort.clearSort?.()}
                       />
-                    )}
+                    ) : null}
                   </ListToolbar>
                 )}
 
-                {listView !== 'members' && (
+                {isTeamsView && (
                   teams.length === 0 ? (
                     <EmptyState
                       isTenantAdmin={isTenantAdmin}
@@ -745,7 +934,7 @@ export default function TeamManagementPage() {
                       <ListEmptyState icon={Users} isNarrowed query={searchQuery} entityLabel="team" emptyTitle="No teams yet" />
                     </div>
                   ) : displayMode === 'list' ? (
-                    <FadeIn key={`list-${currentPage}`} duration={0.35} distance={8}>
+                    <FadeIn key={`list-${teamPage}`} duration={0.35} distance={8}>
                       {/* Pagination is the table card's footer, as on the Users page. */}
                       <TeamListTable
                         teams={paginatedTeams}
@@ -772,7 +961,8 @@ export default function TeamManagementPage() {
                   )
                 )}
 
-                {/* Team Members view — flat list of every assigned member across all teams. */}
+                {/* Team Members view — every assigned member across all teams.
+                    Clicking a member opens their team. */}
                 {listView === 'members' && (
                   <section className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     {flattenedMembers.length === 0 ? (
@@ -787,22 +977,28 @@ export default function TeamManagementPage() {
                       <>
                       {/* Phones: one compact row per member. */}
                       <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
-                        {sortedMembers.map((row) => (
-                          <li key={row.id} className="flex items-center gap-2.5 px-3 py-2.5">
-                            <NameAvatar name={row.name} fallback={row.email} size="sm" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
-                              <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
-                              <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
-                                {row.teamName}
-                                {row.role && <span className="capitalize"> · {row.role.replace(/_/g, ' ').toLowerCase()}</span>}
-                              </p>
-                            </div>
-                            {row.isLead && (
-                              <span className="shrink-0 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
-                                Lead
-                              </span>
-                            )}
+                        {pagedMembers.map((row) => (
+                          <li key={row.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleViewDetails(row.teamId)}
+                              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
+                            >
+                              <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="sm" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
+                                <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
+                                <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
+                                  {row.teamName}
+                                  {row.role && <span className="capitalize"> · {formatRole(row.role)}</span>}
+                                </p>
+                              </div>
+                              {row.isLead && (
+                                <span className="shrink-0 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                  Lead
+                                </span>
+                              )}
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -825,11 +1021,16 @@ export default function TeamManagementPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                            {sortedMembers.map((row) => (
-                              <tr key={row.id} className="transition-colors hover:bg-brand-blue/[0.04]">
+                            {pagedMembers.map((row) => (
+                              <tr
+                                key={row.id}
+                                onClick={() => handleViewDetails(row.teamId)}
+                                title={`Open ${row.teamName}`}
+                                className="cursor-pointer transition-colors hover:bg-brand-blue/[0.04]"
+                              >
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-3">
-                                    <NameAvatar name={row.name} fallback={row.email} size="md" />
+                                    <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="md" />
                                     <div className="min-w-0">
                                       <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
                                       <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
@@ -839,7 +1040,7 @@ export default function TeamManagementPage() {
                                 <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{row.teamName}</td>
                                 <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
                                   {row.role ? (
-                                    <span className="capitalize">{row.role.replace(/_/g, ' ').toLowerCase()}</span>
+                                    <span className="capitalize">{formatRole(row.role)}</span>
                                   ) : (
                                     <span className="text-gray-400 dark:text-slate-500">—</span>
                                   )}
@@ -858,6 +1059,46 @@ export default function TeamManagementPage() {
                           </tbody>
                         </table>
                       </div>
+                      {peoplePagination('members')}
+                      </>
+                    )}
+                  </section>
+                )}
+
+                {/* Unassigned users — active users who belong to no team. */}
+                {listView === 'unassigned' && (
+                  <section className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                    {filteredUnassigned.length === 0 ? (
+                      <div className="px-6 py-16 text-center">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                          <UserMinus className="h-6 w-6 text-brand-blue" />
+                        </div>
+                        <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+                          {searchQuery ? 'No matching users' : 'Everyone is in a team'}
+                        </h3>
+                        <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">
+                          {searchQuery ? 'Try a different search query.' : 'Every active user already belongs to a team.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                          {pagedUnassigned.map((u) => (
+                            <li key={u.id} className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3.5">
+                              <NameAvatar name={u.name} fallback={u.email} src={u.avatar_url} userId={u.id} size="md" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{u.name}</p>
+                                <p className="truncate text-xs text-gray-500 dark:text-slate-500">{u.email}</p>
+                              </div>
+                              {u.role && (
+                                <span className="hidden shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs capitalize text-gray-700 dark:bg-slate-800 dark:text-slate-300 sm:inline">
+                                  {formatRole(u.role)}
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                        {peoplePagination('users')}
                       </>
                     )}
                   </section>
@@ -876,7 +1117,9 @@ export default function TeamManagementPage() {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateTeam}
           mode="create"
-          availableUsers={availableUsers.filter((user) => !teams.some((team) => team.members?.some((member) => member.id === user.id)))}
+          availableUsers={createPickerUsers}
+          hiddenUsersCount={availableUsers.length - createPickerUsers.length}
+          isLoadingUsers={isLoadingUsers}
           isSubmitting={isCreating}
         />
 
@@ -886,12 +1129,13 @@ export default function TeamManagementPage() {
           isOpen={teamModal === 'view' && !showDeleteDialog}
           onClose={closeTeamModal}
           team={selectedTeam}
-          userRole={currentUser?.role}
+          userRole={authUser?.role}
           onEdit={handleStartEdit}
           canEdit={canEditTeams}
           isPreparingEdit={isPreparingEdit}
           onDelete={handleOpenDeleteDialog}
           canDelete={canDeleteTeams}
+          showActivity={isTenantAdmin}
         />
 
         <TeamFormModal
@@ -912,7 +1156,9 @@ export default function TeamManagementPage() {
                 }
               : undefined
           }
-          availableUsers={availableUsers.filter((user) => !teams.filter((team) => team.id !== selectedTeam?.id).some((team) => team.members?.some((member) => member.id === user.id)))}
+          availableUsers={editPickerUsers}
+          hiddenUsersCount={availableUsers.length - editPickerUsers.length}
+          isLoadingUsers={isLoadingUsers}
           isSubmitting={isUpdating}
           onDelete={handleOpenDeleteDialog}
           canDelete={canDeleteTeams}
@@ -924,8 +1170,19 @@ export default function TeamManagementPage() {
           // Cancelling re-shows the Team popup underneath.
           onOpenChange={setShowDeleteDialog}
           teamName={selectedTeam?.name || ''}
+          memberCount={selectedTeam?.member_count || 0}
+          activeJobsCount={selectedTeam?.active_jobs_count || 0}
           onConfirm={handleDeleteTeam}
           isDeleting={isDeleting}
+        />
+
+        <ExportFormatModal
+          open={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          title={exportTitle}
+          recordCount={exportCount}
+          columns={exportHeaders}
+          onExport={runExport}
         />
       </div>
     </FeatureGate>

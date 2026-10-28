@@ -21,8 +21,10 @@
  */
 
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { readListSnapshot, writeListSnapshot } from '@/lib/utils/listSnapshot';
 import {
   Activity,
   ArrowRight,
@@ -36,6 +38,7 @@ import {
   ClipboardList,
   FileText,
   Gauge,
+  Lock,
   Layers3,
   Mail,
   Plus,
@@ -197,9 +200,9 @@ function SectionShell({
     >
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{eyebrow}</p>
+          <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{eyebrow}</p>
           <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50">{title}</h2>
-          {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">{description}</p>}
+          {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
         </div>
         {action}
       </div>
@@ -429,10 +432,18 @@ function DashboardSkeleton() {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, tenant, hasPermission, isTenantAdmin } = useAuth();
-  const [loading, setLoading] = useState(true);
+  /* The last response this session got (kept in memory per signed-in user), so a
+     repeat visit draws at once instead of waiting behind the skeleton. The
+     requests below still run every time and replace it. Only the very first
+     visit, with nothing remembered, shows the skeleton. */
+  const [remembered] = useState(() => readListSnapshot<{
+    dashboard: DashboardResponse | null;
+    interview: AIInterviewStatsResponse | null;
+  }>('dashboard:data'));
+  const [loading, setLoading] = useState(remembered === null);
   const [error, setError] = useState<string | null>(null);
-  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
-  const [interviewStats, setInterviewStats] = useState<AIInterviewStatsResponse | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(remembered?.dashboard ?? null);
+  const [interviewStats, setInterviewStats] = useState<AIInterviewStatsResponse | null>(remembered?.interview ?? null);
 
   // Restore scroll position when returning to the dashboard (scroll-only — the
   // page has no persisted view state; tabs/toggles here are all commented out).
@@ -451,11 +462,19 @@ export default function DashboardPage() {
 
       if (dashboardRes.status === 'fulfilled') {
         setDashboardData(dashboardRes.value);
-      } else {
+      } else if (remembered === null) {
+        // With a remembered response on screen, a failed refresh keeps it rather
+        // than putting an error over data that is still good.
         setError('We could not load some workspace data. Some widgets may be empty.');
       }
       if (interviewRes.status === 'fulfilled') {
         setInterviewStats(interviewRes.value);
+      }
+      if (dashboardRes.status === 'fulfilled' || interviewRes.status === 'fulfilled') {
+        writeListSnapshot('dashboard:data', {
+          dashboard: dashboardRes.status === 'fulfilled' ? dashboardRes.value : remembered?.dashboard ?? null,
+          interview: interviewRes.status === 'fulfilled' ? interviewRes.value : remembered?.interview ?? null,
+        });
       }
       setLoading(false);
     })();
@@ -687,6 +706,7 @@ export default function DashboardPage() {
 
   // CTAs — always rendered; `enabled` drives disabled styling + a permission
   // hover tooltip (click is a no-op) instead of hiding the tile (permission-off must stay visible/disabled).
+  const CREATE_JOB_DENIED = 'You do not have permission to create job descriptions';
   const featuredActions = [
     { label: 'Create Job', href: '/recruitment/jd-creation', onClick: handleCreateJob, enabled: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
   ];
@@ -716,7 +736,7 @@ export default function DashboardPage() {
 
         <div className="space-y-4 md:space-y-6">
         {/* ── PROFILE BANNER ── useAuth only ──────────────────────────── */}
-        <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.18)] md:px-8 md:py-6">
+        <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] md:px-8 md:py-6">
           {/* Identity row: stacked (avatar → text → CTA) on phones AND
               tablets; only lg+ goes side-by-side with the CTA on the right. */}
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -734,22 +754,27 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-500">
+              <div className="min-w-0 w-full lg:w-auto">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                   {timeOfDayGreeting()},
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
+                  <h1 className="min-w-0 max-w-full truncate text-xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-2xl lg:text-3xl">
                     {displayName}
                   </h1>
-                  {isTenantAdmin && (
+                  {/* Every role gets a badge; the Owner keeps the brand-blue check. */}
+                  {isTenantAdmin ? (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-0.5 text-2xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">
                       <BadgeCheck className="h-3 w-3" />
                       Owner
                     </span>
+                  ) : (
+                    <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-2xs font-semibold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+                      {roleLabel}
+                    </span>
                   )}
                 </div>
-                <p className="mt-1 sm:mt-1.5 text-sm text-slate-500 dark:text-slate-500">
+                <p className="mt-1 sm:mt-1.5 text-sm text-slate-500 dark:text-slate-400">
                   Streamline your entire recruitment journey with AI-powered talent solutions.
                 </p>
               </div>
@@ -758,7 +783,9 @@ export default function DashboardPage() {
             {/* CTAs — full-width stacked on phones, inline from sm: up */}
             <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
               {featuredActions.map((item) => {
-                const ItemIcon = item.icon;
+                // Disabled shows a lock, and a tap/click/Enter explains why in a
+                // toast — the `title` hover alone never reaches touch or keyboard.
+                const ItemIcon = item.enabled ? item.icon : Lock;
                 return (
                   <Link
                     key={item.href}
@@ -766,12 +793,13 @@ export default function DashboardPage() {
                     onClick={(e) => {
                       if (!item.enabled) {
                         e.preventDefault();
+                        toast.info(CREATE_JOB_DENIED);
                         return;
                       }
                       item.onClick(e);
                     }}
                     aria-disabled={!item.enabled}
-                    title={!item.enabled ? 'You do not have permission to create job descriptions' : undefined}
+                    title={!item.enabled ? CREATE_JOB_DENIED : undefined}
                     className={
                       !item.enabled
                         ? 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-60'
@@ -1222,9 +1250,9 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-50">{item.action_display}</p>
-                    <p className="truncate text-xs text-slate-500 dark:text-slate-500">{item.jd_title || 'Job description update'}</p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">{item.jd_title || 'Job description update'}</p>
                   </div>
-                  <span className="whitespace-nowrap text-2xs text-slate-400 dark:text-slate-500">{item.time_ago}</span>
+                  <span className="whitespace-nowrap text-2xs text-slate-500 dark:text-slate-400">{item.time_ago}</span>
                 </div>
               ))}
             </div>

@@ -5,6 +5,7 @@
 
 import axios from 'axios';
 import { safeLocalStorage, safeSessionStorage } from '@/lib/utils/browserCompat';
+import type { ProctorFrameConfig, ProctorFrameSendResult } from '@/lib/services/candidateAIInterviewService';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1381,6 +1382,47 @@ export const candidateService = {
       }
       throw error;
     }
+  },
+
+  // ── Server "proctor frame" pipeline for the ASSESSMENT (flags
+  // PROCTOR_VISION_SERVER_ENABLED + PROCTOR_VISION_ASSESSMENT_ENABLED). Same
+  // contract as candidateAIInterviewService's; the server persists the events
+  // itself. Never throws on HTTP status: callers branch on `status`.
+  async getProctorFrameConfig(token: string): Promise<ProctorFrameConfig> {
+    const res = await fetch(`${API_BASE_URL}/candidate/assessment/${token}/proctor-frame/config`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`proctor-frame config failed (${res.status})`);
+    return res.json();
+  },
+
+  async sendProctorFrame(token: string, blob: Blob, ts: number): Promise<ProctorFrameSendResult> {
+    const headers: Record<string, string> = { 'Content-Type': 'image/jpeg' };
+    // Single-active-session guard: the server rejects frames (403) whose
+    // session token doesn't match the attempt's, like /proctor-event.
+    const sessionToken = sessionTokenManager.getToken(token);
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const res = await fetch(
+      `${API_BASE_URL}/candidate/assessment/${token}/proctor-frame?ts=${Math.round(ts)}`,
+      { method: 'POST', headers, body: blob },
+    );
+    let body: any = null;
+    try { body = await res.json(); } catch { /* non-JSON error body */ }
+    return { status: res.status, body };
+  },
+
+  async endProctorFrames(token: string): Promise<void> {
+    try {
+      const headers: Record<string, string> = {};
+      const sessionToken = sessionTokenManager.getToken(token);
+      if (sessionToken) headers['X-Session-Token'] = sessionToken;
+      // keepalive: this also runs from unmount / page teardown.
+      await fetch(
+        `${API_BASE_URL}/candidate/assessment/${token}/proctor-frame/end?ts=${Date.now()}`,
+        { method: 'POST', keepalive: true, headers },
+      );
+    } catch { /* best-effort — the session state also expires server-side */ }
   },
 
   /**

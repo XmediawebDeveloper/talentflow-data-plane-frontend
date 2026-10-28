@@ -400,6 +400,8 @@ export interface AssessmentStatsResponse {
   archived_assessments: number;
   total_invitations: number;
   total_candidates_tested: number;
+  /** Distinct candidate emails with a completed attempt (one per person). */
+  total_unique_candidates?: number;
   total_passed: number;
   total_failed: number;
   average_pass_rate: number | null;
@@ -502,7 +504,14 @@ export type AuditActivityType =
   | 'invite_failed'
   | 'invite_email_changed'
   | 'candidate_exited'
-  | 'candidate_errored';
+  | 'candidate_errored'
+  | 'recording_downloaded'
+  | 'assessment_create_failed'
+  | 'invite_resent'
+  | 'link_shared'
+  | 'invite_bounced'
+  | 'invite_revoked'
+  | 'invite_edited';
 
 export interface CombinedAuditActivity {
   id: string;
@@ -783,6 +792,47 @@ export const assessmentService = {
     try {
       const response = await api.get<AssessmentInvitationListResponse>(`/assessments/${assessmentId}/invitations`, { params });
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Every invitation of every assessment, in as few requests as the backend
+   * allows (normally ONE) — instead of one `listInvitations` per assessment.
+   * Rows are the per-assessment endpoint's own rows; each carries its
+   * `assessment_id`. Throws when the endpoint is unavailable (an older
+   * backend), so the caller can fall back to the per-assessment path.
+   */
+  async getAllInvitations(): Promise<AssessmentInvitationListResponse['items']> {
+    const PAGE_SIZE = 5000;
+    try {
+      const rows: AssessmentInvitationListResponse['items'] = [];
+      for (let page = 1; page <= 40; page += 1) {
+        const response = await api.get<{ items: AssessmentInvitationListResponse['items']; total: number }>(
+          '/assessments/all-invitations',
+          { params: { page, page_size: PAGE_SIZE } },
+        );
+        const items = response.data?.items ?? [];
+        rows.push(...items);
+        if (items.length < PAGE_SIZE || rows.length >= (response.data?.total ?? rows.length)) break;
+      }
+      return rows;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Completed results of every assessment in one request — the Results tab's
+   * replacement for one listResults() call per assessment. Each row carries
+   * its `assessment_id`; rows are exactly those listResults(status_filter:
+   * 'completed') returns.
+   */
+  async getAllResults(): Promise<any[]> {
+    try {
+      const response = await api.get<{ items: any[]; total: number }>('/assessments/all-results');
+      return response.data?.items ?? [];
     } catch (error) {
       throw new Error(handleApiError(error));
     }

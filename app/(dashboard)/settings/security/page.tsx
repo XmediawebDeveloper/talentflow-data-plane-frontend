@@ -1,8 +1,9 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound, Sparkles } from 'lucide-react';
+import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound, Sparkles, Info } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card';
 import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
 import { clearTokens } from '@/lib/services/api';
@@ -153,6 +154,10 @@ export default function SecurityPage() {
   // 2FA state
   const [is2FALoading, setIs2FALoading] = useState(false);
   const [show2FASetup, setShow2FASetup] = useState(false);
+  const [twoFAInfoOpen, setTwoFAInfoOpen] = useState(false);
+  const [timeoutInfoOpen, setTimeoutInfoOpen] = useState(false);
+  const [ssoInfoOpen, setSsoInfoOpen] = useState(false);
+  const [sessionsInfoOpen, setSessionsInfoOpen] = useState(false);
   const [twoFASecret, setTwoFASecret] = useState('');
   const [twoFAQRCode, setTwoFAQRCode] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
@@ -557,7 +562,62 @@ export default function SecurityPage() {
                 <Smartphone className="w-5 h-5 text-success" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Two-Factor Authentication</h2>
+                {/* Hovering the ⓘ shows the guide (same pattern as My Profile → Time Zone).
+                    Hover/focus opens it; a tap toggles it on touch screens. */}
+                <HoverCard open={twoFAInfoOpen} onOpenChange={setTwoFAInfoOpen} openDelay={100} closeDelay={150}>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Two-Factor Authentication</h2>
+                    <HoverCardTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="How does two-factor authentication work?"
+                        onClick={() => setTwoFAInfoOpen(open => !open)}
+                        className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                    </HoverCardTrigger>
+                  </div>
+                  <HoverCardContent
+                    align="start"
+                    collisionPadding={8}
+                    className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                  >
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does two-factor authentication work?</h3>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
+                      <p>
+                        After your password, you also enter a 6-digit code from an authenticator app on your phone.
+                        The code changes every 30 seconds, so even if someone learns your password they can&apos;t sign in without your phone.
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">How to turn it on</h4>
+                      <ol className="list-decimal pl-5 space-y-1">
+                        <li>Install an authenticator app, such as Google Authenticator, Microsoft Authenticator or Authy.</li>
+                        <li>Switch on the toggle on the right.</li>
+                        <li>Scan the QR code with the app, or type in the secret key shown below it.</li>
+                        <li>Enter the 6-digit code the app shows, then click <span className="font-medium text-gray-900 dark:text-slate-50">Verify and Enable</span>.</li>
+                      </ol>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Signing in afterwards</h4>
+                      <p>Enter your email and password as usual, then the current 6-digit code from the app.</p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Turning it off</h4>
+                      <p>Switch the toggle off and confirm with a current code from the app.</p>
+                    </div>
+                    <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-subtle p-2.5 sm:p-3">
+                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                      <ul className="space-y-1 text-warning-strong">
+                        <li>There are no backup codes — if you lose access to the app, you can be locked out. Before changing phones, turn 2FA off and set it up again on the new phone.</li>
+                        <li>Each code is valid only for the time shown in the app (about 30 seconds). Once that time runs out the code expires, and an expired code will not be accepted — enter the new code the app shows instead.</li>
+                        <li>Codes depend on the time, so keep your phone&apos;s clock set automatically. If a code is rejected, wait for the next one.</li>
+                      </ul>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
                 <p className="text-sm text-gray-500 dark:text-slate-500">Add an extra layer of security</p>
               </div>
             </div>
@@ -729,7 +789,75 @@ export default function SecurityPage() {
               <Clock className="w-5 h-5 text-gray-800 dark:text-slate-100" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Session Timeout</h2>
+              {/* Same hover ⓘ as Two-Factor Authentication. Facts from
+                  components/SessionTimeoutProvider.tsx (activity events, 60 s warning)
+                  and dependencies.py (server-side inactivity check). */}
+              <HoverCard open={timeoutInfoOpen} onOpenChange={setTimeoutInfoOpen} openDelay={100} closeDelay={150}>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Session Timeout</h2>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label="How does session timeout work?"
+                      onClick={() => setTimeoutInfoOpen(open => !open)}
+                      className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  </HoverCardTrigger>
+                </div>
+                <HoverCardContent
+                  align="start"
+                  collisionPadding={8}
+                  className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                >
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does session timeout work?</h3>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it does</h4>
+                    <p>
+                      If you don&apos;t use TalentFlow for the time you choose here, you are signed out automatically.
+                      This protects your account if you walk away from an unlocked or shared computer.
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What counts as activity</h4>
+                    <p>
+                      Moving the mouse, clicking, typing, scrolling or touching the screen in TalentFlow. Just leaving the page open
+                      does not count — an open tab you aren&apos;t using still times out.
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Before you are signed out</h4>
+                    <p>
+                      One minute before the time runs out, a warning with a countdown appears. Click
+                      {' '}<span className="font-medium text-gray-900 dark:text-slate-50">Continue Session</span> to stay signed in,
+                      and the timer starts again from the beginning.
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">After you are signed out</h4>
+                    <p>
+                      Sign in again to carry on. Anything you hadn&apos;t saved yet — for example a half-filled form — may be lost,
+                      so save your work before stepping away.
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Which time to choose</h4>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li><span className="font-medium text-gray-900 dark:text-slate-50">15–30 minutes</span> — shared or public computers, or if you handle sensitive candidate data.</li>
+                      <li><span className="font-medium text-gray-900 dark:text-slate-50">1–2 hours</span> — your own computer in the office.</li>
+                      <li><span className="font-medium text-gray-900 dark:text-slate-50">8 hours</span> — a personal device you use all day and keep locked.</li>
+                    </ul>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-lg border border-brand-blue/20 bg-brand-blue/5 p-2.5">
+                    <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                    <p>
+                      This setting applies to your account only, on every device you use. It is saved as soon as you pick a new
+                      time, and the server enforces it too — not just the open page.
+                    </p>
+                  </div>
+                </HoverCardContent>
+              </HoverCard>
               <p className="text-sm text-gray-500 dark:text-slate-500">Auto log out after inactivity</p>
             </div>
           </div>
@@ -767,7 +895,64 @@ export default function SecurityPage() {
                 <KeyRound className="w-5 h-5 text-blue-600" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Single Sign-On (SSO)</h2>
+                {/* Same hover ⓘ as Two-Factor / Session Timeout. Keep it truthful: there is no
+                    SAML/OIDC sign-in in this backend yet — SSO is gated by plan ("sso" feature)
+                    and set up with support, not from this page. Update the text if that changes. */}
+                <HoverCard open={ssoInfoOpen} onOpenChange={setSsoInfoOpen} openDelay={100} closeDelay={150}>
+                  <div className="flex items-center gap-1.5">
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Single Sign-On (SSO)</h2>
+                    <HoverCardTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="How does single sign-on work?"
+                        onClick={() => setSsoInfoOpen(open => !open)}
+                        className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                    </HoverCardTrigger>
+                  </div>
+                  <HoverCardContent
+                    align="start"
+                    collisionPadding={8}
+                    className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                  >
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does single sign-on work?</h3>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
+                      <p>
+                        Single sign-on lets your team sign in to TalentFlow with the work account your company already uses —
+                        for example Microsoft (Entra ID / Azure AD), Google Workspace or Okta — instead of a separate TalentFlow password.
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Why companies use it</h4>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>One password to remember, managed by your IT team.</li>
+                        <li>Your company&apos;s own security rules (such as its sign-in checks) apply to TalentFlow too.</li>
+                        <li>When someone leaves and IT disables their work account, their access goes with it.</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">SAML and OIDC</h4>
+                      <p>
+                        These are the two standard ways a company sign-in system connects to an app. Your IT team will know which one
+                        your company uses — you don&apos;t need to choose yourself.
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Setting it up</h4>
+                      <p>
+                        SSO is included in your plan, but it can&apos;t be switched on from this page. It is set up once for the whole
+                        organization: ask your TalentFlow administrator to contact TalentFlow support, with your IT team&apos;s details ready.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2 rounded-lg border border-brand-blue/20 bg-brand-blue/5 p-2.5">
+                      <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                      <p>Until SSO is set up, everyone keeps signing in with their email and password as usual.</p>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
                 <p className="text-sm text-gray-500 dark:text-slate-500">Configure SSO for your organization</p>
               </div>
             </div>
@@ -782,7 +967,61 @@ export default function SecurityPage() {
         {/* Active Sessions */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-4">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Active Sessions</h2>
+            {/* Same hover ⓘ as the cards above. Keep it truthful: DELETE /sessions/{id} only
+                marks the row invalid — JWTs aren't bound to a session, so a revoked device keeps
+                working until its token expires (JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 480).
+                Update the "Revoking" text if revocation becomes immediate. */}
+            <HoverCard open={sessionsInfoOpen} onOpenChange={setSessionsInfoOpen} openDelay={100} closeDelay={150}>
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Active Sessions</h2>
+                <HoverCardTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="What are active sessions?"
+                    onClick={() => setSessionsInfoOpen(open => !open)}
+                    className="rounded-full p-0.5 text-gray-400 hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 dark:text-slate-500"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                </HoverCardTrigger>
+              </div>
+              <HoverCardContent
+                align="start"
+                collisionPadding={8}
+                className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+              >
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">What are active sessions?</h3>
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What you see here</h4>
+                  <p>
+                    Each row is a device or browser where your account is signed in. It shows the device, its location and IP
+                    address, and when it was last used. The one marked <span className="font-medium text-gray-900 dark:text-slate-50">Current</span> is
+                    the device you&apos;re using right now.
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Check it now and then</h4>
+                  <p>
+                    If you see a device, place or time you don&apos;t recognise, someone else may have your password.
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">Revoking</h4>
+                  <ul className="list-disc pl-5 space-y-1">
+                    <li><span className="font-medium text-gray-900 dark:text-slate-50">Revoke</span> removes one session from the list.</li>
+                    <li><span className="font-medium text-gray-900 dark:text-slate-50">Revoke All Other Sessions</span> removes every session except this one, after you confirm.</li>
+                    <li>A device that is already signed in can keep working until its current sign-in expires — up to 8 hours.</li>
+                  </ul>
+                </div>
+                <div className="flex items-start gap-2 rounded-lg border border-warning-line bg-warning-subtle p-2.5 sm:p-3">
+                  <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                  <p className="text-warning-strong">
+                    Don&apos;t recognise a session? Revoke it, change your password above, turn on two-factor authentication,
+                    and tell your administrator.
+                  </p>
+                </div>
+              </HoverCardContent>
+            </HoverCard>
             {sessions.filter(s => !s.is_current).length > 0 && (
               <button
                 onClick={() => {

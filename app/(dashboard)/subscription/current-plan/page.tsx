@@ -5,7 +5,6 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api, { handleUnauthorized } from '@/lib/services/api';
-import { ScrollableTabs } from '@/components/subscription/ScrollableTabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -600,14 +599,17 @@ export function CurrentPlanLoadingSkeleton() {
             </div>
           </section>
 
-          {/* Subscription pill tabs */}
-          <section className="mb-4 flex gap-1.5 overflow-hidden">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <Skeleton key={i} className="h-9 w-28 shrink-0 rounded-lg" />
-            ))}
+          {/* Subscription tabs: segmented control below lg, folder tabs from lg */}
+          <section className="mb-3 lg:mb-5">
+            <Skeleton className="h-9 w-full rounded-lg lg:hidden" />
+            <div className="hidden gap-1 border-b border-gray-200 lg:flex">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <Skeleton key={i} className="mb-1.5 h-8 w-28 shrink-0 rounded-t-lg" />
+              ))}
+            </div>
           </section>
 
-          <div className="rounded-xl bg-slate-50 p-3 ring-1 ring-gray-100 sm:p-5">
+          <div className="rounded-xl border border-gray-200 bg-slate-100 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0">
             {/* Plans heading + toggle */}
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div className="space-y-2">
@@ -661,14 +663,14 @@ function CurrentPlanContent() {
   // Subscription navigation tabs — surfaced on this page instead of the sidebar.
   // `visible: false` = no permission: the tab stays rendered, greyed, with a
   // hover tooltip and a no-op click (never hidden).
-  const billingLinks: { id: string; label: string; icon: typeof BarChart3; href: string; visible: boolean; deniedMessage?: string }[] = [
-    { id: 'current-plan', label: 'Upgrade Plans', icon: BarChart3, href: '/subscription/current-plan', visible: true },
-    { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage & quotas' },
-    { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory'), deniedMessage: 'You do not have permission to view billing history' },
-    { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory'), deniedMessage: 'You do not have permission to view refund history' },
-    { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory'), deniedMessage: 'You do not have permission to view dispute history' },
-    { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view unit disputes' },
-    { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods'), deniedMessage: 'You do not have permission to view payment methods' },
+  const billingLinks: { id: string; short: string; label: string; icon: typeof BarChart3; href: string; visible: boolean; deniedMessage?: string }[] = [
+    { id: 'current-plan', short: 'Plans', label: 'Upgrade Plans', icon: BarChart3, href: '/subscription/current-plan', visible: true },
+    { id: 'usage-quotas', short: 'Usage', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage & quotas' },
+    { id: 'billing-history', short: 'Billing', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', visible: isTenantAdmin || hasPermission('canViewBillingHistory'), deniedMessage: 'You do not have permission to view billing history' },
+    { id: 'refund-history', short: 'Refunds', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', visible: isTenantAdmin || hasPermission('canViewRefundHistory'), deniedMessage: 'You do not have permission to view refund history' },
+    { id: 'dispute-history', short: 'Disputes', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', visible: isTenantAdmin || hasPermission('canViewDisputeHistory'), deniedMessage: 'You do not have permission to view dispute history' },
+    { id: 'unit-disputes', short: 'Units', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view unit disputes' },
+    { id: 'payment-methods', short: 'Payments', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', visible: isTenantAdmin || hasPermission('canViewPaymentMethods'), deniedMessage: 'You do not have permission to view payment methods' },
   ];
 
   // Use shared quota context - prevents duplicate API calls
@@ -2230,7 +2232,7 @@ function CurrentPlanContent() {
               <div className="min-w-0">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Your Current Plan</h2>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <span className="truncate text-lg font-semibold text-gray-900 dark:text-slate-50">{planDisplayName}</span>
+                  <span className="truncate text-base font-semibold text-gray-900 dark:text-slate-50">{planDisplayName}</span>
                   <Badge variant={statusBadge.variant} className="shrink-0">
                     <StatusIcon />
                     {statusBadge.label}
@@ -2265,7 +2267,7 @@ function CurrentPlanContent() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+                <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                 {isLocked
                   ? 'Your account is locked. Please select a plan and complete payment.'
                   : isOnTrial
@@ -2285,16 +2287,16 @@ function CurrentPlanContent() {
               <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Price</span>
               <div className="flex items-baseline gap-1 lg:justify-end">
                 {isOnTrial ? (
-                  <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">Free</span>
+                  <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">Free</span>
                 ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
                   <>
-                    <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">{formatCurrency(currentPlanPrice, currentPlanCurrency)}</span>
+                    <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlanPrice, currentPlanCurrency)}</span>
                     <span className="text-sm text-gray-500 dark:text-slate-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
                   </>
                 ) : currentPlan?.price ? (
-                  <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">{formatCurrency(currentPlan.price, currentPlan.currency)}</span>
+                  <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlan.price, currentPlan.currency)}</span>
                 ) : (
-                  <span className="text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-3xl">-</span>
+                  <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">-</span>
                 )}
               </div>
               {cycleEndDate && !remainingTime.isExpired && (
@@ -2308,7 +2310,7 @@ function CurrentPlanContent() {
 
           {/* Billing cycle — start / end dates with elapsed-cycle progress */}
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-600 dark:text-slate-400">
                 <span>
                   {isOnTrial ? 'Trial Started' : 'Plan Start'}:{' '}
@@ -2462,8 +2464,8 @@ function CurrentPlanContent() {
                       </div>
                       <p className={`mt-1.5 truncate font-bold tabular-nums tracking-tight ${
                         formatted === 'Unlimited'
-                          ? 'text-lg sm:text-xl text-brand-teal'
-                          : 'text-xl sm:text-2xl text-gray-900 dark:text-slate-50'
+                          ? 'text-base sm:text-lg text-brand-teal'
+                          : 'text-lg sm:text-xl text-gray-900 dark:text-slate-50'
                       }`}>
                         {formatted}
                       </p>
@@ -2522,43 +2524,67 @@ function CurrentPlanContent() {
         </div>
         </div>
 
-        {/* Subscription navigation — pill tabs (scrollable on mobile/tablet, wrapping on desktop) */}
+        {/* Subscription navigation — same pattern as OrganizationTabs (User
+            Management): a sliding segmented control below lg, folder tabs that
+            merge into the panel below from lg up. */}
         {billingLinks.length > 0 && (
-          <section className="mb-4">
-            {/* Mobile + tablet (< lg): single swipeable row of pills with an
-                always-visible custom scrollbar (native bars auto-hide on touch). */}
-            <ScrollableTabs className="lg:hidden" ariaLabel="Subscription sections">
-              {billingLinks.map((link) => {
-                const isActive = link.id === activeSection;
-                const locked = !link.visible;
-                return (
-                  <button
-                    key={link.id}
-                    type="button"
-                    onClick={() => { if (!locked) setActiveSection(link.id as typeof activeSection); }}
-                    aria-current={isActive ? 'page' : undefined}
-                    aria-disabled={locked}
-                    title={locked ? link.deniedMessage : undefined}
-                    className={`shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                      locked
-                        ? 'bg-gray-50 dark:bg-slate-800/60 text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
-                        : isActive
-                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                        : 'bg-gray-50 dark:bg-slate-800/60 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100'
-                    }`}
-                  >
-                    {link.label}
-                  </button>
-                );
-              })}
-            </ScrollableTabs>
+          <section className="mb-3 lg:mb-5">
+            {/* Mobile + tablet (< lg): one segmented control. Equal cells on a
+                light brand-blue track; the white tile glides to the active tab.
+                Short labels so all seven fit on a phone (full name on hover). */}
+            {(() => {
+              const activeIndex = billingLinks.findIndex((l) => l.id === activeSection);
+              const cols = billingLinks.length;
+              const cell = 'relative z-10 inline-flex min-w-0 items-center justify-center rounded-md px-0.5 text-[11px] font-medium transition-colors duration-300 sm:px-1 sm:text-sm';
+              return (
+                <nav
+                  aria-label="Subscription sections"
+                  style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+                  className="relative grid h-9 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10 lg:hidden"
+                >
+                  {activeIndex >= 0 && (
+                    <span
+                      aria-hidden
+                      style={{ width: `calc((100% - 0.5rem) / ${cols})`, transform: `translateX(${activeIndex * 100}%)` }}
+                      className="absolute bottom-1 left-1 top-1 rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
+                    />
+                  )}
+                  {billingLinks.map((link) => {
+                    const isActive = link.id === activeSection;
+                    const locked = !link.visible;
+                    return (
+                      <button
+                        key={link.id}
+                        type="button"
+                        onClick={() => { if (!locked) setActiveSection(link.id as typeof activeSection); }}
+                        aria-current={isActive ? 'page' : undefined}
+                        aria-disabled={locked}
+                        title={locked ? link.deniedMessage : link.label}
+                        className={`${cell} ${
+                          locked
+                            ? 'cursor-not-allowed text-gray-400 opacity-60 dark:text-slate-600'
+                            : isActive
+                            ? 'text-brand-blue'
+                            : 'text-gray-600 hover:text-brand-blue dark:text-slate-400'
+                        }`}
+                      >
+                        <span className="truncate">{link.short}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+              );
+            })()}
 
-            {/* Desktop (lg+): flex-wrap (not overflow scroll) so tight laptop
-                widths wrap to a second row instead of scrolling horizontally. */}
-            <nav className="hidden max-w-full flex-wrap gap-1.5 lg:flex" aria-label="Subscription tabs">
+            {/* Desktop (lg+): folder tabs that merge into the panel below */}
+            <nav
+              aria-label="Subscription tabs"
+              className="hidden max-w-full flex-wrap gap-1 border-b border-gray-200 dark:border-slate-700 lg:flex"
+            >
               {billingLinks.map((link) => {
                 const isActive = link.id === activeSection;
                 const locked = !link.visible;
+                const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm font-medium transition-colors';
                 return (
                   <button
                     key={link.id}
@@ -2567,12 +2593,12 @@ function CurrentPlanContent() {
                     aria-current={isActive ? 'page' : undefined}
                     aria-disabled={locked}
                     title={locked ? link.deniedMessage : undefined}
-                    className={`whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`${base} ${
                       locked
-                        ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                        ? 'border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
                         : isActive
-                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-slate-100'
+                        ? 'border-gray-200 dark:border-slate-700 border-b-slate-100 dark:border-b-slate-800 bg-slate-100 dark:bg-slate-800/50 text-brand-blue'
+                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-gray-50 dark:hover:bg-slate-800/40'
                     }`}
                   >
                     {link.label}
@@ -2583,8 +2609,9 @@ function CurrentPlanContent() {
           </section>
         )}
 
-        {/* Active sub-section + its content on a soft surface panel */}
-        <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 p-3 ring-1 ring-gray-100 dark:ring-slate-700/60 sm:p-5">
+        {/* Active sub-section panel — joins the tab bar's baseline on desktop
+            (-mt-5 cancels the tab bar's mb-5), as on User Management. */}
+        <div className="rounded-xl border border-gray-200 bg-slate-100 p-4 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50">
         {/* Inline sub-section — strips the embedded page's own breadcrumb,
             outer left/right padding, and card wrapper so the content lines up
             seamlessly with the current-plan body. Selectors target the
@@ -2879,10 +2906,10 @@ function CurrentPlanContent() {
           <>
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div className="min-w-0">
-                <h2 className="text-base lg:text-lg font-semibold text-gray-900 dark:text-slate-50">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">
                   {isOnTrial || isLocked ? 'Choose a Plan' : 'Upgrade Plans'}
                 </h2>
-                <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">
+                <p className="mt-0.5 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
                   Pick the plan that fits your team. Switch between monthly and yearly billing.
                 </p>
                 {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
@@ -2988,13 +3015,13 @@ function CurrentPlanContent() {
                     )}
 
                     <h3 className="pt-1 text-base font-bold text-gray-900 dark:text-slate-50">{plan.name}</h3>
-                    <p className="mt-0.5 min-h-[36px] text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>
+                    <p className="mt-0.5 min-h-[32px] text-xs sm:text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>
 
                     <div className="my-4">
                       {(plan.monthlyPrice || plan.annualPrice) ? (
                         <div>
                           <div className="flex items-baseline gap-1">
-                            <span className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-slate-50">
+                            <span className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50">
                               {formatCurrency(
                                 isYearly
                                   ? (plan.annualPrice ?? plan.monthlyPrice ?? 0)
@@ -3051,7 +3078,7 @@ function CurrentPlanContent() {
                           )}
                         </div>
                       ) : (
-                        <div className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900 dark:text-slate-50">Custom</div>
+                        <div className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-slate-50">Custom</div>
                       )}
                     </div>
 
