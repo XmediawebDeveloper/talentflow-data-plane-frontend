@@ -53,7 +53,6 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import ListPagination from '@/components/ListPagination';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
-import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
@@ -156,6 +155,13 @@ interface AssessmentResultsProps {
   /** Job Details: told the table's record count (every page, current filters)
    *  whenever it changes, so the tab badge shows the number the table lists. */
   onTotalItemsChange?: (total: number) => void;
+  /** Job Details: the invite button, placed right after More Filters so it
+   *  is on the toolbar whatever the list holds. */
+  toolbarActions?: React.ReactNode;
+  /** Job Details: the no-results state's action (the same invite button) and
+   *  its supporting line. Unset = the standalone page's wording, no action. */
+  emptyStateAction?: React.ReactNode;
+  emptyStateText?: string;
   /** Job Details: open a candidate's result in the host's own in-page view
    *  (whose trail keeps the job) instead of routing to the Assessments
    *  module's Result Details page. Unset = route, as before. */
@@ -259,7 +265,7 @@ interface QuestionResult {
 const resultOrderTime = (c: { completed_at?: string; created_at?: string }) =>
   new Date(c.completed_at || c.created_at || 0).getTime();
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange, onViewCandidate, toolbarActions, emptyStateAction, emptyStateText }: AssessmentResultsProps) {
   /* Export (a server export — the endpoint enforces `assessments:export` and
      writes the audit row) is greyed with this reason when the permission is
      missing: listed, never hidden. */
@@ -901,7 +907,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     (showsJobVersionSelect && effectiveJobVersion !== 'all' ? 1 : 0) +
     (showsAssessmentSelect && effectiveAssessmentId !== 'all' ? 1 : 0) +
     (showsAssessmentVersionSelect && effectiveAssessmentVersion !== 'all' ? 1 : 0) +
-    /* Status is not counted: it sits on the toolbar row, not in the panel. */
+    /* Status counts only embedded, where it lives in the panel. */
+    (portaled && statusFilter !== 'all' ? 1 : 0) +
     (portaled && passFailFilter !== 'all' ? 1 : 0) +
     Object.values(roundFilters).filter(Boolean).length +
     (appliedDateFrom || appliedDateTo ? 1 : 0);
@@ -1987,9 +1994,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             it reads as the tab card's second row; otherwise inline as before. */}
         {(() => {
         /* The More Filters fields — every applicable one in its usual order.
-           Embedded in Job Details the Status select (the toolbar's status
-           dropdown already is it) and the date range are dropped, and the rest
-           is capped at four. */
+           Embedded in Job Details Status leads (it moved here off the
+           toolbar row, to make room for Invite), the date range is dropped,
+           and the rest is capped at five. */
         /* One More Filters select. Standalone: the Job Openings (JD) page's
            SearchableSelect, so this panel reads like every other list's.
            Embedded in Job Details: the plain select in the AI Talent Match
@@ -2037,6 +2044,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           { value: '90+', label: '90%+' },
         ];
         const filterFields = [
+          /* Embedded: Status moved off the toolbar row into the panel, to
+             make room for the Invite button there. */
+          portaled && filterSelect({
+            id: 'assessment-results-status-filter',
+            label: 'Status',
+            value: statusFilter,
+            onChange: (v) => {
+              setStatusFilter(v as typeof statusFilter);
+              setCurrentPage(1);
+            },
+            options: [
+              { value: 'In Progress', label: 'In Progress' },
+              { value: 'Completed', label: 'Completed' },
+              { value: 'Terminated', label: 'Terminated' },
+            ],
+            allLabel: 'All Candidates',
+          }),
           showsJobVersionSelect && filterSelect({
             id: 'assessment-results-job-version',
             label: 'Job Version',
@@ -2145,7 +2169,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               />
             </div>
           ),
-        ].filter(Boolean).slice(0, portaled ? 4 : undefined);
+        ].filter(Boolean).slice(0, portaled ? 5 : undefined);
         /* Sort by — the tinted control driving the same sortField /
            sortDirection the column headers do. Embedded, Status too: the
            column headers there are plain labels. */
@@ -2214,24 +2238,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                Candidates → Sort by → More Filters → List / Grid, as on AI
                Talent Match. */
             leadingActions={portaled ? (
-              <>
-                {/* Terminated too: the More Filters Status select it came from
-                    is dropped here, so this is the one status control. */}
-                <ToolbarFilterSelect
-                  value={statusFilter}
-                  onChange={(value) => {
-                    setStatusFilter(value as typeof statusFilter);
-                    setCurrentPage(1);
-                  }}
-                  ariaLabel="Filter candidates by status"
-                >
-                  <option value="all">All Candidates</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Terminated">Terminated</option>
-                </ToolbarFilterSelect>
-                {resultsSortControl}
-              </>
+              /* Status is in More Filters here (see filterFields). */
+              resultsSortControl
             ) : (
               /* Result inline with Search, as Location / Industry are on the
                  Job Openings page (and so not repeated in More Filters). */
@@ -2252,6 +2260,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
+            afterFiltersActions={toolbarActions}
             activeFilterCount={activeFilterCount}
             filtersApplied={activeFilterCount > 0}
             /* Reset — search, status, result and every panel filter at once. */
@@ -2546,8 +2555,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </>
                   ) : (
                     <>
-                      <p className="text-gray-600 mb-1">No candidates have completed this assessment yet</p>
-                      <p className="text-sm text-gray-500">Share the assessment link to invite candidates</p>
+                      <p className="text-gray-600 mb-1">No assessment results yet</p>
+                      <p className="text-sm text-gray-500">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
+                      {emptyStateAction && <div className="mt-4">{emptyStateAction}</div>}
                     </>
                   )}
                 </div>
@@ -2815,11 +2825,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         ) : (
                           <>
                             <h3 className="text-lg sm:text-xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
-                              No candidates have completed this assessment yet
+                              No assessment results yet
                             </h3>
                             <p className="mt-1.5 text-sm sm:text-base text-slate-500 dark:text-slate-400">
-                              Share the assessment link to invite candidates
+                              {emptyStateText ?? 'Share the assessment link to invite candidates'}
                             </p>
+                            {emptyStateAction && <div className="mt-5">{emptyStateAction}</div>}
                           </>
                         )}
                       </div>
