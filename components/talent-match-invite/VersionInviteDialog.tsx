@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle, ClipboardList, Link2, Loader2, Mail, Video } from 'lucide-react';
+import { ArrowLeft, CheckCircle, ClipboardList, Loader2, Mail, Video } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -9,22 +9,22 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { VersionUsage } from './VersionList';
 import SendToPanel from './SendToPanel';
-import ResultsStep from './ResultsStep';
 import ServerCandidatePicker, { EMPTY_SELECTION, describeFilters, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
 import ExtraCandidatesInput from './ExtraCandidatesInput';
+import InviteQuotaBar from './InviteQuotaBar';
+import { DEFAULT_EXPIRY_DAYS, defaultInviteMessage } from './inviteDefaults';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
 import { bulkInviteService, type BulkInviteJob, type BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import { assessmentService } from '@/lib/services/assessmentService';
+import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
-import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
+import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
 import AIInterviewWizardDialog from '@/components/ai-interview/AIInterviewWizardDialog';
-import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
-import type { AssessmentResponse } from '@/lib/services/assessmentService';
-import ShareAssessmentModal from '@/components/ShareAssessmentModal';
-import AIInterviewShareQueue from './AIInterviewShareQueue';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import {
   KIND_LABEL,
@@ -39,14 +39,11 @@ import {
   loadVersions,
   nextVersionNumber,
   runVersionAction,
-  sendVersion,
   versionHref,
   INVITE_SOURCE_BY_TAB,
-  type DeliveryMethod,
   type InviteCandidate,
   type InviteKind,
   type InviteVersion,
-  type SendResult,
   type VersionActionItem,
   type VersionPermissions,
 } from './inviteVersions';
@@ -59,15 +56,33 @@ interface PendingConfirm {
   run: () => Promise<void>;
 }
 
+/** The job an invite is for. */
+interface InviteJob {
+  jdId: string;
+  jdCode?: string;
+  jdTitle: string;
+  jobVersionNumber?: number;
+}
+
 /**
- * Job Details → AI Talent Match: "Create / Send Assessment" and "Create / Send
- * AI Interview" — two SEPARATE popups, this one component per `kind`. Built
- * on the Invite to Assessment / AI Interview popups' shell (InviteToAssessmentFlow,
- * class for class): the type's version cards (up to MAX_VERSIONS[kind] per
- * JD row, every status counted, the Latest Active one pre-ticked, one version
- * per send, New version = a Draft copy of the latest), the candidates and the
- * invitation, and one Send; the send's per-candidate results then replace
- * the body. Mounted only while open, so every opening starts fresh.
+ * THE invite popup — every Invite / Send / Invite More / Share / Create /
+ * Send button for an Assessment or an AI Interview opens this one component
+ * (through `InviteDialogProvider`'s `useInviteDialog().open(...)`, or the
+ * hosts that mount it). Change it here and every place follows.
+ *
+ * One popup, top to bottom:
+ *  - the job (picked first when the button has none: every published
+ *    assessment / AI interview, any job);
+ *  - the version cards — only when the button did not fix the version — with
+ *    create, view, edit and the rest of the version actions;
+ *  - the unit quota;
+ *  - the candidates the page ticked (untick to leave out), Select From (the
+ *    job's AI Talent Match / Scored Resumes lists and the resume database,
+ *    server-paged) and Manual / Upload Excel with a per-row Copy Link;
+ *  - the email message (a template) and the link expiry.
+ * Send starts one background job (POST /jd/{id}/bulk-invites) for every
+ * candidate, whose progress replaces the body and survives closing the popup.
+ * Mounted only while open, so every opening starts fresh.
  */
 export default function VersionInviteDialog({
   kind,
@@ -76,7 +91,8 @@ export default function VersionInviteDialog({
   jdCode,
   jdTitle,
   jobVersionNumber,
-  candidates,
+  candidates = [],
+  versionId: fixedVersionId,
   disabledReason,
   onSent,
   onAssessmentsSent,
@@ -85,50 +101,40 @@ export default function VersionInviteDialog({
   inviteAllowed = true,
   inviteDeniedReason,
   preselect = true,
-  bulk = false,
 }: {
   kind: InviteKind;
   onClose: () => void;
-  jdId: string;
+  /** The job. Omitted: the popup opens on the list of every published
+   *  assessment / AI interview, and the pick names the job and version. */
+  jdId?: string;
   jdCode?: string;
-  jdTitle: string;
+  jdTitle?: string;
   jobVersionNumber?: number;
-  /** The candidates ticked on the page. */
-  candidates: InviteCandidate[];
+  /** The candidates ticked on the page ([] / omitted = none). */
+  candidates?: InviteCandidate[];
+  /** The version the button is for (a version row's Invite, Invite More):
+   *  its card list is left out. Omitted: the cards, newest sendable ticked. */
+  versionId?: string;
   /** Why this type is off for the job (feature disabled, JD disabled), or null. */
   disabledReason?: string | null;
   /** Invitations went out — the host refreshes its counts. */
   onSent?: (kind: InviteKind, sentCount: number) => void;
-  /** Assessment popup: Next moves to a second step IN this popup — Share
-   *  Assessment via Email (embedded) with the picked assessment(s) and the
-   *  ticked candidates; that step sends, Back returns here. Given it, the
-   *  popup also offers "Browse all assessments instead" (the original
-   *  cross-job list), whose Next does the same. Called with the number sent. */
+  /** Older hosts' per-kind callbacks; called with onSent. */
   onAssessmentsSent?: (sentCount: number) => void;
-  /** AI Interview popup, the same pattern: Next moves to Send AI Interview
-   *  via Email IN this popup with the picked interview(s) — several (Browse
-   *  all) go one after another — and the ticked candidates; that step sends,
-   *  Back returns here. Called once when at least one invitation went out. */
   onInterviewsSent?: (sentCount: number) => void;
   /** Leave Duplicate out of the version cards' ⋯ menu. */
   hideDuplicate?: boolean;
-  /** Host-specific invite gate (e.g. AI Talent Match's own "Invite to …"
-   *  entry-point permission). Omitted = no extra gate (default behaviour). */
+  /** Host-specific invite gate (e.g. AI Talent Match's own entry-point
+   *  permission). Omitted = no extra gate. */
   inviteAllowed?: boolean;
   /** Shown when `inviteAllowed` is false. */
   inviteDeniedReason?: string;
-  /** Tick every candidate on open (the page ticked them). False = list them
-   *  unticked for the recruiter to pick (Job Details' Create / Send tiles). */
+  /** Tick every page candidate on open. False = listed unticked. */
   preselect?: boolean;
-  /** Job Details' Create / Send tiles: the candidates are the JOB's — its AI
-   *  Talent Match and Scored Resume lists, read from the server a page at a
-   *  time with search and filters (ServerCandidatePicker) — and Send starts
-   *  a background job (POST /jd/{id}/bulk-invites) whose progress survives
-   *  closing the popup. `candidates` is ignored. Pages that tick rows
-   *  themselves keep the per-candidate flow (and its share step). */
+  /** Accepted for older hosts; every send is the background job now. */
   bulk?: boolean;
 }) {
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const p = (user?.permissions || {}) as Record<string, boolean | undefined>;
   const can = (key: string) => isTenantAdmin || !!p[key];
   const perms: VersionPermissions = kind === 'assessment'
@@ -138,7 +144,8 @@ export default function VersionInviteDialog({
         canPublish: can('canUpdateAssessments') || can('canCreateAssessments'),
         // The Assessments page gates Archive / Unarchive on the delete permission.
         canArchive: can('canDeleteAssessments'),
-        canInvite: can('canCreateAssessments'),
+        // What the server checks on send: Assessment → Invite Candidates.
+        canInvite: isTenantAdmin || hasPermissionCode('assessments:invite'),
       }
     : {
         canCreate: can('canCreateAIInterviews'),
@@ -151,24 +158,30 @@ export default function VersionInviteDialog({
   if (!inviteAllowed) perms.canInvite = false;
   const label = KIND_LABEL[kind];
   const off = disabledReason || null;
+  const deniedTitle = !perms.canInvite
+    ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`)
+    : undefined;
+
+  /* The job: given, or picked from the full list first. */
+  const [job, setJob] = useState<InviteJob | null>(jdId ? { jdId, jdCode, jdTitle: jdTitle || '', jobVersionNumber } : null);
+  const [pickedVersionId, setPickedVersionId] = useState<string | undefined>(fixedVersionId);
+  const [jobPickList, setJobPickList] = useState<AssessmentResponse[] | AIInterviewResponse[] | null>(null);
+  const [aiPick, setAiPick] = useState<AIInterviewPickerSelection | null>(null);
+  const [asPick, setAsPick] = useState<AssessmentResponse | null>(null);
 
   const [versions, setVersions] = useState<InviteVersion[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(!off);
+  const [loading, setLoading] = useState(!off && !!job);
   const [error, setError] = useState<string | null>(null);
   const [versionId, setVersionId] = useState<string | null>(null);
   const [candidateIds, setCandidateIds] = useState<string[]>(() => (preselect ? candidates.filter((c) => c.email).map((c) => c.id) : []));
-  const [method, setMethod] = useState<DeliveryMethod>('email');
   const [message, setMessage] = useState('');
-  const [expiryDays, setExpiryDays] = useState(1);
-  const [view, setView] = useState<'compose' | 'results' | 'progress'>('compose');
-  const [results, setResults] = useState<SendResult[]>([]);
-  const [sending, setSending] = useState(false);
-  const [sendTotal, setSendTotal] = useState(0);
-  /* `bulk`: the picked rows or the filter — never the rows themselves — and
-     the background send once it has started. */
+  const messageTouched = useRef(false);
+  const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
+  const [quotaAvailable, setQuotaAvailable] = useState<number | null>(null);
+  /* Select From: the picked rows or the filter — never the rows themselves. */
   const [serverSelection, setServerSelection] = useState<PickerSelection>(EMPTY_SELECTION);
-  /* Bulk mode: candidates typed in or read from a sheet, on top of the picks. */
+  /* Manual / Upload Excel rows. */
   const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
   const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
   const bulkTracker = useOptionalBulkInviteProgress();
@@ -181,115 +194,31 @@ export default function VersionInviteDialog({
   /* AI interview create / edit: the wizard, in its popup, from this address. */
   const [wizardHref, setWizardHref] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  /* A create / edit opened in another tab: re-read on coming back. */
   const reloadOnFocus = useRef(false);
-  /* Browse all assessments: the original cross-job picker, loaded on first use. */
-  const [browseAll, setBrowseAll] = useState(false);
-  const [browseList, setBrowseList] = useState<AssessmentResponse[] | null>(null);
-  const [browsePicked, setBrowsePicked] = useState<AssessmentResponse[]>([]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  /* AI interviews: the same browse, over every config (the shared picker
-     lists the active ones), picked by id. */
-  const [browseConfigs, setBrowseConfigs] = useState<AIInterviewResponse[] | null>(null);
-  const [browseIds, setBrowseIds] = useState<string[]>([]);
-  /* Send hands over to the host's share step rather than sending here. */
-  const handsOff = !bulk && (kind === 'assessment' ? !!onAssessmentsSent : !!onInterviewsSent);
-  /* Step 2 (assessments): the share step, with what Next handed it. Step 1's
-     state stays as it is underneath, so Back returns to it unchanged. */
-  const [shareStep, setShareStep] = useState<{ assessments: AssessmentResponse[]; candidates: InviteCandidate[] } | null>(null);
-  /* Step 2 (AI interviews): the picked interview(s), with the job and
-     interview version each is shown under. */
-  const [interviewStep, setInterviewStep] = useState<{
-    configs: AIInterviewResponse[];
-    candidates: InviteCandidate[];
-    interviewVersions: Record<string, number>;
-    jobVersions: Record<string, number>;
-  } | null>(null);
-  const openInterviewStep = (picked: { config: AIInterviewResponse; version?: number }[], candidates: InviteCandidate[]) => {
-    const interviewVersions: Record<string, number> = {};
-    const jobVersions: Record<string, number> = {};
-    for (const { config, version } of picked) {
-      if (version != null) interviewVersions[config.id] = version;
-      // This JD row's own interview: the job version picked here, not the
-      // config's creation-time `jd_version` snapshot.
-      if (config.jd_id === jdId && jobVersionNumber) jobVersions[config.id] = jobVersionNumber;
-    }
-    setInterviewStep({ configs: picked.map((p) => p.config), candidates, interviewVersions, jobVersions });
-    bodyRef.current?.scrollTo({ top: 0 });
-  };
-  /* The popup's footer: step 2 portals its own footer content into it. */
-  const [footerEl, setFooterEl] = useState<HTMLDivElement | null>(null);
-  const openShareStep = (assessments: AssessmentResponse[], candidates: InviteCandidate[]) => {
-    setShareStep({ assessments, candidates });
-    bodyRef.current?.scrollTo({ top: 0 });
-  };
-  /* The job an assessment is shared for. One of this JD row's own: this
-     row, at the job version picked here — NOT the assessment's `jd_version`,
-     a snapshot the backend stamps at creation that comes back as 1 for
-     assessments authored against a later version (it labelled a V2 job's
-     assessment "V1"; AssessmentResults resolves it the same way). A Browse
-     all pick from another job keeps its own job and that snapshot. */
-  const shareJob = (a: AssessmentResponse) => a.jd_id === jdId
-    ? { jd_short_id: jdCode || a.jd_short_id, jd_title: jdTitle, jd_version: jobVersionNumber ?? a.jd_version }
-    : { jd_short_id: a.jd_short_id, jd_title: a.jd_title || jdTitle, jd_version: a.jd_version };
-  const backFromShareStep = () => {
-    setShareStep(null);
-    setInterviewStep(null);
-    bodyRef.current?.scrollTo({ top: 0 });
-  };
-  const inStep2 = !!shareStep || !!interviewStep;
-  const browseCount = kind === 'assessment' ? browsePicked.length : browseIds.length;
-  const browseNoun = kind === 'assessment' ? 'assessment' : 'AI interview';
-  /* Switching between this job's versions and the full list starts the pick
-     over, as the original popup did. */
-  const showBrowse = (on: boolean) => {
-    setBrowseAll(on);
-    setBrowsePicked([]);
-    setBrowseIds([]);
-    if (!on) return;
-    if (kind === 'assessment' && browseList === null) {
-      void loadBrowseAssessments()
-        .then(setBrowseList)
-        .catch(() => setBrowseList([]));
-    }
-    if (kind === 'interview' && browseConfigs === null) {
-      void loadAllInterviewConfigs()
-        .then(setBrowseConfigs)
-        .catch(() => setBrowseConfigs([]));
-    }
-  };
-  const shareBrowse = () => {
-    if (kind === 'assessment') openShareStep(browsePicked, recipients);
-    else openInterviewStep((browseConfigs ?? []).filter((c) => browseIds.includes(c.id)).map((config) => ({ config })), recipients);
-  };
-  /* Assessment View / Edit open over this popup — the assessment preview and
-     the Configure popup the Assessments pages use — so the picks underneath
-     stay as they are. */
+  /* Assessment View / Edit and the AI interview preview, over this popup. */
   const [viewing, setViewing] = useState<AssessmentResponse | null>(null);
   const [editing, setEditing] = useState<AssessmentResponse | null>(null);
-  /* AI interview View: the AI pickers' own Configure Details preview. */
   const [viewingInterviewId, setViewingInterviewId] = useState<string | null>(null);
-  /* The Latest Active version is pre-ticked once, on the first load. */
   const preselected = useRef(false);
-  /* When the list was last read — coming back to the tab re-reads it, at
-     most this often unless this popup itself opened a Create / Edit. */
   const lastLoadedAt = useRef(0);
 
-  /* Reads the versions; every state write is in the reply's callbacks, after
-     the request. Resolves to the new list, or null when the load failed. */
   const applyVersions = (next: InviteVersion[]) => {
     lastLoadedAt.current = Date.now();
     setVersions(next);
     setLoaded(true);
     setLoading(false);
     setError(null);
-    // Decided outside the updater, which must stay pure (it can run twice).
     const firstLoad = !preselected.current;
     preselected.current = true;
     const listed = listedVersions(kind, next);
     setVersionId((cur) => {
-      if (cur && listed.some((v) => v.id === cur && v.sendable)) return cur;
-      if (firstLoad) return listed.find((v) => v.sendable)?.id ?? null;
+      if (cur && next.some((v) => v.id === cur && v.sendable)) return cur;
+      if (firstLoad) {
+        // The button's own version first; else the newest sendable one.
+        if (pickedVersionId && next.some((v) => v.id === pickedVersionId)) return pickedVersionId;
+        return listed.find((v) => v.sendable)?.id ?? null;
+      }
       return null; // the picked version can no longer take an invite
     });
     return next;
@@ -301,53 +230,58 @@ export default function VersionInviteDialog({
     return null;
   };
   const fetchVersions = (): Promise<InviteVersion[] | null> =>
-    loadVersions(kind, jdId).then(applyVersions, applyLoadError);
+    job ? loadVersions(kind, job.jdId).then(applyVersions, applyLoadError) : Promise.resolve(null);
   const reload = () => {
     setLoading(true);
     setError(null);
     return fetchVersions();
   };
 
-  const loadOnOpen = useEffectEvent(() => { if (!off) void fetchVersions(); });
-  useEffect(() => { loadOnOpen(); }, []);
+  // State is written in the reply's callbacks; `loading` is set where the job is set.
+  const loadOnJob = useEffectEvent(() => { if (!off && job) void fetchVersions(); });
+  useEffect(() => { loadOnJob(); }, [job?.jdId]);
 
-  /* Coming back to this tab: the versions are re-read, so one created,
-     published or archived meanwhile — in the Assessments / AI Interviews
-     module, or a Create / Edit this popup opened — shows without reopening
-     the popup. Not while something here is running (a send, a confirmed
-     action, a create), and at most every 10 seconds unless this popup opened
-     the other tab itself. */
+  /* No job given: the list of every published assessment / AI interview. */
+  useEffect(() => {
+    if (job || off || jobPickList) return;
+    const load = kind === 'assessment' ? loadBrowseAssessments() : loadAllInterviewConfigs();
+    void (load as Promise<AssessmentResponse[] | AIInterviewResponse[]>).then(setJobPickList, () => setJobPickList([]));
+  }, [job, off, kind, jobPickList]);
+
+  /* The template message, filled once the job is known (and again when it
+     changes) unless the recruiter has typed in it. */
+  const selected = versions.find((v) => v.id === versionId) ?? null;
+  useEffect(() => {
+    if (!job || messageTouched.current) return;
+    setMessage(defaultInviteMessage(kind, {
+      jobTitle: job.jdTitle || selected?.config?.jd_title || selected?.raw?.jd_title,
+      companyName: (user as { tenantName?: string } | null)?.tenantName,
+      location: selected?.config?.jd_location,
+    }));
+  }, [job, kind, selected?.id, user]);
+
   const reloadAfterReturn = useEffectEvent(() => {
-    if (off || sending || confirmBusy || creating || !loaded) return;
+    if (off || !job || confirmBusy || creating || !loaded) return;
     if (document.visibilityState === 'hidden') return;
     const forced = reloadOnFocus.current;
     if (!forced && Date.now() - lastLoadedAt.current < 10_000) return;
     reloadOnFocus.current = false;
-    // Refreshed in place — the cards stay up while the new list loads.
     void fetchVersions();
   });
   const closeOnEscape = useEffectEvent((e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
-    // Escape in an open ⋯ menu closes just the menu (it is still in the DOM
-    // while this same keydown is being handled).
     if (document.querySelector('[role="menu"]')) return;
-    // A View / Edit popup is on top: Escape closes the preview; Configure
-    // closes from its own X, which asks about unsaved changes.
     if (viewing) { setViewing(null); return; }
-    // The AI interview preview closes itself on Escape.
     if (viewingInterviewId) return;
     if (editing || creatingFirst || wizardHref) return;
     if (confirm && !confirmBusy) setConfirm(null);
-    else if (!sending && !confirmBusy) onClose();
+    else if (!confirmBusy) onClose();
   });
   useEffect(() => {
     const onFocus = () => reloadAfterReturn();
     const onKey = (e: KeyboardEvent) => closeOnEscape(e);
     window.addEventListener('focus', onFocus);
-    // A tab switch does not always focus the window; visibility does fire.
     document.addEventListener('visibilitychange', onFocus);
-    // Capture phase: seen before a popup on top (the AI interview preview) or
-    // an open ⋯ menu handles the same Escape and closes itself.
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('focus', onFocus);
@@ -356,26 +290,45 @@ export default function VersionInviteDialog({
     };
   }, []);
 
-  const selected = versions.find((v) => v.id === versionId) ?? null;
+  /* The version is fixed when the button named it and it can still be sent. */
+  const versionFixed = !!pickedVersionId && !!selected && selected.id === pickedVersionId && selected.sendable;
   const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
-  /* How many the send goes to: the server selection's count in `bulk`. */
-  const recipientCount = bulk ? selectionCount(serverSelection) + extras.length : recipients.length;
-  /* Next: someone ticked — or, where Next leads to the email step, always:
-     that step adds candidates itself (Manual, Upload Excel, Resume Database),
-     so an empty list here is not a dead end. */
-  const hasCandidatesForNext = bulk ? recipientCount > 0 : (recipients.length > 0 || handsOff);
+  const recipientCount = recipients.length + selectionCount(serverSelection) + extras.length;
   const blocked = createBlockedReason(versions, perms, kind);
-  const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(jdId)}`;
-  const close = () => { if (!sending && !confirmBusy) onClose(); };
+  const returnUrl = job ? `/recruitment/job-details?id=${encodeURIComponent(job.jdId)}` : '/recruitment/job-openings';
+  const close = () => { if (!confirmBusy) onClose(); };
+  const quotaShort = quotaAvailable !== null && recipientCount > quotaAvailable;
 
-  /* New version — v1 is configured in the Configure popup in create mode;
-     after that the latest version is duplicated as the next Draft, never
-     overwriting one: an assessment draft opens in the Configure popup, an AI
-     interview draft in the wizard popup (v1 there too, from Configure). */
+  /* Picking from the full list (no job given): the job and the version. */
+  const chooseFromList = () => {
+    if (kind === 'assessment' && asPick) {
+      setJob({ jdId: asPick.jd_id, jdCode: asPick.jd_short_id, jdTitle: asPick.jd_title || '', jobVersionNumber: asPick.jd_version });
+      setPickedVersionId(asPick.id);
+    } else if (kind === 'interview' && aiPick) {
+      const cfg = (jobPickList as AIInterviewResponse[] | null)?.find((c) => c.id === aiPick.interviewId);
+      if (!cfg?.jd_id) return;
+      setJob({ jdId: cfg.jd_id, jdCode: (cfg as { jd_short_id?: string }).jd_short_id, jdTitle: cfg.jd_title || cfg.position || '', jobVersionNumber: cfg.jd_version });
+      setPickedVersionId(cfg.id);
+    }
+    preselected.current = false;
+    setLoading(true);
+    bodyRef.current?.scrollTo({ top: 0 });
+  };
+  const backToList = () => {
+    setJob(null);
+    setPickedVersionId(undefined);
+    setVersions([]);
+    setVersionId(null);
+    setLoaded(false);
+    setServerSelection(EMPTY_SELECTION);
+    messageTouched.current = false;
+  };
+  /* "Change version" on a fixed version: the cards come back. */
+  const showAllVersions = () => setPickedVersionId(undefined);
+
   const handleCreate = () => {
+    if (!job) return;
     if (versions.length === 0 && kind === 'assessment') {
-      /* The tenant's round defaults first, as the create page reads them;
-         its own defaults if they cannot be read. */
       setCreating(true);
       void api.get('/assessments/settings/topics')
         .then((res) => res?.data ?? null, () => null)
@@ -384,8 +337,7 @@ export default function VersionInviteDialog({
       return;
     }
     if (versions.length === 0) {
-      /* AI interview v1: the wizard, in its popup, from Configure. */
-      setWizardHref(createPageHref(kind, jdId, jdTitle, returnUrl));
+      setWizardHref(createPageHref(kind, job.jdId, job.jdTitle, returnUrl));
       return;
     }
     const latest = versions[0];
@@ -396,15 +348,12 @@ export default function VersionInviteDialog({
       run: async () => {
         setCreating(true);
         try {
-          // Re-read first: another tab may have used the last slot.
           const fresh = (await reload()) ?? versions;
           const why = createBlockedReason(fresh, perms, kind);
           if (why) { toast.error(why); return; }
           const draftId = await duplicateVersion(fresh[0]);
           toast.success(`v${nextVersionNumber(fresh)} created as a draft.`);
           const listed = await reload();
-          /* The new draft opens straight in the Configure popup — ⋯ › Edit's
-             popup — so it is edited and published here, with no navigation. */
           const draft = listed?.find((v) => v.id === draftId);
           if (kind === 'assessment' && draft) {
             try {
@@ -413,8 +362,7 @@ export default function VersionInviteDialog({
               toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
             }
           } else if (draft) {
-            /* An AI interview draft opens in the wizard popup, where it left off. */
-            setWizardHref(await versionHref(draft, 'edit', jdTitle, returnUrl));
+            setWizardHref(await versionHref(draft, 'edit', job.jdTitle, returnUrl));
           }
         } finally {
           setCreating(false);
@@ -424,14 +372,13 @@ export default function VersionInviteDialog({
   };
 
   const handleAction = (v: InviteVersion, item: VersionActionItem) => {
-    if (item.disabledReason) return;
+    if (item.disabledReason || !job) return;
     if ((item.action === 'view' || item.action === 'edit') && v.kind === 'assessment') {
       const open = item.action === 'view' ? setViewing : setEditing;
       setBusyId(v.id);
       void loadAssessmentForPopup(v, item.action)
         .then(open, (err: unknown) => {
           toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
-          // The list may be stale (sent or changed elsewhere): re-read it.
           if (item.action === 'edit') void reload();
         })
         .finally(() => setBusyId(null));
@@ -441,11 +388,9 @@ export default function VersionInviteDialog({
       setViewingInterviewId(v.id);
       return;
     }
-    /* AI interview Edit is the full create / edit wizard — in its popup, over
-       this one, so this popup keeps its picks; the list is re-read on close. */
     if (item.action === 'view' || item.action === 'edit') {
       setBusyId(v.id);
-      void versionHref(v, item.action, jdTitle, returnUrl)
+      void versionHref(v, item.action, job.jdTitle, returnUrl)
         .then(setWizardHref)
         .finally(() => setBusyId(null));
       return;
@@ -491,122 +436,93 @@ export default function VersionInviteDialog({
     }
   };
 
-  /* Send the ONE picked version; `only` re-sends just those (Retry failed). */
-  const send = (only?: InviteCandidate[]) => {
-    if (!selected) return;
-    const list = only ?? recipients;
-    const keep = only ? results.filter((r) => !only.some((c) => c.id === r.candidateId)) : [];
-    setView('results');
-    setSending(true);
-    setSendTotal(keep.length + list.length);
-    setResults(keep);
-    void sendVersion(selected, list, { method, message, expiryDays }, (_d, _t, result) => {
-      setResults((prev) => [...prev, result]);
-    }).then((done) => {
-      setSending(false);
-      const sent = done.filter((r) => r.status === 'sent').length;
-      if (sent > 0) onSent?.(kind, sent);
-      void reload();
-    });
+  /* Per-row Copy Link (Manual cards): this version's invitation for one
+     candidate, created without an email. */
+  const copyLinkFor = async (c: { name: string; email: string }): Promise<string> => {
+    if (!selected?.sendable) throw new Error(`Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version first.`);
+    const data = { candidate_name: c.name, candidate_email: c.email, expiry_days: expiryDays };
+    const res = kind === 'assessment'
+      ? await assessmentService.createInviteLink(selected.id, data)
+      : await aiInterviewService.createInviteLink(selected.id, data);
+    onSent?.(kind, 1);
+    return res.link;
   };
 
-  /* `bulk`: one request with the selection; the backend resolves it, skips
-     what cannot be sent, and sends in the background. The popup switches to
-     the run's progress, which the floating widget keeps following after
-     Done. A refused start (quota, permission, version) is thrown to the
-     confirm's own error toast. */
-  const sendBulk = async () => {
-    if (!selected) return;
-    const job = await bulkInviteService.start(jdId, {
+  /* One background job for everyone: the ticked page candidates and the
+     Manual / Excel rows as extras, the Select From picks as the selection. */
+  const sendAll = async () => {
+    if (!selected || !job) return;
+    const ticked: BulkExtraCandidate[] = recipients.map((c) => ({
+      name: c.name,
+      email: c.email,
+      phone: c.phone || undefined,
+      resume_id: c.resumeId || undefined,
+      invite_source: c.inviteSource || (c.source ? INVITE_SOURCE_BY_TAB[c.source] : undefined),
+    }));
+    const allExtras = [...ticked, ...extras];
+    const started = await bulkInviteService.start(job.jdId, {
       kind,
       version_id: selected.id,
       selection: toRequestSelection(serverSelection),
-      extra_candidates: extras.length ? extras : undefined,
-      delivery: kind === 'interview' ? method : 'email',
-      message: method === 'email' ? message : undefined,
+      extra_candidates: allExtras.length ? allExtras : undefined,
+      delivery: 'email',
+      message: message.trim() || undefined,
       expiry_days: expiryDays,
     });
     bulkReported.current = false;
-    setBulkJob(job);
-    bulkTracker?.track(job, { jdTitle, jdCode });
-    setView('progress');
+    setBulkJob(started);
+    bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
     bodyRef.current?.scrollTo({ top: 0 });
-    const queued = job.queued ?? 0;
+    const queued = started.queued ?? 0;
     if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
-    else toast.success(`Sending ${queued.toLocaleString()} invitation${queued === 1 ? '' : 's'} in the background`);
+    else toast.success(`Sending ${queued.toLocaleString()} invitation${queued === 1 ? '' : 's'}`);
   };
-  /* The run's snapshots: once it ends with something sent, the host is told
-     once (its counts refresh) and the version cards re-read their totals. */
-  const onBulkJobChange = (job: BulkInviteJob) => {
-    setBulkJob(job);
-    if (job.status === 'queued' || job.status === 'running' || bulkReported.current) return;
+  const onBulkJobChange = (j: BulkInviteJob) => {
+    setBulkJob(j);
+    if (j.status === 'queued' || j.status === 'running' || bulkReported.current) return;
     bulkReported.current = true;
-    if (job.sent > 0) onSent?.(kind, job.sent);
+    if (j.sent > 0) {
+      onSent?.(kind, j.sent);
+      if (kind === 'assessment') onAssessmentsSent?.(j.sent);
+      else onInterviewsSent?.(j.sent);
+    }
     void reload();
   };
 
   const askSend = () => {
-    if (!selected?.sendable || !hasCandidatesForNext) return;
-    if (bulk) {
-      const links = method === 'link';
-      const scope = serverSelection.mode === 'filter'
-        ? ` (everyone matching ${describeFilters(serverSelection.filters) || 'the current tab'})` : '';
-      setConfirm({
-        title: `${links ? 'Create invitation links for' : 'Send'} ${label.singular} V${selected.version}?`,
-        message: `${links ? 'Creates personal links for' : 'Sends'} ${selected.name} V${selected.version} to ${recipientCount.toLocaleString()} candidate${recipientCount === 1 ? '' : 's'}${scope}. Anyone already invited to this version, team members, repeated emails and candidates without an email are skipped. The send runs in the background — you can close this popup once it starts.`,
-        confirmText: links ? 'Create Links' : 'Send Invitations',
-        run: sendBulk,
-      });
-      return;
-    }
-    /* Assessments: no send from here — Next moves to the Share Assessment via
-       Email step with the picked version and the ticked candidates. */
-    if (kind === 'assessment' && onAssessmentsSent) {
-      if (!selected.raw) return;
-      openShareStep([selected.raw], recipients);
-      return;
-    }
-    if (kind === 'interview' && onInterviewsSent) {
-      if (!selected.config) return;
-      openInterviewStep([{ config: selected.config, version: selected.version }], recipients);
-      return;
-    }
-    const links = method === 'link';
+    if (!selected?.sendable || recipientCount === 0) return;
+    const scope = serverSelection.mode === 'filter'
+      ? ` (everyone matching ${describeFilters(serverSelection.filters) || 'the current tab'})` : '';
     setConfirm({
-      title: `${links ? 'Create invitation links for' : 'Send'} ${label.singular} V${selected.version}?`,
-      message: `${links ? 'Creates personal links for' : 'Sends'} ${selected.name} V${selected.version} to ${recipientCount} candidate${recipientCount === 1 ? '' : 's'}. Anyone already invited to this version is skipped.`,
-      confirmText: links ? 'Create Links' : 'Send Invitations',
-      run: async () => send(),
+      title: `Send ${label.singular} V${selected.version}?`,
+      message: `Sends ${selected.name} V${selected.version} to ${recipientCount.toLocaleString()} candidate${recipientCount === 1 ? '' : 's'}${scope}. Anyone already invited to this version, team members, repeated emails and candidates without an email are skipped.`,
+      confirmText: 'Send Invitations',
+      run: sendAll,
     });
   };
 
-  const failed = candidates.filter((c) => results.some((r) => r.candidateId === c.id && r.status === 'failed'));
-  const canSend = !!selected?.sendable && hasCandidatesForNext && perms.canInvite && !off;
-  const count = (s: SendResult['status']) => results.filter((r) => r.status === s).length;
+  const canSend = !!selected?.sendable && recipientCount > 0 && perms.canInvite && !off && !quotaShort;
+  const pickingOff = !selected?.sendable || !perms.canInvite || !!off;
 
-  /* The Invite popups' footer sentence: what is missing, then what is about to happen. */
   const footerText = off
     ? ''
-    : browseAll
-      ? (browseCount === 0
-          ? `Select at least one ${browseNoun} to continue`
-          : recipientCount === 0 ? (handsOff ? 'No candidates ticked · add them in the next step' : '') : null)
-    : view === 'progress'
-      ? (bulkJob && (bulkJob.status === 'queued' || bulkJob.status === 'running') ? 'Sending in the background — safe to close' : '')
-    : view === 'results'
-      ? (sending ? `Sending ${results.length} of ${sendTotal}…` : `${count('sent')} sent · ${count('skipped')} skipped · ${count('failed')} failed`)
-      : !selected
-        ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
-        : recipientCount === 0
-          ? (handsOff ? 'No candidates ticked · add them in the next step' : '')
-          : null;
+    : !job
+      ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} to continue`
+      : bulkJob
+        ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
+        : !selected
+          ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
+          : recipientCount === 0
+            ? 'Add candidates: tick them, pick them from Select From, or type them in'
+            : quotaShort
+              ? `Only ${quotaAvailable} unit${quotaAvailable === 1 ? '' : 's'} available for ${recipientCount} candidates`
+              : null;
 
   const Icon = kind === 'assessment' ? ClipboardList : Video;
+  const listPicked = kind === 'assessment' ? !!asPick : !!aiPick;
 
   return (
     <>
-      {/* Shell, header, body and footer are the Invite to Assessment / AI
-          Interview popups', class for class. */}
       <div
         className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
         onClick={close}
@@ -627,292 +543,184 @@ export default function VersionInviteDialog({
                 <h2 id="version-invite-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
                   Invite to {label.singular}
                 </h2>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-slate-500 min-w-0">
-                  {jdCode && <JobIdBadge>{jdCode}</JobIdBadge>}
-                  <span className="min-w-0 truncate">{jdTitle}</span>
-                  {/* The job version — the same blue chip step 2 shows, no wording. */}
-                  {jobVersionNumber ? <VersionChip kind="job" version={jobVersionNumber} /> : null}
-                </div>
+                {job && (
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-slate-500 min-w-0">
+                    {job.jdCode && <JobIdBadge>{job.jdCode}</JobIdBadge>}
+                    <span className="min-w-0 truncate">{job.jdTitle}</span>
+                    {job.jobVersionNumber ? <VersionChip kind="job" version={job.jobVersionNumber} /> : null}
+                    {selected && (
+                      <span className="inline-flex items-center gap-1">
+                        <span>{label.singular} Version</span>
+                        <VersionChip kind="assessment" version={selected.version} />
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            {/* No X — the footer's Cancel closes, as on the Invite popups. */}
+            {/* No X — the footer's Cancel closes (the popup standard). */}
           </div>
 
           <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
             {off ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{off}</div>
-            ) : interviewStep ? (
-              /* Step 2 — Send AI Interview via Email in place of the content,
-                 one picked interview after another; this popup's header and
-                 footer stay (the step fills the footer). */
-              <AIInterviewShareQueue
-                configs={interviewStep.configs}
-                candidates={interviewStep.candidates.map((c) => ({ name: c.name, email: c.email, resumeId: c.resumeId }))}
-                interviewVersions={interviewStep.interviewVersions}
-                jobVersions={interviewStep.jobVersions}
-                inPopupStep
-                footerTarget={footerEl}
-                onBack={backFromShareStep}
-                onInvited={onInterviewsSent}
-                onClose={onClose}
-              />
-            ) : shareStep ? (
-              /* Step 2 — Share Assessment via Email in place of the content;
-                 this popup's header and footer stay (its footer is filled by
-                 the step: summary, Back, Send Invitations). */
-              <ShareAssessmentModal
-                isOpen
-                embedded
-                footerTarget={footerEl}
-                onClose={onClose}
-                onBack={backFromShareStep}
-                assessment={{
-                  id: shareStep.assessments[0].id,
-                  title: shareStep.assessments[0].title,
-                  duration: `${shareStep.assessments[0].duration_minutes || 30} min`,
-                  questions: (shareStep.assessments[0].hr_enabled ? 1 : 0)
-                    + (shareStep.assessments[0].technical_enabled ? 1 : 0)
-                    + (shareStep.assessments[0].coding_enabled ? 1 : 0),
-                  type: 'AI-Generated',
-                  short_id: shareStep.assessments[0].short_id,
-                  version: shareStep.assessments[0].version,
-                  ...shareJob(shareStep.assessments[0]),
-                }}
-                additionalAssessments={shareStep.assessments.slice(1).map((a) => ({
-                  id: a.id,
-                  title: a.title,
-                  duration: `${a.duration_minutes || 30} min`,
-                  questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
-                  type: 'AI-Generated',
-                  short_id: a.short_id,
-                  version: a.version,
-                  ...shareJob(a),
-                }))}
-                /* The ticked candidates, pre-filled, under the source this
-                   hand-over has always sent with. */
-                prefilledCandidates={shareStep.candidates.map((c) => ({
-                  id: c.id,
-                  name: c.name,
-                  email: c.email,
-                  phone: c.phone,
-                  source: 'database' as const,
-                  resumeId: c.resumeId,
-                  /* Recorded per candidate: the Job Details tab they were
-                     ticked on. Anyone added in this step (Manual, Excel,
-                     Select From) keeps Manual / Internal DB. */
-                  inviteSource: c.source ? INVITE_SOURCE_BY_TAB[c.source] : 'JD',
-                }))}
-                /* Only a real send counts: nothing is added when every
-                   invitation failed or was already sent. */
-                onInviteSent={(count) => { if (count > 0) onAssessmentsSent?.(count); }}
-              />
-            ) : browseAll ? (
-              /* The original Browse all view: back to the cards, the shared
-                 cross-job picker, then who it goes to. */
-              <div className="space-y-6">
-                <section aria-label={kind === 'assessment' ? 'All assessments' : 'All AI interviews'}>
-                  <button
-                    type="button"
-                    onClick={() => showBrowse(false)}
-                    className="mb-4 inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-                    Back to this job&apos;s {browseNoun} versions
-                  </button>
-                  {kind === 'interview' ? (
-                    browseConfigs === null ? (
-                      <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                        <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                      </div>
-                    ) : (
-                      <AIInterviewPicker
-                        configs={browseConfigs}
-                        multiple
-                        selection={null}
-                        onSelectionChange={() => {}}
-                        selectedIds={browseIds}
-                        onSelectedIdsChange={setBrowseIds}
-                        scrollContainerRef={bodyRef}
-                      />
-                    )
-                  ) : browseList === null ? (
-                    <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                    </div>
-                  ) : (
-                    <AssessmentPicker
-                      assessments={browseList}
-                      multiple
-                      selectedIds={browsePicked.map((a) => a.id)}
-                      onSelectionChange={setBrowsePicked}
-                      scrollContainerRef={bodyRef}
-                    />
-                  )}
-                </section>
-                <section aria-label="Send to" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-                  <SendToPanel
-                    kind={kind}
-                    candidates={candidates}
-                    selectedIds={candidateIds}
-                    onSelectedIds={setCandidateIds}
-                    method={method}
-                    onMethod={setMethod}
-                    message={message}
-                    onMessage={setMessage}
-                    expiryDays={expiryDays}
-                    onExpiry={setExpiryDays}
-                    candidatesOnly
-                    addInNextStep={handsOff}
-                  />
-                </section>
-              </div>
-            ) : view === 'progress' && bulkJob ? (
-              /* `bulk`: the run's live counts and per-candidate rows; the
-                 floating widget keeps following it after this popup closes. */
+            ) : !job ? (
+              /* No job given: every published one, any job — the pick names
+                 the job and the version. */
+              jobPickList === null ? (
+                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
+                  <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                </div>
+              ) : kind === 'interview' ? (
+                <AIInterviewPicker
+                  configs={jobPickList as AIInterviewResponse[]}
+                  selection={aiPick}
+                  onSelectionChange={setAiPick}
+                  scrollContainerRef={bodyRef}
+                />
+              ) : (
+                <AssessmentPicker
+                  assessments={jobPickList as AssessmentResponse[]}
+                  selectedId={asPick?.id ?? null}
+                  onSelect={(a) => setAsPick(a as AssessmentResponse | null)}
+                  scrollContainerRef={bodyRef}
+                />
+              )
+            ) : bulkJob ? (
+              /* The send's live counts and per-candidate rows; the floating
+                 widget keeps following it after this popup closes. */
               <BulkInviteProgressPanel jobId={bulkJob.job_id} initialJob={bulkJob} compact onJobChange={onBulkJobChange} />
-            ) : view === 'results' ? (
-              <ResultsStep results={results} total={sendTotal} sending={sending} />
             ) : (
               <div className="space-y-6">
-                <section aria-labelledby="version-heading">
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <h3 id="version-heading" className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-                      Select {label.singular} Version
-                    </h3>
-                    {loaded && !error && <VersionUsage kind={kind} used={versions.length} />}
+                {!jdId && (
+                  <button
+                    type="button"
+                    onClick={backToList}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                    Choose a different {label.singular.toLowerCase()}
+                  </button>
+                )}
+                {versionFixed ? (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-2.5">
+                    <span className="text-sm text-gray-800 dark:text-slate-200 min-w-0 truncate">
+                      <span className="font-medium">{selected?.name}</span>
+                      <span className="text-gray-500 dark:text-slate-400"> · V{selected?.version}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={showAllVersions}
+                      className="text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                    >
+                      Change version
+                    </button>
                   </div>
-                  <VersionList
-                    kind={kind}
-                    versions={listedVersions(kind, versions)}
-                    allVersions={versions}
-                    loading={loading && !loaded}
-                    error={error}
-                    onRetry={() => void reload()}
-                    selectedId={versionId}
-                    onSelect={setVersionId}
-                    createBlocked={blocked}
-                    creating={creating}
-                    onCreate={handleCreate}
-                    perms={perms}
-                    busyId={busyId}
-                    onAction={handleAction}
-                    hideDuplicate={hideDuplicate}
-                  />
-                </section>
+                ) : (
+                  <section aria-labelledby="version-heading">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <h3 id="version-heading" className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                        Select {label.singular} Version
+                      </h3>
+                      {loaded && !error && <VersionUsage kind={kind} used={versions.length} />}
+                    </div>
+                    <VersionList
+                      kind={kind}
+                      versions={listedVersions(kind, versions)}
+                      allVersions={versions}
+                      loading={loading && !loaded}
+                      error={error}
+                      onRetry={() => void reload()}
+                      selectedId={versionId}
+                      onSelect={setVersionId}
+                      createBlocked={blocked}
+                      creating={creating}
+                      onCreate={handleCreate}
+                      perms={perms}
+                      busyId={busyId}
+                      onAction={handleAction}
+                      hideDuplicate={hideDuplicate}
+                    />
+                  </section>
+                )}
+                <InviteQuotaBar kind={kind} onStats={(s) => setQuotaAvailable(s && s.total_quota < 999999 ? s.available : null)} />
                 <section aria-label="Send to" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
                   <SendToPanel
                     kind={kind}
                     candidates={candidates}
                     selectedIds={candidateIds}
                     onSelectedIds={setCandidateIds}
-                    method={method}
-                    onMethod={setMethod}
                     message={message}
-                    onMessage={setMessage}
+                    onMessage={(m) => { messageTouched.current = true; setMessage(m); }}
                     expiryDays={expiryDays}
                     onExpiry={setExpiryDays}
-                    /* Just the candidates when Send hands over to the share
-                       step — Share Assessment via Email / Send AI Interview
-                       via Email has its own delivery, message and expiry. */
-                    candidatesOnly={handsOff}
-                    addInNextStep={handsOff}
-                    listSlot={bulk ? (
+                    listSlot={(
                       <div className="space-y-4">
+                        {/* Manual first: it is open with an empty row on every opening. */}
+                        <ExtraCandidatesInput onChange={setExtras} disabled={pickingOff} onCopyLink={copyLinkFor} />
                         <ServerCandidatePicker
-                          jdId={jdId}
+                          jdId={job.jdId}
                           kind={kind}
                           versionId={selected?.sendable ? selected.id : null}
                           selection={serverSelection}
                           onSelectionChange={setServerSelection}
-                          pickingDisabled={!selected?.sendable || !perms.canInvite || !!off}
+                          pickingDisabled={pickingOff}
                         />
-                        {/* The share step's Manual / Upload Excel, kept on the bulk path. */}
-                        <ExtraCandidatesInput onChange={setExtras} disabled={!selected?.sendable || !perms.canInvite || !!off} />
                       </div>
-                    ) : undefined}
+                    )}
                   />
                 </section>
               </div>
             )}
           </div>
 
-          <div ref={setFooterEl} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
-            {!inStep2 && (<>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
             <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-              {footerText ?? (browseAll ? (
+              {footerText ?? (selected && (
                 <span className="inline-flex items-center gap-1.5 align-middle">
                   <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipientCount} candidate{recipientCount === 1 ? '' : 's'} to {browseCount} {browseNoun}{browseCount === 1 ? '' : 's'}{handsOff ? ' · add more in the next step' : ''}
-                </span>
-              ) : selected && (
-                <span className="inline-flex items-center gap-1.5 align-middle">
-                  <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipientCount} candidate{recipientCount === 1 ? '' : 's'} to {label.singular} V{selected.version}{handsOff ? ' · add more in the next step' : ''}
+                  Ready to invite {recipientCount.toLocaleString()} candidate{recipientCount === 1 ? '' : 's'} to {label.singular} V{selected.version}
                 </span>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
-              {browseAll ? (
-                <>
-                  <Button variant="secondary" onClick={close} className="flex-1 sm:flex-none !h-9">
-                    Cancel
-                  </Button>
-                  {/* The original hand-over: the share step, pre-filled. */}
-                  <button
-                    onClick={shareBrowse}
-                    disabled={browseCount === 0 || !hasCandidatesForNext || !perms.canInvite}
-                    title={!perms.canInvite ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`) : undefined}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <ArrowRight className="w-4 h-4" />
-                    Next
-                  </button>
-                </>
-              ) : view === 'progress' ? (
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full sm:w-auto">
+              {bulkJob ? (
                 <button
                   onClick={onClose}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="col-span-2 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Done
                 </button>
-              ) : view === 'results' ? (
-                <>
-                  {!sending && failed.length > 0 && (
-                    <Button variant="secondary" onClick={() => send(failed)} className="flex-1 sm:flex-none !h-9">
-                      Retry failed ({failed.length})
-                    </Button>
-                  )}
-                  <button
-                    onClick={onClose}
-                    disabled={sending}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Done
-                  </button>
-                </>
               ) : (
                 <>
-                  <Button variant="secondary" onClick={close} className="flex-1 sm:flex-none !h-9">
+                  <Button variant="secondary" onClick={close} className="!h-9 w-full">
                     Cancel
                   </Button>
-                  <button
-                    onClick={askSend}
-                    disabled={!canSend}
-                    title={!perms.canInvite ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`) : undefined}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {handsOff ? <ArrowRight className="w-4 h-4" /> : method === 'link' ? <Link2 className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
-                    {handsOff
-                      ? 'Next'
-                      : selected ? `${method === 'link' ? 'Create links for' : 'Send with'} V${selected.version}` : 'Send Invitations'}
-                  </button>
+                  {!job && !off ? (
+                    <button
+                      onClick={chooseFromList}
+                      disabled={!listPicked}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Continue
+                    </button>
+                  ) : (
+                    <button
+                      onClick={askSend}
+                      aria-disabled={!canSend}
+                      disabled={!canSend && perms.canInvite}
+                      title={deniedTitle}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${!perms.canInvite ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <Mail className="w-4 h-4" />
+                      {selected ? `Send with V${selected.version}` : 'Send Invitations'}
+                    </button>
+                  )}
                 </>
               )}
             </div>
-            </>)}
           </div>
 
-          {/* In-popup confirmation, over the whole card. */}
           {confirm && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-[1px] p-4 sm:p-6">
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
@@ -937,14 +745,12 @@ export default function VersionInviteDialog({
         </div>
       </div>
 
-      {/* View / Edit, over this popup (rendered after it, so on top). Closing
-          either comes back here with the version and candidates as they were. */}
       {viewing && (
         <AssessmentPreviewModal
           isOpen
           onClose={() => setViewing(null)}
           assessment={viewing}
-          jobContext={{ jobVersionNumber }}
+          jobContext={{ jobVersionNumber: job?.jobVersionNumber }}
         />
       )}
       {viewingInterviewId && (
@@ -955,33 +761,27 @@ export default function VersionInviteDialog({
           isOpen
           onClose={() => setEditing(null)}
           assessment={editing}
-          /* Saved as a draft or published: the cards are re-read in place,
-             keeping the picked version (while it can still be sent) and the
-             ticked candidates. */
           onSaved={() => void fetchVersions()}
         />
       )}
-      {/* AI interview create / edit: the wizard in its popup. Closing it —
-          or Save as Draft, Discard, Publish — re-reads the versions. */}
-      {wizardHref && (
+      {wizardHref && job && (
         <AIInterviewWizardDialog
           startHref={wizardHref}
-          jdCode={jdCode}
-          jdTitle={jdTitle}
+          jdCode={job.jdCode}
+          jdTitle={job.jdTitle}
           onClose={() => {
             setWizardHref(null);
             void fetchVersions();
           }}
         />
       )}
-      {/* v1: the same Configure popup, creating the job's first assessment. */}
-      {creatingFirst && (
+      {creatingFirst && job && (
         <AssessmentConfigureModal
           isOpen
           create
           topicSettings={creatingFirst.topics ?? undefined}
           onClose={() => setCreatingFirst(null)}
-          assessment={{ jd_id: jdId, jd_short_id: jdCode, jd_title: jdTitle, jd_version: jobVersionNumber }}
+          assessment={{ jd_id: job.jdId, jd_short_id: job.jdCode, jd_title: job.jdTitle, jd_version: job.jobVersionNumber }}
           onSaved={() => void fetchVersions()}
         />
       )}

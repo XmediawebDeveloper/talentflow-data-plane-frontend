@@ -43,8 +43,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import InviteToAssessmentModal from './InviteToAssessmentModal';
-import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResults from './AssessmentResults';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
@@ -61,12 +59,11 @@ import { MAX_INTERVIEW_VERSIONS } from '@/lib/utils/aiInterviewVersion';
 import { aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
-import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
+import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
-import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import AIInterviewVersionHistoryModal from './ai-interview/AIInterviewVersionHistoryModal';
 import AssessmentVersionHistoryModal from './assessments/AssessmentVersionHistoryModal';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
@@ -747,15 +744,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [showApplicantsView, setShowApplicantsView] = useState(false);
   const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [showInviteToAssessmentModal, setShowInviteToAssessmentModal] = useState(false);
-  // ShareAssessmentModal (used by the assessment-side flow) is reused here for
-  // deep-linked assessment sharing. We need
-  // the assessment(s) loaded before we can mount it.
-  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
-  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
-  const [isLoadingShareAssessments, setIsLoadingShareAssessments] = useState(false);
-  // Picker shown when the JD has more than one published assessment — user
-  // chooses which one(s) to invite candidates to before the share modal opens.
   // True while the Create action resolves whether this JD already has an
   // assessment, so the button shows a spinner instead of feeling unresponsive.
   const [resolvingAssessmentTarget, setResolvingAssessmentTarget] = useState(false);
@@ -804,89 +792,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      included), read by Create — the twin of `assessmentVersionCount`. Null
      until Create has looked; the click re-reads it every time regardless. */
   const [aiInterviewVersionCount, setAiInterviewVersionCount] = useState<number | null>(null);
-  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
-  const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
-  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
-
-  /* Candidates the share step opens pre-filled with — the AI Talent Match
-     tab's Invite to Assessment hands its ticked candidates over; the header's
-     Send Invite passes none and the recruiter adds them in the modal. */
-  const [shareAssessmentCandidates, setShareAssessmentCandidates] = useState<
-    { id: string; name: string; email: string; phone?: string; source?: 'database'; resumeId?: string }[] | null
-  >(null);
-
-  // Open the share flow with a list of assessments already chosen.
-  const openShareWithAssessments = (items: any[], candidates: typeof shareAssessmentCandidates = null) => {
-    setShareAssessmentCandidates(candidates);
-    setShareAssessments(items);
-    setShowShareAssessmentModal(true);
-  };
-
-  const handleOpenShareAssessment = async () => {
-    if (isLoadingShareAssessments) return;
-    setIsLoadingShareAssessments(true);
-    try {
-      // Fetch every assessment for this JD, not just published ones. Only
-      // published are invitable, but knowing what else is there is what lets the
-      // failure message name the actual blocker — "still a draft" and "none
-      // created" are different problems with different next steps, and one
-      // generic "no invitable assessment" sentence described neither.
-      const resp = await assessmentService.list({ jd_id: job.id, page_size: 100 });
-      const all: any[] = resp?.items || [];
-      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
-      const revokedIds = getLocallyRevokedAssessmentIds();
-
-      const published = all.filter(a => ['published', 'active'].includes(statusOf(a)));
-      // Exclude any assessment whose invites the recruiter has revoked.
-      // Backend flag wins; locally-revoked IDs from sessionStorage are
-      // the fallback for tabs where the backend flag isn't yet returned.
-      const items = published.filter(a => !isAssessmentRevoked(a, revokedIds));
-
-      if (items.length === 0) {
-        if (published.length > 0) {
-          // Published, but every one has had its invites revoked.
-          toast.error(
-            'Every published assessment for this job has had its invites revoked. Duplicate one to start a fresh invite round.',
-            { duration: 6000 }
-          );
-        } else if (all.some(a => statusOf(a) === 'draft')) {
-          toast.error(
-            'This job’s assessment is still a draft. Publish it before inviting candidates.',
-            { duration: 6000 }
-          );
-        } else {
-          toast.error('No assessment has been created for this job yet. Use Create to add one.');
-        }
-        return;
-      }
-
-      // Straight to "Share Assessment via Email", matching the AI Interview
-      // Send Invite action which resolves the JD's live config and opens its
-      // share modal in one step — no intermediate dialog.
-      //
-      // NOTE: when the JD has several published assessments, every one of them
-      // is included (first as the modal's primary, rest as additionalAssessments)
-      // and each invited candidate receives an invite for ALL of them. The modal
-      // lists them ("Invitations for N assessments") but has no per-assessment
-      // selection, so this is send-all, not choose-one.
-      openShareWithAssessments(items);
-    } catch (err) {
-      console.error('Failed to load assessments for JD:', err);
-      toast.error('Could not load assessments. Please try again.');
-    } finally {
-      setIsLoadingShareAssessments(false);
-    }
-  };
-
-  const handleConfirmAssessmentPick = () => {
-    if (pickerSelectedIds.length === 0) {
-      toast.error('Please select at least one assessment.');
-      return;
-    }
-    const chosen = pickerAssessments.filter(a => pickerSelectedIds.includes(a.id));
-    setShowAssessmentPicker(false);
-    openShareWithAssessments(chosen);
-  };
   const [showSelectSourceModal, setShowSelectSourceModal] = useState(false);
   const [showJDHistory, setShowJDHistory] = useState(false);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
@@ -937,10 +842,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [assessmentInviteCount, setAssessmentInviteCount] = useState(0);
-  // The Assessments Results tab's badge AND enabled state: candidates who
-  // finished — Completed or Terminated (the API's 'abandoned'). Invited or
-  // in-progress candidates have no result yet.
-  const [assessmentFinishedCount, setAssessmentFinishedCount] = useState(0);
   /* The Assessments Results tab's BADGE: the table's own record count while
      the tab is open (reported by AssessmentResults — every page, its current
      filters), else the rows that table lists with no filter: this job's
@@ -1040,15 +941,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [trackAIInterviewConfig, setTrackAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [resolvingTrackInvitesConfig, setResolvingTrackInvitesConfig] = useState(false);
 
-  // The Invite to AI Interview dialog, opened in place so the recruiter never
-  // leaves this page: null = closed, [] = opened with nobody preset (the header
-  // / quick-action Invite — candidates are added in the share step), a seed =
-  // a Scored Resumes row's candidate, listed first.
-  const [aiInviteSeed, setAiInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
-  /* The AI Talent Match tab's "Create / Send Assessment | AI Interview"
-     popups (VersionInviteDialog — one per type): null = closed; else which
-     popup and the candidates ticked in the table. */
-  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[]; preselect?: boolean; bulk?: boolean } | null>(null);
+  /* Every Assessment / AI Interview invite on this page opens the ONE
+     Create / Send popup (VersionInviteDialog): null = closed; else which
+     type, the candidates ticked in the table, and — for Invite More — the
+     version it is fixed to and a hook to reload the tracker under it. */
+  const [inviteDialog, setInviteDialog] = useState<{
+    kind: InviteKind;
+    candidates: InviteCandidate[];
+    preselect?: boolean;
+    bulk?: boolean;
+    versionId?: string;
+    onSent?: (kind: InviteKind, sent: number) => void;
+  } | null>(null);
+  /** Bumped by a send from a tracker's Invite More, so the tracker left open
+   *  under the popup lists the new invitations at once. */
+  const [trackerRefreshSignal, setTrackerRefreshSignal] = useState(0);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
   const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
@@ -1062,11 +969,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // isn't worth doing on every Job Details load for a tab most visits skip.
   const [aiInterviewConfig, setAiInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [aiInterviewCount, setAiInterviewCount] = useState(0);
-  // The Result tab's badge AND its enabled state: candidates who finished —
-  // Completed or Terminated. aiInterviewCount above counts every invitation
-  // (it gates Track and the quick actions); an invited or still-in-progress
-  // candidate has no result yet.
-  const [aiInterviewResultCount, setAiInterviewResultCount] = useState(0);
   /* The AI Interview Result tab's BADGE, the assessment rule: the table's
      record count while the tab is open, else what the table lists with no
      filter — In Progress, Completed and Terminated sessions of the live
@@ -1208,14 +1110,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           .catch(() => null);
         if (isStale()) return;
         setAiInterviewCount(invitations?.total ?? 0);
-        setAiInterviewResultCount((invitations?.completed ?? 0) + (invitations?.terminated ?? 0));
         // The badge: what the results table lists unfiltered (see its state).
         setAiInterviewResultTotal(
           (invitations?.in_progress ?? 0) + (invitations?.completed ?? 0) + (invitations?.terminated ?? 0)
         );
       } else {
         setAiInterviewCount(0);
-        setAiInterviewResultCount(0);
         setAiInterviewResultTotal(0);
       }
     } catch {
@@ -1393,32 +1293,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(job.id)}&from=job-details`);
   };
 
-  /* `seed` pre-fills the invite form's candidate list. The page-level Invite
-     button passes nothing and gets the empty form; a Scored Resumes row passes
-     that candidate. Everything after the lookup is identical either way, so
-     both entry points resolve the same config and open the same modal. */
-  /* Invite — the shared Invite to AI Interview dialog for this job: its active
-     interview versions to pick from, then the share step. `seed` (a Scored
-     Resumes row) lists that candidate first; without it the candidates are
-     added in the share step, as this page's Invite always worked. */
-  const handleInviteAIInterview = (
-    seed?: { name: string; email: string; resumeId?: string }[],
-  ) => {
-    // Only a real candidate list counts as a seed: the quick-action tile hands
-    // this straight to onClick, so it can arrive as a click event, which must
-    // open the dialog with nobody preset — not crash the page on `.map`.
-    // Opens Create / Send AI Interview — the popup the result tabs' Actions
-    // use — so every Invite on this page runs the one flow; with nobody
-    // preset its "Choose candidates in the next step" applies.
-    const list = Array.isArray(seed) ? seed : [];
-    setInviteDialog({
-      kind: 'interview',
-      candidates: list.map((c) => ({ id: c.resumeId || c.email, name: c.name, email: c.email, resumeId: c.resumeId })),
-    });
-  };
+  /* AI Interview "Send Invite" (section header / empty state) and the
+     ?action=invite-ai-interview deep link: the one Create / Send AI Interview
+     popup for this job, nobody preset — its version cards, then candidates
+     are added in the popup (Select From / Manual / Upload Excel). */
+  const handleInviteAIInterview = () =>
+    setInviteDialog({ kind: 'interview', candidates: [], preselect: false });
   /* Quick Actions › Assessment › Invite (and its deep link): Create / Send
      Assessment with nobody preset — candidates are chosen in its email step. */
-  const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [] });
+  const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [], preselect: false });
   /* Quick Actions › Create / Send: the popup lists this job's AI Talent Match
      candidates, then its Scored Resumes candidates — read from the SERVER a
      page at a time (search, filters, 50 more on scroll, tab counts), never
@@ -1911,8 +1794,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setJdAssessments(assessments);
       // Derived here rather than in a separate request — this list is already
       // loaded, and it's the same source Create uses to decide its destination.
-      // Published/active is the same pair handleOpenShareAssessment treats as
-      // invitable, so the button's enabled state matches what clicking it does.
+      // Published/active is the pair the invite popup treats as invitable,
+      // so the button's enabled state matches what clicking it does.
       // Revoked ones are deliberately NOT excluded here: that case has its own
       // "duplicate one to start a fresh round" message, which only lands if the
       // click gets through.
@@ -2064,17 +1947,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       setAssessmentInviteCount(Math.max(listedInviteCount, resultInviteCount));
       setAssessmentResultTotal(listedResultCount);
-      setAssessmentFinishedCount(allResults.filter((r: any) => {
-        const st = String(r.status || '').toLowerCase();
-        return !!r.completed_at || st === 'completed' || st === 'terminated' || st === 'abandoned';
-      }).length);
       setAssessmentResults(allResults);
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
       setAssessmentResultTotal(0);
-      setAssessmentFinishedCount(0);
       setAssessmentResults([]);
       setJdAssessments([]);
     } finally {
@@ -2788,6 +2666,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           candidates={inviteDialog.candidates}
           preselect={inviteDialog.preselect}
           bulk={inviteDialog.bulk}
+          versionId={inviteDialog.versionId}
           /* Create / Send AI Interview: no Duplicate in the version ⋯ menu. */
           hideDuplicate={inviteDialog.kind === 'interview'}
           disabledReason={
@@ -2813,6 +2692,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();
             else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
+            inviteDialog.onSent?.(kind, sent);
           }}
         />
   ) : null;
@@ -2921,76 +2801,61 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       : null;
 
   const hasAssessmentInviteSent = assessmentInviteCount > 0;
-  // Result tabs open only once someone has a result to show.
-  const hasAssessmentResults = assessmentFinishedCount > 0;
-  const hasAIInterviewResults = aiInterviewResultCount > 0;
   const hasAIInterviewInviteSent = aiInterviewCount > 0;
 
-  // Single buttons for the AI Interview Result tab's empty state.
-  // Permission-gated: stays visible, greyed out with a tooltip, when the user
-  // lacks the permission (aria-disabled so the tooltip still shows on hover).
-  const aiInterviewCreateAction =
-    hasPlanFeature('ai_interview') ? (
+  /* The results tabs' invite button — on the tab toolbar beside More Filters
+     and on the empty state, so inviting is always one click away there. It
+     opens THE invite popup with nobody preset; with no assessment / AI
+     interview on this job yet, the popup itself offers Create. Greyed out
+     (never hidden) with the reason when it can't be used — the Quick Actions
+     Create / Send tile's gate, so the two never disagree. */
+  const resultsInviteBlockedReason = (kind: InviteKind): string | null => {
+    if (kind === 'assessment') {
+      if (!permissions.canCreateAssessments) return 'You do not have permission to create or send assessments';
+      if (!features.assessment) return 'Assessments not enabled';
+    } else {
+      if (!permissions.canCreateAIInterviews && !permissions.canShareAIInterviews) {
+        return 'You do not have permission to create or send AI interviews';
+      }
+      if (!features.ai_interview) return 'AI Interviews not enabled';
+    }
+    return jobInactive ? jobInactiveReason : null;
+  };
+  const resultsInviteAction = (kind: InviteKind, size: 'toolbar' | 'empty') => {
+    const blocked = resultsInviteBlockedReason(kind);
+    const exists = kind === 'assessment' ? hasAnyAssessment : hasAnyAIInterview;
+    const label = size === 'toolbar'
+      ? 'Invite'
+      : exists
+        ? 'Invite Candidates'
+        : kind === 'assessment' ? 'Create / Send Assessment' : 'Create / Send AI Interview';
+    return (
       <Button
         variant="primary"
-        onClick={() => { if (permissions.canCreateAIInterviews) handleCreateAIInterview(); }}
-        aria-disabled={!permissions.canCreateAIInterviews || undefined}
-        className={!permissions.canCreateAIInterviews ? 'opacity-60 cursor-not-allowed' : undefined}
-        disabled={
-          permissions.canCreateAIInterviews && (
-            !features.ai_interview
-            || jobInactive
-            || resolvingAIInterviewTarget
-            || blockAIInterviewCreate
-          )
-        }
-        title={
-          !permissions.canCreateAIInterviews
-            ? 'You do not have permission to create AI interviews'
-            : aiInterviewCreateBlockedReason ?? undefined
-        }
+        size={size === 'toolbar' ? 'sm' : undefined}
+        onClick={() => { if (!blocked) openCreateSendFromTile(kind); }}
+        aria-disabled={!!blocked || undefined}
+        title={blocked ?? (size === 'toolbar'
+          ? `Invite candidates to this job's ${kind === 'assessment' ? 'assessment' : 'AI interview'}`
+          : undefined)}
+        className={`${size === 'toolbar' ? 'whitespace-nowrap !h-9 !text-sm' : ''} ${blocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+        icon={<UserPlus className="w-4 h-4" />}
       >
-        {resolvingAIInterviewTarget
-          ? <Loader2 className="w-4 h-4 animate-spin" />
-          : <Sparkles className="w-4 h-4" />}
-        Create
+        {label}
       </Button>
-    ) : null;
-
-  const aiInterviewInviteAction =
-    hasPlanFeature('ai_interview') ? (
-      <Button
-        variant="primary"
-        /* Wrapped so the click event isn't passed through as the candidate
-           seed — this entry point opens the form empty. */
-        onClick={() => { if (permissions.canShareAIInterviews) handleInviteAIInterview(); }}
-        aria-disabled={!permissions.canShareAIInterviews || undefined}
-        className={!permissions.canShareAIInterviews ? 'opacity-60 cursor-not-allowed' : undefined}
-        disabled={permissions.canShareAIInterviews && !canInviteToAIInterview}
-        title={
-          !permissions.canShareAIInterviews
-            ? 'You do not have permission to invite candidates to an AI interview'
-            : !features.ai_interview
-            ? 'AI Interviews not enabled'
-            : jobInactive
-              ? jobInactiveReason
-              : !hasAnyAIInterview
-                ? 'Create an AI interview first'
-                : !hasLiveAIInterview
-                  ? 'Publish the AI interview first'
-                  : undefined
-        }
-      >
-        <UserPlus className="w-4 h-4" />
-        Send Invite
-      </Button>
-    ) : null;
-
-  // A JD can only ever have one live AI interview, so once it is published
-  // Create has nothing left to do — the empty state offers Send Invite instead.
-  const aiInterviewEmptyActions = hasLiveAIInterview
-    ? aiInterviewInviteAction
-    : aiInterviewCreateAction;
+    );
+  };
+  /* Empty-state wording for the results tabs, by how far the job has got. */
+  const resultsEmptyText = (kind: InviteKind) => {
+    const noun = kind === 'assessment' ? 'assessment' : 'AI interview';
+    const exists = kind === 'assessment' ? hasAnyAssessment : hasAnyAIInterview;
+    const live = kind === 'assessment' ? hasPublishedAssessment : hasLiveAIInterview;
+    const sent = kind === 'assessment' ? hasAssessmentInviteSent : hasAIInterviewInviteSent;
+    if (!exists) return `No ${noun} for this job yet. Create one and invite candidates in a single step — results show up here as candidates finish.`;
+    if (!live) return `Publish the ${noun} and invite candidates — results show up here as candidates finish.`;
+    if (!sent) return `Nobody has been invited yet. Invite candidates and their results show up here as they finish.`;
+    return `Invited candidates haven't finished yet. Results show up here once a candidate completes or is terminated.`;
+  };
 
   /* AI Talent Match Results tab badge — holds the loading placeholder until
      the server's distinct-candidate total arrives, rather than showing an
@@ -3561,26 +3426,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </button>
           )}
           {(
-            /* Disabled until an assessment is published — the tab would open on
-               an empty table otherwise, which reads as a fault rather than as
-               "there is nothing to report yet". */
+            /* Always opens (plan lock aside), results or not: with none yet
+               the tab says why and offers the invite popup, which can also
+               create the assessment. */
             <button
-              onClick={() => !assessmentPlanLocked && hasAssessmentResults && setActiveTab('assessment-results')}
-              disabled={assessmentPlanLocked || !hasAssessmentResults}
-              title={
-                assessmentPlanLocked
-                  ? PLAN_LOCKED_MESSAGE
-                  : hasAssessmentResults
-                  ? undefined
-                  : !hasAnyAssessment
-                    ? 'Create an assessment first'
-                    : !hasPublishedAssessment
-                      ? 'Publish the assessment to see results'
-                      : !hasAssessmentInviteSent
-                        ? 'Send at least one invite first'
-                        : 'Results appear once a candidate completes or is terminated'
-              }
-              className={detailTabClass(activeTab === 'assessment-results', assessmentPlanLocked || !hasAssessmentResults)}
+              onClick={() => !assessmentPlanLocked && setActiveTab('assessment-results')}
+              disabled={assessmentPlanLocked}
+              title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+              className={detailTabClass(activeTab === 'assessment-results', assessmentPlanLocked)}
             >
               <BarChart3 className="w-4 h-4" />
               Assessments Results
@@ -3596,28 +3449,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </button>
           )}
           {(aiInterviewPlanLocked || features.ai_interview) && (
-            /* Same rule as the assessment results tab. Without the view
-               permission the tab stays visible but greyed out (tooltip only). */
+            /* Same rule as the assessment results tab: opens with or without
+               results. Without the view permission the tab stays visible but
+               greyed out (tooltip only). */
             <button
-              onClick={() => !aiInterviewPlanLocked && permissions.canViewAIInterviews && hasAIInterviewResults && handleShowAIInterviewResults()}
-              disabled={aiInterviewPlanLocked || (permissions.canViewAIInterviews && !hasAIInterviewResults)}
-              aria-disabled={aiInterviewPlanLocked || !permissions.canViewAIInterviews || !hasAIInterviewResults || undefined}
+              onClick={() => !aiInterviewPlanLocked && permissions.canViewAIInterviews && handleShowAIInterviewResults()}
+              disabled={aiInterviewPlanLocked}
+              aria-disabled={aiInterviewPlanLocked || !permissions.canViewAIInterviews || undefined}
               title={
                 aiInterviewPlanLocked
                   ? PLAN_LOCKED_MESSAGE
                   : !permissions.canViewAIInterviews
                   ? 'You do not have permission to view AI interview results'
-                  : hasAIInterviewResults
-                  ? undefined
-                  : !hasAnyAIInterview
-                    ? 'Create an AI interview first'
-                    : !hasLiveAIInterview
-                      ? 'Publish the AI interview to see results'
-                      : !hasAIInterviewInviteSent
-                        ? 'Send at least one invite first'
-                        : 'Results appear once a candidate completes or is terminated'
+                  : undefined
               }
-              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !permissions.canViewAIInterviews || !hasAIInterviewResults)}
+              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !permissions.canViewAIInterviews)}
             >
               <MessageSquare className="w-4 h-4" />
               AI Interview Result
@@ -3943,7 +3789,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       accent="cyan"
                       planLocked={assessmentPlanLocked}
                       onClick={() => openCreateSendFromTile('assessment')}
-                      loading={isLoadingShareAssessments}
                       disabled={!permissions.canCreateAssessments || !features.assessment || jobInactive}
                       disabledTooltip={
                         !permissions.canCreateAssessments
@@ -3977,31 +3822,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         }
                       />
 
-                      {/* Results exist only once an assessment is published and
-                          candidates can actually sit it — a draft has nothing
-                          to report, so the tile stays disabled and says why,
-                          matching the Invite tile's own rule. */}
+                      {/* Opens the results tab with or without results — with
+                          none yet, the tab offers the invite popup. */}
                       <QuickActionTile
                         icon={<BarChart className="w-4 h-4" />}
-                        // Opens only once a candidate finished — Completed or
-                        // Terminated — same as the results tab.
                         label="Result"
                         accent="cyan"
                         planLocked={assessmentPlanLocked}
                         onClick={handleAssessmentStatus}
-                        disabled={!permissions.canViewAssessments || !features.assessment || !hasAssessmentResults}
+                        disabled={!permissions.canViewAssessments || !features.assessment}
                         disabledTooltip={
                           !permissions.canViewAssessments
                             ? 'You do not have permission to view assessment results'
-                            : !features.assessment
-                            ? 'Assessments not enabled'
-                            : !hasAnyAssessment
-                              ? 'Create an assessment first'
-                              : !hasPublishedAssessment
-                                ? 'Publish the assessment to see results'
-                                : !hasAssessmentInviteSent
-                                  ? 'Send at least one invite first'
-                                  : 'Results appear once a candidate completes or is terminated'
+                            : 'Assessments not enabled'
                         }
                       />
 
@@ -4083,27 +3916,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         }
                       />
 
-                      {/* Same rule as the assessment Result tile: a draft or
-                          unpublished interview has no sittings to report on. */}
+                      {/* Same rule as the assessment Result tile. */}
                       <QuickActionTile
                         icon={<BarChart className="w-4 h-4" />}
                         label="Result"
                         accent="orange"
                       planLocked={aiInterviewPlanLocked}
                         onClick={handleAIInterviewStatus}
-                        disabled={!permissions.canViewAIInterviews || !features.ai_interview || !hasAIInterviewResults}
+                        disabled={!permissions.canViewAIInterviews || !features.ai_interview}
                         disabledTooltip={
                           !permissions.canViewAIInterviews
                             ? 'You do not have permission to view AI interview results'
-                            : !features.ai_interview
-                            ? 'AI Interviews not enabled'
-                            : !hasAnyAIInterview
-                              ? 'Create an AI interview first'
-                              : !hasLiveAIInterview
-                                ? 'Publish the AI interview to see results'
-                                : !hasAIInterviewInviteSent
-                                  ? 'Send at least one invite first'
-                                  : 'Results appear once a candidate completes or is terminated'
+                            : 'AI Interviews not enabled'
                         }
                       />
 
@@ -4603,7 +4427,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                  simply isn't offered. */
               onInviteAIInterview={
                 permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && !jobInactive
-                  ? (candidate) => handleInviteAIInterview([candidate])
+                  ? (candidate) => openInviteDialog('interview', [{ id: candidate.resumeId || candidate.email, name: candidate.name, email: candidate.email, resumeId: candidate.resumeId }], 'score-resume')
                   : undefined
               }
               /* The row menu offers only what this JD actually has. Same two
@@ -4639,34 +4463,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               if (loadingAssessmentResults) {
                 return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>;
               }
-              /* No assessment yet: say so, and offer Create / Send — the
-                 Quick Actions tile's gate, greyed out with its reason (no
-                 permission, switched off, disabled / archived JD). */
-              const createSendBlockedReason = !permissions.canCreateAssessments
-                ? 'You do not have permission to create or send assessments'
-                : !features.assessment
-                  ? 'Assessments not enabled'
-                  : jobInactive
-                    ? jobInactiveReason
-                    : null;
+              /* No assessment yet: say so, and offer the invite popup, which
+                 can create one (greyed out with its reason when it can't). */
               return (
                 <TabEmptyState
                   bordered
                   icon={ClipboardList}
-                  title="No Assessment Results"
-                  description="Create and send an assessment to see candidate results here."
-                  action={(
-                    <Button
-                      variant="primary"
-                      onClick={() => { if (!createSendBlockedReason) openCreateSendFromTile('assessment'); }}
-                      aria-disabled={!!createSendBlockedReason || undefined}
-                      title={createSendBlockedReason ?? undefined}
-                      className={createSendBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined}
-                      icon={<UserPlus className="w-4 h-4" />}
-                    >
-                      Create / Send
-                    </Button>
-                  )}
+                  title="No Assessment Results Yet"
+                  description={resultsEmptyText('assessment')}
+                  action={resultsInviteAction('assessment', 'empty')}
                 />
               );
             }
@@ -4687,6 +4492,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
                 canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
                 formatCandidateName={formatCandidateFirstName}
+                /* Invite — beside More Filters, and on the no-results state. */
+                toolbarActions={resultsInviteAction('assessment', 'toolbar')}
+                emptyStateAction={resultsInviteAction('assessment', 'empty')}
+                emptyStateText={resultsEmptyText('assessment')}
                 /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
@@ -4782,7 +4591,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               hideJobVersion
               formatCandidateName={formatCandidateFirstName}
               jdShortId={job.job_id}
-              emptyStateAction={aiInterviewEmptyActions}
+              /* Invite — beside More Filters, and on the no-results state. */
+              toolbarActions={resultsInviteAction('interview', 'toolbar')}
+              emptyStateAction={resultsInviteAction('interview', 'empty')}
+              emptyStateText={resultsEmptyText('interview')}
               readOnly={jobInactive}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
@@ -4801,9 +4613,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <TabEmptyState
               bordered
               icon={Brain}
-              title="No AI Interview Results"
-              description="Create and publish an AI interview to see candidate results here."
-              action={aiInterviewEmptyActions ?? undefined}
+              title="No AI Interview Results Yet"
+              description={resultsEmptyText('interview')}
+              action={resultsInviteAction('interview', 'empty')}
             />
           )}
         </div>
@@ -4867,17 +4679,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobTitle={job.title}
           onClose={() => setShowUploadModal(false)}
           onSubmit={handleResumeUpload}
-        />
-      )}
-
-      {/* Invite to Assessment Modal — fallback only when the JD has no
-          assessments yet. The primary path now uses ShareAssessmentModal
-          below, identical to the assessment-side flow. */}
-      {showInviteToAssessmentModal && (
-        <InviteToAssessmentModal
-          jobTitle={job.title}
-          jobId={job.id}
-          onClose={() => setShowInviteToAssessmentModal(false)}
         />
       )}
 
@@ -5168,141 +4969,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         );
       })()}
 
-      {/* Assessment Picker — shown when this JD has multiple published assessments.
-          User selects which one(s) before the Share modal opens. */}
-      {showAssessmentPicker && pickerAssessments.length > 0 && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Choose an assessment</h3>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
-                  This job has {pickerAssessments.length} published assessments. Select which one(s) to invite candidates to.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAssessmentPicker(false)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5 text-gray-500 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {pickerAssessments.map(a => {
-                const isPicked = pickerSelectedIds.includes(a.id);
-                const sections = (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0);
-                const parsed = parseAssessmentTitle(a.title || '');
-                const displayVersion = typeof a.version === 'number' ? a.version : parsed.version;
-                const baseTitle = parsed.cleanTitle || a.short_id || 'Untitled assessment';
-                return (
-                  <label
-                    key={a.id}
-                    className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border mb-2 transition-colors ${
-                      isPicked ? 'border-blue-500 bg-blue-50 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isPicked}
-                      onChange={() => {
-                        setPickerSelectedIds(prev =>
-                          prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
-                        );
-                      }}
-                      className="mt-1"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
-                        {baseTitle}
-                        {displayVersion ? ` - Version ${displayVersion}` : ''}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                        {a.short_id && <span>{a.short_id}</span>}
-                        <span>{a.duration_minutes || 30} min</span>
-                        <span>{sections} section{sections !== 1 ? 's' : ''}</span>
-                        {a.jd_version && <span>JD v{a.jd_version}</span>}
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-            <div className="p-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
-              <span className="text-xs text-gray-600 dark:text-slate-400">
-                {pickerSelectedIds.length} of {pickerAssessments.length} selected
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="primary"
-                  onClick={handleConfirmAssessmentPick}
-                  disabled={pickerSelectedIds.length === 0}
-                >
-                  Continue
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share Assessment via Email — same modal the assessment-side page
-          uses for assessment-level share. */}
-      {showShareAssessmentModal && shareAssessments.length > 0 && (
-        <ShareAssessmentModal
-          isOpen={showShareAssessmentModal}
-          onClose={() => {
-            setShowShareAssessmentModal(false);
-            setShareAssessments([]);
-            setShareAssessmentCandidates(null);
-          }}
-          assessment={{
-            id: shareAssessments[0].id,
-            title: shareAssessments[0].title,
-            duration: `${shareAssessments[0].duration_minutes || 30} min`,
-            questions: (shareAssessments[0].hr_enabled ? 1 : 0)
-              + (shareAssessments[0].technical_enabled ? 1 : 0)
-              + (shareAssessments[0].coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: shareAssessments[0].short_id,
-            version: shareAssessments[0].version,
-            // Display ID (JD-133), not `job.id` — the UUID the header printed.
-            jd_short_id: shareAssessments[0].jd_short_id || job.job_id,
-            jd_title: job.title,
-            /* This job's version, not the assessment's `jd_version` snapshot
-               (stamped at creation; reads 1 for later-version assessments).
-               These are this JD row's assessments (listed by its id). */
-            jd_version: job.versionNumber && job.versionNumber > 0 ? job.versionNumber : shareAssessments[0].jd_version,
-          }}
-          additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            duration: `${a.duration_minutes || 30} min`,
-            questions: (a.hr_enabled ? 1 : 0)
-              + (a.technical_enabled ? 1 : 0)
-              + (a.coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: a.short_id,
-            version: a.version,
-            jd_short_id: a.jd_short_id || job.job_id,
-            jd_title: job.title,
-            jd_version: job.versionNumber && job.versionNumber > 0 ? job.versionNumber : a.jd_version,
-          }))}
-          /* From the AI Talent Match tab: its ticked candidates, pre-filled,
-             under the source that tab's Actions menu has always sent with
-             (gated on `scoring:invite`, like BulkInviteModal before it). */
-          prefilledCandidates={shareAssessmentCandidates ?? undefined}
-          inviteSource={shareAssessmentCandidates ? 'Resume Scoring' : 'JD'}
-          onInviteSent={(count) => {
-            const sentCount = Math.max(count, 1);
-            setAssessmentInviteCount((prev) => prev + sentCount);
-            void fetchAssessmentResults();
-          }}
-        />
-      )}
-
       {/* Select Source Modal */}
       {showSelectSourceModal && (
         <SelectSourceModal
@@ -5407,6 +5073,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {/* Track Invites Modal */}
       {showTrackInvitesModal && (
         <TrackInvitesModal
+          /* No refresh prop of its own: a send from Invite More remounts it
+             so the new invitations are listed at once. */
+          key={`track-assessment-${trackerRefreshSignal}`}
           isOpen={showTrackInvitesModal}
           onClose={() => setShowTrackInvitesModal(false)}
           jdId={job.id}
@@ -5415,10 +5084,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           // Revoke / Edit follow the same gate as Invite on this page.
           canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && !jobInactive}
-          // Footer Invite More - this page's own Invite to Assessment dialog.
+          /* Footer Invite More — the one Create / Send Assessment popup over
+             this tracker. The tracker spans every assessment version of this
+             job, so there is no single tracked version to fix: the popup
+             shows its version cards. A send reloads the tracker. */
+          inviteMoreDeniedReason="You do not have permission to invite candidates to an assessment"
           onInviteMore={canInviteToAssessment && permissions.canCreateAssessments && canInviteJdAssessment ? () => {
-            setShowTrackInvitesModal(false);
-            openCreateSendAssessment();
+            setInviteDialog({
+              kind: 'assessment',
+              candidates: [],
+              preselect: false,
+              onSent: () => setTrackerRefreshSignal((n) => n + 1),
+            });
           } : undefined}
           // Keep the whole flow on this page: swap the popup for the same
           // inline detail view the Assessment Result tab opens, rather than
@@ -5455,10 +5132,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             setTrackAIInterviewConfig(null);
             handleAIInterviewCandidateClick(inv.id);
           }}
-          // Footer Invite More — this page's own Invite to AI Interview dialog.
+          /* Footer Invite More — the one Create / Send AI Interview popup,
+             opened on the tracked interview version over this tracker, which
+             stays up and reloads its rows once the send lands. */
+          refreshSignal={trackerRefreshSignal}
+          inviteMoreDeniedReason="You do not have permission to invite candidates to an AI interview"
           onInviteMore={canInviteToAIInterview ? () => {
-            setTrackAIInterviewConfig(null);
-            handleInviteAIInterview();
+            const trackedId = trackAIInterviewConfig.id;
+            setInviteDialog({
+              kind: 'interview',
+              candidates: [],
+              preselect: false,
+              versionId: trackedId,
+              onSent: () => setTrackerRefreshSignal((n) => n + 1),
+            });
           } : undefined}
         />
       )}
@@ -5516,33 +5203,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           type). Up to 5 versions per type for this JD row; one version per
           send. Mounted only while open, so each opening starts fresh. */}
       {versionInviteDialogEl}
-
-      {/* Invite to AI Interview — the shared dialog, scoped to this job, with
-          several interviews pickable (Select All), as the Invite to
-          Assessment dialog below. */}
-      <InviteToAIInterviewFlow
-        open={aiInviteSeed !== null}
-        onClose={() => setAiInviteSeed(null)}
-        jobId={job.id}
-        jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
-        multiple
-        /* Opens with the "Latest" interview version ticked, as the Invite to
-           Assessment dialog below opens on its Latest assessment. */
-        preselectLatest
-        /* Only this job version's own AI interview (the one this page uses),
-           and candidates' first names capitalised — display only. */
-        mappedVersionOnly
-        formatCandidateName={formatCandidateFirstName}
-        candidates={(aiInviteSeed ?? []).map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }))}
-        resumes={aiInviteSeed && aiInviteSeed.length > 0
-          ? aiInviteSeed.map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }) as unknown as ResumeRecord)
-          : undefined}
-        onInvited={() => {
-          setAiInviteSeed(null);
-          setAiInterviewCount((prev) => Math.max(prev + 1, 1));
-          toast.success('AI interview invitation sent');
-        }}
-      />
 
       </div>
       </div>

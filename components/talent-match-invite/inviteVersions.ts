@@ -26,7 +26,6 @@ import {
   MAX_INTERVIEW_VERSIONS,
 } from '@/lib/utils/aiInterviewVersion';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref } from '@/lib/utils/aiInterviewDraftResume';
-import { formatISTDate } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ROUND_LABELS, ROUND_SHORT_LABELS } from '@/components/ai-interview/AIInterviewPicker';
 
@@ -563,125 +562,12 @@ export interface InviteCandidate {
   rating?: number;
   resumeId?: string;
   source?: InviteCandidateSource;
+  /** Recorded on the invitation ("My Resumes", "Resume Scoring", …) when the
+   *  opening page is not one of `source`'s lists. */
+  inviteSource?: string;
   /** This job's resume score (Job Details' Create / Send): the latest score
    *  and match status, or 'unscored'. Omitted = no score chip. */
   score?: { percent: number; matchStatus: string } | 'unscored';
-}
-
-export type DeliveryMethod = 'email' | 'link';
-
-export interface SendOptions {
-  method: DeliveryMethod;
-  message: string;
-  expiryDays: number;
-}
-
-export type SendStatus = 'sent' | 'skipped' | 'failed';
-
-export interface SendResult {
-  candidateId: string;
-  name: string;
-  email: string;
-  status: SendStatus;
-  /** Why it was skipped or failed. */
-  reason?: string;
-  /** The candidate's own link, when the API returned one. */
-  link?: string;
-}
-
-/* The share modals' error reading: a duplicate invite and a team member's
-   email are told apart from a real failure. */
-function classifyError(err: unknown): { status: SendStatus; reason: string } {
-  const e = err as { response?: { status?: number; data?: Record<string, unknown> }; message?: string };
-  const data = (e?.response?.data || {}) as { error?: string; detail?: unknown; message?: string };
-  const detail = data.detail as { error?: string; message?: string } | string | undefined;
-  const code = data.error || (typeof detail === 'object' ? detail?.error : '') || '';
-  const message = e?.message || '';
-  if (e?.response?.status === 409 || message.includes('status code 409') || message.includes('already been invited') || code === 'DUPLICATE_INVITATION' || message.includes('DUPLICATE_INVITATION')) {
-    return { status: 'skipped', reason: 'Already invited to this version' };
-  }
-  if (code === 'TENANT_USER_EMAIL' || message.includes('TENANT_USER_EMAIL')) {
-    return { status: 'failed', reason: 'Team member emails cannot be invited' };
-  }
-  const reason = (typeof detail === 'string' ? detail : detail?.message) || data.message || message || 'Unknown error';
-  return { status: 'failed', reason };
-}
-
-/** The AI share modal's [deadline date] placeholder, filled the same way. */
-const resolveMessage = (message: string, expiryDays: number) =>
-  message.trim()
-    ? message.replace('[deadline date]', expiryDays > 0
-        ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
-        : 'no specific deadline')
-    : undefined;
-
-/**
- * Sends ONE version to each candidate, one at a time, and reports each
- * candidate's own outcome — the endpoints the share modals call per
- * candidate. A candidate with no email, or one whose email repeats an earlier
- * row, is skipped rather than sent twice.
- */
-export async function sendVersion(
-  version: InviteVersion,
-  candidates: InviteCandidate[],
-  options: SendOptions,
-  onProgress?: (done: number, total: number, result: SendResult) => void,
-): Promise<SendResult[]> {
-  const results: SendResult[] = [];
-  const seenEmails = new Set<string>();
-  const message = resolveMessage(options.message, options.expiryDays);
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
-
-  for (const c of candidates) {
-    const email = (c.email || '').trim();
-    const base = { candidateId: c.id, name: c.name, email };
-    let result: SendResult;
-    if (!email) {
-      result = { ...base, status: 'skipped', reason: 'No email address' };
-    } else if (seenEmails.has(email.toLowerCase())) {
-      result = { ...base, status: 'skipped', reason: 'Same email as another selected candidate' };
-    } else {
-      seenEmails.add(email.toLowerCase());
-      try {
-        if (version.kind === 'assessment') {
-          const r = await assessmentService.invite(version.id, {
-            candidate_name: c.name,
-            candidate_email: email,
-            candidate_phone: c.phone || undefined,
-            invite_source: 'AI Talent Match',
-            resume_id: c.resumeId,
-            custom_message: message,
-            expiry_days: options.expiryDays,
-          });
-          result = r.status === 'failed'
-            ? { ...base, status: 'failed', reason: 'The email could not be delivered — check the address' }
-            : { ...base, status: 'sent', link: r.invitation_link };
-        } else if (options.method === 'link') {
-          const r = await aiInterviewService.createInviteLink(version.id, {
-            candidate_name: c.name,
-            candidate_email: email,
-            expiry_days: options.expiryDays,
-          });
-          result = { ...base, status: 'sent', link: r.link };
-        } else {
-          const r = await aiInterviewService.inviteCandidate(version.id, {
-            candidate_name: c.name,
-            candidate_email: email,
-            resume_id: c.resumeId,
-            custom_message: message,
-            expiry_days: options.expiryDays,
-            base_url: baseUrl,
-          });
-          result = { ...base, status: 'sent', link: r.interview_link };
-        }
-      } catch (err) {
-        result = { ...base, ...classifyError(err) };
-      }
-    }
-    results.push(result);
-    onProgress?.(results.length, candidates.length, result);
-  }
-  return results;
 }
 
 /* ── Browse all assessments ──────────────────────────────────────────── */

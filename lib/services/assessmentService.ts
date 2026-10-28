@@ -400,6 +400,8 @@ export interface AssessmentStatsResponse {
   archived_assessments: number;
   total_invitations: number;
   total_candidates_tested: number;
+  /** Distinct candidate emails with a completed attempt (one per person). */
+  total_unique_candidates?: number;
   total_passed: number;
   total_failed: number;
   average_pass_rate: number | null;
@@ -502,7 +504,14 @@ export type AuditActivityType =
   | 'invite_failed'
   | 'invite_email_changed'
   | 'candidate_exited'
-  | 'candidate_errored';
+  | 'candidate_errored'
+  | 'recording_downloaded'
+  | 'assessment_create_failed'
+  | 'invite_resent'
+  | 'link_shared'
+  | 'invite_bounced'
+  | 'invite_revoked'
+  | 'invite_edited';
 
 export interface CombinedAuditActivity {
   id: string;

@@ -59,6 +59,9 @@ interface TrackInvitesModalProps {
   /** Footer "Invite More" - the host closes this tracker and opens its own
    *  invite flow. Left out, the button is not shown. */
   onInviteMore?: () => void;
+  /** Shown (greyed, as the tooltip) when Invite More is not allowed — the
+   *  button stays visible (RBAC grey-out rule). */
+  inviteMoreDeniedReason?: string;
   /** Revoke / Edit are offered only when true (permission + live JD). Resend
    *  and Copy Link are unaffected. */
   canModifyInvites?: boolean;
@@ -91,7 +94,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, canModifyInvites = false, onChanged }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, onChanged }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -803,8 +806,16 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             <Button variant="secondary" size="sm" onClick={onClose}>
               Cancel
             </Button>
-            {onInviteMore && (
-              <Button variant="primary" size="sm" onClick={onInviteMore} icon={<Send className="w-3.5 h-3.5" />}>
+            {(onInviteMore || inviteMoreDeniedReason) && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => { if (onInviteMore) onInviteMore(); }}
+                aria-disabled={!onInviteMore || undefined}
+                title={!onInviteMore ? inviteMoreDeniedReason : undefined}
+                className={!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined}
+                icon={<Send className="w-3.5 h-3.5" />}
+              >
                 Invite More
               </Button>
             )}

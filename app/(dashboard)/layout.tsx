@@ -24,6 +24,7 @@ import PlanChangeReviewBanner from '@/components/plan-change/PlanChangeReviewBan
 import PlanChangeReviewModal from '@/components/plan-change/PlanChangeReviewModal';
 import PlanChangeSuspendedBlock from '@/components/plan-change/PlanChangeSuspendedBlock';
 import { AdminAssignedPlanProvider } from '@/components/providers/AdminAssignedPlanProvider';
+import { InviteDialogProvider } from '@/components/talent-match-invite/InviteDialogProvider';
 import AdminAssignedPlanBanner from '@/components/admin-assigned-plan/AdminAssignedPlanBanner';
 import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssignedPlanModal';
 import GlobalScoringProgressIndicator from '@/components/GlobalScoringProgressIndicator';
@@ -439,7 +440,7 @@ export default function DashboardLayout({
               {/* tf-page-scroll: the page's real scroller (not <body>), so
                   globals.css locks it while a modal overlay is open. */}
               <div className="tf-page-scroll flex-1 overflow-y-auto flex flex-col">
-                <RouteGuard>{children}</RouteGuard>
+                <RouteGuard><InviteDialogProvider>{children}</InviteDialogProvider></RouteGuard>
               </div>
             </div>
 
