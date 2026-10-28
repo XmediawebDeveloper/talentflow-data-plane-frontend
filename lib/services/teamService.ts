@@ -38,8 +38,14 @@ export interface TeamStats {
 
 // Team-Level Usage Visibility interfaces
 export interface TeamUsageByType {
+  /** Units used (gross). */
   total_consumed: number;
   consumption_count: number;
+  /** Units credited back, e.g. a deleted resume returns 1 RU (member usage only). */
+  units_returned?: number;
+  return_count?: number;
+  /** total_consumed − units_returned. */
+  net_consumed?: number;
 }
 
 export interface TeamUsageSummary {
@@ -85,6 +91,36 @@ export interface MyTeamsUsageSummary {
   note?: string;
 }
 
+export type UnitActivityKind = 'all' | 'deducted' | 'returned';
+
+/** One row of a member's unit activity log (GET …/members/{id}/unit-activity). */
+export interface UnitActivityItem {
+  id: string;
+  created_at: string | null;
+  action: string;
+  label: string;
+  unit_type: 'RS' | 'AS' | 'AIU' | 'RU' | string;
+  /** Signed: positive = deducted, negative = returned. */
+  units: number;
+  direction: 'deducted' | 'returned';
+  resume_id: string | null;
+  entity_name: string | null;
+  /** On a deduction whose unit later came back. */
+  returned_at: string | null;
+  returned_by: string | null;
+  /** On a return: when / who uploaded the resume. */
+  original_upload_at: string | null;
+  original_upload_by: string | null;
+}
+
+export interface UnitActivityPage {
+  summary: { deducted: number; returned: number; net: number };
+  items: UnitActivityItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface TeamMemberUsage {
   user_id: string;
   user_email: string;
@@ -96,6 +132,9 @@ export interface TeamMemberUsage {
     RU?: TeamUsageByType;
   };
   total_consumed: number;
+  /** Units credited back across all types, and used − returned. */
+  total_returned?: number;
+  total_net?: number;
   total_actions: number;
   last_activity: string | null;
   jds_created: number;
@@ -313,6 +352,26 @@ class TeamService {
       console.error(`Error fetching team ${teamId} members usage:`, error);
       throw error;
     }
+  }
+
+  /**
+   * One member's unit activity: every unit deducted and every unit returned
+   * (a deleted resume gives its 1 RU back), newest first. Tenant Admin only.
+   */
+  async getMemberUnitActivity(
+    teamId: string,
+    userId: string,
+    opts: { kind?: UnitActivityKind; fromDate?: string; toDate?: string; limit?: number; offset?: number } = {},
+  ): Promise<UnitActivityPage> {
+    const params: Record<string, string | number> = {
+      kind: opts.kind ?? 'all',
+      limit: opts.limit ?? 20,
+      offset: opts.offset ?? 0,
+    };
+    if (opts.fromDate) params.start_date = opts.fromDate;
+    if (opts.toDate) params.end_date = opts.toDate;
+    const response = await api.get(`/unit-pool/teams/${teamId}/members/${userId}/unit-activity`, { params });
+    return response.data;
   }
 
   async getTeamsHistory(limit: number = 20, offset: number = 0, eventType?: string): Promise<{ items: TeamHistoryEntry[]; total: number }> {
