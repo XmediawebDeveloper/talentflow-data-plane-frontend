@@ -13,6 +13,7 @@ import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -1017,7 +1018,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     } catch (error: any) {
       console.error('Failed to send invitations:', error);
       setIsSubmitting(false);
-      toast.error(`Failed to send invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Couldn't send invitations. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 

@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import userService, { ApiUser } from '@/lib/services/userService';
@@ -543,7 +544,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: unknown) {
       console.error('Error creating team:', error);
-      toast.error(getErrorDetail(error) || 'Failed to create team');
+      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't create team. Please try again."));
     } finally {
       setIsCreating(false);
     }
@@ -621,7 +622,7 @@ export default function TeamManagementPage() {
       setTeamModal('view');
     } catch (error: unknown) {
       console.error('Error updating team:', error);
-      toast.error(getErrorDetail(error) || 'Failed to update team');
+      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't update team. Please try again."));
     } finally {
       setIsUpdating(false);
     }
@@ -653,7 +654,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: unknown) {
       console.error('Error deleting team:', error);
-      toast.error(getErrorDetail(error) || 'Failed to delete team');
+      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't delete team. Please try again."));
     } finally {
       setIsDeleting(false);
     }
@@ -1004,18 +1005,18 @@ export default function TeamManagementPage() {
                       </ul>
                       <div className="hidden overflow-x-auto tf-table-shell md:block">
                         <table className="w-full min-w-[640px]">
-                          <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                          <thead className="bg-white dark:bg-slate-900">
                             <tr className="text-left">
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'name')}>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(memberSort, 'name')}>
                                 <SortableHeader label="Member" column="name" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'team')}>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(memberSort, 'team')}>
                                 <SortableHeader label="Team" column="team" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(memberSort, 'role')}>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(memberSort, 'role')}>
                                 <SortableHeader label="Role" column="role" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500 text-right" aria-sort={ariaSort(memberSort, 'lead')}>
+                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 text-right" aria-sort={ariaSort(memberSort, 'lead')}>
                                 <SortableHeader label="Lead" column="lead" sort={memberSort} align="right" />
                               </th>
                             </tr>

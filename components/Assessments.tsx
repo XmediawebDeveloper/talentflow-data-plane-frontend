@@ -115,13 +115,16 @@ import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessme
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
-import { assessmentJobLockMessage, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { jobLockBadgeFor } from '@/components/jobs/JobStatusBadge';
+import type { JDLineageVersion } from '@/lib/services/jdService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import Dropdown from '@/components/ui/filter-select';
-import AllAssessmentsTable, { VersionPill, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
+import AllAssessmentsTable, { VersionPill, AssessmentJobStatusBadge, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus, assessmentStatusLabel } from '@/components/assessments/AssessmentVersionHistoryPanel';
@@ -862,14 +865,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      an Archived / Disabled one (the AI Interview rule, for Create / Duplicate
      only). Read in one batch for the jobs the loaded assessments point at. */
   const [jobVersionStatusById, setJobVersionStatusById] = useState<Record<string, string>>({});
+  /* Every version of each linked job, from the same read — the Job Name badge
+     is judged on the whole job (jobLockBadgeFor), as on AI Interview. */
+  const [jobLineageById, setJobLineageById] = useState<Record<string, JDLineageVersion[]>>({});
   useEffect(() => {
     const missing = Array.from(new Set(
       apiAssessments.map((a: any) => a?.jd_id).filter((id: any) => id && !(id in jobVersionStatusById)),
     )) as string[];
     if (missing.length === 0) return;
     let cancelled = false;
-    loadJobVersionStatuses(missing)
-      .then((statuses) => { if (!cancelled) setJobVersionStatusById((prev) => ({ ...prev, ...statuses })); })
+    loadJobVersionLineages(missing)
+      .then((lineages) => {
+        if (cancelled) return;
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+        setJobLineageById((prev) => ({ ...prev, ...lineages }));
+      })
       .catch(() => { /* the click-time check still blocks */ });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4263,7 +4273,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, null);
     } catch (error) {
       console.error('Failed to delete assessment:', error);
-      toast.error(`Failed to delete assessment: ${error instanceof Error ? error.message : 'Only draft assessments can be deleted'}`);
+      toast.error(`Couldn't delete assessment. ${friendlyErrorMessage(error, 'Only draft assessments can be deleted.')}`);
       setOpenMenuId(null);
     }
   };
@@ -4278,7 +4288,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to pause assessment:', error);
-      toast.error(`Failed to pause assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Couldn't pause assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
       setOpenMenuId(null);
     }
   };
@@ -4454,7 +4464,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to activate assessment:', error);
-      toast.error(`Failed to activate assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Couldn't activate assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
       setOpenMenuId(null);
     }
   };
@@ -4481,7 +4491,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to unarchive assessment:', error);
-      toast.error(`Failed to unarchive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Couldn't unarchive assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
       setOpenMenuId(null);
     }
   };
@@ -4507,7 +4517,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
       console.error('Failed to archive assessment:', error);
-      toast.error(`Failed to archive assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Couldn't archive assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
       setOpenMenuId(null);
     }
   };
@@ -5613,6 +5623,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           >
             {assessment.job?.title || stripVersionFromTitle(assessment.title)}
           </h3>
+          {(() => {
+            /* The linked job's own Disabled / Archived / Draft status, judged
+               on the whole job — the AI Interview card's badge. */
+            const kind = assessment.jd_id
+              ? jobLockBadgeFor(jobVersionStatusById[assessment.jd_id], jobLineageById[assessment.jd_id])
+              : null;
+            return kind ? <AssessmentJobStatusBadge kind={kind} /> : null;
+          })()}
         </div>
 
         {/* Status of the job's newest assessment - the row's
@@ -7834,10 +7852,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               do not shift sideways when the skeleton swaps
                               out. */}
                           <table className="w-full table-auto">
-                            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                            <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 {['Select', 'Candidate', 'Email', 'Timeline', 'Completed', 'Result Status', 'Tech Score', 'Coding Score', 'Invite Source', 'Phone', 'CID', 'JD ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Actions'].map((c) => (
-                                  <th key={c} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4"><Skeleton className="h-3 w-20" /></th>
+                                  <th key={c} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
                             </thead>
@@ -7975,10 +7993,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             under it are a three-character `v3` — and 100px is
                             what a JD-014 badge needs beside its heading. */}
                         <table className="w-full table-auto">
-                          <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                          <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
                               {/* Select all — this page's rows. */}
-                              <th className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle">
+                              <th className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
                                 {(() => {
                                   const allOnPage = pageItems.length > 0 && pageItems.every((row) => selectedResultKeys.has(resultRowKey(row)));
                                   return (
@@ -7999,22 +8017,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   );
                                 })()}
                               </th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Email</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Completed</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result Status</span></th>
-                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
-                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Phone</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Email</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Completed</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result Status</span></th>
+                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
+                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Phone</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
                               {/* Job ID leads the job group — the id first,
                                   then the name, then the versions — which is
                                   the order the Invitation Status rows and the
                                   All Assessments table both put them in. */}
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD Title</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD Title</span></th>
                               {/* The three version columns sit next to JD
                                   Title so the job, the version of it, the
                                   version of the assessment sat against it and
@@ -8030,10 +8048,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   and side by side in this order they read as
                                   the relationship they are, this assessment
                                   version on that job version. */}
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Resume Version</span></th>
-                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
+                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Resume Version</span></th>
+                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -8681,11 +8699,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                         <div className="min-h-[320px] overflow-auto tf-table-shell">
                           <table className="w-full table-auto">
-                            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                            <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-12"><Skeleton className="h-4 w-4 rounded" /></th>
                                 {['Candidate', 'Timeline', 'Status', 'Tech Score', 'Coding Score', 'Invite Source', 'CID', 'Job & Assessment', 'Action'].map((c) => (
-                                  <th key={c} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4"><Skeleton className="h-3 w-20" /></th>
+                                  <th key={c} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
                             </thead>
@@ -9007,7 +9025,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               scrollbar that existed only to reach it. */}
                           <table className="w-full table-auto">
                             {total > 0 && (
-                            <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                            <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 {/* Select All — the pinned checkbox column
                                     the Resume Scoring table opens with, in the
@@ -9018,7 +9036,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     table), so the checkbox stays put while the
                                     wide table scrolls sideways. */}
                                 {showInviteSelection && (
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-12 align-middle tf-sticky-col-left">
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-12 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                                   <button
                                     onClick={toggleSelectAllInvites}
                                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
@@ -9033,9 +9051,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </button>
                                 </th>
                                 )}
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
                                 {/* Centred, like the score columns on the
                                     Candidate Results table — a percentage over
                                     its Pass/Fail chip reads as a unit, and
@@ -9048,17 +9066,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     column that came and went would have to do
                                     it per row, which a table cannot. Rows
                                     without the round show a dash. */}
-                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
-                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
+                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
                                 {/* Job ID / Job Role / Job Version / Assessment Version —
                                     the job group, after Invite Source: the same place the
                                     Track Invites popup and the Results page put it. */}
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Role</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Role</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
                                 {/* Action — pinned to the right edge with
                                     `tf-sticky-col`, the mirror of the Select
                                     All column's `tf-sticky-col-left`, so on
@@ -9066,7 +9084,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     both stay reachable while the columns
                                     between them scroll. Same treatment as the
                                     Track Invites popup's own Actions column. */}
-                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Action</span></th>
+                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Action</span></th>
                               </tr>
                             </thead>
                             )}
@@ -10210,7 +10228,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     list.slice((pickerSafePage - 1) * invitePickerPageSize, pickerSafePage * invitePickerPageSize);
                   const pagedPickerRows = pageSlice(pickerRows);
                   const selection = invitePickerSelection;
-                  const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
+                  const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900';
                   return (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -10259,7 +10277,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <table className="w-full text-sm border-collapse">
                                 <thead className="sticky top-0 z-[6]">
                                   <tr className="border-b border-gray-200 dark:border-slate-700">
-                                    <th className={`${PICKER_TH} w-14 !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
+                                    <th className={`${PICKER_TH} w-14 !bg-white dark:!bg-slate-900`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Name</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
@@ -10268,7 +10286,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invitations Sent</span></th>
                                     <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Created On</span></th>
                                     <th className={`${PICKER_TH} pr-6`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Created By</span></th>
-                                    <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Preview</span></th>
+                                    <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-white dark:!bg-slate-900`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Preview</span></th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -10766,7 +10784,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <tr className="border-b border-gray-200 dark:border-slate-700">
                         <th className="w-8 py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
                         {['Candidate', 'Timeline', 'Status', 'Invite Source', 'CID', 'Actions'].map((c) => (
-                          <th key={c} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left"><Skeleton className="h-3 w-16" /></th>
+                          <th key={c} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-16" /></th>
                         ))}
                       </tr>
                     </thead>
@@ -10821,27 +10839,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <table className="w-max min-w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Candidate</th>
+                        <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Candidate</th>
                         {/* hidden md:table-cell mirrors this column's <td>. Without
                             it the header carried one more cell than the body between
                             sm and md, shifting every heading after Timeline off its
                             column. */}
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
                         {/* Tech / Coding Score columns are conditional on the
                             assessment having that round enabled — same rule as
                             the Results page. Showing a "Coding Score" column
                             for a JD without a coding round produced a
                             permanent "—" column that confused recruiters. */}
                         {trackingTechEnabled && (
-                          <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
+                          <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
                         )}
                         {trackingCodingEnabled && (
-                          <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                          <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
                         )}
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
                         {/* Job scope only: with invites from several
                             assessments in one table, the row has to say which
                             job version its assessment belongs to - that is the
@@ -10857,12 +10875,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             relationship they are: this assessment version, on
                             that job version. */}
                         {trackingJob && (
-                          <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                          <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
                         )}
                         {trackingJob && (
-                          <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
+                          <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
                         )}
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

@@ -4198,14 +4198,14 @@ export default function AIInterviewClusters() {
                     <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
                     <span className="text-xs text-gray-500">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
-                  <div>
+                  <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-100">
-                          <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Q</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
+                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
                         </tr>
                       </thead>
                       <tbody>

@@ -1242,21 +1242,21 @@ export default function AuditTrailPage() {
             <div className="hidden md:block table-responsive">
               <table className="w-full">
                 <thead className="sticky top-0 z-10">
-                  <tr className="bg-gray-50/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Timestamp</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">User ID</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">User</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Role</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Action</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Details</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Impact</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Error Origin</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Error Code</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Duration</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Refund Flag</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Units</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">Actions</th>
+                  <tr className="bg-white dark:bg-slate-900 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Timestamp</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">User ID</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">User</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Role</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Details</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Impact</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Error Origin</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Error Code</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Duration</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Refund Flag</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Units</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

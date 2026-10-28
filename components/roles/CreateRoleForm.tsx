@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { askTurnOnWithDependents, askUnlockEntryPoint, usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
 import {
   forgetTurnOff,
@@ -204,7 +205,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     });
 
     if (missingCodes.length > 0) {
-      toast.error(`Warning: ${missingCodes.length} permissions not found in backend: ${missingCodes.join(', ')}`);
+      toast.warning(`${missingCodes.length} selected permission${missingCodes.length === 1 ? ' is' : 's are'} no longer available and ${missingCodes.length === 1 ? 'was' : 'were'} left out. Refresh the page and check the role.`);
     }
 
     return ids;
@@ -384,7 +385,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
       if (onSuccess) { onSuccess(); } else { router.push('/organization/role-management'); }
     } catch (error: unknown) {
       console.error('Failed to create role:', error);
-      toast.error(getErrorDetail(error) || 'Failed to create role');
+      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't create role. Please try again."));
     } finally {
       setIsSaving(false);
     }

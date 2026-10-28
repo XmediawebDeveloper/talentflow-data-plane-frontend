@@ -877,7 +877,7 @@ export default function Dashboard({
               {loadingActivities ? (
                 <div className="tf-table-shell">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-white border-b border-gray-200">
                       <tr>
                         <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
                         <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
@@ -910,12 +910,12 @@ export default function Dashboard({
               ) : (
                 <div className="tf-table-shell">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Details</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">User</th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">

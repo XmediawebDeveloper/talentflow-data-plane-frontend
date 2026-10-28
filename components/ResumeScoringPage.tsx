@@ -4621,16 +4621,16 @@ export default function ResumeScoringPage({
                 /* User-Management-uniform table shell */
                 <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
                   <table className="w-full">
-                    <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                    <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Job</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Job Title</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Scored By</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Scored</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Count</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Verdict</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">Actions</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Count</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Verdict</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -5301,26 +5301,26 @@ export default function ResumeScoringPage({
                        plus 3 data rows (~50px each). */
                     <div className="overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
                       <table className="w-full text-xs">
-                        <thead className="sticky top-0 z-10">
-                          <tr className="text-left bg-brand-sky dark:bg-slate-800">
-                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Version</th>
-                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Scored By</th>
-                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">
+                        <thead className="sticky top-0 z-10 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                          <tr className="text-left bg-white dark:bg-slate-900">
+                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Version</th>
+                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Scored By</th>
+                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
                               <span className="inline-flex items-center gap-1">Date {sortHeaderIcon}</span>
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">
+                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
                               <span className="inline-flex items-center gap-1">Resumes Scored {sortHeaderIcon}</span>
                             </th>
-                            <th colSpan={3} className="py-1.5 px-3 font-bold text-gray-900 dark:text-slate-100 text-center border-b border-gray-200 dark:border-slate-700">Status</th>
-                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">
+                            <th colSpan={3} className="py-1.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 text-center border-b border-gray-200 dark:border-slate-700">Status</th>
+                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
                               <span className="inline-flex items-center gap-1">Average Score {sortHeaderIcon}</span>
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom text-right">Action</th>
+                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom text-right">Action</th>
                           </tr>
-                          <tr className="text-left bg-brand-sky dark:bg-slate-800">
-                            <th className="py-1.5 px-3 font-semibold text-success">Exact</th>
-                            <th className="py-1.5 px-3 font-semibold text-brand-orange-deep dark:text-orange-400">Partial</th>
-                            <th className="py-1.5 px-3 font-semibold text-destructive">No Match</th>
+                          <tr className="text-left bg-white dark:bg-slate-900">
+                            <th className="py-1.5 px-3 font-semibold text-success text-xs">Exact</th>
+                            <th className="py-1.5 px-3 font-semibold text-brand-orange-deep dark:text-orange-400 text-xs">Partial</th>
+                            <th className="py-1.5 px-3 font-semibold text-destructive text-xs">No Match</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">

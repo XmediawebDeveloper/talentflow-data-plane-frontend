@@ -390,10 +390,10 @@ export default function AssessmentVersionHistoryModal({
                     per scored round (TECH / CODE). */}
                 <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-auto h-[339px]">
                   <table className="w-full text-sm min-w-[820px]">
-                    <thead className="sticky top-0 z-10 bg-slate-200/70 dark:bg-slate-800 text-xs text-gray-700 dark:text-slate-300">
+                    <thead className="sticky top-0 z-10 bg-white dark:bg-slate-900 text-xs text-gray-600 dark:text-slate-300">
                       <tr className="h-9">
                         {([['Version', 'created'], ['Created On', 'created'], ['Created By', 'creator']] as [string, SortKey][]).map(([h, key]) => (
-                          <th key={h} rowSpan={2} className="px-3 font-medium whitespace-nowrap text-left" aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                          <th key={h} rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-left" aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                             <button type="button" onClick={() => toggleSort(key)} className="inline-flex items-center gap-1 hover:text-brand-blue">
                               {h}
                               {sort.key === key
@@ -402,15 +402,15 @@ export default function AssessmentVersionHistoryModal({
                             </button>
                           </th>
                         ))}
-                        <th rowSpan={2} className="px-3 font-medium whitespace-nowrap text-center">Invited</th>
-                        <th rowSpan={2} className="px-3 font-medium whitespace-nowrap text-center">Completed</th>
+                        <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-center">Invited</th>
+                        <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-center">Completed</th>
                         {shownRounds.map((k) => (
                           <th key={k} colSpan={2} className="px-3 font-semibold whitespace-nowrap text-center border-l border-white/70 dark:border-slate-700" title={`${ROUND_LABELS[k]} round`}>
                             {ROUND_SHORT_LABELS[k]}
                           </th>
                         ))}
-                        <th rowSpan={2} className="px-3 font-medium whitespace-nowrap text-center">Expired</th>
-                        <th rowSpan={2} className="px-3 font-medium whitespace-nowrap text-left" aria-sort={sort.key === 'status' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                        <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-center">Expired</th>
+                        <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-left" aria-sort={sort.key === 'status' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                           <button type="button" onClick={() => toggleSort('status')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                             Status
                             {sort.key === 'status'
@@ -418,11 +418,11 @@ export default function AssessmentVersionHistoryModal({
                               : <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />}
                           </button>
                         </th>
-                        <th rowSpan={2} className="px-3 font-medium whitespace-nowrap text-center">Action</th>
+                        <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-center">Action</th>
                       </tr>
-                      <tr className="h-9 border-b border-gray-200 dark:border-slate-700 text-2xs text-gray-600 dark:text-slate-400">
+                      <tr className="h-9 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-600 dark:text-slate-300">
                         {shownRounds.map((k) => (
-                          <th key={k} colSpan={2} className="p-0 font-medium border-l border-white/70 dark:border-slate-700">
+                          <th key={k} colSpan={2} className="p-0 font-semibold border-l border-white/70 dark:border-slate-700">
                             <div className="grid grid-cols-2"><span>Pass</span><span>Fail</span></div>
                           </th>
                         ))}

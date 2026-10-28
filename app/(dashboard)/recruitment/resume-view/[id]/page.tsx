@@ -221,13 +221,14 @@ import { Button } from '@/components/ui/button';
 import type { ScoredResume } from '@/components/ScoredResumesTable';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
-import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
+import { mapJDToJob, formatJobActionMessage } from '@/lib/utils/jobOpeningDisplay';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import InviteToAssessmentFlow from '@/components/InviteToAssessmentFlow';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -998,7 +999,7 @@ Best regards`);
       }
     } catch (error: any) {
       console.error('Failed to share resume:', error);
-      toast.error(error?.message || 'Failed to send email');
+      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
     } finally {
       setIsSendingEmail(false);
     }
@@ -1323,7 +1324,7 @@ Best regards`);
       if (error?.message?.includes('QUOTA') || error?.response?.status === 403) {
         toast.error('Resume scoring quota exhausted. Please upgrade your plan.');
       } else {
-        toast.error(error?.message || 'Failed to start scoring');
+        toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
       }
     } finally {
       setSelectedVersionForApply(null);
@@ -2823,8 +2824,8 @@ Best regards`);
         <AITalentMatchProgressPanel
           jobTitle={aiTalentMatchJob.title}
           jobId={aiTalentMatchJob.id}
-          onComplete={(results) => {
-            toast.success(`AI Talent Match completed for "${aiTalentMatchJob.title}" with ${results.length} match${results.length === 1 ? '' : 'es'}.`);
+          onComplete={() => {
+            toast.success(formatJobActionMessage(aiTalentMatchJob, 'run'));
             setAiTalentMatchJob(null);
           }}
           onError={(error) => {

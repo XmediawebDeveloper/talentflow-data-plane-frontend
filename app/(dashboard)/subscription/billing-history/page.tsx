@@ -746,25 +746,25 @@ export default function BillingHistoryPage() {
 
             <div className="hidden overflow-x-auto tf-table-shell sm:block">
               <table className="w-full min-w-[800px] tf-premium-table">
-                <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[200px]">Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]" aria-sort={invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('date')} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-brand-blue">
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[200px]">Invoice</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]" aria-sort={invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('date')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                         Date
                         {invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
                       </button>
                     </th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Description</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Payment</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[130px]" aria-sort={invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                      <button type="button" onClick={() => toggleSort('amount')} className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-brand-blue">
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Payment</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]" aria-sort={invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" onClick={() => toggleSort('amount')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                         Amount
                         {invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
                       </button>
                     </th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px]">Status</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px]">Status</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -880,14 +880,14 @@ export default function BillingHistoryPage() {
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[750px] tf-premium-table">
-                <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Date</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Description</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[130px]">Activation</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[120px] tf-sticky-col">Action</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Invoice</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Date</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]">Activation</th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[120px] tf-sticky-col">Action</th>
                   </tr>
                 </thead>
                 <tbody>

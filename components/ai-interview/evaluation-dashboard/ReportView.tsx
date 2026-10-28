@@ -87,12 +87,12 @@ export function ReportView({ data }: { data: DashboardData }) {
           </div>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill</th>
-                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Coverage</th>
-                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
-                  <th className="text-left p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Insight</th>
+                  <th className="text-left p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Skill</th>
+                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Coverage</th>
+                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
+                  <th className="text-left p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Insight</th>
                 </tr>
               </thead>
               <tbody>
@@ -134,12 +134,12 @@ export function ReportView({ data }: { data: DashboardData }) {
           <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across each cluster</p>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
-                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skills Included</th>
-                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Coverage %</th>
-                  <th className="text-center p-4 text-xs uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Weight</th>
+                  <th className="text-left p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
+                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Skills Included</th>
+                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Coverage %</th>
+                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Weight</th>
                 </tr>
               </thead>
               <tbody>

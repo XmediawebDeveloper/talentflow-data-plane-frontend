@@ -9,6 +9,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
 import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks, type PickSource } from '@/lib/utils/resumeSelection';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 
 interface InviteToAssessmentModalProps {
   onClose: () => void;
@@ -138,7 +139,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       setMyResumesData(resumes);
       setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
       setMyResumesLoaded(true);
-    } catch { toast.error({ title: 'Error', description: 'Failed to load My Resumes' }); }
+    } catch { toast.error({ title: "Couldn't load My Resumes", description: 'Please try again.' }); }
     finally { loadingSources.current.delete('my-resumes'); setIsLoadingMy(false); }
   };
 
@@ -149,7 +150,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     try {
       setInternalDbData(await fetchAllResumes('internal-db'));
       setInternalDbLoaded(true);
-    } catch { toast.error({ title: 'Error', description: 'Failed to load Shared Database' }); }
+    } catch { toast.error({ title: "Couldn't load Shared Database", description: 'Please try again.' }); }
     finally { loadingSources.current.delete('internal-db'); setIsLoadingInternal(false); }
   };
 
@@ -434,7 +435,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       }
     } catch (error: any) {
       console.error('Failed to send invitations:', error);
-      toast.error({ title: 'Error', description: error.message || 'Failed to send invitations' });
+      toast.error({ title: "Couldn't send invitations", description: friendlyErrorMessage(error, 'Please try again.') });
     } finally {
       setIsSubmitting(false);
     }

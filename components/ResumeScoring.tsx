@@ -301,15 +301,15 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-5">
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Job Position</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Match Score</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Key Matches</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Missing Skills</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Candidate</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Job Position</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Match Score</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Key Matches</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Missing Skills</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Status</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">

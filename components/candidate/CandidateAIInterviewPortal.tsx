@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import dynamic from 'next/dynamic';
@@ -1485,7 +1486,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       setInterview(result);
       setStep('identity');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to record consent. Please try again.');
+      toast.error(friendlyErrorMessage(err, "Couldn't record consent. Please try again."));
     } finally {
       setConsentSubmitting(false);
     }
@@ -1520,7 +1521,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // Advance immediately once backend identity verification succeeds.
       setStep('system_check');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to verify identity. Please try again.');
+      toast.error(friendlyErrorMessage(err, "Couldn't verify identity. Please try again."));
     } finally {
       setIdentitySubmitting(false);
     }

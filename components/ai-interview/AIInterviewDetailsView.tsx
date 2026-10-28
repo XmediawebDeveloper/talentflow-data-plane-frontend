@@ -13,6 +13,7 @@ import {
   Sliders, Info, Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
@@ -599,7 +600,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       markUnsavedVersion(result.cloned_id);
       router.push(withOrigin(aiInterviewConfigureHref(result.cloned_id, config.jd_id || '')));
     } catch (error: any) {
-      toast.error(error.message || 'Failed to duplicate config');
+      toast.error(friendlyErrorMessage(error, "Couldn't duplicate config. Please try again."));
     } finally {
       setActionLoading(false);
     }
@@ -617,7 +618,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       await onRefresh?.();
       toast.success('Config archived');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to archive');
+      toast.error(friendlyErrorMessage(error, "Couldn't archive AI interview. Please try again."));
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -645,7 +646,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           : 'Configuration restored to Active'
       );
     } catch (error: any) {
-      toast.error(error.message || 'Failed to unarchive');
+      toast.error(friendlyErrorMessage(error, "Couldn't unarchive AI interview. Please try again."));
     } finally {
       setActionLoading(false);
     }
@@ -663,7 +664,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       toast.success('Config deleted');
       onBack();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to delete');
+      toast.error(friendlyErrorMessage(error, "Couldn't delete AI interview. Please try again."));
     } finally {
       setActionLoading(false);
       setConfirmAction(null);
@@ -794,7 +795,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       setCandidateDetail(detail);
       setCandidateParam(detail?.id || activityId);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load candidate details');
+      toast.error(friendlyErrorMessage(error, "Couldn't load candidate details. Please try again."));
     } finally {
       setCandidateLoading(false);
     }
@@ -868,11 +869,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                     <table className="w-full sm:min-w-[420px] text-sm whitespace-nowrap">
                       <thead>
-                        <tr className="bg-slate-50 text-left border-b border-gray-100">
-                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600">Round</th>
-                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
-                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
-                          <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
+                        <tr className="bg-white text-left border-b border-gray-100">
+                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-xs">Round</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Questions</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Clusters</th>
+                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Time</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">

@@ -11,6 +11,7 @@ import AppModal from '@/components/ui/app-modal';
 import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 import { isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
 import { toast } from '@/components/ui/enhanced-toast';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
@@ -619,7 +620,7 @@ function JDCreationContent() {
                 console.error('[TalentFlow] Could not open a working copy of the published JD:', copyError);
                 toast.error({
                   title: 'Could not open this JD for editing',
-                  description: copyError instanceof Error ? copyError.message : 'Please try again.',
+                  description: friendlyErrorMessage(copyError, "Please try again."),
                 });
                 router.push('/recruitment/job-openings');
                 setLoading(false);
@@ -913,7 +914,7 @@ function JDCreationContent() {
         console.error('[TalentFlow] Take over failed:', error);
         toast.error({
           title: 'Could not take over this JD',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          description: friendlyErrorMessage(error, "Please try again."),
         });
       } finally {
         setTakingOver(false);

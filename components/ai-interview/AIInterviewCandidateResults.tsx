@@ -834,7 +834,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                 <tr>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
@@ -1086,9 +1086,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
           <>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                   <tr>
-<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
+<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                       <button
                         type="button"
                         onClick={toggleAllOnPage}
@@ -1103,19 +1103,19 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         )}
                       </button>
                     </th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-500 dark:text-slate-400 text-xs uppercase tracking-wider tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                    <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

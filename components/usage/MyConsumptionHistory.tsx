@@ -21,6 +21,7 @@ import {
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST } from '@/lib/utils/dateUtils';
 import {
@@ -129,7 +130,7 @@ export default function MyConsumptionHistory() {
       setHistory(items);
     } catch (error: any) {
       if (isStale()) return;
-      toast.error(error.message || 'Failed to load consumption history');
+      toast.error(friendlyErrorMessage(error, "Couldn't load consumption history. Please try again."));
     } finally {
       if (!isStale()) setIsLoading(false);
     }
@@ -341,13 +342,13 @@ export default function MyConsumptionHistory() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto tf-table-shell">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-white border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date & Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Units</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Date & Time</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Units</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">

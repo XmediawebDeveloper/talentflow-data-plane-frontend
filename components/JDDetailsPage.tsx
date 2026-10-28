@@ -142,10 +142,10 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="tf-table-shell hidden md:block">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -302,10 +302,10 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
         {loading ? (
           <div className="tf-table-shell hidden md:block">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -341,33 +341,33 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
           <>
             <div className="tf-table-shell hidden md:block">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Candidate
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Assessment
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
                       HR
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
                       Technical
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
                       Coding
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
                       Overall
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Duration
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Completed
                     </th>
                   </tr>
@@ -586,10 +586,10 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="tf-table-shell hidden md:block">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -674,10 +674,10 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
         {loading ? (
           <div className="tf-table-shell hidden md:block">
             <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -703,18 +703,18 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
           <>
             <div className="tf-table-shell hidden md:block">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Candidate
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Match Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
                       Score
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
                       Scored At
                     </th>
                   </tr>

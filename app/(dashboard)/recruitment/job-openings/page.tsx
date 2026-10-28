@@ -14,13 +14,14 @@ import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
+import { mapJDToJob, formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { readListSnapshot, writeListSnapshot } from '@/lib/utils/listSnapshot';
@@ -544,7 +545,7 @@ export default function JobOpeningsPage() {
         j.id === job.id ? { ...j, status: 'Published', postedDate: new Date().toISOString() } : j
       ));
       markVersionStatus(job.id, 'published');
-      toast.success(`"${job.title}" is now live!`);
+      toast.success(formatJobActionMessage(job, 'published'));
     } catch (error: any) {
       // Check if this is a quota exceeded error
       const quotaError = error?.response?.data?.detail;
@@ -596,7 +597,7 @@ export default function JobOpeningsPage() {
         j.id === job.id ? { ...j, status: 'Disabled' } : j
       ));
       markVersionStatus(job.id, 'disabled');
-      toast.info(`"${job.title}" has been disabled`);
+      toast.success(formatJobActionMessage(job, 'disabled'));
       closeDisableDialog();
     } catch (error) {
       toast.error('Failed to disable job');
@@ -606,6 +607,8 @@ export default function JobOpeningsPage() {
     }
   };
 
+  /* Runs only from the "Re-enable JD" menu items (Disabled jobs), so the
+     toasts say re-enabled; a real Republish after editing lives on Job Details. */
   const handleRepublishJob = async (job: Job) => {
     try {
       await jdService.updateStatus(job.id, 'published');
@@ -613,9 +616,9 @@ export default function JobOpeningsPage() {
         j.id === job.id ? { ...j, status: 'Published' } : j
       ));
       markVersionStatus(job.id, 'published');
-      toast.success(`"${job.title}" has been republished`);
+      toast.success(formatJobActionMessage(job, 're-enabled'));
     } catch (error) {
-      toast.error('Failed to republish job');
+      toast.error(friendlyErrorMessage(error, `Couldn't re-enable ${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })}. Please try again.`));
     }
   };
 
@@ -637,7 +640,7 @@ export default function JobOpeningsPage() {
         j.id === job.id ? { ...j, status: 'Archived' } : j
       ));
       markVersionStatus(job.id, 'archived');
-      toast.success(`"${job.title}" has been archived`);
+      toast.success(formatJobActionMessage(job, 'archived'));
       setArchiveDialog({ open: false, job: null, busy: false });
     } catch (error) {
       toast.error('Failed to archive job');
@@ -653,7 +656,7 @@ export default function JobOpeningsPage() {
         j.id === job.id ? { ...j, status: 'Published' } : j
       ));
       markVersionStatus(job.id, 'published');
-      toast.success(`"${job.title}" has been unarchived and published`);
+      toast.success(formatJobActionMessage(job, 'unarchived and published'));
     } catch (error) {
       toast.error('Failed to unarchive job');
     }
@@ -706,11 +709,9 @@ export default function JobOpeningsPage() {
       deletedIdsRef.current.add(job.id);
       markVersionsDeleted([job.id]);
       setJobs(prev => prev.filter(j => j.id !== job.id));
-      toast.success(isLaterVersion
-        ? `V${job.versionNumber} of "${job.title}" has been deleted`
-        : `"${job.title}" has been deleted`);
+      toast.success(formatJobActionMessage(job, 'deleted'));
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete job');
+      toast.error(friendlyErrorMessage(error, "Couldn't delete job. Please try again."));
     }
   };
 
@@ -743,8 +744,10 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(job => updated.has(job.id) ? { ...job, status: mapStatus(status) } : job));
     }
     if (failed === 0) {
-      toast.success(updatedIds.length === 1
-        ? `"${targets.find(job => job.id === updatedIds[0])?.title}" has been ${done}`
+      const onlyUpdated = updatedIds.length === 1 ? targets.find(job => job.id === updatedIds[0]) : undefined;
+      const singleVerb = { archive: 'archived', disable: 'disabled', reenable: 're-enabled', unarchive: 'unarchived and published' } as const;
+      toast.success(onlyUpdated
+        ? formatJobActionMessage(onlyUpdated, singleVerb[action])
         : `${updatedIds.length} jobs ${done}`);
     } else if (updatedIds.length > 0) {
       toast.warning(`${updatedIds.length} ${done} · ${failed} failed`);
@@ -850,7 +853,8 @@ export default function JobOpeningsPage() {
     }
 
     if (deletedIds.length > 0 && skipped.length === 0 && failed === 0) {
-      toast.success(`${deletedIds.length} job(s) deleted`);
+      const onlyDeleted = deletedIds.length === 1 ? jobsToDelete.find(job => job.id === deletedIds[0]) : undefined;
+      toast.success(onlyDeleted ? formatJobActionMessage(onlyDeleted, 'deleted') : `${deletedIds.length} job(s) deleted`);
     } else {
       const summary = [
         deletedIds.length ? `${deletedIds.length} deleted` : '',
@@ -931,12 +935,10 @@ export default function JobOpeningsPage() {
         <AITalentMatchProgressPanel
           jobTitle={aiMatchRunJob.title}
           jobId={aiMatchRunJob.id}
-          onComplete={(results) => {
+          onComplete={() => {
             const job = aiMatchRunJob;
             setAiMatchRunJob(null);
-            toast.success(`AI Talent Match completed for "${job.title}" — ${results.length} matching candidate${results.length === 1 ? '' : 's'}.`, {
-              action: { label: 'View results', onClick: () => router.push(`/recruitment/job-details?id=${job.id}&tab=ai-talent-match`) },
-            });
+            toast.success(formatJobActionMessage(job, 'run'));
           }}
           onError={(error) => {
             setAiMatchRunJob(null);
@@ -956,7 +958,7 @@ export default function JobOpeningsPage() {
           onClose={() => setScoreResumesJob(null)}
           onScoringFinished={() => {
             const job = scoreResumesJob;
-            toast.success(`Scoring finished for "${job.title}".`, {
+            toast.success(`Scoring finished for ${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })}.`, {
               action: { label: 'View scored resumes', onClick: () => router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes`) },
             });
           }}

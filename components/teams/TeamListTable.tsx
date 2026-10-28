@@ -19,7 +19,7 @@ interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails' | 
   onSort: (key: TeamListSortKey) => void;
 }
 
-const TH = 'px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500';
+const TH = 'px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300';
 
 /**
  * List-view counterpart of the TeamCard grid: same data, one row per team.
@@ -64,7 +64,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
       </ul>
       <div className="hidden overflow-x-auto tf-table-shell md:block">
         <table className="w-full min-w-[820px]">
-          <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+          <thead className="bg-white dark:bg-slate-900">
             <tr className="text-left">
               <th className={`${TH} pl-5`} aria-sort={ariaSort(sort, 'name')}>
                 <SortableHeader label="Team" column="name" sort={sort} />

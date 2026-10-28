@@ -361,10 +361,10 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Managing Job Descriptions</h2>
           <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700 tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-800/50">
+              <thead className="bg-white dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-50">Action</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-50">Description</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
@@ -455,10 +455,10 @@ const helpArticles: Record<string, {
 
           <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700 tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-800/50">
+              <thead className="bg-white dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-50">Field</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-50">Description</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Field</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
@@ -909,11 +909,11 @@ const helpArticles: Record<string, {
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-gray-50 dark:bg-slate-800/50">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 dark:text-slate-50 border border-gray-200 dark:border-slate-700">Feature</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-slate-50 border border-gray-200 dark:border-slate-700">Starter</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold border border-gray-200 dark:border-slate-700 bg-brand-blue/5 text-brand-blue">Professional</th>
-                  <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 dark:text-slate-50 border border-gray-200 dark:border-slate-700">Enterprise</th>
+                <tr className="bg-white dark:bg-slate-900">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Feature</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Starter</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-brand-blue/5 text-brand-blue">Professional</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Enterprise</th>
                 </tr>
               </thead>
               <tbody>

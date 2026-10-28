@@ -113,7 +113,7 @@ const INTERVIEW_VOCABULARY: VersionHistoryVocabulary = {
 
 /* Header cell — the AI Talent Match results table's, class for class (its
    background and rule come from the <thead>), as in the assessment picker. */
-const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle';
+const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle';
 
 const ROUND_CHIP = 'inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30';
 
@@ -422,9 +422,9 @@ export default function AIInterviewPicker({
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             <div className="tf-table-shell tf-table-shell--compact">
               <table className="w-full table-auto text-sm">
-                <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
+                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
                     <th className={PICKER_TH}>JD ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>

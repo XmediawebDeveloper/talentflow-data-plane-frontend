@@ -28,6 +28,7 @@ import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeS
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import {
   AlertDialog,
@@ -816,7 +817,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(error.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
     }
   };
 

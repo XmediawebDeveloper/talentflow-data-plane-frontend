@@ -354,7 +354,7 @@ export default function AIInterviewVersionHistoryModal({
                 <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-auto h-[307px]">
                   <table className="w-full text-sm min-w-[900px]">
                     <thead className="sticky top-0 z-10">
-                      <tr className="h-10 bg-slate-200/70 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-700 dark:text-slate-300">
+                      <tr className="h-10 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-600 dark:text-slate-300">
                         {([
                           ['Version', 'created'], ['Created On', 'created'], ['Created By', 'creator'], ['Rounds', 'rounds'],
                           ['Invited'], ['Completed'], ['Terminated'], ['Expired'], ['Revoked'], ['Status', 'status'], ['Action'],
@@ -362,7 +362,7 @@ export default function AIInterviewVersionHistoryModal({
                           const left = ['Version', 'Created On', 'Created By', 'Rounds', 'Status'].includes(h);
                           const active = !!key && sort.key === key;
                           return (
-                            <th key={h} className={`px-3 py-2.5 font-medium whitespace-nowrap ${left ? 'text-left' : 'text-center'}`}
+                            <th key={h} className={`px-3 py-2.5 font-semibold whitespace-nowrap text-xs text-gray-600 dark:text-slate-300 ${left ? 'text-left' : 'text-center'}`}
                               aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                               {key ? (
                                 <button type="button" onClick={() => toggleSort(key)} className="inline-flex items-center gap-1 hover:text-brand-blue">

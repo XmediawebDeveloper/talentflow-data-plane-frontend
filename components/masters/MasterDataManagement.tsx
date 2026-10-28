@@ -416,10 +416,10 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
         {loading ? (
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50/80">
+              <thead className="bg-white">
                 <tr className="text-left">
                   {config.columns.map((col) => (
-                    <th key={col} className="px-4 py-4">
+                    <th key={col} className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">
                       <Skeleton className="h-3 w-20" />
                     </th>
                   ))}
@@ -456,7 +456,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
         ) : (
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50/80">
+              <thead className="bg-white">
                 <tr className="text-left">
                   {config.columns.map((col, c) => (
                     <th
@@ -464,7 +464,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                       /* Actions pinned right: the table is ~1000px wide, so on
                          a phone or tablet Edit / Delete sat off-screen behind a
                          sideways scroll. */
-                      className={`px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 ${c === config.columns.length - 1 ? 'tf-sticky-col' : ''}`}
+                      className={`px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 ${c === config.columns.length - 1 ? 'tf-sticky-col' : ''}`}
                     >
                       {col}
                     </th>

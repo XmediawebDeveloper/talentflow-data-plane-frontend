@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, ChevronDown } from 'lucide-react';
+import { X, Database, FolderOpen, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, ChevronDown } from 'lucide-react';
+import { RESUME_TAB_LABEL } from '@/lib/constants/resumePools';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -32,6 +33,7 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
@@ -516,7 +518,7 @@ export default function SelectSourceModal({
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
-      toast.error(`Failed to archive resume: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      toast.error(`Couldn't archive resume. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 
@@ -531,7 +533,7 @@ export default function SelectSourceModal({
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
-      toast.error(`Failed to delete resume: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      toast.error(`Couldn't delete resume. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 
@@ -742,7 +744,7 @@ export default function SelectSourceModal({
 
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(error.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
       setSubmitting(false);
     }
   };
@@ -1037,7 +1039,7 @@ export default function SelectSourceModal({
       setFolders(flattenFolders(folderData || []));
       toast.success('Folder created');
     } catch (error: any) {
-      toast.error(`Failed to create folder: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      toast.error(`Couldn't create folder. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 
@@ -1189,58 +1191,51 @@ export default function SelectSourceModal({
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
-          <div className="flex gap-1 sm:gap-2">
-            {/* My Resumes tab needs its Score Resume sub-action — without it the
-                tab stays visible but greyed out (hover explains). */}
-            <button
-              onClick={() => { if (!hasMyResumesScoreAccess) return; handleTabChange('my-resumes'); }}
-              aria-disabled={!hasMyResumesScoreAccess}
-              title={!hasMyResumesScoreAccess ? 'You do not have permission to score resumes from My Resumes' : undefined}
-              className={`px-3 sm:px-5 py-2 sm:py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                !hasMyResumesScoreAccess
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
-                  : activeTab === 'my-resumes'
-                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
-                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">My Resumes</span>
-              <span className="sm:hidden">Resumes</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'my-resumes'
-                  ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
-                {tabCounts.myResumes ?? ''}
-              </span>
-            </button>
-            {/* Shared Database tab: visible always, greyed out without access. */}
-            <button
-              onClick={() => { if (!hasInternalDBAccess) return; handleTabChange('internal-db'); }}
-              aria-disabled={!hasInternalDBAccess}
-              title={!hasInternalDBAccess ? 'You do not have permission to score resumes from the Shared Database' : undefined}
-              className={`px-3 sm:px-5 py-2 sm:py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                !hasInternalDBAccess
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
-                  : activeTab === 'internal-db'
-                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
-                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Shared Database</span>
-              <span className="sm:hidden">Shared DB</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'internal-db'
-                  ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
-                {tabCounts.internalDb ?? ''}
-              </span>
-            </button>
+        {/* Tabs — the Resume Database page's pool switch (same segmented
+            strip, icons, colours and count badge), centred in the popup. A
+            pool without the Score Resume permission stays visible but greyed
+            out (hover explains). */}
+        <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex-shrink-0 flex justify-center">
+          <div
+            role="tablist"
+            aria-label="Resume pool"
+            className="grid w-full max-w-full grid-cols-2 gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm sm:inline-flex sm:w-auto dark:bg-slate-900 dark:ring-slate-700"
+          >
+            {([
+              { tab: 'my-resumes', Icon: FolderOpen, iconColor: 'text-brand-orange', allowed: hasMyResumesScoreAccess, count: tabCounts.myResumes, lockedTitle: 'You do not have permission to score resumes from My Resumes' },
+              { tab: 'internal-db', Icon: Database, iconColor: 'text-brand-cyan', allowed: hasInternalDBAccess, count: tabCounts.internalDb, lockedTitle: 'You do not have permission to score resumes from the Shared Database' },
+            ] as const).map(({ tab, Icon, iconColor, allowed, count, lockedTitle }) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => { if (!allowed) return; handleTabChange(tab); }}
+                aria-disabled={!allowed}
+                title={!allowed ? lockedTitle : undefined}
+                className={`inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm transition-colors sm:h-9 sm:gap-2 sm:px-4 sm:whitespace-nowrap ${
+                  !allowed
+                    ? 'font-medium text-gray-400 cursor-not-allowed opacity-60 dark:text-slate-500'
+                    : activeTab === tab
+                      ? 'bg-slate-100 font-semibold text-brand-blue shadow-sm ring-1 ring-brand-blue/30 dark:bg-slate-800'
+                      : 'font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Icon className={`h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-400'}`} />
+                {RESUME_TAB_LABEL[tab]}
+                {count !== undefined && count !== null && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
+                      activeTab === tab
+                        ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                        : 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 

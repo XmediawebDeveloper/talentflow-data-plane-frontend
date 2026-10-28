@@ -1,4 +1,4 @@
-import { jdService } from '@/lib/services/jdService';
+import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
 
 /**
  * Create and Duplicate Assessment follow the job version they are linked to:
@@ -38,13 +38,17 @@ export const assessmentJobLockMessage = (status?: string | null): string | null 
 };
 
 /**
- * Each job version's live status, keyed by its own JD id, for these ids — one
- * batched lineage read. Ids the server does not return are left out.
+ * Every version of each job these JD ids belong to, keyed by the requested
+ * JD id — one batched lineage read. Ids the server does not return are left out.
  */
-export async function loadJobVersionStatuses(jdIds: string[]): Promise<Record<string, string>> {
+export async function loadJobVersionLineages(jdIds: string[]): Promise<Record<string, JDLineageVersion[]>> {
   const ids = Array.from(new Set(jdIds.filter(Boolean)));
   if (ids.length === 0) return {};
-  const lineages = await jdService.getLineagesBatch(ids);
+  return jdService.getLineagesBatch(ids);
+}
+
+/** Each job version's live status, keyed by its own JD id, from loaded lineages. */
+export function jobVersionStatusesFrom(lineages: Record<string, JDLineageVersion[]>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const versions of Object.values(lineages)) {
     for (const v of versions || []) {
@@ -52,6 +56,14 @@ export async function loadJobVersionStatuses(jdIds: string[]): Promise<Record<st
     }
   }
   return out;
+}
+
+/**
+ * Each job version's live status, keyed by its own JD id, for these ids — one
+ * batched lineage read. Ids the server does not return are left out.
+ */
+export async function loadJobVersionStatuses(jdIds: string[]): Promise<Record<string, string>> {
+  return jobVersionStatusesFrom(await loadJobVersionLineages(jdIds));
 }
 
 /**

@@ -3,6 +3,7 @@
 import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { assessmentInviteSource } from '@/components/AIInterviewInviteTable';
@@ -242,7 +243,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       toast.success('New invitation link generated and emailed!');
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
-      toast.error(error?.response?.data?.detail?.message || error?.message || 'Failed to resend invitation. Please try again.');
+      toast.error(friendlyErrorMessage(error, "Couldn't resend invitation. Please try again."));
     } finally {
       setResendingId(null);
     }
@@ -605,18 +606,18 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <table className="w-max min-w-full">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">CID</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Candidate</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Assessment</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Timeline</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">CID</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Candidate</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Assessment</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Status</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Timeline</th>
                       {invitations.some(inv => inv.assessment_technical_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Tech Score</th>
+                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Tech Score</th>
                       )}
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Coding Score</th>
+                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Coding Score</th>
                       )}
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap tf-sticky-col">Actions</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

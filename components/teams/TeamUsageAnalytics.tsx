@@ -742,46 +742,46 @@ function TeamRow({
                     {/* Member table header — 9 cols */}
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                           Member
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
-                            <span className="text-gray-500 dark:text-slate-500">Resume Scoring</span>
+                            <span className="text-gray-600 dark:text-slate-300">Resume Scoring</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
-                            <span className="text-gray-500 dark:text-slate-500">Assessment</span>
+                            <span className="text-gray-600 dark:text-slate-300">Assessment</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
-                            <span className="text-gray-500 dark:text-slate-500">AI Interview</span>
+                            <span className="text-gray-600 dark:text-slate-300">AI Interview</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
-                            <span className="text-gray-500 dark:text-slate-500">Resume Storage</span>
+                            <span className="text-gray-600 dark:text-slate-300">Resume Storage</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <FileText className="w-3 h-3 text-brand-blue" />
                             JDs
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <ClipboardCheck className="w-3 h-3 text-brand-blue" />
                             Assessments
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                           Last Active
                         </th>
                       </tr>
@@ -1478,14 +1478,14 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
       /* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, Share) */
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
         <table className="w-full">
-          <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
+          <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, 'name')}>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(teamSort, 'name')}>
                 <SortableHeader label="Team" column="name" sort={teamSort} />
               </th>
               {(['RS', 'AS', 'AIU', 'RU'] as const).map(k => (
                 // Colour moved from the inner span to the th so the sort button can turn it brand-blue.
-                <th key={k} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, k)}>
+                <th key={k} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(teamSort, k)}>
                   <SortableHeader
                     label={<><span className={`w-2 h-2 rounded-full ${UNIT_DOT[k]}`} /><abbr title={UNIT_FULL_NAME[k]} className="no-underline">{k}</abbr></>}
                     column={k}
@@ -1493,10 +1493,10 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   />
                 </th>
               ))}
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, 'total')}>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(teamSort, 'total')}>
                 <SortableHeader label="Total" column="total" sort={teamSort} />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                 <abbr title="Mix of RS / AS / AIU / RU, and this team's share of all usage" className="no-underline">Share</abbr>
               </th>
             </tr>
