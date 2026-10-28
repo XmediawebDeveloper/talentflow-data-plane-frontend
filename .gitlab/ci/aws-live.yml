@@ -125,6 +125,8 @@ variables:
     # pushed copy is the one that matters; free the runner's disk
     - docker image rm "$ECR_REGISTRY/$AWS_ECR_REPO:$CI_COMMIT_SHORT_SHA"
     - docker image prune -f
+    # build cache is not removed by image prune and fills the runner disk
+    - docker builder prune -f --filter until=72h
 
 "Deploy":
   extends: .aws-live
