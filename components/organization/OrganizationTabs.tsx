@@ -42,7 +42,7 @@ export default function OrganizationTabs({ stickyTop, group = 'users' }: { stick
     { id: 'usage-history', group: 'users', label: 'Usage History', short: 'Usage', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage history' },
     { id: 'role-management', group: 'users', label: 'Roles & Permissions', short: 'Roles', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to manage roles & permissions' },
     // Plan-gated: stays visible but disabled (hover explains) when the plan lacks Teams.
-    { id: 'team-management', group: 'teams', label: 'Teams', short: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
+    { id: 'team-management', group: 'teams', label: 'Teams', short: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams') || hasPermission('canCreateTeams') || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
     { id: 'team-chat', group: 'teams', label: 'Chat', short: 'Chat', href: '/organization/team-chat', visible: true },
   ];
   const tabs = allTabs.filter((t) => t.group === group);

@@ -1,10 +1,12 @@
 'use client';
 
-import { Users, Briefcase, FileText, UserPlus, Crown, ChevronRight } from 'lucide-react';
+import { Users, UserPlus, Crown, ChevronRight } from 'lucide-react';
 import { Team, TeamMember } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/components/ui/utils';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import NameAvatar from '@/components/ui/name-avatar';
+import { UNIT_KEYS, UNIT_LABELS, UNIT_CHART_COLOR, type UnitKey } from '@/lib/constants/unitColors';
 
 export const teamInitials = (name: string) => {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -13,10 +15,16 @@ export const teamInitials = (name: string) => {
   return (words[0][0] + words[1][0]).toUpperCase();
 };
 
+/** Team dates in IST, like the rest of the app (was the browser's locale and zone). */
 export const formatTeamDate = (iso: string) => {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!iso || Number.isNaN(new Date(iso).getTime())) return '';
+  return formatISTDate(iso);
+};
+
+/** "20 Oct 2026, 11:33 AM" (IST). */
+export const formatTeamDateTime = (iso: string) => {
+  if (!formatTeamDate(iso)) return '';
+  return `${formatISTDate(iso)}, ${formatISTTime(iso).toUpperCase()}`;
 };
 
 const plural = (count: number, noun: string) => `${noun}${count === 1 ? '' : 's'}`;
@@ -108,6 +116,67 @@ export function TeamSizeBar({ count, max, className }: { count: number; max: num
   );
 }
 
+/** A team's units in the last 30 days, per unit type and in total. */
+export type TeamUnits = Record<UnitKey, number> & { total: number };
+
+/** Whole numbers stay whole; fractions get one decimal. */
+export const formatTeamUnits = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1));
+
+/**
+ * "128 units" plus a bar split by unit type (same colours as Team Usage).
+ * Clicking opens the team in Team Usage, when `onOpen` is given.
+ * `units` undefined = no usage data for this team (e.g. not one of yours).
+ */
+export function TeamUnitsSummary({
+  units,
+  onOpen,
+  className,
+}: {
+  units: TeamUnits | undefined;
+  onOpen?: () => void;
+  className?: string;
+}) {
+  if (!units) {
+    return (
+      <span className={cn('text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500', className)} title="Usage is shown for your teams only">
+        —
+      </span>
+    );
+  }
+  const breakdown = UNIT_KEYS.map((k) => `${UNIT_LABELS[k]}: ${formatTeamUnits(units[k])}`).join(' · ');
+  const body = (
+    <>
+      <span className="text-sm max-sm:text-[13px] font-semibold tabular-nums text-gray-900 dark:text-slate-100">
+        {formatTeamUnits(units.total)}
+        <span className="ml-1 text-xs font-normal text-gray-500 dark:text-slate-400">units</span>
+      </span>
+      {units.total > 0 && (
+        <span className="mt-1 flex h-1.5 w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800" aria-hidden>
+          {UNIT_KEYS.map((k) =>
+            units[k] > 0 ? <span key={k} style={{ width: `${(units[k] / units.total) * 100}%`, backgroundColor: UNIT_CHART_COLOR[k] }} /> : null,
+          )}
+        </span>
+      )}
+    </>
+  );
+  if (!onOpen) {
+    return <span className={cn('inline-flex flex-col', className)} title={breakdown}>{body}</span>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      title={`${breakdown} — open in Team Usage`}
+      className={cn('relative z-10 inline-flex flex-col items-start rounded-md text-left hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40', className)}
+    >
+      {body}
+    </button>
+  );
+}
+
 export interface TeamActionHandlers {
   /** Opens the Team popup (details, with Edit and Delete inside). */
   onViewDetails: (teamId: string) => void;
@@ -116,18 +185,23 @@ export interface TeamActionHandlers {
   canManage?: boolean;
   /** Member count of the largest team — scales the size bar. */
   maxMembers?: number;
+  /** Units per team (last 30 days). null = not available to this user — hidden. */
+  unitsByTeam?: Record<string, TeamUnits> | null;
+  /** Opens the team in Team Usage. */
+  onOpenUsage?: (teamId: string) => void;
+  /** Who created each team (from the history's "Team Created" events). null = not available. */
+  createdBy?: Record<string, string> | null;
 }
 
 interface TeamCardProps extends TeamActionHandlers {
   team: Team;
 }
 
-export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false, maxMembers = 0 }: TeamCardProps) {
+export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false, maxMembers = 0, unitsByTeam = null, onOpenUsage, createdBy = null }: TeamCardProps) {
   const created = formatTeamDate(team.created_at);
+  // Members + units only — the Teams module is about people and unit usage.
   const metrics = [
     { icon: Users, value: team.member_count, label: plural(team.member_count, 'member') },
-    { icon: Briefcase, value: team.active_jobs_count, label: plural(team.active_jobs_count, 'active job') },
-    { icon: FileText, value: team.resumes_count, label: plural(team.resumes_count, 'resume') },
   ];
 
   return (
@@ -177,6 +251,16 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
         ))}
       </ul>
       <TeamSizeBar count={team.member_count} max={maxMembers} className="mt-3" />
+      {unitsByTeam && (
+        <div className="mt-3 flex items-end justify-between gap-2">
+          <span className="text-xs text-gray-500 dark:text-slate-400">Units · last 30 days</span>
+          <TeamUnitsSummary
+            units={unitsByTeam[team.id]}
+            onOpen={onOpenUsage ? () => onOpenUsage(team.id) : undefined}
+            className="items-end"
+          />
+        </div>
+      )}
 
       {/* pt-4 keeps the gap; mt-auto pins the footer to the bottom of a stretched card. */}
       <div className="mt-auto pt-4">
@@ -195,7 +279,12 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
         ) : (
           <AttentionChip>No members yet</AttentionChip>
         )}
-        {created && <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500">Created {created}</span>}
+        {created && (
+          <span className="min-w-0 truncate text-right text-xs text-gray-400 dark:text-slate-500">
+            Created {created}
+            {createdBy?.[team.id] && <> by <span className="text-gray-500 dark:text-slate-400">{createdBy[team.id]}</span></>}
+          </span>
+        )}
       </div>
       </div>
     </article>

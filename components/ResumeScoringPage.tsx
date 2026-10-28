@@ -1890,7 +1890,8 @@ export default function ResumeScoringPage({
         }, 2000);
       } catch (err) {
         console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
-        toast.error('Failed to start scoring. Please try again.');
+        // Show the reason (e.g. not enough Resume Scoring units) when there is one.
+        toast.error(err instanceof Error && err.message ? err.message : 'Failed to start scoring. Please try again.');
         // Mark all queued items as failed so the modal shows the error
         for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
