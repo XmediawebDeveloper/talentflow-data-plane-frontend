@@ -24,6 +24,7 @@ import ResumeVersionsModal from '@/components/ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
 import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks } from '@/lib/utils/resumeSelection';
+import InviteEntryModeTabs, { DEFAULT_INVITE_ENTRY_MODE, type InviteEntryMode } from '@/components/talent-match-invite/InviteEntryModeTabs';
 
 /* THE SHARE ASSESSMENT VIA EMAIL DIALOG — laid out and behaving as the
    Send AI Interview via Email dialog (`ShareAIInterviewModal`) does: the same
@@ -184,7 +185,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // All assessments to send invitations for (main + additional)
   const allAssessments = [assessment, ...(additionalAssessments || [])];
 
-  const [inputMode, setInputMode] = useState<'manual' | 'database' | 'excel'>('manual');
+  const [inputMode, setInputMode] = useState<InviteEntryMode>(DEFAULT_INVITE_ENTRY_MODE);
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [candidates, setCandidates] = useState<CandidateEmail[]>(
     prefilledCandidates && prefilledCandidates.length > 0
@@ -426,12 +427,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   /* Manual / Upload Excel / Select From — plain buttons; only the icons carry
      colour. The active one is marked by a darker border and a light fill. */
-  const modeTabClass = (active: boolean) =>
-    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
-      active
-        ? 'bg-gray-100 dark:bg-slate-800 border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-50 font-medium'
-        : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-    }`;
 
   /* Hover intent: a short delay so scrolling, or crossing the gap into a
      flyout, doesn't flip menus open and shut — each new event cancels the last. */
@@ -1625,27 +1620,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {/* Mode Switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
               <label className="text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => { commitPicks(); setInputMode('manual'); }} className={modeTabClass(inputMode === 'manual')}>
-                  <Upload className="w-4 h-4 text-brand-blue" />
-                  Manual
-                </button>
-                <button type="button" onClick={() => { commitPicks(); excelInputRef.current?.click(); }} className={modeTabClass(inputMode === 'excel')}>
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  Upload Excel
-                </button>
-                <input
-                  ref={excelInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleExcelUpload}
-                  className="hidden"
-                />
-                <button type="button" onClick={() => setInputMode('database')} className={modeTabClass(inputMode === 'database')}>
-                  <Database className="w-4 h-4 text-brand-orange" />
-                  Select From
-                </button>
-              </div>
+              <InviteEntryModeTabs
+                mode={inputMode}
+                onManual={() => { commitPicks(); setInputMode('manual'); }}
+                onExcel={() => { commitPicks(); excelInputRef.current?.click(); }}
+                onSelectFrom={() => setInputMode('database')}
+              />
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleExcelUpload}
+                className="hidden"
+              />
             </div>
 
             {/* Manual Input Mode */}

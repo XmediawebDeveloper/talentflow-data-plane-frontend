@@ -1,11 +1,12 @@
 // Evaluation Dashboard tab — converted from Vite sources:
-// - SkillBreakdown.tsx     → "Skills" sub-view (per-skill analysis accordion)
+// - SkillBreakdown.tsx     → "Skills" sub-view (List: table with details shown; Grid: original per-skill cards)
 // - QuestionAnalysis.tsx   → "Questions" sub-view (per-question accordion + math)
 // - ExampleScenarios.tsx   → "Formula" sub-view (scoring formula reference)
 // MUI Accordion/Card → Tailwind disclosure. Wired to live DashboardData.
 import { useState, type ReactNode } from 'react';
 import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
+  List, LayoutGrid,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 import { orderQuestionsAsAsked, isSkillNotAssessed } from './types';
@@ -13,6 +14,7 @@ import { buildRationaleLines } from './types';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 import { formatScore1, formatSkillScore, truncate1 } from '@/lib/utils/matchStatus';
+import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 interface Props {
   data: DashboardData;
 }
@@ -120,6 +122,259 @@ export function EvaluationDashboardV2({ data }: Props) {
  * separate which 19 skills were the gate-blocking ones.
  */
 export function SkillsView({ data }: { data: DashboardData }) {
+  const [layout, setLayout] = useState<'list' | 'grid'>('list');
+  // Same sliding segmented control as the Question Analysis All / Sections toggle.
+  const layoutToggle = (
+    <div
+      role="radiogroup"
+      aria-label="Skill view"
+      className="relative grid grid-cols-2 p-0.5 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+    >
+      <span
+        aria-hidden
+        className={`absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-0.125rem)] rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
+          layout === 'grid' ? 'translate-x-full' : 'translate-x-0'
+        }`}
+      />
+      {([['list', 'List', List], ['grid', 'Grid', LayoutGrid]] as const).map(([mode, label, Icon]) => (
+        <button
+          key={mode}
+          type="button"
+          role="radio"
+          aria-checked={layout === mode}
+          onClick={() => setLayout(mode)}
+          className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-colors duration-300 ${
+            layout === mode ? 'text-brand-blue' : 'text-gray-500 hover:text-brand-blue'
+          }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">{layoutToggle}</div>
+      {layout === 'list' ? <SkillsListView data={data} /> : <SkillsGridView data={data} />}
+    </div>
+  );
+}
+
+/** List view — aligned table, every skill's detail shown by default. */
+function SkillsListView({ data }: { data: DashboardData }) {
+  const isPartialEvaluation = data.isPartialEvaluation;
+
+  // Flatten each section's clusters into skill rows tagged with their
+  // section so we can render two independent sections + summary blocks.
+  const flatten = (clusters: typeof data.mustHaveClusters) =>
+    clusters.flatMap(c =>
+      c.skills.map(s => ({
+        ...s,
+        clusterPriority: c.priority,
+        clusterName: c.name,
+      })),
+    );
+  const mhSkills = flatten(data.mustHaveClusters);
+  const nhSkills = flatten(data.niceToHaveClusters);
+  const allSkills = [...mhSkills, ...nhSkills];
+
+  // Use the adapter's QA-derived section averages so Skill Breakdown shows
+  // the same numbers as Overview and Question Analysis.
+  const mhAvg = data.scores.mustHave;
+  const nhAvg = data.scores.niceToHave;
+
+  // Table columns once the section card is wide enough (container query):
+  // Skill | Cluster | Skill Weight | Score (10) | Contribution (Skill Weight × Score) | AI Analysis.
+  // Narrower cards (tablet / phone / tight laptop) stack each row instead.
+  const cols = '@4xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_5.5rem_5rem_7.5rem_minmax(0,2fr)]';
+
+  // Every row shows its full detail — no expand/collapse.
+  const renderSkillRow = (
+    s: typeof allSkills[number],
+    rowKey: string,
+  ) => {
+    const tag = priorityTag(s.clusterPriority);
+    // P1/P2/P3 colours — same as the Skill Coverage tab
+    // (shared PRIORITY_LABELS; numeric scale 3 = High … 1 = Low).
+    const pr = getPriorityLabel(s.clusterPriority === 'High' ? 3 : s.clusterPriority === 'Medium' ? 2 : 1);
+    // A skill no question covered has no score to show. Its 0 is "not
+    // measured", not "measured and failed" — the Cluster Coverage tab makes
+    // the same distinction from the same `asked` flag.
+    // Shared rule (types.ts): never on old interviews with no record of what
+    // was asked, and a real score always wins.
+    const notAssessed = isSkillNotAssessed(s);
+    const contribution = +(s.score * tag.weight).toFixed(1);
+    const color = notAssessed ? 'var(--raw-9ca3af)' : scoreColor(s.score);
+    // AI Analysis box tint follows the same score bands as scoreColor.
+    const analysisTint = notAssessed
+      ? 'bg-gray-50 border-gray-200'
+      : s.score >= 8.0
+        ? 'bg-emerald-50 border-emerald-100'
+        : s.score >= MHS_THRESHOLD
+          ? 'bg-amber-50 border-amber-100'
+          : 'bg-rose-50 border-rose-100';
+    const statLabel = 'text-2xs text-gray-500 @4xl:hidden';
+    return (
+      <div
+        key={rowKey}
+        className={`grid grid-cols-3 ${cols} items-center gap-x-4 gap-y-2 px-4 sm:px-5 py-3 ${notAssessed ? 'bg-gray-50/60' : ''}`}
+      >
+        {/* Skill name */}
+        <div className="col-span-3 @4xl:col-span-1 min-w-0">
+          <div className={`text-sm font-semibold break-words ${notAssessed ? 'text-gray-500' : 'text-gray-900'}`}>{s.name}</div>
+          {notAssessed && (
+            <span className="mt-1 inline-block text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 whitespace-nowrap">Not assessed</span>
+          )}
+        </div>
+
+        {/* Cluster — "P1 - Cluster name" */}
+        <div className="col-span-3 @4xl:col-span-1 min-w-0">
+          <div className={statLabel}>Cluster</div>
+          <div className="text-xs text-gray-700 break-words">
+            <span className={`inline-block text-2xs font-semibold px-1.5 py-0.5 rounded border align-middle ${pr.color}`}>{tag.tag}</span> - {s.clusterName}
+          </div>
+        </div>
+
+        {/* Skill Weight / Score / Contribution */}
+        <div className="@4xl:text-center">
+          <div className={statLabel}>Skill Weight</div>
+          <div className="text-sm text-gray-700 tabular-nums">{tag.weight}</div>
+        </div>
+        <div className="@4xl:text-center">
+          <div className={statLabel}>Score (10)</div>
+          <div className="text-base font-bold tabular-nums" style={{ color }}>{notAssessed ? '—' : formatSkillScore(s.score)}</div>
+        </div>
+        <div className="@4xl:text-center">
+          <div className={statLabel}>Contribution</div>
+          <div className="text-base font-bold tabular-nums" style={{ color }}>{notAssessed ? '—' : contribution}</div>
+        </div>
+
+        {/* AI Analysis */}
+        <div className={`col-span-3 @4xl:col-span-1 rounded-lg border px-3 py-2 text-xs leading-relaxed ${analysisTint}`}>
+          <div className="text-gray-700">
+            {notAssessed
+              ? 'No question in this interview covered this skill, so it has no skill score. If its planned question was never reached (the interview ended early), that question still counts as 0 in the Section Score.'
+              : (s.feedback || 'No specific feedback captured for this skill.')}
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  // One section = title chip, then a single card: summary strip, column
+  // headers, and the skill rows.
+  const renderSection = (
+    keyPrefix: string,
+    title: string,
+    chip: string,
+    chipCls: string,
+    skills: typeof allSkills,
+    avg: number,
+    summaryCls: string,
+    accentCls: string,
+  ) => (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="text-base font-bold text-gray-900">{title}</div>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${chipCls}`}>{chip}</span>
+      </div>
+      <div className="@container rounded-2xl border border-gray-200 bg-white overflow-hidden">
+        {/* Summary — the section score (question scores ÷ planned questions)
+            is the number Pass/Fail and the report use, not an average of the
+            skill rows below. */}
+        <div className={`grid grid-cols-3 @3xl:grid-cols-[1fr_1fr_1fr_auto] border-b border-gray-200 ${summaryCls}`}>
+          <div className="px-3 sm:px-5 py-3 border-r border-gray-200">
+            <div className="text-2xs text-gray-500 mb-0.5">Section Score</div>
+            <div className={`text-lg sm:text-xl font-bold tabular-nums ${accentCls}`}>
+              {formatScore1(avg)}<span className="text-sm font-semibold text-gray-400">/10</span>
+            </div>
+          </div>
+          <div className="px-3 sm:px-5 py-3 border-r border-gray-200">
+            <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
+            <div className={`text-lg sm:text-xl font-bold tabular-nums ${accentCls}`}>{skills.length}</div>
+          </div>
+          <div className="px-3 sm:px-5 py-3 @3xl:border-r border-gray-200">
+            <div className="text-2xs text-gray-500 mb-0.5">Strong (≥7)</div>
+            <div className="text-lg sm:text-xl font-bold tabular-nums text-emerald-600">{skills.filter(s => s.score >= 7.0).length}</div>
+          </div>
+          {/* Priority legend — explains the P-codes in the Cluster column. */}
+          <div className="col-span-3 @3xl:col-span-1 px-3 sm:px-5 py-3 border-t @3xl:border-t-0 border-gray-200">
+            <div className="text-2xs text-gray-500 mb-1">Priority</div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([3, 2, 1] as const).map(n => {
+                const pl = getPriorityLabel(n);
+                return (
+                  <span key={n} className={`text-2xs font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${pl.color}`}>
+                    {priorityTag(pl.short as 'High' | 'Medium' | 'Low').tag} · {pl.short} Priority
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+        <div className={`hidden @4xl:grid ${cols} items-center gap-x-4 px-4 sm:px-5 py-2.5 bg-brand-blue/5 border-b border-gray-200 text-xs font-semibold text-gray-700`}>
+          <div>Skill</div>
+          <div>Cluster</div>
+          <div className="text-center">Skill Weight</div>
+          <div className="text-center">Score (10)</div>
+          <div className="text-center">Contribution<div className="text-2xs font-medium text-gray-500">(Skill Weight × Score)</div></div>
+          <div>AI Analysis</div>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {skills.map((s, i) => renderSkillRow(s, `${keyPrefix}-${s.name}-${i}`))}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      {isPartialEvaluation && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          This interview ended early. The AI evaluated only the questions the candidate attended, so no final pass/fail or overall match score is shown here.
+        </div>
+      )}
+
+      {allSkills.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
+          No skills evaluated yet.
+        </div>
+      ) : (
+        <>
+          {/* Must-Have Section — gate-blocking skills, MHS ≥ 6.0 = Pass */}
+          {mhSkills.length > 0 && renderSection(
+            'mh',
+            'Must-Have Skills',
+            isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail',
+            'bg-indigo-50 text-indigo-700',
+            mhSkills,
+            mhAvg,
+            'bg-amber-50/40',
+            'text-indigo-700',
+          )}
+
+          {/* Nice-to-Have Section — informational only per spec */}
+          {nhSkills.length > 0 && renderSection(
+            'nh',
+            'Nice-to-Have Skills',
+            'Information Only',
+            'bg-amber-50 text-amber-700',
+            nhSkills,
+            nhAvg,
+            'bg-amber-50/40',
+            'text-amber-600',
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Grid view — the original per-skill cards (click a card for its analysis). */
+function SkillsGridView({ data }: { data: DashboardData }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const isPartialEvaluation = data.isPartialEvaluation;
 
@@ -341,9 +596,9 @@ export function SkillsView({ data }: { data: DashboardData }) {
                   <div className="text-xl font-bold text-indigo-700">{mhSkills.length}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥8)</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥7)</div>
                   <div className="text-xl font-bold text-emerald-600">
-                    {mhSkills.filter(s => s.score >= 8.0).length}
+                    {mhSkills.filter(s => s.score >= 7.0).length}
                   </div>
                 </div>
               </div>
@@ -364,9 +619,9 @@ export function SkillsView({ data }: { data: DashboardData }) {
                   <div className="text-xl font-bold text-amber-600">{nhSkills.length}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥8)</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥7)</div>
                   <div className="text-xl font-bold text-emerald-600">
-                    {nhSkills.filter(s => s.score >= 8.0).length}
+                    {nhSkills.filter(s => s.score >= 7.0).length}
                   </div>
                 </div>
               </div>
@@ -387,6 +642,17 @@ export function SkillsView({ data }: { data: DashboardData }) {
  *   • HR is not scored
  * Source: data.perQuestionDetails — built by adapter.ts:buildPerQuestionDetails.
  */
+type QaStatus = 'answered' | 'skipped' | 'not_asked';
+type QaFilter = 'all' | QaStatus | 'low';
+const STATUS_LABEL: Record<QaStatus, string> = { answered: 'Answered', skipped: 'Skipped', not_asked: 'Not Asked' };
+const QA_FILTERS: { key: QaFilter; label: string }[] = [
+  { key: 'all',       label: 'All' },
+  { key: 'answered',  label: 'Answered' },
+  { key: 'skipped',   label: 'Skipped' },
+  { key: 'not_asked', label: 'Not Asked' },
+  { key: 'low',       label: `Low score (<${MHS_THRESHOLD})` },
+];
+
 export function QuestionsView({ data, renderAnswerAction }: {
   data: DashboardData;
   /** Optional control shown beside "Candidate's Answer" for each question
@@ -404,6 +670,11 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // "All" = one continuous list numbered 1..N across the whole interview;
   // "Sections" = the MHS / NHS / HR grouping with section-local Q numbers.
   const [viewMode, setViewMode] = useState<'all' | 'sections'>('all');
+  // Card = full per-question cards; List = compact one-row-per-question table.
+  const [layout, setLayout] = useState<'card' | 'list'>('card');
+  const [qFilter, setQFilter] = useState<QaFilter>('all');
+  // List rows expanded in place, keyed by interview-wide question number.
+  const [openRows, setOpenRows] = useState<Record<number, boolean>>({});
 
   if (delivered.length === 0) {
     return (
@@ -428,20 +699,18 @@ export function QuestionsView({ data, renderAnswerAction }: {
     return trimmed + '?';
   };
 
-  // Score color: spec uses ≥6.0 as the Pass threshold for MHS — mirror that
-  // in the per-Q badge so the recruiter sees instantly which Qs were strong.
+  // Score color — same bands as Skill Breakdown (scoreColor): green ≥8,
+  // amber from the 6.0 Pass threshold, red below it.
   const scoreColorClass = (s: number): string => {
-    if (s >= MHS_THRESHOLD) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-    if (s >= 4.0) return 'text-amber-600 bg-amber-50 border-amber-200';
-    return 'text-rose-600 bg-rose-50 border-rose-200';
+    if (s >= 8.0) return 'text-success bg-success-subtle border-success-line';
+    if (s >= MHS_THRESHOLD) return 'text-warning bg-warning-subtle border-warning-line';
+    return 'text-destructive bg-destructive-subtle border-destructive-line';
   };
-  // Priority chip color — mirrors the spec's weight tiers: P1 (weight 10),
-  // P2 (weight 7), P3 (weight 4). Green = high priority, lighter = lower.
+  // Priority chip color — the shared P1/P2/P3 colours (PRIORITY_LABELS), as on
+  // Skill Coverage and Skill Breakdown. Numeric scale: 3 = High … 1 = Low.
   const priorityChipClass = (level: 'High' | 'Medium' | 'Low' | null): string => {
     if (!level) return 'bg-gray-50 text-gray-500 border-gray-200';
-    if (level === 'High') return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-    if (level === 'Medium') return 'bg-sky-50 text-sky-700 border-sky-200';
-    return 'bg-violet-50 text-violet-700 border-violet-200';
+    return getPriorityLabel(level === 'High' ? 3 : level === 'Medium' ? 2 : 1).color;
   };
   const priorityLabel = (level: 'High' | 'Medium' | 'Low' | null): string =>
     !level ? 'No priority' : level === 'High' ? 'P1' : level === 'Medium' ? 'P2' : 'P3';
@@ -503,13 +772,16 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // Per-Q card renderer (extracted so the grouped-by-section rendering
   // below stays readable).
   const sectionTag: Record<string, { label: string; cls: string }> = {
-    mth: { label: 'Must-Have', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-    nth: { label: 'Nice-to-Have', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
-    hr:  { label: 'HR', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+    mth: { label: 'Must-Have', cls: 'bg-brand-blue/10 text-brand-blue border-brand-blue/20' },
+    nth: { label: 'Nice-to-Have', cls: 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20' },
+    hr:  { label: 'HR', cls: 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20' },
   };
   // `allNum` is set only in the "All" view: the card shows that interview-wide
   // number plus a section tag (in "Sections" the header already names it).
-  const renderQCard = (q: typeof delivered[number], idx: number, allNum?: number) => {
+  // Answer, score rationale, skills assessed, follow-ups and clarifications —
+  // shared by the Grid card and an expanded List row. `idx` keys the
+  // "Skills assessed" dropdown's open state.
+  const renderQDetails = (q: typeof delivered[number], idx: number) => {
     const answer = (q.answer && q.answer.trim()) || '';
     const displayOnlyScore = typeof q.displayOnlyQuestionScore === 'number'
       ? q.displayOnlyQuestionScore
@@ -520,135 +792,11 @@ export function QuestionsView({ data, renderAnswerAction }: {
     const scoredSkills = q.skills.filter(k => !k.is_unscored);
     const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
     const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
-    // HR is not scored per spec — suppress score badge + per-skill score
-    // calc footer for HR cards so the recruiter doesn't mistake "0.0/10"
-    // for a performance signal on a behavioral question.
     const isHr = q.section === 'hr';
     return (
-      <div
-        key={`q-${idx}`}
-        className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3"
-      >
-        {/* 1. Question + question score badge (suppressed for HR) */}
-        <div>
-          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
-              {/* Sections view: per-section serial number (q.qNum, from 1). */}
-              {allNum !== undefined ? `Question ${allNum}` : `S.No. ${q.qNum}`}
-            </span>
-            {allNum !== undefined && sectionTag[q.section] && (
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionTag[q.section].cls}`}
-                title={`Question ${q.qNum} of the ${sectionTag[q.section].label} section`}
-              >
-                {sectionTag[q.section].label} · Q{q.qNum}
-              </span>
-            )}
-            {isHr && q.notDelivered ? (
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
-                title="This selected HR question was never asked — the candidate ended the interview before reaching it."
-              >
-                HR · Not Asked
-              </span>
-            ) : isHr ? (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
-                HR · For Reference
-              </span>
-            ) : q.notDelivered ? (
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(0)}`}
-                title="This planned question was never asked — the interview ended before reaching it, so it scores 0."
-              >
-                Not Delivered · 0.0/10
-              </span>
-            ) : q.isUnscored && displayOnlyScore !== null ? (
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(displayOnlyScore)}`}
-                title="Display-only score from the runtime evaluator snapshot for this attended question. Excluded from terminated-session overall scoring until a full evaluation lands."
-              >
-                Score: {displayOnlyScore.toFixed(1)}/10
-              </span>
-            ) : q.isUnscored ? (
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
-                title="No evaluator scores were produced for this question — excluded from the section average rather than counted as 0.0."
-              >
-                Not Evaluated
-              </span>
-            ) : (
-              <span
-                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(q.questionScore)}`}
-                title="Question Score = Σ(skill_score × weight) / Σ(weight)"
-              >
-                Score: {q.questionScore.toFixed(1)}/10
-              </span>
-            )}
-            {/* Sections view: the question's number in the "All" view, after the
-                score. Taken from allOrder (not askedNum, which ranks every asked
-                row before every un-reached one) so a Not Asked opening HR
-                question still counts ahead of MHS: 5 HR configured → MHS
-                starts at Q6 even when only 3 HR questions were asked. */}
-            {allNum === undefined && allNumOf.has(q) && (
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200"
-                title="Position in the whole interview, as numbered in the All view"
-              >
-                Q{allNumOf.get(q)}
-              </span>
-            )}
-            {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-amber-100 text-amber-700 border-amber-200"
-                title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
-              >
-                {q.bundledFollowUp.source_qnum && q.bundledFollowUp.source_qnum > 0
-                  ? `Follow-up from Q${q.bundledFollowUp.source_qnum}`
-                  : 'Follow-up'}
-              </span>
-            )}
-          </div>
-          <div className="text-sm font-semibold text-gray-900 leading-relaxed">
-            {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
-          </div>
-          {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (() => {
-            const focus = q.bundledFollowUp.focus_skill || 'this skill';
-            const srcQ = q.bundledFollowUp.source_qnum;
-            // Only reference a source question when it's a DIFFERENT, valid one.
-            const srcRef = (srcQ && srcQ > 0 && srcQ !== q.qNum) ? `Q${srcQ}'s answer` : 'an earlier answer';
-            const prior = q.bundledFollowUp.prior_level;
-            const excerpt = q.bundledFollowUp.source_excerpt;
-            // Phrase the coverage band in plain English so reviewers don't
-            // have to know our internal "low / medium" labels.
-            const priorPhrase =
-              prior === 'low'
-                ? 'briefly (low coverage)'
-                : prior === 'medium'
-                ? 'with some detail (medium coverage)'
-                : prior === 'covered'
-                ? 'in depth (high coverage)'
-                : '';
-            return (
-              <div className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-                <div>
-                  Reframed as a follow-up — the candidate volunteered{' '}
-                  <span className="font-semibold">{focus}</span>{' '}
-                  {priorPhrase && <>{priorPhrase} </>}
-                  in {srcRef}, so Bina probed it at this planned slot instead
-                  of asking it fresh.
-                </div>
-                {excerpt && (
-                  <div className="mt-1 italic text-amber-800/90">
-                    From {srcRef}: “{excerpt}”
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-
+      <>
         {/* 2. Candidate's answer */}
-        <div className="border-l-2 border-indigo-200 pl-3">
+        <div className="border-l-2 border-brand-blue/20 pl-3">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
             <div className="text-xs font-medium text-gray-500">
               Candidate's Answer
@@ -685,7 +833,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               }
               if (q.skipReason) {
                 return (
-                  <span className={`inline-flex items-center gap-1.5 italic ${q.skipReason.tone === 'amber' ? 'text-amber-700' : 'text-gray-400'}`}>
+                  <span className={`inline-flex items-center gap-1.5 italic ${q.skipReason.tone === 'amber' ? 'text-warning' : 'text-gray-400'}`}>
                     <SkipForward className="w-3.5 h-3.5" />
                     {q.skipReason.text}
                   </span>
@@ -724,12 +872,12 @@ export function QuestionsView({ data, renderAnswerAction }: {
           // summary sentences. Shared by the PDF/report so all surfaces match.
           const lines = buildRationaleLines(q.skills, q.scoreRationale);
           return (
-            <div className="border-l-2 border-amber-200 pl-3">
+            <div className="border-l-2 border-warning-line pl-3">
               <div className="text-xs font-medium text-gray-500 mb-1">
                 Score Rationale
               </div>
-              <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 break-words leading-relaxed">
-                <Brain className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+              <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-warning-subtle/60 border border-warning-line rounded px-2.5 py-2 break-words leading-relaxed">
+                <Brain className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
                 <div className="space-y-1 flex-1">
                   {lines.map((line, li) => {
                     const ci = line.indexOf(':');
@@ -823,21 +971,21 @@ export function QuestionsView({ data, renderAnswerAction }: {
                                         Skipped
                                       </span>
                                     ) : s.is_fallback ? (
-                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-warning-subtle text-warning-strong border border-warning-line"
                                         title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question.">
                                         Q
                                       </span>
                                     ) : null}
                                   </span>
                                   <span title="Priority weight"><span className="text-gray-400">×</span><span className="text-gray-700"> {s.weight}</span></span>
-                                  <span title="Score × Weight"><span className="text-gray-400">= </span><span className="text-indigo-700 font-semibold">{contribution}</span></span>
+                                  <span title="Score × Weight"><span className="text-gray-400">= </span><span className="text-brand-blue font-semibold">{contribution}</span></span>
                                 </div>
                               )}
                             </div>
                             {/* Per-skill AI analysis (one_line_note) */}
                             {s.note && !s.is_unscored && (
                               <div className="mt-1.5 flex items-start gap-1.5 text-xs text-gray-600 bg-white border border-gray-100 rounded px-2 py-1.5">
-                                <Brain className="w-3 h-3 text-indigo-500 mt-0.5 shrink-0" />
+                                <Brain className="w-3 h-3 text-brand-blue mt-0.5 shrink-0" />
                                 <span className="leading-relaxed">{s.note}</span>
                               </div>
                             )}
@@ -849,7 +997,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                           Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{formatScore1(q.questionScore)}</span>
                         </div>
                       ) : q.isUnscored && displayOnlyScore !== null ? (
-                        <div className="text-2xs text-amber-700 italic pl-1 pt-1">
+                        <div className="text-2xs text-warning italic pl-1 pt-1">
                           Partial runtime score shown for this attended question. Excluded from the terminated-session section average.
                         </div>
                       ) : q.isUnscored ? (
@@ -871,8 +1019,8 @@ export function QuestionsView({ data, renderAnswerAction }: {
             empty/undefined (the common case in timed mode after
             strict-distribution turned probe-mode off). */}
         {q.followUps && q.followUps.length > 0 && (
-          <div className="border-l-2 border-amber-300 pl-3 mt-1">
-            <div className="text-xs font-semibold text-amber-700 mb-1.5">
+          <div className="border-l-2 border-warning-line pl-3 mt-1">
+            <div className="text-xs font-semibold text-warning mb-1.5">
               Follow-up{q.followUps.length === 1 ? '' : 's'} to Q{q.qNum} ({q.followUps.length})
             </div>
             <div className="space-y-2">
@@ -904,27 +1052,27 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 };
                 const reasonNote = explainReason();
                 return (
-                  <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
+                  <div key={fi} className="rounded bg-warning-subtle border border-warning-line p-3 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-2xs font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                      <span className="text-2xs font-bold px-1.5 py-0.5 rounded bg-warning-line text-warning-strong">
                         FU{fi + 1}
                       </span>
                       {/* Which question this is a follow-up to (parent), and —
                           when the trigger skill was volunteered earlier — which
                           question it came from (source). */}
-                      <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                      <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-warning-subtle text-warning-strong border border-warning-line">
                         Follow-up to Q{q.qNum}
                       </span>
                       {typeof fu.source_qnum === 'number' && fu.source_qnum > 0 && fu.source_qnum !== q.qNum && (
-                        <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                        <span className="text-2xs px-1.5 py-0.5 rounded bg-warning-subtle text-warning border border-warning-line">
                           from Q{fu.source_qnum}
                         </span>
                       )}
                       {fu.topic && (
-                        <span className="text-2xs text-amber-700 italic">on {fu.topic}</span>
+                        <span className="text-2xs text-warning italic">on {fu.topic}</span>
                       )}
                       {typeof fu.score === 'number' && (
-                        <span className="ml-auto text-2xs font-mono text-amber-800">
+                        <span className="ml-auto text-2xs font-mono text-warning-strong">
                           Score {formatSkillScore(fu.score)}
                         </span>
                       )}
@@ -938,7 +1086,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                       <div className="text-2xs italic text-gray-600">{fu.note}</div>
                     )}
                     {reasonNote && (
-                      <div className="text-2xs text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 mt-1">
+                      <div className="text-2xs text-warning-strong bg-warning-subtle border border-warning-line rounded px-2 py-1.5 mt-1">
                         <span className="font-semibold">Note:</span> {reasonNote}
                       </div>
                     )}
@@ -982,9 +1130,294 @@ export function QuestionsView({ data, renderAnswerAction }: {
             </div>
           </div>
         )}
+      </>
+    );
+  };
+
+  const renderQCard = (q: typeof delivered[number], idx: number, allNum?: number) => {
+    const displayOnlyScore = typeof q.displayOnlyQuestionScore === 'number'
+      ? q.displayOnlyQuestionScore
+      : null;
+    // HR is not scored per spec — suppress score badge + per-skill score
+    // calc footer for HR cards so the recruiter doesn't mistake "0.0/10"
+    // for a performance signal on a behavioral question.
+    const isHr = q.section === 'hr';
+    return (
+      <div
+        key={`q-${idx}`}
+        id={anchorId(q)}
+        className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3 scroll-mt-[calc(var(--crumb-h,3rem)+9.5rem)]"
+      >
+        {/* 1. Question + question score badge (suppressed for HR) */}
+        <div>
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className="text-xs font-semibold text-white bg-brand-blue px-2 py-0.5 rounded-full">
+              {/* Sections view: per-section serial number (q.qNum, from 1). */}
+              {allNum !== undefined ? `Question ${allNum}` : `S.No. ${q.qNum}`}
+            </span>
+            {allNum !== undefined && sectionTag[q.section] && (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionTag[q.section].cls}`}
+                title={`Question ${q.qNum} of the ${sectionTag[q.section].label} section`}
+              >
+                {sectionTag[q.section].label} · Q{q.qNum}
+              </span>
+            )}
+            {isHr && q.notDelivered ? (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
+                title="This selected HR question was never asked — the candidate ended the interview before reaching it."
+              >
+                HR · Not Asked
+              </span>
+            ) : isHr ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20">
+                HR · For Reference
+              </span>
+            ) : q.notDelivered ? (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(0)}`}
+                title="This planned question was never asked — the interview ended before reaching it, so it scores 0."
+              >
+                Not Delivered · 0.0/10
+              </span>
+            ) : q.isUnscored && displayOnlyScore !== null ? (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(displayOnlyScore)}`}
+                title="Display-only score from the runtime evaluator snapshot for this attended question. Excluded from terminated-session overall scoring until a full evaluation lands."
+              >
+                Score: {displayOnlyScore.toFixed(1)}/10
+              </span>
+            ) : q.isUnscored ? (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
+                title="No evaluator scores were produced for this question — excluded from the section average rather than counted as 0.0."
+              >
+                Not Evaluated
+              </span>
+            ) : (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(q.questionScore)}`}
+                title="Question Score = Σ(skill_score × weight) / Σ(weight)"
+              >
+                Score: {q.questionScore.toFixed(1)}/10
+              </span>
+            )}
+            {/* Sections view: the question's number in the "All" view, after the
+                score. Taken from allOrder (not askedNum, which ranks every asked
+                row before every un-reached one) so a Not Asked opening HR
+                question still counts ahead of MHS: 5 HR configured → MHS
+                starts at Q6 even when only 3 HR questions were asked. */}
+            {allNum === undefined && allNumOf.has(q) && (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200"
+                title="Position in the whole interview, as numbered in the All view"
+              >
+                Q{allNumOf.get(q)}
+              </span>
+            )}
+            {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
+              <span
+                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-warning-subtle text-warning border-warning-line"
+                title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
+              >
+                {q.bundledFollowUp.source_qnum && q.bundledFollowUp.source_qnum > 0
+                  ? `Follow-up from Q${q.bundledFollowUp.source_qnum}`
+                  : 'Follow-up'}
+              </span>
+            )}
+          </div>
+          <div className="text-sm font-semibold text-gray-900 leading-relaxed">
+            {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
+          </div>
+          {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (() => {
+            const focus = q.bundledFollowUp.focus_skill || 'this skill';
+            const srcQ = q.bundledFollowUp.source_qnum;
+            // Only reference a source question when it's a DIFFERENT, valid one.
+            const srcRef = (srcQ && srcQ > 0 && srcQ !== q.qNum) ? `Q${srcQ}'s answer` : 'an earlier answer';
+            const prior = q.bundledFollowUp.prior_level;
+            const excerpt = q.bundledFollowUp.source_excerpt;
+            // Phrase the coverage band in plain English so reviewers don't
+            // have to know our internal "low / medium" labels.
+            const priorPhrase =
+              prior === 'low'
+                ? 'briefly (low coverage)'
+                : prior === 'medium'
+                ? 'with some detail (medium coverage)'
+                : prior === 'covered'
+                ? 'in depth (high coverage)'
+                : '';
+            return (
+              <div className="mt-1.5 text-xs text-warning bg-warning-subtle border border-warning-line rounded px-2 py-1.5">
+                <div>
+                  Reframed as a follow-up — the candidate volunteered{' '}
+                  <span className="font-semibold">{focus}</span>{' '}
+                  {priorPhrase && <>{priorPhrase} </>}
+                  in {srcRef}, so Bina probed it at this planned slot instead
+                  of asking it fresh.
+                </div>
+                {excerpt && (
+                  <div className="mt-1 italic text-warning-strong/90">
+                    From {srcRef}: “{excerpt}”
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
+        {renderQDetails(q, idx)}
       </div>
     );
   };
+
+  // ── Filters / jump bar / list layout ────────────────────────────────────
+  // Answer status, using the same "no real answer" rule as the card's
+  // Candidate's Answer block.
+  const statusOf = (q: typeof delivered[number]): QaStatus => {
+    if (q.notDelivered || q.responseType === 'not_asked') return 'not_asked';
+    const rt = (q.responseType || '').toLowerCase();
+    const ans = (q.answer || '').trim();
+    const noRealAnswer = !ans || ans.toLowerCase() === '[skipped]'
+      || ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(rt);
+    return noRealAnswer ? 'skipped' : 'answered';
+  };
+  const matchesFilter = (q: typeof delivered[number], f: QaFilter): boolean => {
+    if (f === 'all') return true;
+    if (f === 'low') {
+      // Scored questions below the Pass threshold. HR is never scored; never-
+      // asked and not-evaluated questions have their own states.
+      return q.section !== 'hr' && statusOf(q) !== 'not_asked' && !q.isUnscored && q.questionScore < MHS_THRESHOLD;
+    }
+    return statusOf(q) === f;
+  };
+  // Jump-chip colour: the same score bands as the card's score badge.
+  const jumpTone = (q: typeof delivered[number]): string => {
+    if (statusOf(q) === 'not_asked') return 'bg-gray-50 text-gray-400 border-gray-200';
+    if (q.section === 'hr') return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
+    if (q.isUnscored) return 'bg-gray-100 text-gray-500 border-gray-300';
+    return scoreColorClass(q.questionScore);
+  };
+  // Cards and list rows share one anchor id per question (only one layout
+  // renders at a time), keyed by its interview-wide number.
+  const anchorId = (q: typeof delivered[number]) => `qa-q-${allNumOf.get(q)}`;
+  const scrollToQ = (q: typeof delivered[number]) =>
+    document.getElementById(anchorId(q))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const jumpTo = (q: typeof delivered[number]) => {
+    if (matchesFilter(q, qFilter)) { scrollToQ(q); return; }
+    // Hidden by the filter — clear it first, then scroll once it renders.
+    setQFilter('all');
+    setTimeout(() => scrollToQ(q), 60);
+  };
+  const toggleRow = (n: number) => setOpenRows(p => ({ ...p, [n]: !p[n] }));
+  const mhVis = mhQs.filter(q => matchesFilter(q, qFilter));
+  const nhVis = nhQs.filter(q => matchesFilter(q, qFilter));
+  const hrVis = hrQs.filter(q => matchesFilter(q, qFilter));
+  const noneMatch = mhVis.length + nhVis.length + hrVis.length === 0;
+
+  // Score cell for the list layout — mirrors the card's score badge states.
+  const listScore = (q: typeof delivered[number]) => {
+    const badge = 'inline-block text-xs font-semibold px-2 py-0.5 rounded-full border tabular-nums whitespace-nowrap';
+    if (q.section === 'hr') return <span className={`${badge} bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20`}>Not scored</span>;
+    if (q.notDelivered) return <span className={`${badge} ${scoreColorClass(0)}`}>0.0/10</span>;
+    if (q.isUnscored) {
+      return typeof q.displayOnlyQuestionScore === 'number'
+        ? <span className={`${badge} ${scoreColorClass(q.displayOnlyQuestionScore)}`}>{q.displayOnlyQuestionScore.toFixed(1)}/10</span>
+        : <span className={`${badge} bg-gray-100 text-gray-500 border-gray-300`}>Not evaluated</span>;
+    }
+    return <span className={`${badge} ${scoreColorClass(q.questionScore)}`}>{q.questionScore.toFixed(1)}/10</span>;
+  };
+  const statusChipCls: Record<QaStatus, string> = {
+    answered:  'bg-success-subtle text-success border-success-line',
+    skipped:   'bg-warning-subtle text-warning border-warning-line',
+    not_asked: 'bg-gray-100 text-gray-500 border-gray-300',
+  };
+  const listCols = 'md:grid-cols-[3.5rem_minmax(0,1fr)_7.5rem_7rem_6.5rem]';
+  // Compact list: one row per question; clicking a row expands its details
+  // (answer, rationale, skills assessed…) right under it.
+  const renderList = (qs: typeof delivered) => qs.length === 0 ? null : (
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className={`hidden md:grid ${listCols} items-center gap-x-3 px-4 py-2.5 bg-brand-blue/5 border-b border-gray-200 text-xs font-semibold text-gray-700`}>
+        <div>Q#</div>
+        <div>Question</div>
+        <div>Section</div>
+        <div>Status</div>
+        <div className="text-center">Score</div>
+      </div>
+      <div className="divide-y divide-gray-200">
+        {qs.map((q, i) => {
+          const st = statusOf(q);
+          const sec = sectionTag[q.section];
+          const n = allNumOf.get(q) ?? i + 1;
+          const isOpen = !!openRows[n];
+          return (
+            <div key={`row-${i}`} id={anchorId(q)} className={`scroll-mt-[calc(var(--crumb-h,3rem)+9.5rem)] ${isOpen ? 'bg-brand-blue/5' : ''}`}>
+            <button
+              type="button"
+              onClick={() => toggleRow(n)}
+              aria-expanded={isOpen}
+              title={isOpen ? 'Hide details' : 'Show details'}
+              className={`w-full text-left grid grid-cols-[3rem_minmax(0,1fr)] ${listCols} items-center gap-x-3 gap-y-1.5 px-4 py-2.5 hover:bg-gray-50 transition-colors`}
+            >
+              <div className="flex items-center gap-1 text-xs font-bold text-brand-blue tabular-nums">
+                {isOpen ? <ChevronUp className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
+                Q{n}
+              </div>
+              <div className="text-sm text-gray-900 leading-snug line-clamp-2 min-w-0">
+                {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
+              </div>
+              <div className="col-start-2 md:col-start-auto flex flex-wrap items-center gap-1.5 md:contents">
+                <div>
+                  {sec && <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${sec.cls}`}>{sec.label}</span>}
+                </div>
+                <div>
+                  <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${statusChipCls[st]}`}>{STATUS_LABEL[st]}</span>
+                </div>
+                <div className="md:text-center">{listScore(q)}</div>
+              </div>
+            </button>
+            {isOpen && (
+              <div className="px-4 pb-4 pt-1 md:pl-[5.25rem] space-y-3">
+                {renderQDetails(q, 1000 + n)}
+              </div>
+            )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  // List | Grid (Grid = the full per-question cards) — same sliding toggle as All / Sections.
+  const layoutToggle = (
+    <div
+      role="radiogroup"
+      aria-label="Question layout"
+      className="relative grid grid-cols-2 p-0.5"
+    >
+      <span
+        aria-hidden
+        className={`absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-0.125rem)] rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out ${
+          layout === 'card' ? 'translate-x-full' : 'translate-x-0'
+        }`}
+      />
+      {([['list', 'List', List], ['card', 'Grid', LayoutGrid]] as const).map(([mode, label, Icon]) => (
+        <button
+          key={mode}
+          type="button"
+          role="radio"
+          aria-checked={layout === mode}
+          onClick={() => setLayout(mode)}
+          className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-colors duration-300 ${
+            layout === mode ? 'text-brand-blue' : 'text-gray-500 hover:text-brand-blue'
+          }`}
+        >
+          <Icon className="hidden sm:block w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 
   // Section header chip — small label + count badge so each block has a
   // visible divider between MHS / NHS / HR.
@@ -998,15 +1431,15 @@ export function QuestionsView({ data, renderAnswerAction }: {
 
   // Which section heads the Sections view (MHS → NHS → HR, skipping empties).
   // Its heading shares the top row with the toggle; the others draw their own.
-  const firstSection = mhQs.length > 0 ? 'mh' : nhQs.length > 0 ? 'nh' : hrQs.length > 0 ? 'hr' : null;
+  const firstSection = mhVis.length > 0 ? 'mh' : nhVis.length > 0 ? 'nh' : hrVis.length > 0 ? 'hr' : null;
   const mhHeading = () => sectionHeading(
     'Must-Have Section',
     isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail',
     mhQs.length,
-    'bg-indigo-50 text-indigo-700',
+    'bg-brand-blue/10 text-brand-blue',
   );
-  const nhHeading = () => sectionHeading('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-amber-50 text-amber-700');
-  const hrHeading = () => sectionHeading('HR Round', 'For Reference', hrQs.length, 'bg-violet-50 text-violet-700');
+  const nhHeading = () => sectionHeading('Nice-to-Have Section', 'Information Only', nhQs.length, 'bg-brand-orange/10 text-brand-orange-deep');
+  const hrHeading = () => sectionHeading('HR Round', 'For Reference', hrQs.length, 'bg-brand-cyan/10 text-brand-cyan');
   const totalQs = mhQs.length + nhQs.length + hrQs.length;
 
   // All | Sections — the app's sliding tile toggle (as "View by" on Scored
@@ -1017,7 +1450,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
     <div
       role="radiogroup"
       aria-label="Question view"
-      className="relative grid grid-cols-2 p-0.5 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+      className="relative grid grid-cols-2 p-0.5"
     >
       <span
         aria-hidden
@@ -1032,7 +1465,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
           role="radio"
           aria-checked={viewMode === mode}
           onClick={() => setViewMode(mode)}
-          className={`relative z-10 px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-colors duration-300 ${
+          className={`relative z-10 px-2 sm:px-3 py-1 text-xs font-semibold rounded-md whitespace-nowrap transition-colors duration-300 ${
             viewMode === mode ? 'text-brand-blue' : 'text-gray-500 hover:text-brand-blue'
           }`}
         >
@@ -1045,7 +1478,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
   return (
     <div className="space-y-3">
       {isPartialEvaluation && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+        <div className="rounded-2xl border border-warning-line bg-warning-subtle px-5 py-4 text-sm text-warning-strong">
           This interview was terminated before completion. The scores below are for attended questions only; no overall pass/fail or final match score is generated.
         </div>
       )}
@@ -1054,42 +1487,100 @@ export function QuestionsView({ data, renderAnswerAction }: {
           sticky breadcrumb (set by CandidateResultsView); 3rem matches the left
           tab rail's offset where it isn't set. -mx-6 px-6 stretches the white
           backdrop to the card's padding so cards scroll cleanly beneath it. */}
-      <div className="sticky top-[var(--crumb-h,3rem)] z-20 -mx-6 px-6 py-2 bg-white flex items-center gap-2">
-        {viewMode === 'all' ? (
-          <>
-            <div className="text-base font-bold text-gray-900">All Questions</div>
-            <span className="text-xs text-gray-500">· {totalQs} question{totalQs === 1 ? '' : 's'}</span>
-          </>
-        ) : firstSection === 'mh' ? mhHeading()
-          : firstSection === 'nh' ? nhHeading()
-          : firstSection === 'hr' ? hrHeading()
-          : null}
-        <div className="ml-auto shrink-0">{viewToggle}</div>
+      <div className="sticky top-[var(--crumb-h,3rem)] z-20 -mx-6 px-6 py-2 bg-white space-y-2 border-b border-gray-100">
+        <div className="flex flex-wrap items-center gap-2">
+          {viewMode === 'all' ? (
+            <>
+              <div className="text-base font-bold text-gray-900">All Questions</div>
+              <span className="text-xs text-gray-500">· {totalQs} question{totalQs === 1 ? '' : 's'}</span>
+            </>
+          ) : firstSection === 'mh' ? mhHeading()
+            : firstSection === 'nh' ? nhHeading()
+            : firstSection === 'hr' ? hrHeading()
+            : null}
+          {/* One control: All | Sections, a divider, then List | Grid. */}
+          <div className="ml-auto max-w-full inline-flex items-center rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10">
+            {viewToggle}
+            <span aria-hidden className="w-px h-5 bg-brand-blue/20" />
+            {layoutToggle}
+          </div>
+        </div>
+        {/* Filters — each chip shows how many questions it matches. */}
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter questions">
+          {QA_FILTERS.map(f => {
+            const count = delivered.filter(q => matchesFilter(q, f.key)).length;
+            const active = qFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setQFilter(f.key)}
+                className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 transition-colors ${
+                  active
+                    ? 'bg-brand-blue text-white ring-brand-blue'
+                    : 'bg-white text-gray-600 ring-gray-200 hover:text-brand-blue hover:ring-brand-blue/40'
+                }`}
+              >
+                {f.label}
+                <span className={`tabular-nums ${active ? 'text-white/80' : 'text-gray-400'}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* Jump bar — one chip per question in interview order, coloured by
+            its score; questions outside the active filter are dimmed. */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5" role="navigation" aria-label="Jump to question">
+          {allOrder.map((q, i) => (
+            <button
+              key={`jump-${i}`}
+              type="button"
+              onClick={() => jumpTo(q)}
+              title={`Q${i + 1} · ${STATUS_LABEL[statusOf(q)]}${q.section !== 'hr' && statusOf(q) !== 'not_asked' && !q.isUnscored ? ` · ${q.questionScore.toFixed(1)}/10` : ''}`}
+              className={`shrink-0 min-w-[2.25rem] text-2xs font-semibold px-1.5 py-1 rounded border tabular-nums transition-opacity hover:opacity-100 ${jumpTone(q)} ${
+                matchesFilter(q, qFilter) ? '' : 'opacity-35'
+              }`}
+            >
+              Q{i + 1}
+            </button>
+          ))}
+        </div>
       </div>
+      {noneMatch && (
+        <div className="rounded-2xl border border-gray-200 p-8 text-center text-sm text-gray-400 italic">
+          No questions match this filter.
+        </div>
+      )}
       {viewMode === 'all' && (
-        <>
-          {allOrder.map((q, i) => renderQCard(q, i, i + 1))}
-        </>
+        layout === 'list'
+          ? renderList(allOrder.filter(q => matchesFilter(q, qFilter)))
+          : <>{allOrder.map((q, i) => matchesFilter(q, qFilter) ? renderQCard(q, i, i + 1) : null)}</>
       )}
       {/* Sections view keeps MHS → NHS → HR regardless of the HR stage. */}
-      {viewMode === 'sections' && mhQs.length > 0 && (
+      {viewMode === 'sections' && mhVis.length > 0 && (
         <>
           {firstSection !== 'mh' && (
             <div className="flex items-center gap-2 pt-1 pb-1">{mhHeading()}</div>
           )}
-          {mhQs.map((q, i) => renderQCard(q, hrQs.length + i))}
+          {layout === 'list'
+            ? renderList(mhVis)
+            : mhQs.map((q, i) => matchesFilter(q, qFilter) ? renderQCard(q, hrQs.length + i) : null)}
         </>
       )}
-      {viewMode === 'sections' && nhQs.length > 0 && (
+      {viewMode === 'sections' && nhVis.length > 0 && (
         <>
           {firstSection !== 'nh' && <div className="flex items-center gap-2 pt-1 pb-1">{nhHeading()}</div>}
-          {nhQs.map((q, i) => renderQCard(q, hrQs.length + mhQs.length + i))}
+          {layout === 'list'
+            ? renderList(nhVis)
+            : nhQs.map((q, i) => matchesFilter(q, qFilter) ? renderQCard(q, hrQs.length + mhQs.length + i) : null)}
         </>
       )}
-      {viewMode === 'sections' && hrQs.length > 0 && (
+      {viewMode === 'sections' && hrVis.length > 0 && (
         <>
           {firstSection !== 'hr' && <div className="flex items-center gap-2 pt-1 pb-1">{hrHeading()}</div>}
-          {hrQs.map((q, i) => renderQCard(q, i))}
+          {layout === 'list'
+            ? renderList(hrVis)
+            : hrQs.map((q, i) => matchesFilter(q, qFilter) ? renderQCard(q, i) : null)}
         </>
       )}
 
@@ -1099,27 +1590,27 @@ export function QuestionsView({ data, renderAnswerAction }: {
       {!isPartialEvaluation && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
           {mhQs.length > 0 && (
-            <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
-              <div className="bg-indigo-600 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+            <div className="rounded-2xl border-2 border-brand-blue overflow-hidden">
+              <div className="bg-brand-blue text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
                 Must-Have Section
               </div>
-              <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
-                <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
+              <div className={`p-4 ${mhPass ? 'bg-success-subtle' : 'bg-destructive-subtle'}`}>
+                <div className={`text-xs mb-1 ${mhPass ? 'text-success-strong' : 'text-destructive-strong'}`}>
                   Section Score = sum of question scores ÷ {mhDenom} planned questions
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
-                  <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  <span className={`text-3xl font-bold ${mhPass ? 'text-success' : 'text-destructive'}`}>
                     {formatScore1(mhScore)}
                   </span>
-                  <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  <span className={`text-sm font-semibold ${mhPass ? 'text-success' : 'text-destructive'}`}>
                     out of 10
                   </span>
                 </div>
                 <div
                   className={`text-sm font-bold text-center p-2 rounded border-2 ${
                     mhPass
-                      ? 'bg-emerald-100 border-emerald-500 text-emerald-800'
-                      : 'bg-rose-100 border-rose-500 text-rose-800'
+                      ? 'bg-success-subtle border-success text-success-strong'
+                      : 'bg-destructive-subtle border-destructive text-destructive-strong'
                   }`}
                 >
                   {formatScore1(mhScore)} {mhPass ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
@@ -1128,37 +1619,37 @@ export function QuestionsView({ data, renderAnswerAction }: {
             </div>
           )}
           {nhQs.length > 0 && (
-            <div className="rounded-2xl border-2 border-amber-500 overflow-hidden">
-              <div className="bg-amber-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+            <div className="rounded-2xl border-2 border-brand-orange overflow-hidden">
+              <div className="bg-brand-orange text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
                 Nice-to-Have Section
               </div>
-              <div className="p-4 bg-amber-50">
-                <div className="text-xs text-amber-800 mb-1">
+              <div className="p-4 bg-brand-orange/5">
+                <div className="text-xs text-brand-orange-deep mb-1">
                   Section Score = sum of question scores ÷ {nhDenom} planned questions
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
-                  <span className="text-3xl font-bold text-amber-600">{formatScore1(nhScore)}</span>
-                  <span className="text-sm font-semibold text-amber-700">out of 10</span>
+                  <span className="text-3xl font-bold text-brand-orange-deep">{formatScore1(nhScore)}</span>
+                  <span className="text-sm font-semibold text-brand-orange-deep">out of 10</span>
                 </div>
-                <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
+                <div className="text-sm font-bold text-center p-2 rounded bg-brand-orange/10 border-2 border-brand-orange text-brand-orange-deep">
                   Informational only — does not affect Pass/Fail
                 </div>
               </div>
             </div>
           )}
           {hrQs.length > 0 && (
-            <div className={`${viewMode === 'all' && hrOpening.length > 0 && hrClosing.length === 0 ? 'order-first ' : ''}rounded-2xl border-2 border-violet-500 overflow-hidden`}>
-              <div className="bg-violet-500 text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
+            <div className={`${viewMode === 'all' && hrOpening.length > 0 && hrClosing.length === 0 ? 'order-first ' : ''}rounded-2xl border-2 border-brand-cyan overflow-hidden`}>
+              <div className="bg-brand-cyan text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
                 HR Round
               </div>
-              <div className="p-4 bg-violet-50">
-                <div className="text-xs text-violet-800 mb-1">
+              <div className="p-4 bg-brand-cyan/10">
+                <div className="text-xs text-brand-cyan mb-1">
                   {hrQs.length} HR question{hrQs.length === 1 ? '' : 's'} asked
                 </div>
-                <div className="text-sm font-semibold text-violet-900 mb-3">
+                <div className="text-sm font-semibold text-brand-cyan mb-3">
                   Behavioral / cultural fit conversation
                 </div>
-                <div className="text-sm font-bold text-center p-2 rounded bg-violet-100 border-2 border-violet-500 text-violet-800">
+                <div className="text-sm font-bold text-center p-2 rounded bg-brand-cyan/15 border-2 border-brand-cyan text-brand-cyan">
                   Not scored — per evaluation spec
                 </div>
               </div>

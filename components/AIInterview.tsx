@@ -2829,6 +2829,34 @@ export default function AIInterview() {
   if (redirectingToConfig) {
     return <AIInterviewFlowLoader message="Loading configuration…" />;
   }
+  /* Job-row skeleton: the first load's page skeleton, and the Total Jobs list
+     while its Refresh runs (as All Interviews swaps its rows for a skeleton). */
+  const configRowsSkeleton = (
+    <>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="@container/ai-row p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-sm shadow-brand-blue/5">
+                  <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
+                    <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                    <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                      {Array.from({ length: 4 }).map((_, j) => (
+                        <div key={j} className="space-y-1.5">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-4 w-10" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+    </>
+  );
   if (loading) {
     return (
       <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
@@ -2866,30 +2894,7 @@ export default function AIInterview() {
               ))}
             </div>
             {/* Config rows — one per job, matching the loaded list's row shape */}
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-sm shadow-brand-blue/5">
-                  <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
-                    <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
-                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
-                      <Skeleton className="h-4 w-40" />
-                    </div>
-                    <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
-                      <Skeleton className="h-5 w-20 rounded-full" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
-                      {Array.from({ length: 4 }).map((_, j) => (
-                        <div key={j} className="space-y-1.5">
-                          <Skeleton className="h-3 w-16" />
-                          <Skeleton className="h-4 w-10" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-3">{configRowsSkeleton}</div>
           </div>
         </div>
       </main>
@@ -3011,6 +3016,9 @@ export default function AIInterview() {
             {
               label: 'Configured Jobs',
               value: allConfigs.length ? totalJobs : (stats?.total_configs ?? 0),
+              // Every config is one interview version, so the versions behind
+              // the job count are the configs themselves (Total Interviews).
+              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
               icon: Briefcase,
               tab: 'all' as TabKey,
               cardKey: 'jobs' as OverviewCardKey,
@@ -3045,7 +3053,7 @@ export default function AIInterview() {
           ];
           return (
             <StatsCardGrid className="mb-5 sm:mb-8" columns={4}>
-              {cards.map(({ label, value, icon: Icon, tab, cardKey }) => (
+              {cards.map(({ label, value, versions, icon: Icon, tab, cardKey }) => (
                 <StatsCard
                   key={label}
                   tone="neutral"
@@ -3056,7 +3064,13 @@ export default function AIInterview() {
                   value={value}
                   sparkline={false}
                   onClick={() => openListView(tab, { cardKey })}
-                />
+                >
+                  {versions !== undefined && (
+                    <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                      {versions} {versions === 1 ? 'version' : 'versions'}
+                    </span>
+                  )}
+                </StatsCard>
               ))}
             </StatsCardGrid>
           );
@@ -3358,7 +3372,9 @@ export default function AIInterview() {
           {/* Refresh — right corner of the pill row. Refetches whichever tab
               is on screen: the config-list/processing/invitation-status/
               settings tabs this component owns directly, plus a bump of
-              `refreshSignal` for the three that manage their own data. */}
+              `refreshSignal` for the three that manage their own data.
+              Hidden on Settings — a form, not a list. */}
+          {activeTab !== 'settings' && (
           <Button
             variant="secondary"
             size="sm"
@@ -3371,6 +3387,7 @@ export default function AIInterview() {
           >
             <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
+          )}
           </div>
         </div>
         {/* Actions (N) + Clear for ticked rows land on this third line. */}
@@ -3421,7 +3438,15 @@ export default function AIInterview() {
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && !showUngroupedList && (
             <div className="p-3 sm:p-6">
-              {collapsedConfigs.length === 0 ? (
+              {isRefreshingTab ? (
+                <div
+                  aria-busy="true"
+                  aria-label="Refreshing jobs"
+                  className={listDisplayMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start' : 'space-y-3'}
+                >
+                  {configRowsSkeleton}
+                </div>
+              ) : collapsedConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
                     <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />

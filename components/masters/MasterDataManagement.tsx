@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Check, AlertCircle, Clock, GraduationCap, Factory, Sparkles, ArrowUpRight, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Check, Power, PowerOff, Clock, GraduationCap, Factory, Sparkles, ArrowUpRight, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/enhanced-toast';
 import {
   masterDataService,
@@ -77,6 +77,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
   const [editingItem, setEditingItem] = useState<BaseItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -273,12 +274,39 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
         await masterDataService.deleteIndustryType(id);
       }
 
-      toast.success({ title: 'Item deleted successfully' });
+      toast.success({ title: 'Item permanently deleted' });
       setShowDeleteConfirm(null);
+      // Re-fetch rather than filter the deleted row out locally, so sort order
+      // and the pagination total always reflect what the server actually has.
       fetchData();
     } catch (error) {
       console.error('Failed to delete:', error);
       toast.error({ title: 'Failed to delete', description: 'Please try again.' });
+    }
+  };
+
+  // Active <-> Inactive is a status change, not a delete — a separate action so
+  // Delete can be a real, permanent removal without losing the ability to
+  // park a level without discarding it.
+  const handleToggleActive = async (item: BaseItem) => {
+    const nextActive = !item.is_active;
+    setTogglingId(item.id);
+    try {
+      if (type === 'experience') {
+        await masterDataService.updateExperienceLevel(item.id, { is_active: nextActive });
+      } else if (type === 'education') {
+        await masterDataService.updateEducationLevel(item.id, { is_active: nextActive });
+      } else if (type === 'industry') {
+        await masterDataService.updateIndustryType(item.id, { is_active: nextActive });
+      }
+
+      toast.success({ title: nextActive ? 'Marked active' : 'Marked inactive' });
+      fetchData();
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      toast.error({ title: 'Failed to update status', description: 'Please try again.' });
+    } finally {
+      setTogglingId(null);
     }
   };
 
@@ -476,12 +504,31 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
+                        <button
+                          onClick={() => handleToggleActive(item)}
+                          disabled={togglingId === item.id}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-[border-color,box-shadow,color,background-color] disabled:cursor-not-allowed disabled:opacity-60 ${
+                            item.is_active
+                              ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-gray-300 hover:bg-gray-50'
+                              : 'border-brand-teal/20 bg-brand-teal/[0.05] text-brand-teal hover:bg-brand-teal/[0.1]'
+                          }`}
+                          aria-label={item.is_active ? 'Deactivate' : 'Activate'}
+                          title={item.is_active ? 'Deactivate' : 'Activate'}
+                        >
+                          {togglingId === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : item.is_active ? (
+                            <PowerOff className="h-4 w-4" />
+                          ) : (
+                            <Power className="h-4 w-4" />
+                          )}
+                        </button>
                         {showDeleteConfirm === item.id ? (
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleDelete(item.id)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-destructive text-white shadow-sm shadow-red-600/25 transition-all hover:-translate-y-0.5 hover:bg-destructive"
-                              aria-label="Confirm delete" title="Confirm delete"
+                              aria-label="Confirm permanent delete" title="Confirm permanent delete"
                             >
                               <Check className="h-4 w-4" />
                             </button>
@@ -497,7 +544,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                           <button
                             onClick={() => setShowDeleteConfirm(item.id)}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1]"
-                            aria-label="Delete" title="Delete"
+                            aria-label="Delete permanently" title="Delete permanently"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

@@ -492,7 +492,6 @@ export default function ServerCandidatePicker({
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-slate-400 truncate">
                       {r.email ? r.email : <span className="font-medium text-warning-strong">No email</span>}
-                      {r.phone ? ` · ${r.phone}` : ''}
                       {r.title ? ` · ${r.title}` : ''}
                     </span>
                   </span>

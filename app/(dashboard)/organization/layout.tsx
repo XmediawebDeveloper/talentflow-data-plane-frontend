@@ -2,12 +2,13 @@
 
 import { usePathname } from 'next/navigation';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import OrganizationTabs from '@/components/organization/OrganizationTabs';
+import OrganizationTabs, { type OrganizationTabGroup } from '@/components/organization/OrganizationTabs';
 import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
 
 /**
- * Persistent frame for the five organization tabs (Users, Usage History,
- * Roles & Permissions, Teams, Chat).
+ * Persistent frame for the organization tab groups:
+ *   User Management — Users, Usage History, Roles & Permissions
+ *   Teams           — Teams, Chat (opened from the dashboard's Teams tile)
  *
  * The page card, breadcrumb, tab bar and the grey tab panel live HERE, so they
  * stay mounted while switching tabs — only the panel's content changes, with a
@@ -19,12 +20,18 @@ import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIn
  * Other routes under /organization (company profile, internal tickets, usage,
  * role create/edit) are not tabs — they pass through untouched.
  */
-const TAB_PAGES: Record<string, string> = {
-  '/organization/user-management': 'Users',
-  '/organization/usage-history': 'Usage History',
-  '/organization/role-management': 'Roles & Permissions',
-  '/organization/team-management': 'Teams',
-  '/organization/team-chat': 'Chat',
+const TAB_PAGES: Record<string, { label: string; group: OrganizationTabGroup }> = {
+  '/organization/user-management': { label: 'Users', group: 'users' },
+  '/organization/usage-history': { label: 'Usage History', group: 'users' },
+  '/organization/role-management': { label: 'Roles & Permissions', group: 'users' },
+  '/organization/team-management': { label: 'Teams', group: 'teams' },
+  '/organization/team-chat': { label: 'Chat', group: 'teams' },
+};
+
+/** Each group's landing tab — the breadcrumb's middle crumb links here. */
+const GROUP_ROOT: Record<OrganizationTabGroup, { label: string; href: string }> = {
+  users: { label: 'User Management', href: '/organization/user-management' },
+  teams: { label: 'Teams', href: '/organization/team-management' },
 };
 
 export default function OrganizationLayout({ children }: { children: React.ReactNode }) {
@@ -32,8 +39,10 @@ export default function OrganizationLayout({ children }: { children: React.React
   // Tab bar pins just below the sticky breadcrumb (measured height).
   const [crumbRef, crumbHeight] = useBreadcrumbOffset();
 
-  const label = TAB_PAGES[pathname];
-  if (!label) return <>{children}</>;
+  const page = TAB_PAGES[pathname];
+  if (!page) return <>{children}</>;
+  const { label, group } = page;
+  const root = GROUP_ROOT[group];
 
   // Chat fills the viewport height (its message list scrolls inside), so the
   // frame becomes a flex column down to the content; it never scrolls the page,
@@ -53,12 +62,12 @@ export default function OrganizationLayout({ children }: { children: React.React
             barRef={crumbRef}
             className="mb-4 shrink-0 md:mb-6"
             items={
-              pathname === '/organization/user-management'
-                ? [{ label: 'Dashboard', href: '/dashboard' }, { label: 'User Management' }]
-                : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'User Management', href: '/organization/user-management' }, { label }]
+              pathname === root.href
+                ? [{ label: 'Dashboard', href: '/dashboard' }, { label: root.label }]
+                : [{ label: 'Dashboard', href: '/dashboard' }, { label: root.label, href: root.href }, { label }]
             }
           />
-          <OrganizationTabs stickyTop={isChat ? undefined : crumbHeight} />
+          <OrganizationTabs group={group} stickyTop={isChat ? undefined : crumbHeight} />
 
           {/* The active tab's panel — joins the tab bar's baseline on desktop
               (-mt-5 cancels the tab bar's mb-5). */}
