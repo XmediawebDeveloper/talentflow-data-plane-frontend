@@ -43,7 +43,7 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, renderInviteTargetItems, resolveInviteTargetState, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
+import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, renderInviteTargetItems, resolveInviteTargetState, resolveSelectionJobLock, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
 import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -2918,6 +2918,14 @@ export default function ResumeScoringPage({
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
           jobCode={jdCodeOf(selectedHistoryItem)}
+          /* Archived/Disabled → both invites below grey out with that as
+             the reason, same as the job-list's own Actions menu — this
+             single-job drill-down sits outside Job Details' JobActionLock. */
+          jobStatus={(() => {
+            const record = jobRecordsById.get(selectedHistoryItem.jobId);
+            const raw = record?.status || (selectedHistoryItem.jdStatus === 'active' ? 'published' : selectedHistoryItem.jdStatus) || 'published';
+            return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+          })()}
           initialScoredDate={selectedHistoryItem.scoredDateFilter ?? ''}
           availableUnits={availableASUnits ?? 10}
           /* Nothing published on this JD → nothing to invite to, so the row's
@@ -3866,14 +3874,28 @@ export default function ResumeScoringPage({
                     {(() => {
                       /* The ticked jobs, each as the job its invite goes to
                          (its latest version — the one the row shows). */
+                      // Same status the row's own badge resolves (jobRecordsById,
+                      // falling back to this item's own jdStatus) — Archived /
+                      // Disabled jobs lock both invites below, whatever the
+                      // permission, with that as the reason.
+                      const statusOf = (item: typeof selectableJobs[number]) => {
+                        const record = jobRecordsById.get(item.jobId);
+                        const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                        return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+                      };
                       const tickedJobs: InviteTargetJob[] = selectableJobs
                         .filter(item => {
                           const k = resolveHistoryGroupKey(item);
                           return selectedHistoryItems.has(k) || isJobPartlySelected(k);
                         })
-                        .map(item => ({ jdId: item.jobId, jdCode: jdCodeOf(item) || undefined, jdTitle: item.jobTitle }));
+                        .map(item => ({ jdId: item.jobId, jdCode: jdCodeOf(item) || undefined, jdTitle: item.jobTitle, status: statusOf(item) }));
                       const assessmentTarget = resolveInviteTargetState('assessment', tickedJobs, id => jobViewInviteTargets.hasAssessment(id));
                       const interviewTarget = resolveInviteTargetState('interview', tickedJobs, id => jobViewInviteTargets.hasAIInterview(id));
+                      const selectionJobLock = resolveSelectionJobLock(tickedJobs);
+                      const assessmentAllowed = jobActionPerms.canCreateAssessments && !selectionJobLock;
+                      const assessmentReason = selectionJobLock ?? jobActionPerms.assessmentDeniedReason;
+                      const interviewAllowed = jobActionPerms.mayInviteAIInterview && !selectionJobLock;
+                      const interviewReason = selectionJobLock ?? jobActionPerms.aiInterviewDeniedReason;
                       const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
                         setCreateInviteTarget({ kind, job, rows: jobViewExportRows, view: 'job' });
                       return (
@@ -3882,10 +3904,10 @@ export default function ResumeScoringPage({
                             kind: 'assessment',
                             target: assessmentTarget,
                             itemClass: itemCls,
-                            allowed: jobActionPerms.canCreateAssessments,
-                            deniedReason: jobActionPerms.assessmentDeniedReason,
+                            allowed: assessmentAllowed,
+                            deniedReason: assessmentReason,
                             onInvite: (e) => {
-                              if (!jobActionPerms.canCreateAssessments) {
+                              if (!assessmentAllowed) {
                                 e.preventDefault();
                                 return;
                               }
@@ -3897,10 +3919,10 @@ export default function ResumeScoringPage({
                             kind: 'interview',
                             target: interviewTarget,
                             itemClass: itemCls,
-                            allowed: jobActionPerms.mayInviteAIInterview,
-                            deniedReason: jobActionPerms.aiInterviewDeniedReason,
+                            allowed: interviewAllowed,
+                            deniedReason: interviewReason,
                             onInvite: (e) => {
-                              if (!jobActionPerms.mayInviteAIInterview) {
+                              if (!interviewAllowed) {
                                 e.preventDefault();
                                 return;
                               }
