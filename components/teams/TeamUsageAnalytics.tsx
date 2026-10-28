@@ -2,9 +2,9 @@
 
 import {
   Users, BarChart3, ChevronDown, ChevronRight,
-  Download, FileText, ClipboardCheck, Upload,
+  Download, FileText, ClipboardCheck, Upload, Loader2, Search, Crown,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import teamService, {
   TeamUsageSummary,
   TeamMemberUsage,
@@ -21,10 +21,12 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Skeleton } from '@/components/ui/skeleton';
 import ExportFormatModal from '@/components/ExportFormatModal';
-import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import { exportRows, exportRowsToCSV, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import NameAvatar from '@/components/ui/name-avatar';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort } from '@/components/ui/sortable-header';
+import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { useTeamReportRange, useReportMeasure, RangePresets, MeasureToggle, RANGE_PRESETS, todayIST, previousRange, periodDelta } from './reportControls';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 
@@ -71,6 +73,52 @@ function teamTotal(t: TeamUsageSummary) {
   return getCount(t, 'RS') + getCount(t, 'AS') + getCount(t, 'AIU') + getCount(t, 'RU');
 }
 
+/** Units consumed, as shown under a count: whole numbers stay whole, fractions get one decimal. */
+function formatUnits(units: number) {
+  return Number.isInteger(units) ? String(units) : units.toFixed(1);
+}
+
+// ─── Measure: actions (how many times) or units (how much was consumed) ─────
+
+type Measure = 'actions' | 'units';
+type UnitKey = 'RS' | 'AS' | 'AIU' | 'RU';
+const UNIT_KEYS: readonly UnitKey[] = ['RS', 'AS', 'AIU', 'RU'];
+
+/** The Actions / Units toggle, read by every row and card below. */
+const MeasureContext = createContext<Measure>('actions');
+
+function teamValue(t: TeamUsageSummary, k: UnitKey, m: Measure) {
+  return m === 'units' ? t.by_type[k]?.total_consumed ?? 0 : getCount(t, k);
+}
+function teamTotalBy(t: TeamUsageSummary, m: Measure) {
+  return UNIT_KEYS.reduce((sum, k) => sum + teamValue(t, k, m), 0);
+}
+function memberValue(mem: TeamMemberUsage, k: UnitKey, m: Measure) {
+  return m === 'units' ? getMUnits(mem, k) : getMCount(mem, k);
+}
+function memberTotalBy(mem: TeamMemberUsage, m: Measure) {
+  return UNIT_KEYS.reduce((sum, k) => sum + memberValue(mem, k, m), 0);
+}
+function formatMeasure(v: number, m: Measure) {
+  return m === 'units' ? formatUnits(v) : v.toLocaleString();
+}
+
+/** Full names behind the RS / AS / AIU / RU abbreviations — header tooltips and the phone legend. */
+const UNIT_FULL_NAME: Record<'RS' | 'AS' | 'AIU' | 'RU', string> = {
+  RS: 'Resume Scoring',
+  AS: 'Assessment',
+  AIU: 'AI Interview',
+  RU: 'Resume Storage',
+};
+
+/** A member's consumption history loads this many entries at a time. */
+const LOG_PAGE_SIZE = 200;
+
+/* Member usage per team + range. Collapsing and re-opening a team used to
+   refetch it every time; the cache is cleared whenever the team list reloads. */
+const membersCache = new Map<string, TeamMemberUsage[]>();
+const membersCacheKey = (teamId: string, fromDate: string, toDate: string) => `${teamId}|${fromDate}|${toDate}`;
+
 // Human-readable labels for all unit types (including system ones)
 const UNIT_TYPE_LABEL: Record<string, string> = {
   RS:         'RS',
@@ -90,15 +138,101 @@ const ENTRY_UNIT_BADGE_EXTENDED: Record<string, string> = {
 
 // ─── Consumption log entries (member drill-down detail) ───────────────────────
 
-function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
+interface LogPaging {
+  /** Entries in the range on the server — more than `entries.length` means more to load. */
+  total: number;
+  onLoadMore: () => void;
+  loadingMore: boolean;
+}
+
+/** "Showing 200 of 340" — or just the count when everything is loaded. */
+const historyCountLabel = (shown: number, total: number) =>
+  total > shown ? `showing ${shown} of ${total}` : `${shown} ${shown === 1 ? 'entry' : 'entries'}`;
+
+function LoadMoreHistory({ shown, total, onLoadMore, loadingMore, className = '' }: LogPaging & { shown: number; className?: string }) {
+  if (total <= shown) return null;
+  const next = Math.min(LOG_PAGE_SIZE, total - shown);
+  return (
+    <button
+      type="button"
+      onClick={onLoadMore}
+      disabled={loadingMore}
+      className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-brand-blue transition-colors hover:bg-brand-blue/[0.04] disabled:cursor-wait disabled:opacity-70 dark:border-slate-700 dark:bg-slate-900 ${className}`}
+    >
+      {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+      {loadingMore ? 'Loading…' : `Load ${next} more`}
+    </button>
+  );
+}
+
+/** Unit-type / status filters over the loaded history (client side). */
+function useHistoryFilters(entries: ConsumptionLogEntry[]) {
+  const [unit, setUnit] = useState('');
+  const [status, setStatus] = useState('');
+  const unitOptions = useMemo(() => Array.from(new Set(entries.map(e => e.unit_type))), [entries]);
+  const statusOptions = useMemo(() => Array.from(new Set(entries.map(e => e.status))), [entries]);
+  const filtered = useMemo(
+    () => entries.filter(e => (!unit || e.unit_type === unit) && (!status || e.status === status)),
+    [entries, unit, status],
+  );
+  return { unit, setUnit, status, setStatus, unitOptions, statusOptions, filtered, active: !!unit || !!status };
+}
+type HistoryFilters = ReturnType<typeof useHistoryFilters>;
+
+/** The shown (filtered) entries as a CSV. */
+function downloadHistory(entries: ConsumptionLogEntry[], memberName: string, fromDate: string, toDate: string) {
+  const rows = entries.map(e => [
+    formatIST(e.created_at),
+    UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type,
+    e.unit_type === 'max_seats' ? 'Seat License' : (e.entity_name || UNIT_TYPE_NAMES[e.unit_type] || e.unit_type),
+    e.units_consumed,
+    e.status.replace(/_/g, ' '),
+    e.failure_reason ?? '',
+  ]);
+  const slug = memberName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'member';
+  exportRowsToCSV(['Date', 'Unit', 'Item', 'Units', 'Status', 'Failure Reason'], rows, `${slug}-history-${fromDate}-to-${toDate}`);
+}
+
+function HistoryToolbar({ f, onDownload, className = '' }: { f: HistoryFilters; onDownload: () => void; className?: string }) {
+  const select = 'h-7 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300';
+  return (
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      {f.unitOptions.length > 1 && (
+        <select aria-label="Filter by unit type" value={f.unit} onChange={e => f.setUnit(e.target.value)} className={select}>
+          <option value="">All units</option>
+          {f.unitOptions.map(u => <option key={u} value={u}>{UNIT_TYPE_LABEL[u] ?? u}</option>)}
+        </select>
+      )}
+      {f.statusOptions.length > 1 && (
+        <select aria-label="Filter by status" value={f.status} onChange={e => f.setStatus(e.target.value)} className={select}>
+          <option value="">All statuses</option>
+          {f.statusOptions.map(st => <option key={st} value={st}>{st.replace(/_/g, ' ').toLowerCase()}</option>)}
+        </select>
+      )}
+      <button
+        type="button"
+        onClick={onDownload}
+        disabled={f.filtered.length === 0}
+        className="ml-auto inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-medium text-gray-700 hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+      >
+        <Download className="h-3.5 w-3.5" /> CSV
+      </button>
+    </div>
+  );
+}
+
+function MemberLogEntries({ entries, total, onLoadMore, loadingMore, memberName, fromDate, toDate }: { entries: ConsumptionLogEntry[]; memberName: string; fromDate: string; toDate: string } & LogPaging) {
   // Show ALL entries sorted newest-first (including system ones like max_seats)
-  const sorted = [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const f = useHistoryFilters(entries);
+  const sorted = [...f.filtered].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <tr>
       <td colSpan={8} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
         <p className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-          Consumption History — {sorted.length} {sorted.length === 1 ? 'entry' : 'entries'}
+          Consumption History — {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
         </p>
+        <HistoryToolbar f={f} onDownload={() => downloadHistory(sorted, memberName, fromDate, toDate)} className="mb-3" />
+        {sorted.length === 0 && <p className="text-xs italic text-gray-400 dark:text-slate-500">No entries match these filters.</p>}
         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
           {sorted.map(e => (
             <div key={e.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3 text-sm max-sm:text-[13px]">
@@ -143,6 +277,7 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
             </div>
           ))}
         </div>
+        <LoadMoreHistory shown={entries.length} total={total} onLoadMore={onLoadMore} loadingMore={loadingMore} className="mt-2" />
       </td>
     </tr>
   );
@@ -151,10 +286,32 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
 // ─── Data hooks (shared by the desktop rows and the phone cards) ─────────────
 
 /** A member's consumption log, fetched on first expand. */
-function useMemberLog(member: TeamMemberUsage, fromDate: string) {
+function useMemberLog(member: TeamMemberUsage, fromDate: string, toDate: string) {
   const [expanded, setExpanded] = useState(false);
   const [entries, setEntries] = useState<ConsumptionLogEntry[] | null>(null);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // One page of history from `offset`. Same range as the counts above —
+  // end_date used to be left out, so the history ran past the To date.
+  const fetchPage = async (offset: number) => {
+    const res = await unitPoolService.getConsumptionHistory({
+      user_id: member.user_id,
+      start_date: fromDate,
+      end_date: toDate,
+      limit: LOG_PAGE_SIZE,
+      offset,
+    });
+    const items: ConsumptionLogEntry[] = Array.isArray(res)
+      ? res
+      : (res as any).items ?? (res as any).data ?? [];
+    // No total from the server: assume more only while pages come back full.
+    const serverTotal = !Array.isArray(res) && typeof res.total === 'number'
+      ? res.total
+      : offset + items.length + (items.length === LOG_PAGE_SIZE ? 1 : 0);
+    return { items, serverTotal };
+  };
 
   const toggle = async () => {
     if (expanded) { setExpanded(false); return; }
@@ -162,26 +319,35 @@ function useMemberLog(member: TeamMemberUsage, fromDate: string) {
     if (entries !== null) return;
     setLoading(true);
     try {
-      const res = await unitPoolService.getConsumptionHistory({
-        user_id: member.user_id,
-        start_date: fromDate,
-        limit: 200,
-      });
-      const items: ConsumptionLogEntry[] = Array.isArray(res)
-        ? res
-        : (res as any).items ?? (res as any).data ?? [];
+      const { items, serverTotal } = await fetchPage(0);
       setEntries(items);
+      setTotal(serverTotal);
     } catch {
       setEntries([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   };
 
-  // Reset on date change
-  useEffect(() => { setEntries(null); setExpanded(false); }, [fromDate]);
+  const loadMore = async () => {
+    if (!entries || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const { items, serverTotal } = await fetchPage(entries.length);
+      setEntries([...entries, ...items]);
+      setTotal(items.length === 0 ? entries.length : serverTotal);
+    } catch {
+      toast.error({ title: 'Could not load more history', description: 'Please try again.' });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
-  return { expanded, toggle, entries, loading };
+  // Reset when either end of the range changes
+  useEffect(() => { setEntries(null); setTotal(0); setExpanded(false); }, [fromDate, toDate]);
+
+  return { expanded, toggle, entries, loading, total, loadMore, loadingMore };
 }
 
 /** A team's member usage, fetched while the team is expanded. */
@@ -191,11 +357,21 @@ function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toD
 
   useEffect(() => {
     if (!expanded) return;
+    const key = membersCacheKey(teamId, fromDate, toDate);
+    const cached = membersCache.get(key);
+    if (cached) {
+      setMembers(cached);
+      setLoadingMembers(false);
+      return;
+    }
     let cancelled = false;
     setLoadingMembers(true);
     setMembers(null);
     teamService.getTeamMembersUsage(teamId, fromDate, toDate)
-      .then(res => { if (!cancelled) setMembers(res.members); })
+      .then(res => {
+        membersCache.set(key, res.members);
+        if (!cancelled) setMembers(res.members);
+      })
       .catch(() => { if (!cancelled) setMembers([]); })
       .finally(() => { if (!cancelled) setLoadingMembers(false); });
     return () => { cancelled = true; };
@@ -204,15 +380,94 @@ function useTeamMembers(teamId: string, expanded: boolean, fromDate: string, toD
   return { members, loadingMembers };
 }
 
+// ─── Member list: search, sort, Top / No-usage markers ─────────────────────────
+
+type MemberSort = 'usage' | 'name' | 'recent';
+
+/** Search + sort over a team's members, and which one used the most. */
+function useMemberView(members: TeamMemberUsage[] | null) {
+  const measure = useContext(MeasureContext);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<MemberSort>('usage');
+  const list = useMemo(() => members ?? [], [members]);
+  const topId = useMemo(() => {
+    if (list.length < 2) return null;
+    let best: TeamMemberUsage | null = null;
+    for (const mem of list) if (!best || memberTotalBy(mem, measure) > memberTotalBy(best, measure)) best = mem;
+    return best && memberTotalBy(best, measure) > 0 ? best.user_id : null;
+  }, [list, measure]);
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const found = q
+      ? list.filter(mem => (mem.user_name || '').toLowerCase().includes(q) || (mem.user_email || '').toLowerCase().includes(q))
+      : list;
+    return [...found].sort((a, b) => {
+      if (sort === 'name') return (a.user_name || a.user_email).localeCompare(b.user_name || b.user_email, undefined, { sensitivity: 'base' });
+      if (sort === 'recent') return (b.last_activity || '').localeCompare(a.last_activity || '');
+      return memberTotalBy(b, measure) - memberTotalBy(a, measure);
+    });
+  }, [list, query, sort, measure]);
+  return { query, setQuery, sort, setSort, rows, topId, count: list.length };
+}
+type MemberView = ReturnType<typeof useMemberView>;
+
+function MemberListControls({ view, className = '' }: { view: MemberView; className?: string }) {
+  if (view.count < 2) return null;
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <div className="relative min-w-0 flex-1 sm:max-w-xs">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <input
+          type="search"
+          value={view.query}
+          onChange={e => view.setQuery(e.target.value)}
+          placeholder="Search members…"
+          aria-label="Search members"
+          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-8 pr-2 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+        />
+      </div>
+      <select
+        aria-label="Sort members"
+        value={view.sort}
+        onChange={e => view.setSort(e.target.value as MemberSort)}
+        className="h-8 shrink-0 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+      >
+        <option value="usage">Most usage</option>
+        <option value="name">Name (A–Z)</option>
+        <option value="recent">Recently active</option>
+      </select>
+    </div>
+  );
+}
+
+/** "Top" for the team's biggest consumer; "No usage" for a member with none in the range. */
+function MemberBadges({ member, isTop }: { member: TeamMemberUsage; isTop: boolean }) {
+  const idle = memberTotalBy(member, 'actions') === 0;
+  if (!isTop && !idle) return null;
+  return isTop ? (
+    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-brand-orange/10 px-1.5 py-px text-2xs font-semibold text-brand-orange-deep ring-1 ring-brand-orange/15">
+      <Crown className="h-2.5 w-2.5" /> Top
+    </span>
+  ) : (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-px text-2xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400">
+      No usage
+    </span>
+  );
+}
+
 // ─── Single member row ────────────────────────────────────────────────────────
 
-function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: string }) {
-  const { expanded, toggle, entries, loading } = useMemberLog(member, fromDate);
+function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; fromDate: string; toDate: string; isTop?: boolean }) {
+  const { expanded, toggle, entries, loading, total, loadMore, loadingMore } = useMemberLog(member, fromDate, toDate);
+  const measure = useContext(MeasureContext);
 
-  const rs   = getMCount(member, 'RS');
-  const as_  = getMUnits(member, 'AS');   // float for assessments
-  const aiu  = getMCount(member, 'AIU');
-  const ru   = getMCount(member, 'RU');
+  // The badge follows the Actions / Units toggle; the line under it shows the other one.
+  const rs   = memberValue(member, 'RS', measure);
+  const as_  = memberValue(member, 'AS', measure);
+  const aiu  = memberValue(member, 'AIU', measure);
+  const ru   = memberValue(member, 'RU', measure);
+  const secondary = (k: UnitKey) =>
+    measure === 'units' ? `${getMCount(member, k)} actions` : `${formatUnits(getMUnits(member, k))} units`;
 
   return (
     <>
@@ -228,7 +483,10 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
             </div>
             <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
             <div>
-              <p className="text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</p>
+              <p className="flex items-center gap-1.5 text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">
+                {member.user_name || '—'}
+                <MemberBadges member={member} isTop={isTop} />
+              </p>
               <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
             </div>
           </div>
@@ -239,9 +497,9 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
-              {rs}
+              {formatMeasure(rs, measure)}
             </span>
-            <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'RS')} actions</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{secondary('RS')}</p>
           </div>
         </td>
 
@@ -250,9 +508,9 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${as_ > 0 ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-gray-100 text-gray-400'}`}>
-              {as_.toFixed(1)}
+              {formatMeasure(as_, measure)}
             </span>
-            <p className="text-xs text-gray-400 dark:text-slate-500">units consumed</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{secondary('AS')}</p>
           </div>
         </td>
 
@@ -261,9 +519,9 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
-              {aiu}
+              {formatMeasure(aiu, measure)}
             </span>
-            <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'AIU')} actions</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{secondary('AIU')}</p>
           </div>
         </td>
 
@@ -272,9 +530,9 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
-              {ru}
+              {formatMeasure(ru, measure)}
             </span>
-            <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'RU')} actions</p>
+            <p className="text-xs text-gray-400 dark:text-slate-500">{secondary('RU')}</p>
           </div>
         </td>
 
@@ -334,7 +592,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
 
       {/* Log entries */}
       {expanded && !loading && entries !== null && entries.length > 0 && (
-        <MemberLogEntries entries={entries} />
+        <MemberLogEntries entries={entries} total={total} onLoadMore={loadMore} loadingMore={loadingMore} memberName={member.user_name || member.user_email} fromDate={fromDate} toDate={toDate} />
       )}
 
       {/* Empty */}
@@ -349,7 +607,30 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
   );
 }
 
-// ─── Team row (outer table — 6 cols) + nested member table (10 cols) ──────────
+// ─── Share bar: a team's mix of RS / AS / AIU / RU, and its % of all usage ────
+
+function ShareBar({ team, grandTotal, className = '' }: { team: TeamUsageSummary; grandTotal: number; className?: string }) {
+  const measure = useContext(MeasureContext);
+  const total = teamTotalBy(team, measure);
+  if (total <= 0 || grandTotal <= 0) return <span className="text-sm text-gray-300 dark:text-slate-500">—</span>;
+  const pct = Math.round((total / grandTotal) * 100);
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <div
+        className="flex h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+        title={UNIT_KEYS.map(k => `${k} ${formatMeasure(teamValue(team, k, measure), measure)}`).join(' · ')}
+      >
+        {UNIT_KEYS.map(k => {
+          const v = teamValue(team, k, measure);
+          return v > 0 ? <span key={k} className={UNIT_DOT[k]} style={{ width: `${(v / total) * 100}%` }} /> : null;
+        })}
+      </div>
+      <span className="text-xs font-medium tabular-nums text-gray-600 dark:text-slate-300">{pct < 1 ? '<1' : pct}%</span>
+    </div>
+  );
+}
+
+// ─── Team row (outer table — 7 cols) + nested member table (10 cols) ──────────
 
 function TeamRow({
   team,
@@ -357,25 +638,30 @@ function TeamRow({
   toDate,
   expanded,
   onToggle,
+  grandTotal,
 }: {
   team: TeamUsageSummary;
   fromDate: string;
   toDate: string;
   expanded: boolean;
   onToggle: () => void;
+  grandTotal: number;
 }) {
   const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
+  const view = useMemberView(members);
+  const measure = useContext(MeasureContext);
 
-  const rs  = getCount(team, 'RS');
-  const as_ = getCount(team, 'AS');
-  const aiu = getCount(team, 'AIU');
-  const ru  = getCount(team, 'RU');
-  const total = teamTotal(team);
+  const rs  = teamValue(team, 'RS', measure);
+  const as_ = teamValue(team, 'AS', measure);
+  const aiu = teamValue(team, 'AIU', measure);
+  const ru  = teamValue(team, 'RU', measure);
+  const total = teamTotalBy(team, measure);
 
   return (
     <>
       {/* Team summary row — outer table 6 cols */}
       <tr
+        id={`team-usage-${team.team_id}`}
         onClick={onToggle}
         className="cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-200 dark:border-slate-700 select-none"
       >
@@ -407,24 +693,27 @@ function TeamRow({
             </div>
           </div>
         </td>
-        {([['RS', rs], ['AS', as_], ['AIU', aiu], ['RU', ru]] as [string, number][]).map(([key, val]) => (
+        {([['RS', rs], ['AS', as_], ['AIU', aiu], ['RU', ru]] as ['RS' | 'AS' | 'AIU' | 'RU', number][]).map(([key, val]) => (
           <td key={key} className="px-4 py-4 whitespace-nowrap">
             {val > 0
-              ? <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{val}</span>
+              ? <span title={`${UNIT_FULL_NAME[key]}: ${formatMeasure(val, measure)} ${measure}`} className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{formatMeasure(val, measure)}</span>
               : <span className="text-gray-300 dark:text-slate-500 text-sm max-sm:text-[13px]">—</span>}
           </td>
         ))}
         <td className="px-4 py-4 whitespace-nowrap">
           <span className={`text-sm max-sm:text-[13px] font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
-            {total > 0 ? total : '—'}
+            {total > 0 ? formatMeasure(total, measure) : '—'}
           </span>
+        </td>
+        <td className="px-4 py-4 whitespace-nowrap">
+          <ShareBar team={team} grandTotal={grandTotal} />
         </td>
       </tr>
 
       {/* Member expansion — full-width nested table with 10 columns */}
       {expanded && (
         <tr>
-          <td colSpan={6} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
+          <td colSpan={7} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
             <div className="bg-gray-50 dark:bg-slate-800/50">
               {loadingMembers ? (
                 <div className="px-4 py-3 space-y-3">
@@ -448,6 +737,7 @@ function TeamRow({
                 </div>
               ) : members && members.length > 0 ? (
                 <div className="tf-table-shell">
+                  <MemberListControls view={view} className="px-4 pt-3 pb-1" />
                   <table className="w-full">
                     {/* Member table header — 9 cols */}
                     <thead>
@@ -497,9 +787,14 @@ function TeamRow({
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-50 dark:divide-slate-700/60">
-                      {members.map(m => (
-                        <MemberRow key={m.user_id} member={m} fromDate={fromDate} />
+                      {view.rows.map(m => (
+                        <MemberRow key={m.user_id} member={m} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
                       ))}
+                      {view.rows.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-4 text-sm italic text-gray-400 dark:text-slate-500">No members match “{view.query}”.</td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -518,13 +813,16 @@ function TeamRow({
 
 // ─── Phone cards (<md) — same data and drill-down as the tables above ────────
 
-function MobileLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
-  const sorted = [...entries].sort((a, b) => b.created_at.localeCompare(a.created_at));
+function MobileLogEntries({ entries, total, onLoadMore, loadingMore, memberName, fromDate, toDate }: { entries: ConsumptionLogEntry[]; memberName: string; fromDate: string; toDate: string } & LogPaging) {
+  const f = useHistoryFilters(entries);
+  const sorted = [...f.filtered].sort((a, b) => b.created_at.localeCompare(a.created_at));
   return (
     <div className="border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
       <p className="mb-2 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">
-        History · {sorted.length} {sorted.length === 1 ? 'entry' : 'entries'}
+        History · {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
       </p>
+      <HistoryToolbar f={f} onDownload={() => downloadHistory(sorted, memberName, fromDate, toDate)} className="mb-2" />
+      {sorted.length === 0 && <p className="text-xs italic text-gray-400 dark:text-slate-500">No entries match these filters.</p>}
       <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-0.5">
         {sorted.map(e => (
           <li key={e.id} className="rounded-md bg-gray-50 px-2.5 py-2 dark:bg-slate-800/50">
@@ -553,17 +851,16 @@ function MobileLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
           </li>
         ))}
       </ul>
+      <LoadMoreHistory shown={entries.length} total={total} onLoadMore={onLoadMore} loadingMore={loadingMore} className="mt-2" />
     </div>
   );
 }
 
-function MobileMemberCard({ member, fromDate }: { member: TeamMemberUsage; fromDate: string }) {
-  const { expanded, toggle, entries, loading } = useMemberLog(member, fromDate);
+function MobileMemberCard({ member, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; fromDate: string; toDate: string; isTop?: boolean }) {
+  const { expanded, toggle, entries, loading, total, loadMore, loadingMore } = useMemberLog(member, fromDate, toDate);
+  const measure = useContext(MeasureContext);
   const stats: [string, string | number, boolean][] = [
-    ['RS', getMCount(member, 'RS'), getMCount(member, 'RS') > 0],
-    ['AS', getMUnits(member, 'AS').toFixed(1), getMUnits(member, 'AS') > 0],
-    ['AIU', getMCount(member, 'AIU'), getMCount(member, 'AIU') > 0],
-    ['RU', getMCount(member, 'RU'), getMCount(member, 'RU') > 0],
+    ...UNIT_KEYS.map((k): [string, string, boolean] => [k, formatMeasure(memberValue(member, k, measure), measure), memberValue(member, k, measure) > 0]),
     ['JDs', member.jds_created, member.jds_created > 0],
     ['Assess.', member.assessments_created, member.assessments_created > 0],
   ];
@@ -581,7 +878,10 @@ function MobileMemberCard({ member, fromDate }: { member: TeamMemberUsage; fromD
         </span>
         <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.user_name || '—'}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">
+            <span className="truncate">{member.user_name || '—'}</span>
+            <MemberBadges member={member} isTop={isTop} />
+          </span>
           <span className="block truncate text-xs text-gray-400 dark:text-slate-500">{member.user_email}</span>
         </span>
       </button>
@@ -606,7 +906,9 @@ function MobileMemberCard({ member, fromDate }: { member: TeamMemberUsage; fromD
           ))}
         </div>
       )}
-      {expanded && !loading && entries !== null && entries.length > 0 && <MobileLogEntries entries={entries} />}
+      {expanded && !loading && entries !== null && entries.length > 0 && (
+        <MobileLogEntries entries={entries} total={total} onLoadMore={loadMore} loadingMore={loadingMore} memberName={member.user_name || member.user_email} fromDate={fromDate} toDate={toDate} />
+      )}
       {expanded && !loading && entries !== null && entries.length === 0 && (
         <p className="border-t border-gray-100 px-2.5 py-2.5 text-xs italic text-gray-400 dark:border-slate-700/60 dark:text-slate-500">
           No consumption entries in the selected period.
@@ -622,18 +924,22 @@ function MobileTeamCard({
   toDate,
   expanded,
   onToggle,
+  grandTotal,
 }: {
   team: TeamUsageSummary;
   fromDate: string;
   toDate: string;
   expanded: boolean;
   onToggle: () => void;
+  grandTotal: number;
 }) {
   const { members, loadingMembers } = useTeamMembers(team.team_id, expanded, fromDate, toDate);
-  const total = teamTotal(team);
+  const view = useMemberView(members);
+  const measure = useContext(MeasureContext);
+  const total = teamTotalBy(team, measure);
 
   return (
-    <li>
+    <li id={`team-usage-${team.team_id}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -654,24 +960,26 @@ function MobileTeamCard({
         </span>
         <span className="shrink-0 text-right">
           <span className={`block text-sm max-sm:text-[13px] font-bold tabular-nums ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
-            {total > 0 ? total : '—'}
+            {total > 0 ? formatMeasure(total, measure) : '—'}
           </span>
-          <span className="block text-2xs text-gray-400 dark:text-slate-500">total</span>
+          <span className="block text-2xs text-gray-400 dark:text-slate-500">{measure === 'units' ? 'units' : 'total'}</span>
         </span>
       </button>
       <div className="flex flex-wrap gap-1.5 px-3 pb-3 pl-[3.25rem]">
         {(['RS', 'AS', 'AIU', 'RU'] as const).map(k => {
-          const val = getCount(team, k);
+          const val = teamValue(team, k, measure);
           return (
             <span
               key={k}
+              title={UNIT_FULL_NAME[k]}
               className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-2xs font-semibold ${val > 0 ? UNIT_COLORS[k] : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500'}`}
             >
-              {k} <span className="tabular-nums">{val}</span>
+              {k} <span className="tabular-nums">{formatMeasure(val, measure)}</span>
             </span>
           );
         })}
       </div>
+      <ShareBar team={team} grandTotal={grandTotal} className="px-3 pb-3 pl-[3.25rem]" />
       {expanded && (
         <div className="border-t border-gray-100 bg-gray-50 p-2 dark:border-slate-700/60 dark:bg-slate-800/50">
           {loadingMembers ? (
@@ -681,11 +989,15 @@ function MobileTeamCard({
               ))}
             </div>
           ) : members && members.length > 0 ? (
-            <ul className="space-y-2">
-              {members.map(m => (
-                <MobileMemberCard key={m.user_id} member={m} fromDate={fromDate} />
-              ))}
-            </ul>
+            <>
+              <MemberListControls view={view} className="mb-2" />
+              <ul className="space-y-2">
+                {view.rows.map(m => (
+                  <MobileMemberCard key={m.user_id} member={m} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
+                ))}
+              </ul>
+              {view.rows.length === 0 && <p className="px-2 py-2 text-xs italic text-gray-400 dark:text-slate-500">No members match “{view.query}”.</p>}
+            </>
           ) : (
             <p className="px-2 py-2 text-xs italic text-gray-400 dark:text-slate-500">No members with usage in this period.</p>
           )}
@@ -697,84 +1009,146 @@ function MobileTeamCard({
 
 // ─── Summary stat card ────────────────────────────────────────────────────────
 
-function StatCard({ label, value, dot, loading }: {
-  label: string; value: number; dot: string; loading: boolean;
+function StatCard({ label, value, dot, loading, onClick, active = false, delta }: {
+  label: string; value: string; dot: string; loading: boolean;
+  /** "▲ 18%" style change vs the previous period; null/undefined hides it. */
+  delta?: { text: string; tone: 'up' | 'down' | 'flat'; hint: string } | null;
+  /** Sorts the table by this column. */
+  onClick?: () => void;
+  active?: boolean;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-3.5 py-2.5 sm:px-5 sm:py-4 flex items-center gap-3 sm:gap-4 text-left w-full">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick || loading}
+      aria-pressed={active}
+      title={onClick ? `Sort teams by ${label}` : undefined}
+      className={`rounded-xl border shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] px-3.5 py-2.5 sm:px-5 sm:py-4 flex items-center gap-3 sm:gap-4 text-left w-full transition-colors disabled:cursor-default ${
+        active
+          ? 'border-brand-blue/40 bg-brand-blue/[0.04] dark:bg-brand-blue/10'
+          : 'border-gray-100 bg-white hover:border-brand-blue/30 dark:border-slate-700/60 dark:bg-slate-900'
+      }`}
+    >
       <span className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full shrink-0 ${dot}`} />
       <div className="min-w-0">
         <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{label}</p>
         {loading
           ? <div className="h-6 w-10 bg-gray-100 dark:bg-slate-800 rounded animate-pulse mt-1" />
           : <p className="text-lg max-sm:text-base sm:text-xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</p>}
+        {!loading && delta && (
+          <p
+            title={delta.hint}
+            className={`mt-0.5 truncate text-2xs font-medium ${
+              delta.tone === 'up' ? 'text-success' : delta.tone === 'down' ? 'text-brand-orange-deep' : 'text-gray-400 dark:text-slate-500'
+            }`}
+          >
+            {delta.text}
+          </p>
+        )}
       </div>
-    </div>
+    </button>
   );
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-const TEAM_EXPORT_HEADERS = ['Team', 'RS', 'AS', 'AIU', 'Total', 'JDs Created', 'Assessments Created'];
-const USER_EXPORT_HEADERS = ['Team', 'Member Name', 'Member Email', 'RS Actions', 'AS Units', 'AIU Units', 'RU Actions', 'Total Actions', 'Last Active'];
+// Every count is actions (consumption_count), as on screen; Total is the sum of
+// all four — the team export used to drop RU while its Total still counted it.
+const TEAM_EXPORT_HEADERS = ['Team', 'RS Actions', 'AS Actions', 'AIU Actions', 'RU Actions', 'Total Actions', 'JDs Created', 'Assessments Created'];
+const USER_EXPORT_HEADERS = ['Team', 'Member Name', 'Member Email', 'RS Actions', 'AS Actions', 'AIU Actions', 'RU Actions', 'Total Actions', 'Total Units', 'Last Active'];
 
 async function exportTeams(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string) {
   const rows = teams.map(t => [
     t.team_name ?? 'Unknown',
-    getCount(t, 'RS'), getCount(t, 'AS'), getCount(t, 'AIU'),
+    getCount(t, 'RS'), getCount(t, 'AS'), getCount(t, 'AIU'), getCount(t, 'RU'),
     teamTotal(t), t.jds_created, t.assessments_created,
   ]);
   await exportRows(format, TEAM_EXPORT_HEADERS, rows, `team-usage-${fromDate}-to-${toDate}`, { sheetName: 'Team Usage' });
 }
 
 async function exportUsers(format: ExportFileFormat, teams: TeamUsageSummary[], fromDate: string, toDate: string) {
-  const rows: (string | number | null)[][] = [];
+  // All teams at once (one by one was slow on a long list); results keep team order.
+  const results = await Promise.allSettled(
+    teams.map(team => teamService.getTeamMembersUsage(team.team_id, fromDate, toDate)),
+  );
 
-  for (const team of teams) {
-    try {
-      const summary = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate);
-      for (const m of summary.members ?? []) {
-        const rs  = m.by_type['RS']?.consumption_count  ?? 0;
-        const as_ = m.by_type['AS']?.total_consumed      ?? 0;
-        const aiu = m.by_type['AIU']?.total_consumed     ?? 0;
-        const ru  = m.by_type['RU']?.consumption_count  ?? 0;
-        rows.push([
-          team.team_name ?? 'Unknown',
-          m.user_name ?? '',
-          m.user_email ?? '',
-          rs, as_, aiu, ru,
-          rs + ru,
-          // was `m.last_active`, which does not exist on TeamMemberUsage - the backend
-          // emits `last_activity` (routers/unit_pool.py) and line ~272 above already
-          // reads that. The `?? ''` masked it, so this CSV column exported blank.
-          m.last_activity ?? '',
-        ]);
-      }
-    } catch {
-      // Skip teams we can't fetch
+  const rows: (string | number | null)[][] = [];
+  const skipped: string[] = [];
+  results.forEach((result, i) => {
+    const team = teams[i];
+    if (result.status === 'rejected') {
+      skipped.push(team.team_name || 'Unnamed Team');
+      return;
     }
-  }
+    for (const m of result.value.members ?? []) {
+      const types = ['RS', 'AS', 'AIU', 'RU'] as const;
+      const actions = types.map(k => getMCount(m, k));
+      const units = types.reduce((sum, k) => sum + getMUnits(m, k), 0);
+      rows.push([
+        team.team_name ?? 'Unknown',
+        m.user_name ?? '',
+        m.user_email ?? '',
+        ...actions,
+        actions.reduce((a, b) => a + b, 0),
+        formatUnits(units),
+        // The backend field is `last_activity` (routers/unit_pool.py), not `last_active`.
+        m.last_activity ?? '',
+      ]);
+    }
+  });
 
   await exportRows(format, USER_EXPORT_HEADERS, rows, `team-usage-by-user-${fromDate}-to-${toDate}`, { sheetName: 'Team Usage by User' });
+
+  // A team that failed used to vanish from the file without a word.
+  if (skipped.length > 0) {
+    toast.warning({
+      title: `${skipped.length} ${skipped.length === 1 ? 'team was' : 'teams were'} left out of the export`,
+      description: `Couldn't load members for: ${skipped.join(', ')}. Try exporting again.`,
+    });
+  }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function TeamUsageAnalytics() {
+interface TeamUsageAnalyticsProps {
+  /** Team to open on arrival (e.g. clicked in the Analytics tab). */
+  focusTeamId?: string | null;
+  /** Called once the focus request has been applied (or the team isn't listed). */
+  onFocusHandled?: () => void;
+}
+
+export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled }: TeamUsageAnalyticsProps = {}) {
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canExport = isTenantAdmin || hasPermissionCode('teams:export');
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
-  });
-  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
+  // Range and Actions / Units are shared with the Analytics tab (same session values).
+  const { fromDate, toDate, setFromDate, setToDate, applyPreset, activePresetId } = useTeamReportRange();
   const [teams, setTeams] = useState<TeamUsageSummary[]>([]);
+  // Same-length period just before the range — null when it couldn't load.
+  const [prevTeams, setPrevTeams] = useState<TeamUsageSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [measure, setMeasure] = useReportMeasure();
+  const [teamQuery, setTeamQuery] = useState('');
+  const [hideIdle, setHideIdle] = useState(false);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   // Which export the format picker is open for — null while it's closed.
   const [exportScope, setExportScope] = useState<'team' | 'user' | null>(null);
   const isMobile = useIsMobile();
   const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // This tab's own filter; range and measure persist in reportControls.
+  useListStatePersistence('team-usage', { hideIdle }, (saved) => {
+    if (typeof saved.hideIdle === 'boolean') setHideIdle(saved.hideIdle);
+  });
+
+  const last90 = RANGE_PRESETS.find((p) => p.id === '90d')!;
+  // Empty range: offer the widest preset unless it's already (or nearly) in use.
+  const canWidenRange = fromDate > last90.range().from;
+
+  // Every fetch gets a number; only the latest one's result is applied (a
+  // restored range fires a second fetch right after the default one).
+  const fetchSeq = useRef(0);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -787,44 +1161,90 @@ export default function TeamUsageAnalytics() {
   }, []);
 
   const fetchTeams = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     setExpandedTeamId(null);
+    membersCache.clear();
+    const load = (from: string, to: string) =>
+      isTenantAdmin ? teamService.getAllTeamsUsage(from, to) : teamService.getMyTeamsUsage(from, to);
+    const prev = previousRange(fromDate, toDate);
     try {
-      const res = isTenantAdmin
-        ? await teamService.getAllTeamsUsage(fromDate, toDate)
-        : await teamService.getMyTeamsUsage(fromDate, toDate);
+      // The previous period is for the "vs previous" lines only — its failure
+      // just hides them.
+      const [res, prevRes] = await Promise.all([
+        load(fromDate, toDate),
+        load(prev.from, prev.to).catch(() => null),
+      ]);
+      if (seq !== fetchSeq.current) return;
       setTeams(res.teams ?? []);
+      setPrevTeams(prevRes ? prevRes.teams ?? [] : null);
     } catch {
+      if (seq !== fetchSeq.current) return;
       toast.error({ title: 'Failed to load team usage', description: 'Please refresh and try again.' });
       setTeams([]);
+      setPrevTeams(null);
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   }, [fromDate, toDate, isTenantAdmin]);
 
   useEffect(() => { fetchTeams(); }, [fetchTeams]);
 
+  // Opened from Analytics with a team: clear this tab's filters, expand that
+  // team once the list has loaded, and bring it into view.
+  useEffect(() => {
+    if (!focusTeamId || loading) return;
+    if (teams.some((t) => t.team_id === focusTeamId)) {
+      setTeamQuery('');
+      setHideIdle(false);
+      setExpandedTeamId(focusTeamId);
+      requestAnimationFrame(() =>
+        document.getElementById(`team-usage-${focusTeamId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
+      );
+    }
+    onFocusHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTeamId, loading, teams]);
+
   const teamSort = useTableSort<'name' | 'RS' | 'AS' | 'AIU' | 'RU' | 'total'>({
     descFirst: ['RS', 'AS', 'AIU', 'RU', 'total'],
   });
-  const sortedTeams = sortRows(teams, teamSort.sortKey, teamSort.sortDir, {
+  // Team search + "hide teams with no usage" narrow the list; the stat cards
+  // and exports still cover every team.
+  const visibleTeams = teams.filter((t) => {
+    if (hideIdle && teamTotalBy(t, 'actions') === 0) return false;
+    const q = teamQuery.trim().toLowerCase();
+    return !q || (t.team_name || 'Unnamed Team').toLowerCase().includes(q);
+  });
+  const sortedTeams = sortRows(visibleTeams, teamSort.sortKey, teamSort.sortDir, {
     name: (t) => t.team_name || 'Unnamed Team',
-    RS: (t) => getCount(t, 'RS'),
-    AS: (t) => getCount(t, 'AS'),
-    AIU: (t) => getCount(t, 'AIU'),
-    RU: (t) => getCount(t, 'RU'),
-    total: (t) => teamTotal(t),
+    RS: (t) => teamValue(t, 'RS', measure),
+    AS: (t) => teamValue(t, 'AS', measure),
+    AIU: (t) => teamValue(t, 'AIU', measure),
+    RU: (t) => teamValue(t, 'RU', measure),
+    total: (t) => teamTotalBy(t, measure),
   });
 
-  const totals = {
-    rs:  teams.reduce((s, t) => s + getCount(t, 'RS'), 0),
-    as_: teams.reduce((s, t) => s + getCount(t, 'AS'), 0),
-    aiu: teams.reduce((s, t) => s + getCount(t, 'AIU'), 0),
-    ru:  teams.reduce((s, t) => s + getCount(t, 'RU'), 0),
-    all: teams.reduce((s, t) => s + teamTotal(t), 0),
-  };
+  const sumBy = (list: TeamUsageSummary[], k: UnitKey | 'total') =>
+    list.reduce((sum, t) => sum + (k === 'total' ? teamTotalBy(t, measure) : teamValue(t, k, measure)), 0);
+  const grandTotal = sumBy(teams, 'total');
+  const prevDays = previousRange(fromDate, toDate).days;
+  // "▲ 18%" vs the previous period of the same length.
+  const deltaFor = (k: UnitKey | 'total') =>
+    prevTeams ? periodDelta(sumBy(teams, k), sumBy(prevTeams, k), prevDays, (v) => formatMeasure(v, measure)) : null;
+  const filtersOn = !!teamQuery.trim() || hideIdle;
+  const noMatchPanel = (
+    <div className={TABLE_EMPTY_PANEL_CLASS}>
+      <Search className="w-8 h-8 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
+      <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No teams match these filters.</p>
+      <button type="button" onClick={() => { setTeamQuery(''); setHideIdle(false); }} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
+        Clear filters
+      </button>
+    </div>
+  );
 
   return (
+    <MeasureContext.Provider value={measure}>
     <div>
       {/* Header */}
       <div className="mb-4 sm:mb-5 flex flex-col gap-3 sm:gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-center lg:justify-between">
@@ -857,7 +1277,7 @@ export default function TeamUsageAnalytics() {
               aria-label="To date"
               value={toDate}
               min={fromDate}
-              max={new Date().toISOString().split('T')[0]}
+              max={todayIST()}
               onChange={setToDate}
               className="w-full lg:w-[150px] max-sm:px-2 max-sm:!text-xs"
             />
@@ -915,53 +1335,101 @@ export default function TeamUsageAnalytics() {
         </div>
       </div>
 
-      {/* Summary stats — display only; the table below is always shown. */}
+      {/* Quick ranges — the date fields above still allow any custom range. */}
+      <RangePresets activeId={activePresetId} onPick={applyPreset} className="-mt-1 mb-3 sm:mb-4 lg:justify-end" />
+
+      {/* Summary stats — each card also sorts the table below by its column,
+          and says how it moved against the previous period of the same length. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} />
-        <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} />
-        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"    loading={loading} />
-        <StatCard label="Resume Storage"  value={totals.ru}  dot="bg-orange-500" loading={loading} />
-        <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} />
+        {([
+          ['Resume Scoring', 'bg-blue-500', 'RS'],
+          ['Assessments', 'bg-purple-500', 'AS'],
+          ['AI Interviews', 'bg-success', 'AIU'],
+          ['Resume Storage', 'bg-orange-500', 'RU'],
+          [measure === 'units' ? 'Total Units' : 'Total Actions', 'bg-gray-400', 'total'],
+        ] as const).map(([label, dot, key]) => (
+          <StatCard
+            key={key}
+            label={label}
+            value={formatMeasure(sumBy(teams, key), measure)}
+            dot={dot}
+            loading={loading}
+            onClick={teams.length > 1 ? () => teamSort.toggleSort(key) : undefined}
+            active={teamSort.sortKey === key}
+            delta={deltaFor(key)}
+          />
+        ))}
       </div>
 
-      {/* justify-end, not justify-between: the Back to overview button that
-          used to hold the left slot is gone, and the tally belongs on the
-          right. */}
-      <div className="mb-3 sm:mb-4 flex items-center justify-end gap-2">
-        {/* Phones have no column headers, so sorting moves to a dropdown. */}
-        {isMobile && teams.length > 1 && (
-          <ToolbarFilterSelect
-            className="mr-auto"
-            ariaLabel="Sort teams"
-            value={teamSort.sortKey ?? ''}
-            onChange={(v) => {
-              if (!v) teamSort.clearSort?.();
-              else if (v !== teamSort.sortKey) teamSort.toggleSort(v as NonNullable<typeof teamSort.sortKey>);
-            }}
-          >
-            <option value="">Default order</option>
-            <option value="name">Team name</option>
-            <option value="total">Total</option>
-            <option value="RS">Resume Scoring</option>
-            <option value="AS">Assessment</option>
-            <option value="AIU">AI Interview</option>
-            <option value="RU">Resume Storage</option>
-          </ToolbarFilterSelect>
+      {/* Toolbar: team search, hide-idle, Actions / Units; sort + count on the right. */}
+      <div className="mb-3 sm:mb-4 flex flex-wrap items-center gap-2">
+        {teams.length > 1 && (
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={teamQuery}
+              onChange={(e) => setTeamQuery(e.target.value)}
+              placeholder="Search teams…"
+              aria-label="Search teams"
+              className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-8 pr-2 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+            />
+          </div>
         )}
-        {/* Only while a column is sorted */}
-        <ClearSortChip
-          sort={teamSort}
-          labels={{ name: 'Team', RS: 'RS', AS: 'AS', AIU: 'AIU', RU: 'RU', total: 'Total' }}
-          onClear={() => teamSort.clearSort?.()}
-        />
-        <span className="text-xs text-gray-500 dark:text-slate-400">
-          {teams.length} {teams.length === 1 ? 'team' : 'teams'}
-        </span>
+        {teams.length > 0 && (
+          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-xs text-gray-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={hideIdle}
+              onChange={(e) => setHideIdle(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300 accent-brand-blue"
+            />
+            Hide teams with no usage
+          </label>
+        )}
+        <MeasureToggle value={measure} onChange={setMeasure} />
+        <div className="ml-auto flex items-center gap-2">
+          {/* Phones have no column headers, so sorting moves to a dropdown. */}
+          {isMobile && teams.length > 1 && (
+            <ToolbarFilterSelect
+              ariaLabel="Sort teams"
+              value={teamSort.sortKey ?? ''}
+              onChange={(v) => {
+                if (!v) teamSort.clearSort?.();
+                else if (v !== teamSort.sortKey) teamSort.toggleSort(v as NonNullable<typeof teamSort.sortKey>);
+              }}
+            >
+              <option value="">Default order</option>
+              <option value="name">Team name</option>
+              <option value="total">Total</option>
+              <option value="RS">Resume Scoring</option>
+              <option value="AS">Assessment</option>
+              <option value="AIU">AI Interview</option>
+              <option value="RU">Resume Storage</option>
+            </ToolbarFilterSelect>
+          )}
+          {/* Only while a column is sorted */}
+          <ClearSortChip
+            sort={teamSort}
+            labels={{ name: 'Team', RS: 'RS', AS: 'AS', AIU: 'AIU', RU: 'RU', total: 'Total' }}
+            onClear={() => teamSort.clearSort?.()}
+          />
+          <span className="text-xs text-gray-500 dark:text-slate-400">
+            {filtersOn ? `${visibleTeams.length} of ${teams.length}` : teams.length} {teams.length === 1 ? 'team' : 'teams'}
+          </span>
+        </div>
       </div>
 
       {/* Phones: one card per team, members and their history open inline.
           Rendered instead of the table (not alongside it) so an expanded team
           fetches its members once. */}
+      {isMobile && (
+        <p className="mb-2 text-2xs text-gray-400 dark:text-slate-500">
+          {(['RS', 'AS', 'AIU', 'RU'] as const).map((k, i) => (
+            <span key={k}>{i > 0 && ' · '}<span className="font-semibold">{k}</span> {UNIT_FULL_NAME[k]}</span>
+          ))}
+        </p>
+      )}
       {isMobile ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
           {loading ? (
@@ -980,13 +1448,21 @@ export default function TeamUsageAnalytics() {
             <div className={TABLE_EMPTY_PANEL_CLASS}>
               <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
               <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+              {canWidenRange && (
+                <button type="button" onClick={() => applyPreset(last90)} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
+                  Try the last 90 days
+                </button>
+              )}
             </div>
+          ) : sortedTeams.length === 0 ? (
+            noMatchPanel
           ) : (
             <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {sortedTeams.map(team => (
                 <MobileTeamCard
                   key={team.team_id}
                   team={team}
+                  grandTotal={grandTotal}
                   fromDate={fromDate}
                   toDate={toDate}
                   expanded={expandedTeamId === team.team_id}
@@ -999,7 +1475,7 @@ export default function TeamUsageAnalytics() {
           )}
         </div>
       ) : (
-      /* Outer team table — 6 cols (Team, RS, AS, AIU, RU, Total) */
+      /* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, Share) */
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
@@ -1011,7 +1487,7 @@ export default function TeamUsageAnalytics() {
                 // Colour moved from the inner span to the th so the sort button can turn it brand-blue.
                 <th key={k} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, k)}>
                   <SortableHeader
-                    label={<><span className={`w-2 h-2 rounded-full ${UNIT_DOT[k]}`} />{k}</>}
+                    label={<><span className={`w-2 h-2 rounded-full ${UNIT_DOT[k]}`} /><abbr title={UNIT_FULL_NAME[k]} className="no-underline">{k}</abbr></>}
                     column={k}
                     sort={teamSort}
                   />
@@ -1020,11 +1496,14 @@ export default function TeamUsageAnalytics() {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(teamSort, 'total')}>
                 <SortableHeader label="Total" column="total" sort={teamSort} />
               </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">
+                <abbr title="Mix of RS / AS / AIU / RU, and this team's share of all usage" className="no-underline">Share</abbr>
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              /* Skeleton rows mirror the 6-col team row: Team, RS, AS, AIU, RU, Total */
+              /* Skeleton rows mirror the 7-col team row: Team, RS, AS, AIU, RU, Total, Share */
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-t border-gray-200 dark:border-slate-700">
                   <td className="px-4 py-4 whitespace-nowrap">
@@ -1042,24 +1521,37 @@ export default function TeamUsageAnalytics() {
                   <td className="px-4 py-4 whitespace-nowrap">
                     <Skeleton className="h-5 w-8" />
                   </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <Skeleton className="h-1.5 w-24 rounded-full" />
+                  </td>
                 </tr>
               ))
             ) : teams.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-0">
+                <td colSpan={7} className="p-0">
                   {/* The shared empty-state panel — centred on both axes with
                       the same height and padding every other table's uses. */}
                   <div className={TABLE_EMPTY_PANEL_CLASS}>
                     <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
                     <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+                    {canWidenRange && (
+                      <button type="button" onClick={() => applyPreset(last90)} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
+                        Try the last 90 days
+                      </button>
+                    )}
                   </div>
                 </td>
+              </tr>
+            ) : sortedTeams.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-0">{noMatchPanel}</td>
               </tr>
             ) : (
               sortedTeams.map(team => (
                 <TeamRow
                   key={team.team_id}
                   team={team}
+                  grandTotal={grandTotal}
                   fromDate={fromDate}
                   toDate={toDate}
                   expanded={expandedTeamId === team.team_id}
@@ -1080,5 +1572,6 @@ export default function TeamUsageAnalytics() {
           : 'Click a team to see its members · Click a member to see their full consumption history'}
       </p>
     </div>
+    </MeasureContext.Provider>
   );
 }

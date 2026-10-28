@@ -415,6 +415,10 @@ export interface AIInterviewStatsResponse {
   cancelled: number;
   average_score: number | null;
   candidates_invited: number;
+  /** Distinct candidate emails with a finished interview (one per person). */
+  candidates_interviewed?: number;
+  /** Finished interviews (completed + terminated), repeats included. */
+  interview_sessions?: number;
 }
 
 export interface SendInviteRequest {
@@ -515,6 +519,10 @@ export interface AIInterviewAuditTrailResponse {
   page_size: number;
   total_lifecycle_events: number;
   total_candidate_events: number;
+  interviews_created?: number;
+  candidates_invited?: number;
+  candidates_in_progress?: number;
+  candidates_completed?: number;
 }
 
 export const aiInterviewService = {
@@ -1036,6 +1044,32 @@ export const aiInterviewService = {
    * `getConfigInvitations(id, { page_size: 1 })`, whose `total` and `completed`
    * the Interview list reads per config.
    */
+  /**
+   * Every invitation of every interview, in as few requests as the backend
+   * allows (normally ONE) — instead of one `getConfigInvitations` per
+   * interview. Rows are the per-interview endpoint's own rows; each carries its
+   * `config_id`. Throws when the endpoint is unavailable (an older backend), so
+   * the caller can fall back to the per-interview path.
+   */
+  async getAllInvitations(): Promise<AIInterviewResponse[]> {
+    const PAGE_SIZE = 5000;
+    try {
+      const rows: AIInterviewResponse[] = [];
+      for (let page = 1; page <= 40; page += 1) {
+        const response = await api.get<{ items: AIInterviewResponse[]; total: number; total_pages?: number }>(
+          '/ai-interview/all-invitations',
+          { params: { page, page_size: PAGE_SIZE } },
+        );
+        const items = response.data?.items ?? [];
+        rows.push(...items);
+        if (items.length < PAGE_SIZE || rows.length >= (response.data?.total ?? rows.length)) break;
+      }
+      return rows;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   async getInvitationCounts(configIds: string[]): Promise<Record<string, { total: number; completed: number }>> {
     const ids = Array.from(new Set(configIds.filter(Boolean)));
     if (ids.length === 0) return {};

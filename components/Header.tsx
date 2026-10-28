@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Monitor, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -33,6 +33,28 @@ const MAX_BADGE_COUNT = 9;
    phone-width sheet and the desktop dropdown. */
 const VISIBLE_NOTIFICATIONS = 2;
 
+/* Header theme button cycles Light → Dark → Auto (follows the OS setting). */
+const THEME_CYCLE = ['light', 'dark', 'system'] as const;
+const THEME_LABEL: Record<string, string> = { light: 'Light', dark: 'Dark', system: 'Auto (system)' };
+const nextTheme = (current?: string) =>
+  THEME_CYCLE[(THEME_CYCLE.indexOf((current ?? 'light') as (typeof THEME_CYCLE)[number]) + 1) % THEME_CYCLE.length];
+
+/* Chat messages have their own unread badges in Team Chat, so they're kept out
+   of the header popup. The backend has no dedicated chat category (they come in
+   under e.g. "team"), so match on anything that marks the row as chat. */
+const isChatNotification = (n: Pick<Notification, 'category' | 'entity_type' | 'action_url'> | null | undefined) =>
+  !!n && (
+    /chat/i.test(n.category || '') ||
+    /chat|channel/i.test(n.entity_type || '') ||
+    /team-chat|\/chat(\/|\?|$)/i.test(n.action_url || '')
+  );
+
+/* The API can't exclude a category, so the popup reads a full page (the API's
+   max) and drops chat rows itself. Counts are exact while the user has no more
+   than this many notifications; past that the badge reads "9+" anyway. */
+const NOTIFICATION_FETCH_LIMIT = 100;
+const NOTIFICATION_DISPLAY_LIMIT = 20;
+
 interface HeaderProps {
   onLogout: () => void;
   user: UserType | null;
@@ -58,7 +80,12 @@ export default function Header(props: HeaderProps) {
 function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps & { user: UserType }) {
   const router = useRouter();
   const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme: storedTheme, setTheme } = useTheme();
+  // The saved theme only exists in the browser; until mount, render as Light so
+  // the server and first client render agree (no hydration mismatch on the icon).
+  const [themeMounted, setThemeMounted] = useState(false);
+  useEffect(() => setThemeMounted(true), []);
+  const theme = themeMounted ? storedTheme : 'light';
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -182,14 +209,16 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     setNotificationsLoading(true);
     try {
       const response = await notificationService.getNotifications(
-        20, 0, activeNotificationTab === 'unread'
+        NOTIFICATION_FETCH_LIMIT, 0, activeNotificationTab === 'unread'
       );
       if (isStale()) return;
-      setNotifications(response.notifications);
-      setUnreadCount(response.unread_count);
+      const chat = response.notifications.filter(isChatNotification);
+      const chatUnread = chat.filter((n) => !n.is_read).length;
+      setNotifications(response.notifications.filter((n) => !isChatNotification(n)).slice(0, NOTIFICATION_DISPLAY_LIMIT));
+      setUnreadCount(Math.max(0, response.unread_count - chatUnread));
       // Only the All tab's response counts everything; the Unread tab's total
       // is the unread subset, and taking it would shrink the All tab's label.
-      if (activeNotificationTab === 'all') setTotalCount(response.total);
+      if (activeNotificationTab === 'all') setTotalCount(Math.max(0, response.total - chat.length));
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -202,9 +231,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     if (!user) return;
 
     try {
-      const response = await notificationService.getNotificationCounts();
-      setUnreadCount(response.unread);
-      setTotalCount(response.total);
+      // Not /notifications/count — its totals include chat rows, which the
+      // popup hides. Count from the list instead, minus the chat rows.
+      const response = await notificationService.getNotifications(NOTIFICATION_FETCH_LIMIT, 0, false);
+      const chat = response.notifications.filter(isChatNotification);
+      setUnreadCount(Math.max(0, response.unread_count - chat.filter((n) => !n.is_read).length));
+      setTotalCount(Math.max(0, response.total - chat.length));
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
@@ -225,17 +257,20 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
   // Handle new notification from WebSocket - stable callback
   const handleNewNotification = useCallback((notification: any) => {
     console.log('[Header] New notification via WebSocket:', notification);
+    // Chat messages aren't shown in the popup, so they don't bump its badge.
+    if (isChatNotification(notification)) return;
     // Increment unread count
     setUnreadCount(prev => prev + 1);
     // Dispatch event to trigger refresh if panel is open
     window.dispatchEvent(new CustomEvent('wsNotificationReceived'));
   }, []);
 
-  // Handle count update from WebSocket - stable callback
+  // Handle count update from WebSocket - stable callback. The pushed count
+  // includes chat rows, so recount instead of taking it as-is.
   const handleCountUpdate = useCallback((count: number) => {
     console.log('[Header] Count update via WebSocket:', count);
-    setUnreadCount(count);
-  }, []);
+    fetchNotificationCount();
+  }, [fetchNotificationCount]);
 
   // Listen for WebSocket notification events to refresh list if panel is open
   useEffect(() => {
@@ -1210,17 +1245,18 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           )}
         </div>
 
-        {/* Dark mode toggle */}
-        <Tooltip content={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'} position="bottom">
+        {/* Theme: Light → Dark → Auto. The icon shows the current mode. */}
+        <Tooltip content={`Theme: ${THEME_LABEL[theme ?? 'light'] ?? 'Light'} — click for ${THEME_LABEL[nextTheme(theme)]}`} position="bottom">
           <button
-            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            onClick={() => setTheme(nextTheme(theme))}
             className="p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-            aria-label="Toggle dark mode"
+            aria-label={`Theme: ${THEME_LABEL[theme ?? 'light'] ?? 'Light'}. Switch to ${THEME_LABEL[nextTheme(theme)]}`}
           >
-            {resolvedTheme === 'dark'
-              ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
-              : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
-            }
+            {theme === 'system'
+              ? <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
+              : theme === 'dark'
+                ? <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
+                : <Sun className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
         </Tooltip>
 
@@ -1234,10 +1270,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             }}
             className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-brand-blue/5 rounded-lg px-1.5 sm:px-3 py-1 sm:py-2 transition-colors"
           >
-            <NameAvatar name={user.name} fallback={user.email} size="md" />
+            <NameAvatar name={user.name} fallback={user.email} src={user.avatarUrl} size="md" />
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-2xs lg:text-xs text-gray-500">{prettyRole(user.role)}</div>
+              <div className="text-2xs lg:text-xs text-gray-500">{user.roleDisplay || prettyRole(user.role)}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1265,7 +1301,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   <div className="pointer-events-none absolute -bottom-16 left-16 h-36 w-36 rounded-full bg-white/[0.07] blur-2xl" />
                   <div className="relative flex items-center gap-4">
                     <div className="relative shrink-0">
-                      <NameAvatar name={user.name} fallback={user.email} size="xl" className="bg-white dark:bg-white dark:text-brand-blue" />
+                      <NameAvatar name={user.name} fallback={user.email} src={user.avatarUrl} size="xl" className="bg-white dark:bg-white dark:text-brand-blue" />
                       {/* Presence dot, ringed in the banner's own blue rather
                           than white, so it reads as cut out of the avatar
                           instead of floating over it. */}
@@ -1291,7 +1327,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           {user.role === 'tenant_admin'
                             ? <Crown className="w-3 h-3" />
                             : <Shield className="w-3 h-3" />}
-                          {prettyRole(user.role)}
+                          {user.roleDisplay || prettyRole(user.role)}
                         </span>
 
                         {/* User id — click to copy the FULL uuid. Shown short

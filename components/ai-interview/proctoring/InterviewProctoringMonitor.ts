@@ -47,6 +47,11 @@ interface UseInterviewProctoringMonitorOptions {
   // "another voice detected" and the proctor floods the report with false
   // violations.
   shouldSuppressVoiceCheck?: () => boolean;
+  // Server proctor-frame mode: the server judges camera obstruction and
+  // persists `camera_obstructed` itself. While this returns true the local
+  // video worker still tracks isCameraObstructed, but does not emit the
+  // event (no duplicate row, no duplicate toast).
+  shouldSuppressObstructionEvent?: () => boolean;
 }
 
 interface ProctoringState {
@@ -103,7 +108,13 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
 const BACKEND_FLUSH_INTERVAL = 5000; // Flush every 5 seconds
 
 // Worker check intervals
-const VIDEO_CHECK_INTERVAL = 500;    // Sample video at 2 FPS (main thread capture)
+// Camera-obstruction sampling (160x120 drawImage + getImageData on the main
+// thread). Was 500 ms; 1 s halves that cost. The worker's confirm thresholds
+// are expressed in wall-clock ms below and converted to frame counts, so
+// obstruction is still confirmed after ~7.5 s and cleared after ~2.5 s.
+const VIDEO_CHECK_INTERVAL = 1000;   // Sample video at 1 FPS (main thread capture)
+const OBSTRUCT_CONFIRM_MS = 7500;    // was 15 frames x 500 ms
+const CLEAR_CONFIRM_MS = 2500;       // was 5 frames x 500 ms
 const VOICE_CHECK_INTERVAL = 3000;   // Check voice every 3 seconds
 
 // Background noise detection (AIU-67)
@@ -135,8 +146,8 @@ const getVideoWorkerCode = () => `
   let isObstructed = false;
   let consecutiveObstructed = 0;
   let consecutiveClear = 0;
-  const OBSTRUCT_THRESHOLD = 15;  // frames to confirm obstruction
-  const CLEAR_THRESHOLD = 5;      // frames to confirm clear
+  const OBSTRUCT_THRESHOLD = ${Math.ceil(OBSTRUCT_CONFIRM_MS / VIDEO_CHECK_INTERVAL)};  // frames to confirm obstruction
+  const CLEAR_THRESHOLD = ${Math.ceil(CLEAR_CONFIRM_MS / VIDEO_CHECK_INTERVAL)};      // frames to confirm clear
   let reducedFrequency = false;
 
   function analyze(imageData, width, height, threshold) {
@@ -325,6 +336,7 @@ export function useInterviewProctoringMonitor({
   obstructionThreshold = 30,
   reportEvent,
   shouldSuppressVoiceCheck,
+  shouldSuppressObstructionEvent,
 }: UseInterviewProctoringMonitorOptions) {
   // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
@@ -355,6 +367,8 @@ export function useInterviewProctoringMonitor({
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
   useEffect(() => { shouldSuppressVoiceCheckRef.current = shouldSuppressVoiceCheck; }, [shouldSuppressVoiceCheck]);
+  const shouldSuppressObstructionEventRef = useRef(shouldSuppressObstructionEvent);
+  shouldSuppressObstructionEventRef.current = shouldSuppressObstructionEvent;
 
   // Worker refs
   const videoWorkerRef = useRef<Worker | null>(null);
@@ -526,7 +540,7 @@ export function useInterviewProctoringMonitor({
         if (type === 'STATE_CHANGE') {
           if (data.obstructed) {
             setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
-            emitEventRef.current('camera_obstructed', {
+            if (!shouldSuppressObstructionEventRef.current?.()) emitEventRef.current('camera_obstructed', {
               reason: data.reason,
               avgBrightness: data.avgBrightness,
               brightnessRange: data.brightnessRange,
@@ -1258,7 +1272,9 @@ export function useInterviewProctoringMonitor({
       'voice_mismatch', 'voice_identity_changed',
     ];
     const unsubIdentity = InterviewEventBus.subscribe((event) => {
-      if (IDENTITY_EVENTS.includes(event.type)) {
+      // `__server`: raised from a server proctor-frame answer — the server
+      // already persisted it, so it is a toast only, never re-queued.
+      if (IDENTITY_EVENTS.includes(event.type) && !event.details?.__server) {
         backendQueueRef.current.push({
           event_type: event.type,
           timestamp: event.timestamp.toISOString(),

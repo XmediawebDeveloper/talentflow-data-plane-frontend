@@ -43,8 +43,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import InviteToAssessmentModal from './InviteToAssessmentModal';
-import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResults from './AssessmentResults';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
@@ -61,12 +59,11 @@ import { MAX_INTERVIEW_VERSIONS } from '@/lib/utils/aiInterviewVersion';
 import { aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import DraftAssessmentExistsModal, { type ExistingDraftAssessment } from '@/components/assessments/DraftAssessmentExistsModal';
-import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
+import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
-import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
 import AIInterviewVersionHistoryModal from './ai-interview/AIInterviewVersionHistoryModal';
 import AssessmentVersionHistoryModal from './assessments/AssessmentVersionHistoryModal';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
@@ -747,15 +744,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [showApplicantsView, setShowApplicantsView] = useState(false);
   const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [showInviteToAssessmentModal, setShowInviteToAssessmentModal] = useState(false);
-  // ShareAssessmentModal (used by the assessment-side flow) is reused here for
-  // deep-linked assessment sharing. We need
-  // the assessment(s) loaded before we can mount it.
-  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
-  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
-  const [isLoadingShareAssessments, setIsLoadingShareAssessments] = useState(false);
-  // Picker shown when the JD has more than one published assessment — user
-  // chooses which one(s) to invite candidates to before the share modal opens.
   // True while the Create action resolves whether this JD already has an
   // assessment, so the button shows a spinner instead of feeling unresponsive.
   const [resolvingAssessmentTarget, setResolvingAssessmentTarget] = useState(false);
@@ -804,89 +792,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      included), read by Create — the twin of `assessmentVersionCount`. Null
      until Create has looked; the click re-reads it every time regardless. */
   const [aiInterviewVersionCount, setAiInterviewVersionCount] = useState<number | null>(null);
-  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
-  const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
-  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
-
-  /* Candidates the share step opens pre-filled with — the AI Talent Match
-     tab's Invite to Assessment hands its ticked candidates over; the header's
-     Send Invite passes none and the recruiter adds them in the modal. */
-  const [shareAssessmentCandidates, setShareAssessmentCandidates] = useState<
-    { id: string; name: string; email: string; phone?: string; source?: 'database'; resumeId?: string }[] | null
-  >(null);
-
-  // Open the share flow with a list of assessments already chosen.
-  const openShareWithAssessments = (items: any[], candidates: typeof shareAssessmentCandidates = null) => {
-    setShareAssessmentCandidates(candidates);
-    setShareAssessments(items);
-    setShowShareAssessmentModal(true);
-  };
-
-  const handleOpenShareAssessment = async () => {
-    if (isLoadingShareAssessments) return;
-    setIsLoadingShareAssessments(true);
-    try {
-      // Fetch every assessment for this JD, not just published ones. Only
-      // published are invitable, but knowing what else is there is what lets the
-      // failure message name the actual blocker — "still a draft" and "none
-      // created" are different problems with different next steps, and one
-      // generic "no invitable assessment" sentence described neither.
-      const resp = await assessmentService.list({ jd_id: job.id, page_size: 100 });
-      const all: any[] = resp?.items || [];
-      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
-      const revokedIds = getLocallyRevokedAssessmentIds();
-
-      const published = all.filter(a => ['published', 'active'].includes(statusOf(a)));
-      // Exclude any assessment whose invites the recruiter has revoked.
-      // Backend flag wins; locally-revoked IDs from sessionStorage are
-      // the fallback for tabs where the backend flag isn't yet returned.
-      const items = published.filter(a => !isAssessmentRevoked(a, revokedIds));
-
-      if (items.length === 0) {
-        if (published.length > 0) {
-          // Published, but every one has had its invites revoked.
-          toast.error(
-            'Every published assessment for this job has had its invites revoked. Duplicate one to start a fresh invite round.',
-            { duration: 6000 }
-          );
-        } else if (all.some(a => statusOf(a) === 'draft')) {
-          toast.error(
-            'This job’s assessment is still a draft. Publish it before inviting candidates.',
-            { duration: 6000 }
-          );
-        } else {
-          toast.error('No assessment has been created for this job yet. Use Create to add one.');
-        }
-        return;
-      }
-
-      // Straight to "Share Assessment via Email", matching the AI Interview
-      // Send Invite action which resolves the JD's live config and opens its
-      // share modal in one step — no intermediate dialog.
-      //
-      // NOTE: when the JD has several published assessments, every one of them
-      // is included (first as the modal's primary, rest as additionalAssessments)
-      // and each invited candidate receives an invite for ALL of them. The modal
-      // lists them ("Invitations for N assessments") but has no per-assessment
-      // selection, so this is send-all, not choose-one.
-      openShareWithAssessments(items);
-    } catch (err) {
-      console.error('Failed to load assessments for JD:', err);
-      toast.error('Could not load assessments. Please try again.');
-    } finally {
-      setIsLoadingShareAssessments(false);
-    }
-  };
-
-  const handleConfirmAssessmentPick = () => {
-    if (pickerSelectedIds.length === 0) {
-      toast.error('Please select at least one assessment.');
-      return;
-    }
-    const chosen = pickerAssessments.filter(a => pickerSelectedIds.includes(a.id));
-    setShowAssessmentPicker(false);
-    openShareWithAssessments(chosen);
-  };
   const [showSelectSourceModal, setShowSelectSourceModal] = useState(false);
   const [showJDHistory, setShowJDHistory] = useState(false);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
@@ -1040,15 +945,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [trackAIInterviewConfig, setTrackAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [resolvingTrackInvitesConfig, setResolvingTrackInvitesConfig] = useState(false);
 
-  // The Invite to AI Interview dialog, opened in place so the recruiter never
-  // leaves this page: null = closed, [] = opened with nobody preset (the header
-  // / quick-action Invite — candidates are added in the share step), a seed =
-  // a Scored Resumes row's candidate, listed first.
-  const [aiInviteSeed, setAiInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
-  /* The AI Talent Match tab's "Create / Send Assessment | AI Interview"
-     popups (VersionInviteDialog — one per type): null = closed; else which
-     popup and the candidates ticked in the table. */
-  const [inviteDialog, setInviteDialog] = useState<{ kind: InviteKind; candidates: InviteCandidate[]; preselect?: boolean; bulk?: boolean } | null>(null);
+  /* Every Assessment / AI Interview invite on this page opens the ONE
+     Create / Send popup (VersionInviteDialog): null = closed; else which
+     type, the candidates ticked in the table, and — for Invite More — the
+     version it is fixed to and a hook to reload the tracker under it. */
+  const [inviteDialog, setInviteDialog] = useState<{
+    kind: InviteKind;
+    candidates: InviteCandidate[];
+    preselect?: boolean;
+    bulk?: boolean;
+    versionId?: string;
+    onSent?: (kind: InviteKind, sent: number) => void;
+  } | null>(null);
+  /** Bumped by a send from a tracker's Invite More, so the tracker left open
+   *  under the popup lists the new invitations at once. */
+  const [trackerRefreshSignal, setTrackerRefreshSignal] = useState(0);
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
   const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
@@ -1393,32 +1304,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(job.id)}&from=job-details`);
   };
 
-  /* `seed` pre-fills the invite form's candidate list. The page-level Invite
-     button passes nothing and gets the empty form; a Scored Resumes row passes
-     that candidate. Everything after the lookup is identical either way, so
-     both entry points resolve the same config and open the same modal. */
-  /* Invite — the shared Invite to AI Interview dialog for this job: its active
-     interview versions to pick from, then the share step. `seed` (a Scored
-     Resumes row) lists that candidate first; without it the candidates are
-     added in the share step, as this page's Invite always worked. */
-  const handleInviteAIInterview = (
-    seed?: { name: string; email: string; resumeId?: string }[],
-  ) => {
-    // Only a real candidate list counts as a seed: the quick-action tile hands
-    // this straight to onClick, so it can arrive as a click event, which must
-    // open the dialog with nobody preset — not crash the page on `.map`.
-    // Opens Create / Send AI Interview — the popup the result tabs' Actions
-    // use — so every Invite on this page runs the one flow; with nobody
-    // preset its "Choose candidates in the next step" applies.
-    const list = Array.isArray(seed) ? seed : [];
-    setInviteDialog({
-      kind: 'interview',
-      candidates: list.map((c) => ({ id: c.resumeId || c.email, name: c.name, email: c.email, resumeId: c.resumeId })),
-    });
-  };
+  /* AI Interview "Send Invite" (section header / empty state) and the
+     ?action=invite-ai-interview deep link: the one Create / Send AI Interview
+     popup for this job, nobody preset — its version cards, then candidates
+     are added in the popup (Select From / Manual / Upload Excel). */
+  const handleInviteAIInterview = () =>
+    setInviteDialog({ kind: 'interview', candidates: [], preselect: false });
   /* Quick Actions › Assessment › Invite (and its deep link): Create / Send
      Assessment with nobody preset — candidates are chosen in its email step. */
-  const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [] });
+  const openCreateSendAssessment = () => setInviteDialog({ kind: 'assessment', candidates: [], preselect: false });
   /* Quick Actions › Create / Send: the popup lists this job's AI Talent Match
      candidates, then its Scored Resumes candidates — read from the SERVER a
      page at a time (search, filters, 50 more on scroll, tab counts), never
@@ -1713,11 +1607,22 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      date when there is no status history for this JD (the `job` prop can
      arrive without `updated_at`, which left that row "N/A" at the bottom). */
   const [jdLastUpdatedAt, setJdLastUpdatedAt] = useState<string | undefined>(undefined);
+  /* Who created this JD row and when — Recent Activity's "Created as Draft"
+     entry. Every JD is created as a draft working copy and only becomes
+     Published through /jd/{id}/publish, so created_by_name + created_at
+     always name the draft's author, never whoever published it (that comes
+     from /jd/{id}/versions). A new lineage version is its own JD row, hence
+     the version number. */
+  const [jdCreation, setJdCreation] = useState<{ at?: string; by?: string; version?: number } | null>(null);
   useEffect(() => {
     if (!job.id) return;
     let cancelled = false;
     jdService.get(job.id)
-      .then((jd) => { if (!cancelled) setJdLastUpdatedAt(jd.updated_at); })
+      .then((jd) => {
+        if (cancelled) return;
+        setJdLastUpdatedAt(jd.updated_at);
+        setJdCreation({ at: jd.created_at, by: jd.created_by_name, version: jd.version_number });
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [job.id, job.status]);
@@ -1900,8 +1805,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setJdAssessments(assessments);
       // Derived here rather than in a separate request — this list is already
       // loaded, and it's the same source Create uses to decide its destination.
-      // Published/active is the same pair handleOpenShareAssessment treats as
-      // invitable, so the button's enabled state matches what clicking it does.
+      // Published/active is the pair the invite popup treats as invitable,
+      // so the button's enabled state matches what clicking it does.
       // Revoked ones are deliberately NOT excluded here: that case has its own
       // "duplicate one to start a fresh round" message, which only lands if the
       // click gets through.
@@ -2777,6 +2682,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           candidates={inviteDialog.candidates}
           preselect={inviteDialog.preselect}
           bulk={inviteDialog.bulk}
+          versionId={inviteDialog.versionId}
           /* Create / Send AI Interview: no Duplicate in the version ⋯ menu. */
           hideDuplicate={inviteDialog.kind === 'interview'}
           disabledReason={
@@ -2802,6 +2708,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onSent={(kind, sent) => {
             if (kind === 'assessment') void fetchAssessmentResults();
             else setAiInterviewCount((prev) => Math.max(prev + sent, 1));
+            inviteDialog.onSent?.(kind, sent);
           }}
         />
   ) : null;
@@ -3932,7 +3839,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       accent="cyan"
                       planLocked={assessmentPlanLocked}
                       onClick={() => openCreateSendFromTile('assessment')}
-                      loading={isLoadingShareAssessments}
                       disabled={!permissions.canCreateAssessments || !features.assessment || jobInactive}
                       disabledTooltip={
                         !permissions.canCreateAssessments
@@ -4224,7 +4130,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   carries no version of its own).
                 - Job Disabled / Re-enabled / Archived / Unarchived: one row
                   per audited status transition from /jd/{id}/status-history,
-                  with the user who made it and when. */}
+                  with the user who made it and when.
+                - Job Created as Draft: one row from the JD's own
+                  created_by_name + created_at — the draft's author, kept
+                  separate from whoever later published it. */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Recent Activity</h3>
             <div className="space-y-3">
@@ -4244,13 +4153,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   });
                 } else {
                   // Lineage fetch hasn't landed (or failed) — fall back to the
-                  // JD's own creator/updated fields so Published/Republished
-                  // still show something rather than vanishing entirely.
+                  // JD's own published/updated dates so Published/Republished
+                  // still show something rather than vanishing entirely. No
+                  // name: `job.postedBy` is the CREATOR, not the publisher.
                   if (job.status === 'Published' && job.postedDate) {
-                    events.push({ key: 'jd-published', dot: 'bg-success', title: 'Job Published', date: job.postedDate, by: job.postedBy });
+                    events.push({ key: 'jd-published', dot: 'bg-success', title: 'Job Published', date: job.postedDate });
                   }
                   if (job.currentVersion && job.currentVersion > 1) {
-                    events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at, by: job.postedBy });
+                    events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at });
+                  }
+                }
+                /* JD creation — always as a draft (see `jdCreation`), credited
+                   to its own author, so a draft one user wrote and another
+                   published shows both names. Falls back to the `job` prop's
+                   created_at / postedBy (created_by_name) until the fetch lands;
+                   a bare user id (uuid) is not shown as a name. */
+                {
+                  const createdAt = jdCreation?.at || job.created_at;
+                  const createdBy = jdCreation?.by || job.postedBy;
+                  const version = jdCreation?.version ?? job.versionNumber ?? 1;
+                  if (createdAt) {
+                    events.push({
+                      key: 'jd-created',
+                      dot: 'bg-gray-400',
+                      title: version > 1 ? `Job Version Created as Draft (V${version})` : 'Job Created as Draft',
+                      date: createdAt,
+                      by: createdBy && !/^[0-9a-f-]{32,36}$/i.test(createdBy) ? createdBy : undefined,
+                    });
                   }
                 }
                 /* JD status changes — every Disabled / Re-enabled / Archived /
@@ -4569,7 +4498,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                  simply isn't offered. */
               onInviteAIInterview={
                 permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && !jobInactive
-                  ? (candidate) => handleInviteAIInterview([candidate])
+                  ? (candidate) => openInviteDialog('interview', [{ id: candidate.resumeId || candidate.email, name: candidate.name, email: candidate.email, resumeId: candidate.resumeId }], 'score-resume')
                   : undefined
               }
               /* The row menu offers only what this JD actually has. Same two
@@ -4833,17 +4762,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobTitle={job.title}
           onClose={() => setShowUploadModal(false)}
           onSubmit={handleResumeUpload}
-        />
-      )}
-
-      {/* Invite to Assessment Modal — fallback only when the JD has no
-          assessments yet. The primary path now uses ShareAssessmentModal
-          below, identical to the assessment-side flow. */}
-      {showInviteToAssessmentModal && (
-        <InviteToAssessmentModal
-          jobTitle={job.title}
-          jobId={job.id}
-          onClose={() => setShowInviteToAssessmentModal(false)}
         />
       )}
 
@@ -5134,141 +5052,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         );
       })()}
 
-      {/* Assessment Picker — shown when this JD has multiple published assessments.
-          User selects which one(s) before the Share modal opens. */}
-      {showAssessmentPicker && pickerAssessments.length > 0 && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Choose an assessment</h3>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
-                  This job has {pickerAssessments.length} published assessments. Select which one(s) to invite candidates to.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowAssessmentPicker(false)}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5 text-gray-500 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {pickerAssessments.map(a => {
-                const isPicked = pickerSelectedIds.includes(a.id);
-                const sections = (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0);
-                const parsed = parseAssessmentTitle(a.title || '');
-                const displayVersion = typeof a.version === 'number' ? a.version : parsed.version;
-                const baseTitle = parsed.cleanTitle || a.short_id || 'Untitled assessment';
-                return (
-                  <label
-                    key={a.id}
-                    className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border mb-2 transition-colors ${
-                      isPicked ? 'border-blue-500 bg-blue-50 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isPicked}
-                      onChange={() => {
-                        setPickerSelectedIds(prev =>
-                          prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
-                        );
-                      }}
-                      className="mt-1"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
-                        {baseTitle}
-                        {displayVersion ? ` - Version ${displayVersion}` : ''}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                        {a.short_id && <span>{a.short_id}</span>}
-                        <span>{a.duration_minutes || 30} min</span>
-                        <span>{sections} section{sections !== 1 ? 's' : ''}</span>
-                        {a.jd_version && <span>JD v{a.jd_version}</span>}
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-            <div className="p-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between gap-3 shrink-0">
-              <span className="text-xs text-gray-600 dark:text-slate-400">
-                {pickerSelectedIds.length} of {pickerAssessments.length} selected
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="primary"
-                  onClick={handleConfirmAssessmentPick}
-                  disabled={pickerSelectedIds.length === 0}
-                >
-                  Continue
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share Assessment via Email — same modal the assessment-side page
-          uses for assessment-level share. */}
-      {showShareAssessmentModal && shareAssessments.length > 0 && (
-        <ShareAssessmentModal
-          isOpen={showShareAssessmentModal}
-          onClose={() => {
-            setShowShareAssessmentModal(false);
-            setShareAssessments([]);
-            setShareAssessmentCandidates(null);
-          }}
-          assessment={{
-            id: shareAssessments[0].id,
-            title: shareAssessments[0].title,
-            duration: `${shareAssessments[0].duration_minutes || 30} min`,
-            questions: (shareAssessments[0].hr_enabled ? 1 : 0)
-              + (shareAssessments[0].technical_enabled ? 1 : 0)
-              + (shareAssessments[0].coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: shareAssessments[0].short_id,
-            version: shareAssessments[0].version,
-            // Display ID (JD-133), not `job.id` — the UUID the header printed.
-            jd_short_id: shareAssessments[0].jd_short_id || job.job_id,
-            jd_title: job.title,
-            /* This job's version, not the assessment's `jd_version` snapshot
-               (stamped at creation; reads 1 for later-version assessments).
-               These are this JD row's assessments (listed by its id). */
-            jd_version: job.versionNumber && job.versionNumber > 0 ? job.versionNumber : shareAssessments[0].jd_version,
-          }}
-          additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            duration: `${a.duration_minutes || 30} min`,
-            questions: (a.hr_enabled ? 1 : 0)
-              + (a.technical_enabled ? 1 : 0)
-              + (a.coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: a.short_id,
-            version: a.version,
-            jd_short_id: a.jd_short_id || job.job_id,
-            jd_title: job.title,
-            jd_version: job.versionNumber && job.versionNumber > 0 ? job.versionNumber : a.jd_version,
-          }))}
-          /* From the AI Talent Match tab: its ticked candidates, pre-filled,
-             under the source that tab's Actions menu has always sent with
-             (gated on `scoring:invite`, like BulkInviteModal before it). */
-          prefilledCandidates={shareAssessmentCandidates ?? undefined}
-          inviteSource={shareAssessmentCandidates ? 'Resume Scoring' : 'JD'}
-          onInviteSent={(count) => {
-            const sentCount = Math.max(count, 1);
-            setAssessmentInviteCount((prev) => prev + sentCount);
-            void fetchAssessmentResults();
-          }}
-        />
-      )}
-
       {/* Select Source Modal */}
       {showSelectSourceModal && (
         <SelectSourceModal
@@ -5373,6 +5156,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {/* Track Invites Modal */}
       {showTrackInvitesModal && (
         <TrackInvitesModal
+          /* No refresh prop of its own: a send from Invite More remounts it
+             so the new invitations are listed at once. */
+          key={`track-assessment-${trackerRefreshSignal}`}
           isOpen={showTrackInvitesModal}
           onClose={() => setShowTrackInvitesModal(false)}
           jdId={job.id}
@@ -5381,10 +5167,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           // Revoke / Edit follow the same gate as Invite on this page.
           canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && !jobInactive}
-          // Footer Invite More - this page's own Invite to Assessment dialog.
+          /* Footer Invite More — the one Create / Send Assessment popup over
+             this tracker. The tracker spans every assessment version of this
+             job, so there is no single tracked version to fix: the popup
+             shows its version cards. A send reloads the tracker. */
+          inviteMoreDeniedReason="You do not have permission to invite candidates to an assessment"
           onInviteMore={canInviteToAssessment && permissions.canCreateAssessments && canInviteJdAssessment ? () => {
-            setShowTrackInvitesModal(false);
-            openCreateSendAssessment();
+            setInviteDialog({
+              kind: 'assessment',
+              candidates: [],
+              preselect: false,
+              onSent: () => setTrackerRefreshSignal((n) => n + 1),
+            });
           } : undefined}
           // Keep the whole flow on this page: swap the popup for the same
           // inline detail view the Assessment Result tab opens, rather than
@@ -5421,10 +5215,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             setTrackAIInterviewConfig(null);
             handleAIInterviewCandidateClick(inv.id);
           }}
-          // Footer Invite More — this page's own Invite to AI Interview dialog.
+          /* Footer Invite More — the one Create / Send AI Interview popup,
+             opened on the tracked interview version over this tracker, which
+             stays up and reloads its rows once the send lands. */
+          refreshSignal={trackerRefreshSignal}
+          inviteMoreDeniedReason="You do not have permission to invite candidates to an AI interview"
           onInviteMore={canInviteToAIInterview ? () => {
-            setTrackAIInterviewConfig(null);
-            handleInviteAIInterview();
+            const trackedId = trackAIInterviewConfig.id;
+            setInviteDialog({
+              kind: 'interview',
+              candidates: [],
+              preselect: false,
+              versionId: trackedId,
+              onSent: () => setTrackerRefreshSignal((n) => n + 1),
+            });
           } : undefined}
         />
       )}
@@ -5482,33 +5286,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           type). Up to 5 versions per type for this JD row; one version per
           send. Mounted only while open, so each opening starts fresh. */}
       {versionInviteDialogEl}
-
-      {/* Invite to AI Interview — the shared dialog, scoped to this job, with
-          several interviews pickable (Select All), as the Invite to
-          Assessment dialog below. */}
-      <InviteToAIInterviewFlow
-        open={aiInviteSeed !== null}
-        onClose={() => setAiInviteSeed(null)}
-        jobId={job.id}
-        jobVersionNumber={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
-        multiple
-        /* Opens with the "Latest" interview version ticked, as the Invite to
-           Assessment dialog below opens on its Latest assessment. */
-        preselectLatest
-        /* Only this job version's own AI interview (the one this page uses),
-           and candidates' first names capitalised — display only. */
-        mappedVersionOnly
-        formatCandidateName={formatCandidateFirstName}
-        candidates={(aiInviteSeed ?? []).map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }))}
-        resumes={aiInviteSeed && aiInviteSeed.length > 0
-          ? aiInviteSeed.map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }) as unknown as ResumeRecord)
-          : undefined}
-        onInvited={() => {
-          setAiInviteSeed(null);
-          setAiInterviewCount((prev) => Math.max(prev + 1, 1));
-          toast.success('AI interview invitation sent');
-        }}
-      />
 
       </div>
       </div>
@@ -6006,164 +5783,6 @@ function AIMatchTabContent({
                 onSelectAll={selectAllCandidates}
                 onClear={clearSelection}
               />
-
-              {/* Actions — appears once something is ticked; holds the bulk
-                  operations: Score, plus Invite to Assessment / AI Interview
-                  (the Scored Resumes tab's Actions menu pattern — ready, or a
-                  "+ Create" offer when this job has none yet). */}
-              {selectedIds.size > 0 && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
-                      aria-label={`Actions for ${selectedIds.size} selected`}
-                    >
-                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-                      </span>
-                      Actions ({selectedIds.size})
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                      {selectedIds.size.toLocaleString()} selected
-                    </div>
-                    {/* (N) is the ticked candidates still unscored for this
-                        job version — not the selection size — and only they
-                        are sent. Nothing left to score (or the scored list
-                        still loading) greys it out with the reason, the AI
-                        Talent Match page's disabled Score Resumes row. */}
-                    {(() => {
-                      /* All three from the same lists the count and the run
-                         use — the selection and its unscored subset. */
-                      const selectedCount = selectedCandidates.length;
-                      const eligibleCount = scoreEligibleCandidates.length;
-                      const alreadyCount = selectedCount - eligibleCount;
-                      const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
-                      if (jobLockedReason) {
-                        return (
-                          <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                            <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
-                            <span className="min-w-0">
-                              <span className="block">Score Selected</span>
-                              <span className="block text-2xs text-gray-400 normal-case whitespace-normal">{jobLockedReason}</span>
-                            </span>
-                          </DropdownMenuItem>
-                        );
-                      }
-                      if (!scoredResumesLoaded || eligibleCount === 0) {
-                        // Disabled items take no pointer events, so the reason
-                        // is spelled out on the row itself, not behind an ⓘ.
-                        return (
-                          <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
-                            <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
-                            <span className="min-w-0">
-                              <span className="block">Score Selected{scoredResumesLoaded ? ' (0)' : ''}</span>
-                              <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
-                                {!scoredResumesLoaded
-                                  ? 'Checking scored status…'
-                                  : selectedCount === 1
-                                    ? 'This candidate has already been scored for this job version, so there is no one to score.'
-                                    : `All ${selectedCount.toLocaleString()} selected candidates have already been scored for this job version, so none are eligible.`}
-                              </span>
-                            </span>
-                          </DropdownMenuItem>
-                        );
-                      }
-                      // Only when some of the selection is excluded — a fully
-                      // eligible selection needs no explanation.
-                      const explanation = alreadyCount > 0
-                        ? `You selected ${plural(selectedCount, 'candidate', 'candidates')}, but only ${eligibleCount.toLocaleString()} ${eligibleCount === 1 ? 'is' : 'are'} eligible for scoring. The remaining ${plural(alreadyCount, 'candidate has', 'candidates have')} already been scored for this job version.`
-                        : null;
-                      return (
-                        <DropdownMenuItem
-                          className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                          aria-describedby={explanation ? 'ai-match-score-selected-why' : undefined}
-                          onSelect={() => {
-                            if (alreadyCount > 0) toast.info(`${alreadyCount} already scored — scoring the other ${eligibleCount}.`);
-                            onScoreSelected(scoreEligibleCandidates);
-                          }}
-                        >
-                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                          <span>Score Selected ({eligibleCount.toLocaleString()})</span>
-                          {explanation && (
-                            <>
-                              <span id="ai-match-score-selected-why" className="sr-only">{explanation}</span>
-                              <ScoreSelectedInfo message={explanation} />
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                      );
-                    })()}
-                    {/* Create / Send — the version drawer, on that type. The
-                        same icons and permission reads the invite items used. */}
-                    <DropdownMenuItem
-                      aria-disabled={!canCreateAssessments || undefined}
-                      title={!canCreateAssessments ? assessmentDeniedReason : undefined}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
-                      onSelect={(e) => {
-                        if (!canCreateAssessments) {
-                          // Locked: tooltip only, no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        onOpenInviteDrawer('assessment', selectedCandidates);
-                      }}
-                    >
-                      <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-                      <span>Create / Send Assessment </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      aria-disabled={!mayInviteAIInterview || undefined}
-                      title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
-                      onSelect={(e) => {
-                        if (!mayInviteAIInterview) {
-                          // Locked: tooltip only, no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        onOpenInviteDrawer('interview', selectedCandidates);
-                      }}
-                    >
-                      <Video className="w-4 h-4 text-menu-icon-ai" />
-                      <span>Create / Send AI Interview </span>
-                    </DropdownMenuItem>
-                    {/* Export, last — the ticked candidates, through the AI
-                        Talent Match page's CSV / Excel picker. */}
-                    <DropdownMenuItem
-                      aria-disabled={!canExport || undefined}
-                      title={!canExport ? 'You do not have permission to export matched candidates' : undefined}
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
-                      onSelect={(e) => {
-                        if (!canExport) {
-                          // Locked: tooltip only, no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        setShowExportModal(true);
-                      }}
-                    >
-                      <FileDown className="w-4 h-4 text-menu-icon-download" />
-                      <span>Export</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
-                >
-                  <X className="w-4 h-4" />
-                  Clear
-                </button>
-              </div>
-              )}
             </>
           }
           /* Order: Select All → Search → All Matches → Sort → More Filters
@@ -6265,9 +5884,167 @@ function AIMatchTabContent({
           }
           />
         );
+        /* Actions + Clear — once something is ticked, their own full-width
+           row under the toolbar (Score, Invite to Assessment / AI Interview,
+           Export). Rendered outside ListToolbar: its `beforeSearch` slot is
+           a shrink-wrapped box beside Select All, so a row inside it
+           wrapped cramped and misaligned. h-9 matches the toolbar band. */
+        const bulkActionsRow = selectedIds.size > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                  aria-label={`Actions for ${selectedIds.size} selected`}
+                >
+                  <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                  </span>
+                  Actions ({selectedIds.size})
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                  {selectedIds.size.toLocaleString()} selected
+                </div>
+                {/* (N) is the ticked candidates still unscored for this
+                    job version — not the selection size — and only they
+                    are sent. Nothing left to score (or the scored list
+                    still loading) greys it out with the reason, the AI
+                    Talent Match page's disabled Score Resumes row. */}
+                {(() => {
+                  /* All three from the same lists the count and the run
+                     use — the selection and its unscored subset. */
+                  const selectedCount = selectedCandidates.length;
+                  const eligibleCount = scoreEligibleCandidates.length;
+                  const alreadyCount = selectedCount - eligibleCount;
+                  const plural = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+                  if (jobLockedReason) {
+                    return (
+                      <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                        <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <span className="min-w-0">
+                          <span className="block">Score Selected</span>
+                          <span className="block text-2xs text-gray-400 normal-case whitespace-normal">{jobLockedReason}</span>
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  }
+                  if (!scoredResumesLoaded || eligibleCount === 0) {
+                    // Disabled items take no pointer events, so the reason
+                    // is spelled out on the row itself, not behind an ⓘ.
+                    return (
+                      <DropdownMenuItem className="flex !items-start gap-2.5 px-4 py-2.5 text-sm text-gray-400" disabled>
+                        <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <span className="min-w-0">
+                          <span className="block">Score Selected{scoredResumesLoaded ? ' (0)' : ''}</span>
+                          <span className="block text-2xs text-gray-400 normal-case whitespace-normal">
+                            {!scoredResumesLoaded
+                              ? 'Checking scored status…'
+                              : selectedCount === 1
+                                ? 'This candidate has already been scored for this job version, so there is no one to score.'
+                                : `All ${selectedCount.toLocaleString()} selected candidates have already been scored for this job version, so none are eligible.`}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    );
+                  }
+                  // Only when some of the selection is excluded — a fully
+                  // eligible selection needs no explanation.
+                  const explanation = alreadyCount > 0
+                    ? `You selected ${plural(selectedCount, 'candidate', 'candidates')}, but only ${eligibleCount.toLocaleString()} ${eligibleCount === 1 ? 'is' : 'are'} eligible for scoring. The remaining ${plural(alreadyCount, 'candidate has', 'candidates have')} already been scored for this job version.`
+                    : null;
+                  return (
+                    <DropdownMenuItem
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                      aria-describedby={explanation ? 'ai-match-score-selected-why' : undefined}
+                      onSelect={() => {
+                        if (alreadyCount > 0) toast.info(`${alreadyCount} already scored — scoring the other ${eligibleCount}.`);
+                        onScoreSelected(scoreEligibleCandidates);
+                      }}
+                    >
+                      <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                      <span>Score Selected ({eligibleCount.toLocaleString()})</span>
+                      {explanation && (
+                        <>
+                          <span id="ai-match-score-selected-why" className="sr-only">{explanation}</span>
+                          <ScoreSelectedInfo message={explanation} />
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                  );
+                })()}
+                {/* Create / Send — the version drawer, on that type. The
+                    same icons and permission reads the invite items used. */}
+                <DropdownMenuItem
+                  aria-disabled={!canCreateAssessments || undefined}
+                  title={!canCreateAssessments ? assessmentDeniedReason : undefined}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                  onSelect={(e) => {
+                    if (!canCreateAssessments) {
+                      // Locked: tooltip only, no toast.
+                      e.preventDefault();
+                      return;
+                    }
+                    onOpenInviteDrawer('assessment', selectedCandidates);
+                  }}
+                >
+                  <ClipboardList className="w-4 h-4 text-menu-icon-view" />
+                  <span>Create / Send Assessment </span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  aria-disabled={!mayInviteAIInterview || undefined}
+                  title={!mayInviteAIInterview ? aiInterviewDeniedReason : undefined}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                  onSelect={(e) => {
+                    if (!mayInviteAIInterview) {
+                      // Locked: tooltip only, no toast.
+                      e.preventDefault();
+                      return;
+                    }
+                    onOpenInviteDrawer('interview', selectedCandidates);
+                  }}
+                >
+                  <Video className="w-4 h-4 text-menu-icon-ai" />
+                  <span>Create / Send AI Interview </span>
+                </DropdownMenuItem>
+                {/* Export, last — the ticked candidates, through the AI
+                    Talent Match page's CSV / Excel picker. */}
+                <DropdownMenuItem
+                  aria-disabled={!canExport || undefined}
+                  title={!canExport ? 'You do not have permission to export matched candidates' : undefined}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 opacity-60 cursor-not-allowed'}`}
+                  onSelect={(e) => {
+                    if (!canExport) {
+                      // Locked: tooltip only, no toast.
+                      e.preventDefault();
+                      return;
+                    }
+                    setShowExportModal(true);
+                  }}
+                >
+                  <FileDown className="w-4 h-4 text-menu-icon-download" />
+                  <span>Export</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              type="button"
+              onClick={clearSelection}
+              title="Clear the selection"
+              className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          </div>
+        ) : null;
         return toolbarPortal
-          ? createPortal(toolbar, toolbarPortal)
-          : <div className="space-y-3">{toolbar}</div>;
+          ? createPortal(<>{toolbar}{bulkActionsRow}</>, toolbarPortal)
+          : <div className="space-y-3">{toolbar}{bulkActionsRow}</div>;
       })()}
 
       {/* Table / Grid */}

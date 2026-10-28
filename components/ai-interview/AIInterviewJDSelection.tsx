@@ -16,7 +16,7 @@ import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import ListPagination from '@/components/ListPagination';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList } from '@/lib/utils/jobOpeningDisplay';
+import { lineageKey, isSelectableVersion, mapJDToJob, jobSearchMatcher, sortJobs, buildAssessmentJobList, needsVersionPicker } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
 import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
 import { jdService } from '@/lib/services';
@@ -171,6 +171,8 @@ export default function AIInterviewJDSelection() {
   const pagedJobs = lineageJobs.slice((jdSafePage - 1) * jdItemsPerPage, jdSafePage * jdItemsPerPage);
 
   const jdPickOnThisPage = !!jdPick && pagedJobs.some(job => lineageKey(job) === jdPick.lineage);
+  /* Every version we hold, for the View Versions test below. */
+  const allVersions = [...fullJobsById.values()];
 
   const handleCreateForVersion = (jdId: string) => {
     if (isJdDisabled(jds.find(jd => jd.id === jdId)?.status)) {
@@ -237,7 +239,7 @@ export default function AIInterviewJDSelection() {
                 </div>
                 <JobEligibilityNote
                   className="mt-3"
-                  description="Published (or Republished) job versions without an AI interview can be selected. Disabled jobs are shown read-only until enabled again. Archived, Draft and already-configured jobs are hidden — use View Versions to see a job's full history."
+                  description="Published (or Republished) job versions without an AI interview can be selected. Disabled jobs are shown read-only until enabled again. Archived, Draft and already-configured jobs are hidden. A job with only one available version is selected straight from its card; View Versions appears when there are versions to choose from, and the eye icon shows a job's full history."
                 />
               </div>
 
@@ -356,6 +358,10 @@ export default function AIInterviewJDSelection() {
                       const latestSelectableStatus = isSelectableVersion(job);
                       const latestSelectable = !latestHasInterview && !blockedByOtherPick && latestSelectableStatus && !jobDisabled;
                       const latestUnpublishedReason = `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
+                      /* Only when another version could be picked — a job whose
+                         card version is its one available version is picked
+                         straight from the card. */
+                      const showVersionPicker = needsVersionPicker(job, allVersions, version => versionHasInterview(version.id));
                       /* The card's + builds against this job's picked version
                          when one is ticked, otherwise the latest. */
                       const cardTarget = lineageSelected ? jdPick!.job : job;
@@ -383,7 +389,9 @@ export default function AIInterviewJDSelection() {
                                 ? `${JD_DISABLED_ACTION_MESSAGE} View Versions still shows this job's version history.`
                               : !latestSelectableStatus
                                 ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
-                                : 'View Versions opens this job’s version history — every version of this job, and the one to build the AI interview against.'
+                                : showVersionPicker
+                                  ? 'View Versions opens this job’s version history — every version of this job, and the one to build the AI interview against.'
+                                  : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the AI interview against it.`
                           }
                           aria-disabled={blockedByOtherPick}
                           className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
@@ -488,29 +496,31 @@ export default function AIInterviewJDSelection() {
                             </div>
                           </div>
 
-                          {/* View Versions — always offered, bottom-right, as on
-                              the Assessments picker. */}
-                          <div className="mt-3 flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                jdLineage.toggle(versionKey, job.id);
-                              }}
-                              aria-expanded={versionsExpanded}
-                              className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                                versionsExpanded
-                                  ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
-                                  : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                              }`}
-                              title={versionsExpanded ? 'Hide version history' : 'View version history — every version of this job, and the one to build the AI interview against'}
-                            >
-                              {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                          </div>
+                          {/* View Versions — bottom-right, only when this job has
+                              another version to pick (needsVersionPicker). */}
+                          {showVersionPicker && (
+                            <div className="mt-3 flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  jdLineage.toggle(versionKey, job.id);
+                                }}
+                                aria-expanded={versionsExpanded}
+                                className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                                  versionsExpanded
+                                    ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
+                                    : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                                }`}
+                                title={versionsExpanded ? 'Hide version history' : 'View version history — every version of this job, and the one to build the AI interview against'}
+                              >
+                                {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                            </div>
+                          )}
 
-                          {versionsExpanded && (
+                          {showVersionPicker && versionsExpanded && (
                             <JobVersionHistoryPanel
                               job={job}
                               versions={jdLineage.lineages[versionKey]}

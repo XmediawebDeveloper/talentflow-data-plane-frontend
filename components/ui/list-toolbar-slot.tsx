@@ -92,3 +92,45 @@ export function ListToolbarPortal({
 }
 
 export default ListToolbarPortal;
+
+/**
+ * A list's bulk-selection controls (the Actions (N) menu and Clear), drawn on
+ * their own line UNDER the tab pills instead of inside the search row.
+ *
+ * The page reserves that line with `<div data-list-bulk-slot />` (empty:hidden,
+ * so it costs nothing until rows are ticked). Wrap the controls in this
+ * component and they portal there; on a page with no such element they render
+ * in place, exactly as before. The element is found in a layout effect, so the
+ * controls never paint in the search row first.
+ */
+/**
+ * The element inside a toolbar host where a page's Sort by control belongs —
+ * right after More Filters. `ListToolbar` renders an empty `display: contents`
+ * span for it; this hook watches the host and hands back that span, so the
+ * page can portal its Sort by into whichever tab's toolbar is on screen. Null
+ * while no toolbar is mounted, in which case the page draws Sort by itself.
+ */
+export function useListSortSlot(host: HTMLElement | null) {
+  const [el, setEl] = React.useState<HTMLElement | null>(null);
+  React.useLayoutEffect(() => {
+    if (!host) { setEl(null); return; }
+    const find = () => setEl((prev) => {
+      const next = host.querySelector<HTMLElement>('[data-list-sort-slot]');
+      return next === prev ? prev : next;
+    });
+    find();
+    const observer = new MutationObserver(find);
+    observer.observe(host, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [host]);
+  return el;
+}
+
+export function ListBulkActions({ children }: { children: React.ReactNode }) {
+  const [slot, setSlot] = React.useState<HTMLElement | null>(null);
+  React.useLayoutEffect(() => {
+    setSlot(document.querySelector<HTMLElement>('[data-list-bulk-slot]'));
+  }, []);
+  if (slot) return createPortal(children, slot);
+  return <>{children}</>;
+}

@@ -4,11 +4,8 @@ import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useId } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import CreateInviteTargetModal from '@/components/resume-scoring/CreateInviteTargetModal';
-import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import {
-  buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, withResumeInviteMarker,
-  RESUME_INVITE_PARAM, type InviteHandoffKind,
+  clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoffKind,
 } from '@/lib/utils/resumeScoringInviteHandoff';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import VersionCompareModal from '@/components/VersionCompareModal';
@@ -18,7 +15,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip, Plus, ClipboardList, Video
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Database, Paperclip, ClipboardList, Video
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -222,11 +219,9 @@ import type { ScoredResume } from '@/components/ScoredResumesTable';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
-import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
-import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
-import InviteToAssessmentFlow from '@/components/InviteToAssessmentFlow';
-import type { AssessmentResponse } from '@/lib/services/assessmentService';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -492,24 +487,9 @@ export default function ResumeViewPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showFileProperties]);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
-  const [inviteIntent, setInviteIntent] = useState<'assessment' | 'ai-interview' | null>(null);
-  const [showInviteJobPicker, setShowInviteJobPicker] = useState(false);
-  const [inviteJobQuery, setInviteJobQuery] = useState('');
-  const [loadingInvite, setLoadingInvite] = useState(false);
-  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
-  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
-  /* AI Interview invite — the shared Invite to AI Interview popup (the same
-     one My Resumes and the Shared Database use): pick the interview, then
-     the share modal with this candidate prefilled. */
-  const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
-  /* Assessment invite — the shared Invite to Assessment popup (the same one
-     AI Talent Match opens): pick one or more assessments, then the share
-     modal with this candidate prefilled, exactly as before. */
-  const [showAssessmentInviteFlow, setShowAssessmentInviteFlow] = useState(false);
-  const [inviteAssessmentOptions, setInviteAssessmentOptions] = useState<AssessmentResponse[]>([]);
-  const [pickedInviteAssessments, setPickedInviteAssessments] = useState<AssessmentResponse[]>([]);
-  const [loadingInviteAssessments, setLoadingInviteAssessments] = useState(false);
-  const [inviteJobTitle, setInviteJobTitle] = useState('');
+  /* Every Assessment / AI Interview invite here opens THE invite popup
+     (VersionInviteDialog). */
+  const { open: openInvite } = useInviteDialog();
 
   useEffect(() => {
     if (!showInviteMenu) return;
@@ -543,108 +523,47 @@ export default function ResumeViewPage() {
     else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [showInviteMenu]);
 
-  const startInvite = async (intent: 'assessment' | 'ai-interview') => {
+  /* Invite ▾ → Assessment / AI Interview: THE invite popup with this resume
+     as the candidate. Opened for one job (a job's AI Talent Match list or Job
+     Details) → that job's versions; otherwise the popup starts on the list of
+     every published one. It offers Create v1 / New version itself, so a job
+     with none yet is no longer a separate greyed "+ Create …" path. */
+  const inviteJobId = viewSource === 'ai-talent-match' ? aiMatchJobId
+    : viewSource === 'job-details' ? jobDetailsJobId
+    : null;
+  const inviteCandidate = (): InviteCandidate | null => {
+    if (!resume) return null;
+    const email = resume.email && resume.email !== 'No email' ? resume.email : '';
+    const phone = resume.phone && resume.phone !== 'No phone' ? resume.phone : undefined;
+    const base = { id: resumeId, name: getCandidateName() || resume.name || '', email, phone, resumeId };
+    if (viewSource === 'ai-talent-match') return { ...base, source: 'talent-match', inviteSource: 'AI Talent Match' };
+    return {
+      ...base,
+      inviteSource: viewSource === 'my-resumes' ? 'My Resumes'
+        : viewSource === 'resume-database' ? 'Internal DB'
+        : 'JD',
+    };
+  };
+  const startInvite = (intent: 'assessment' | 'ai-interview') => {
     setShowInviteMenu(false);
-    if (intent === 'ai-interview') {
-      setShowAIInviteFlow(true);
-      return;
-    }
-    if (intent === 'assessment') {
-      /* Straight into the shared popup, as AI Interview does. Only published,
-         non-revoked assessments can be invited to — the rule this page's
-         job-scoped load has always applied, now across every job, since the
-         popup lists and groups them by job itself. */
-      setPickedInviteAssessments([]);
-      setInviteAssessmentOptions([]);
-      setShowAssessmentInviteFlow(true);
-      setLoadingInviteAssessments(true);
-      try {
-        const { assessmentService } = await import('@/lib/services/assessmentService');
-        const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
-        const resp = await assessmentService.list({ status: 'published', page_size: 100 });
-        const revokedIds = getLocallyRevokedAssessmentIds();
-        setInviteAssessmentOptions((resp?.items || []).filter((a) => {
-          const status = String(a?.status || '').toLowerCase();
-          if (status !== 'published' && status !== 'active') return false;
-          return !isAssessmentRevoked(a, revokedIds);
-        }));
-      } catch (err) {
-        console.error('[ResumeView] Failed to load assessments:', err);
-        toast.error('Could not load assessments. Please try again.');
-      } finally {
-        setLoadingInviteAssessments(false);
-      }
-      return;
-    }
-    setInviteIntent(intent);
-    setInviteJobQuery('');
-    if (publishedJobs.length === 0) await fetchPublishedJobs();
-    setShowInviteJobPicker(true);
-  };
-
-  // Assessment invite for the chosen JD — mirrors the JD page's rules: only
-  // published, non-revoked assessments can be invited to.
-  const openAssessmentInvite = async (job: Job) => {
-    setLoadingInvite(true);
-    try {
-      const { assessmentService } = await import('@/lib/services/assessmentService');
-      const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
-      const resp = await assessmentService.list({ jd_id: job.id, status: 'published', page_size: 100 });
-      const revokedIds = getLocallyRevokedAssessmentIds();
-      const items: any[] = (resp?.items || []).filter((a: any) => {
-        const status = String(a?.status || '').toLowerCase();
-        if (status !== 'published' && status !== 'active') return false;
-        return !isAssessmentRevoked(a, revokedIds);
-      });
-
-      if (items.length === 0) {
-        toast.error(`No invitable assessment is available for "${job.title}".`, { duration: 6000 });
-        return;
-      }
-      setShareAssessments(items);
-      setInviteJobTitle(job.title);
-      setShowShareAssessmentModal(true);
-      setShowInviteJobPicker(false);
-    } catch (err) {
-      console.error('[ResumeView] Failed to load assessments:', err);
-      toast.error('Could not load assessments. Please try again.');
-    } finally {
-      setLoadingInvite(false);
-    }
-  };
-
-  /* Opened from AI Talent Match, the job is known — so Invite follows
-     Resume Scoring's flow: a job with no AI Assessment / AI Interview yet
-     greys that entry with the reason and offers "+ Create …" under it; the
-     create pages come back here (`?resume_invite=1`) and the invite opens
-     for this candidate. */
-  const aiMatchInviteJobId = viewSource === 'ai-talent-match' ? aiMatchJobId : null;
-  const aiMatchInviteTargets = useJobInviteTargets(aiMatchInviteJobId ?? undefined);
-  const assessmentMissing = !!aiMatchInviteJobId && aiMatchInviteTargets.known && !aiMatchInviteTargets.assessmentConfigured;
-  const aiInterviewMissing = !!aiMatchInviteJobId && aiMatchInviteTargets.known && !aiMatchInviteTargets.aiInterviewConfigured;
-  const [createInviteKind, setCreateInviteKind] = useState<InviteHandoffKind | null>(null);
-
-  const startCreateInviteTarget = () => {
-    const kind = createInviteKind;
-    if (!kind || !aiMatchInviteJobId) return;
-    const returnUrl = withResumeInviteMarker(`${window.location.pathname}${window.location.search}`);
-    saveInviteHandoff({
-      source: 'ai-talent-match',
-      kind,
-      jdId: aiMatchInviteJobId,
-      jdTitle: aiMatchJobTitle || 'Job',
-      scoreIds: [resumeId],
-      candidateCount: 1,
-      view: 'job',
-      origin: 'detail',
-      candidateName: getCandidateName(),
-      returnUrl,
+    const candidate = inviteCandidate();
+    const jobTitle = viewSource === 'ai-talent-match' ? aiMatchJobTitle : jobDetailsTitle;
+    openInvite({
+      kind: intent === 'assessment' ? 'assessment' : 'interview',
+      job: inviteJobId
+        ? {
+            jdId: inviteJobId,
+            jdTitle: (crumbJob && crumbJob.id === inviteJobId ? crumbJob.title : jobTitle) || 'Job',
+            versionNumber: crumbJob && crumbJob.id === inviteJobId ? crumbJob.version ?? undefined : undefined,
+          }
+        : undefined,
+      candidates: candidate ? [candidate] : [],
     });
-    setCreateInviteKind(null);
-    router.push(buildCreateUrl(kind, { id: aiMatchInviteJobId, title: aiMatchJobTitle }, returnUrl, 'ai-talent-match'));
   };
 
-  // Back from a create: re-check the job, then open the invite for this candidate.
+  // Back from a create (started before this page used the one popup): re-check
+  // the job, then open the invite for this candidate.
+  const aiMatchInviteJobId = viewSource === 'ai-talent-match' ? aiMatchJobId : null;
   const inviteHandoffCheckedRef = useRef(false);
   useEffect(() => {
     if (inviteHandoffCheckedRef.current || !aiMatchInviteJobId || !resume) return;
@@ -678,45 +597,11 @@ export default function ResumeViewPage() {
         toast.info(`No ${what} was published for ${jobName} yet - create it from Invite when you are ready.`);
         return;
       }
-      aiMatchInviteTargets.refresh();
       toast.success(`${what} is live for ${jobName} - now invite ${getCandidateName() || 'this candidate'}.`);
-      if (h.kind === 'assessment') void startInvite('assessment');
-      else setShowAIInviteFlow(true);
+      startInvite((h.kind as InviteHandoffKind) === 'assessment' ? 'assessment' : 'ai-interview');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiMatchInviteJobId, resume, resumeId]);
-
-  /* The greyed entry with its reason, and "+ Create …" under it — the same
-     pair as AI Talent Match's / Resume Scoring's Actions menu. */
-  const renderCreateInviteItems = (kind: InviteHandoffKind) => {
-    const what = kind === 'assessment' ? 'AI Assessment' : 'AI Interview';
-    const Icon = kind === 'assessment' ? ClipboardList : Video;
-    return (
-      <>
-        <div role="menuitem" aria-disabled="true" className="w-full flex items-start gap-3 px-3 py-2 text-left text-gray-400 cursor-not-allowed">
-          <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-            <Icon className="w-4 h-4 text-gray-400" />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-medium">{kind === 'assessment' ? 'Assessment' : 'AI Interview'}</span>
-            <span className="block text-2xs leading-snug">{aiMatchJobTitle || 'This job'} has no {what} yet</span>
-          </span>
-        </div>
-        <button
-          role="menuitem"
-          onClick={() => { setShowInviteMenu(false); setCreateInviteKind(kind); }}
-          className="w-full flex items-center gap-2 pl-14 pr-3 py-2 text-left text-sm font-medium text-brand-blue hover:bg-brand-blue/5"
-        >
-          <Plus className="w-4 h-4" />
-          Create {what}
-        </button>
-      </>
-    );
-  };
-
-  const handleInviteJobPicked = (job: Job) => {
-    if (inviteIntent === 'assessment') openAssessmentInvite(job);
-  };
 
   const handleCompareCheck = (versionId: string) => {
     setCompareChecked(prev => {
@@ -1148,6 +1033,8 @@ Best regards`);
         email: resume.email && resume.email !== 'No email' ? resume.email : '',
         phone: resume.phone && resume.phone !== 'No phone' ? resume.phone : undefined,
         resumeId,
+        // A job's AI Talent Match Result tab — recorded as "AI Talent Match".
+        source: 'talent-match',
       }],
     });
   };
@@ -1625,7 +1512,7 @@ Best regards`);
                       <div className="relative" ref={inviteMenuRef}>
                         <button
                           onClick={() => { if (!canInvite) return; setShowInviteMenu(!showInviteMenu); }}
-                          disabled={loadingInvite || (canInvite && invitePlanLocked)}
+                          disabled={canInvite && invitePlanLocked}
                           aria-disabled={!canInvite}
                           title={
                             assessmentPlanLocked && aiInterviewPlanLocked
@@ -1642,47 +1529,43 @@ Best regards`);
                               : 'bg-white border border-brand-blue/40 text-brand-blue hover:bg-brand-blue/5'
                           }`}
                         >
-                          {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                          <UserPlus className="w-4 h-4" />
                           Invite
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
                         </button>
 
                         {showInviteMenu && (
-                          <div ref={inviteDropdownRef} role="menu" className={`absolute left-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} ${assessmentMissing || aiInterviewMissing ? 'w-64' : 'w-52'} max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
-                            {canInviteAssessment && !assessmentPlanLocked && assessmentMissing ? renderCreateInviteItems('assessment') : (
-                              <button
-                                role="menuitem"
-                                onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
-                                disabled={assessmentPlanLocked}
-                                aria-disabled={!canInviteAssessment}
-                                title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
-                                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                                  assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
-                                }`}
-                              >
-                                <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                                  <ClipboardList className="w-4 h-4 text-brand-blue" />
-                                </span>
-                                <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
-                              </button>
-                            )}
-                            {canInviteAIInterview && !aiInterviewPlanLocked && aiInterviewMissing ? renderCreateInviteItems('interview') : (
-                              <button
-                                role="menuitem"
-                                onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
-                                disabled={aiInterviewPlanLocked}
-                                aria-disabled={!canInviteAIInterview}
-                                title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
-                                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-                                  aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
-                                }`}
-                              >
-                                <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
-                                  <Video className="w-4 h-4 text-brand-cyan" />
-                                </span>
-                                <span className="min-w-0 text-sm font-medium text-gray-900">AI Interview</span>
-                              </button>
-                            )}
+                          <div ref={inviteDropdownRef} role="menu" className={`absolute left-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} w-52 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]`}>
+                            <button
+                              role="menuitem"
+                              onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
+                              disabled={assessmentPlanLocked}
+                              aria-disabled={!canInviteAssessment}
+                              title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                              className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                                assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
+                              }`}
+                            >
+                              <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                                <ClipboardList className="w-4 h-4 text-brand-blue" />
+                              </span>
+                              <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
+                            </button>
+                            <button
+                              role="menuitem"
+                              onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
+                              disabled={aiInterviewPlanLocked}
+                              aria-disabled={!canInviteAIInterview}
+                              title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                              className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                                aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
+                              }`}
+                            >
+                              <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
+                                <Video className="w-4 h-4 text-brand-cyan" />
+                              </span>
+                              <span className="min-w-0 text-sm font-medium text-gray-900">AI Interview</span>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -1790,20 +1673,20 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
               </div>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
             </div>
           )}
 
           {/* Work Experience */}
           {detailedResume.experience.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
@@ -1812,12 +1695,12 @@ Best regards`);
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h4 className="font-semibold text-gray-900 mb-1">{exp.title}</h4>
-                          <div className="flex items-center gap-2 text-gray-700 mb-1">
+                          <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{exp.title}</h4>
+                          <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
                             <Building2 className="w-4 h-4" />
                             <span>{exp.company}</span>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-4 text-xs text-gray-600">
                             {exp.location && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
@@ -1875,22 +1758,22 @@ Best regards`);
             {/* Education */}
             {detailedResume.education.length > 0 && (
               <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-6">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
                 </div>
                 <div className="space-y-4">
                   {detailedResume.education.map((edu, index) => (
                     <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                      <h4 className="font-semibold text-gray-800 mb-1">
+                      <h4 className="text-sm sm:text-base font-semibold text-gray-800 mb-1">
                         {edu.degree}
                         {edu.field && ` in ${edu.field}`}
                       </h4>
-                      {edu.school && <div className="text-gray-700 mb-1">{edu.school}</div>}
-                      {edu.institution && !edu.school && <div className="text-gray-700 mb-1">{edu.institution}</div>}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
+                      {edu.school && <div className="text-sm text-gray-700 mb-1">{edu.school}</div>}
+                      {edu.institution && !edu.school && <div className="text-sm text-gray-700 mb-1">{edu.institution}</div>}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                         {edu.location && (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
@@ -1921,17 +1804,17 @@ Best regards`);
             {/* Skills */}
             {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
               <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-6">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Code className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
                 </div>
 
                 {/* Technical Skills */}
                 {detailedResume.skills.technical.length > 0 && (
                   <div className="mb-6">
-                    <h4 className="font-medium text-gray-900 mb-4">Technical Skills</h4>
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Technical Skills</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {detailedResume.skills.technical.map((skill, index) => (
                         <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
@@ -1946,7 +1829,7 @@ Best regards`);
                 {/* Soft Skills */}
                 {detailedResume.skills.soft.length > 0 && (
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-4">Soft Skills</h4>
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Soft Skills</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {detailedResume.skills.soft.map((skill, index) => (
                         <span key={index} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
@@ -1974,15 +1857,15 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                     <Award className="w-4 h-4 text-brand-orange" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
                 </div>
                 <div className={`space-y-2.5 ${detailedResume.certifications.length > 3 ? 'max-h-[15rem] overflow-y-auto pr-1' : ''}`}>
                   {detailedResume.certifications.map((cert, index) => (
                     <div key={index} className="px-3 py-2.5 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 [overflow-wrap:anywhere]">
-                          <h4 className="text-sm font-semibold text-gray-900 mb-0.5">{cert.name}</h4>
-                          {cert.issuer && <div className="text-xs text-gray-700 mb-0.5">{cert.issuer}</div>}
+                          <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5">{cert.name}</h4>
+                          {cert.issuer && <div className="text-sm text-gray-700 mb-0.5">{cert.issuer}</div>}
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                             {cert.date && (
                               <span className="flex items-center gap-1">
@@ -2011,7 +1894,7 @@ Best regards`);
                       <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <Languages className="w-4 h-4 text-brand-cyan" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {detailedResume.languages.map((lang, index) => (
@@ -2027,7 +1910,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Globe className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
                   </div>
                 )}
 
@@ -2075,17 +1958,17 @@ Best regards`);
           {/* Projects */}
           {resume.projects && resume.projects.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
               </div>
               <div className="space-y-4">
                 {resume.projects.map((project: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="font-semibold text-gray-900">{project.name}</h4>
+                      <h4 className="text-sm sm:text-base font-semibold text-gray-900">{project.name}</h4>
                       {project.url && (
                         <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                           <ExternalLink className="w-4 h-4" />
@@ -2115,18 +1998,18 @@ Best regards`);
           {/* Awards */}
           {resume.awards && resume.awards.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
               </div>
               <div className="space-y-4">
                 {resume.awards.map((award: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-1">{award.name}</h4>
+                        <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{award.name}</h4>
                         {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
                         {award.date && (
                           <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
@@ -2149,11 +2032,11 @@ Best regards`);
           {/* Achievements */}
           {resume.achievements && resume.achievements.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
               </div>
               <div className="space-y-2">
                 {/* param is not just `string`: the render below branches on the object form
@@ -2172,16 +2055,16 @@ Best regards`);
           {/* Volunteer Experience */}
           {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand-cyan" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
               </div>
               <div className="space-y-4">
                 {resume.volunteerExperience.map((vol: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                    <h4 className="font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
+                    <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
                     {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
                     {vol.duration && (
                       <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
@@ -2199,15 +2082,15 @@ Best regards`);
           {/* Hobbies & Interests */}
           {resume.hobbies && resume.hobbies.length > 0 && (
             <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-6">
+              <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {resume.hobbies.map((hobby: string | { name?: string }, index: number) => (
-                  <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
+                  <span key={index} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
                     {typeof hobby === 'string' ? hobby : ((hobby.name || hobby) as React.ReactNode)}
                   </span>
                 ))}
@@ -2222,9 +2105,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
               </div>
-              <p className="text-gray-700 leading-relaxed">{resume.objective}</p>
+              <p className="text-sm text-gray-700 leading-relaxed">{resume.objective}</p>
             </div>
           )}
 
@@ -2235,9 +2118,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
               </div>
-              <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
             </div>
           )}
 
@@ -2253,7 +2136,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
                   <History className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
                 <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
@@ -2447,7 +2330,7 @@ Best regards`);
         />
         <aside
           role="dialog"
-          aria-modal="true"
+          aria-modal={showFileProperties}
           aria-label="File Properties"
           className={`absolute inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-out ${
             showFileProperties ? 'translate-x-0' : 'translate-x-full'
@@ -2833,182 +2716,6 @@ Best regards`);
           }}
         />
       )}
-
-      {/* Invite — step 1: choose the job the invite belongs to */}
-      {showInviteJobPicker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
-            <div className="flex items-start justify-between p-5 border-b border-gray-200 shrink-0">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {inviteIntent === 'assessment' ? 'Invite for Assessment' : 'Invite to AI Interview'}
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Choose the job to invite {resume?.name || 'this candidate'} for.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowInviteJobPicker(false)}
-                className="p-1 hover:bg-gray-100 rounded"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            <div className="p-3 border-b border-gray-100 shrink-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={inviteJobQuery}
-                  onChange={(e) => setInviteJobQuery(e.target.value)}
-                  placeholder="Search jobs..."
-                  className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3">
-              {publishedJobs.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-8">No published jobs available.</p>
-              ) : (
-                publishedJobs
-                  .filter(job => !inviteJobQuery.trim() ||
-                    job.title?.toLowerCase().includes(inviteJobQuery.trim().toLowerCase()) ||
-                    (job as any).job_id?.toLowerCase().includes(inviteJobQuery.trim().toLowerCase()))
-                  .map(job => (
-                    <button
-                      key={job.id}
-                      onClick={() => handleInviteJobPicked(job)}
-                      disabled={loadingInvite}
-                      className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 mb-2 text-left hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors disabled:opacity-60"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          {(job as any).job_id && (
-                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
-                              {(job as any).job_id}
-                            </span>
-                          )}
-                          <span className="text-sm font-medium text-gray-900 truncate">{job.title}</span>
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3">
-                          {job.department && <span>{job.department}</span>}
-                          {job.location && <span>{job.location}</span>}
-                        </div>
-                      </div>
-                      {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin text-brand-blue" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                    </button>
-                  ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Invite — step 2a: share the JD's assessment. Prefilled with the
-          resume this page is showing — was opening blank, leaving the
-          recruiter to retype the name and email of the candidate whose
-          resume they were already looking at. */}
-      {showShareAssessmentModal && shareAssessments.length > 0 && (
-        <ShareAssessmentModal
-          isOpen={showShareAssessmentModal}
-          onClose={() => {
-            setShowShareAssessmentModal(false);
-            setShareAssessments([]);
-          }}
-          prefilledCandidates={
-            resume?.email
-              ? [{
-                  id: resumeId,
-                  name: getCandidateName(),
-                  email: resume.email,
-                  phone: resume.phone,
-                  source: 'manual',
-                  resumeId,
-                }]
-              : undefined
-          }
-          assessment={{
-            id: shareAssessments[0].id,
-            title: shareAssessments[0].title,
-            duration: `${shareAssessments[0].duration_minutes || 30} min`,
-            questions: (shareAssessments[0].hr_enabled ? 1 : 0)
-              + (shareAssessments[0].technical_enabled ? 1 : 0)
-              + (shareAssessments[0].coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: shareAssessments[0].short_id,
-            version: shareAssessments[0].version,
-            jd_title: inviteJobTitle,
-            jd_version: shareAssessments[0].jd_version,
-          }}
-          additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
-            id: a.id,
-            title: a.title,
-            duration: `${a.duration_minutes || 30} min`,
-            questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: a.short_id,
-            version: a.version,
-            jd_title: inviteJobTitle,
-            jd_version: a.jd_version,
-          }))}
-          inviteSource="JD"
-        />
-      )}
-
-      {/* Invite to AI Interview — the shared picker popup, this candidate
-          prefilled, then the share modal. */}
-      <InviteToAssessmentFlow
-        open={showAssessmentInviteFlow}
-        onClose={() => {
-          setShowAssessmentInviteFlow(false);
-          setPickedInviteAssessments([]);
-        }}
-        assessments={inviteAssessmentOptions}
-        loading={loadingInviteAssessments}
-        multiple
-        selectedAssessments={pickedInviteAssessments}
-        onSelectedAssessmentsChange={setPickedInviteAssessments}
-        candidates={resume ? [{ id: resumeId, name: getCandidateName(), email: resume.email || undefined }] : []}
-        resumes={resume ? [resume] : undefined}
-        onProceed={() => {
-          /* The existing share step: the picked assessments, the first as
-             the primary and the rest as additional, with this candidate
-             prefilled — the same Share Assessment modal as before. */
-          setShareAssessments(pickedInviteAssessments);
-          setInviteJobTitle(pickedInviteAssessments[0]?.jd_title || '');
-          setShowAssessmentInviteFlow(false);
-          setPickedInviteAssessments([]);
-          setShowShareAssessmentModal(true);
-        }}
-        /* Opened from AI Talent Match: the job the candidate was matched
-           against, exactly as Invite → AI Interview below is given it — so
-           the popup opens on that job's assessment version cards, with
-           "Browse all assessments instead" for the rest. */
-        jobId={viewSource === 'ai-talent-match' && aiMatchJobId ? aiMatchJobId : undefined}
-      />
-
-      {createInviteKind && aiMatchInviteJobId && (
-        <CreateInviteTargetModal
-          kind={createInviteKind}
-          jdTitle={aiMatchJobTitle || 'This job'}
-          candidateCount={1}
-          sourceLabel={getCandidateName() || 'this resume'}
-          onCancel={() => setCreateInviteKind(null)}
-          onStart={startCreateInviteTarget}
-        />
-      )}
-
-      <InviteToAIInterviewFlow
-        open={showAIInviteFlow}
-        onClose={() => setShowAIInviteFlow(false)}
-        candidates={resume ? [{ id: resumeId, name: getCandidateName(), email: resume.email || undefined }] : []}
-        resumes={resume ? [resume] : undefined}
-        onInvited={() => setShowAIInviteFlow(false)}
-        jobId={viewSource === 'ai-talent-match' && aiMatchJobId ? aiMatchJobId : undefined}
-      />
 
       {/* Share via Email Modal */}
       {isShareModalOpen && (

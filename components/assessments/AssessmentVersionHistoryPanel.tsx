@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
+import { ChevronDown, Eye, FileText, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Pagination from '@/components/Pagination';
 import type { ReactNode } from 'react';
@@ -195,6 +195,14 @@ interface AssessmentVersionHistoryPanelProps {
    * `hideDraftJobVersions`; omitted, every version is shown as before.
    */
   hideJobVersionsWithoutAssessments?: boolean;
+  /**
+   * Draw the Job Versions table the way the Job Descriptions list's own
+   * version table draws (components/jobs/JobVersionHistoryPanel.tsx): a
+   * brand-tinted shell, the brand-sky header in bold dark text, its tighter
+   * cells, and the latest version's faint tint. Look only; omitted, the table
+   * is unchanged.
+   */
+  jdStyle?: boolean;
   /**
    * The trailing controls for one assessment — the host's own three-dot menu
    * and quick actions. Given that assessment's record so the host's existing
@@ -594,6 +602,8 @@ interface JobVersionGroup {
    *  Undefined until this version's own JD record lands, or when it states no
    *  experience at all; the cell draws a dash for both. */
   experience?: string;
+  /** The version's JD record has not landed yet, so Experience is unknown rather than empty. */
+  experiencePending?: boolean;
   createdOn?: string;
   createdBy?: string;
   assessments: AssessmentVersionRow[];
@@ -674,14 +684,17 @@ const sumKnown = (values: (number | undefined)[]): number | null =>
 const UnknownMetric = () => <span className="text-sm text-gray-400">—</span>;
 
 function MetricCell({ value, label }: { value: number; label: string }) {
-  // Number and label on one line, never wrapped — the Assessments / Invitations
-  // Sent / Completed columns read as a single "1 Assessment" phrase rather than
-  // a value stacked above a word.
+  // The number alone: the column header already names the metric, so repeating
+  // "Assessments" / "Invitation" / "Candidates" beside every figure was noise.
+  // The word stays as the hover title and the accessible name.
   return (
-    <div className="flex items-baseline gap-1 whitespace-nowrap">
-      <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{value}</span>
-      <span className="text-xs text-gray-500 dark:text-slate-400">{label}</span>
-    </div>
+    <span
+      className="text-sm font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap"
+      title={`${value} ${label}`}
+      aria-label={`${value} ${label}`}
+    >
+      {value}
+    </span>
   );
 }
 
@@ -826,9 +839,15 @@ export default function AssessmentVersionHistoryPanel({
   renderChildExtraDetail,
   hideDraftJobVersions = false,
   hideJobVersionsWithoutAssessments = false,
+  jdStyle = false,
   paginated = false,
 }: AssessmentVersionHistoryPanelProps) {
+  /* Job Versions row cell padding — see `jdStyle`. */
+  const jobCell = jdStyle ? 'py-2.5 px-3' : 'px-3 sm:px-4 py-3';
   const childColumns = childColumnsFor(vocabulary);
+  /* The three count columns hold a bare number, so header and cells centre. */
+  const isCountColumn = (label: string) =>
+    label === vocabulary.childPlural || label === 'Invitations Sent' || label === 'Completed';
   /* `paginated` state. The Job Versions table has one page; each job version's
      Assessment Versions table has its own, keyed by job version, so turning a
      page in one never moves another. */
@@ -1040,6 +1059,7 @@ export default function AssessmentVersionHistoryPanel({
       /* `detail` is keyed by this version's own JD row id (`lineageEntry.id`),
          which is what maps the value to the right job version. */
       experience: formatJobVersionExperience(detail),
+      experiencePending: !!lineageEntry && !detail,
       /* When the version itself was made, not when it was published — the
          column says Created On. */
       createdOn: lineageEntry?.created_at || detail?.created_at,
@@ -1065,9 +1085,413 @@ export default function AssessmentVersionHistoryPanel({
     return visible.map((group, index) => ({ ...group, isLatestJobVersion: index === 0 }));
   })();
 
+  /* A job version's Actions (View / Create, plus the job eye) and its nested
+     interview / assessment table. Built once and drawn by both the table rows
+     and, under `jdStyle`, the phone cards, so the two can never drift. */
+  const renderJobVersionActions = (group: (typeof groups)[number]) => {
+    const hasAssessments = group.hasAssessment;
+    const isOpen = expandedJobVersions.has(group.jobVersion);
+              /* Read THIS version. Never disabled and never conditional on
+                 the assessment state beside it: reading a job version is
+                 unrelated to whether one can be built against it, so an
+                 Archived, Disabled or Draft row opens exactly like a
+                 published one. Same button, same popup, as the eye on the
+                 Create Assessment picker's own version rows.
+
+                 Built once here and rendered on whichever side of the
+                 View / Create slot `viewJobVersionPlacement` names, so the
+                 two orders are one button in two positions rather than two
+                 copies that can drift apart. */
+              const viewJobVersionButton =
+                onViewJobVersion && group.jobVersionId ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
+                    aria-label={`View job V${group.jobVersion} details`}
+                    title={`View job V${group.jobVersion} details`}
+                    className="h-8 w-8 px-0 flex-shrink-0"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                ) : null;
+
+    return (
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        {/* The job version eye, when this surface wants it
+            first. See `viewJobVersionPlacement`. */}
+        {viewJobVersionPlacement === 'leading' && viewJobVersionButton}
+        {/* Create Assessment and View Assessment are the
+            SAME slot, decided per job version by one
+            thing: whether an assessment exists against
+            THIS version's JD row. Saving one — Draft or
+            Published, it makes no difference — is what
+            flips it, and because the answer is derived
+            from the fetched data rather than held in
+            component state, it is still flipped after a
+            reload, and one version flipping leaves its
+            siblings exactly as they were. */}
+        {hasAssessments ? (
+          <button
+            type="button"
+            onClick={() => toggleJobVersion(group.jobVersion)}
+            aria-expanded={isOpen}
+            aria-label={
+              isOpen
+                ? `Hide the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
+                : `View the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
+            }
+            title={`View the ${vocabulary.childSingular.toLowerCase()} created for job V${group.jobVersion}`}
+            className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue text-xs font-medium hover:bg-brand-blue/5 transition-colors"
+          >
+            View {vocabulary.childSingular}
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+        ) : onCreateAssessment && group.jobVersionId ? (
+          /* No assessment for this job version yet, so the
+             row offers the one action that changes that.
+
+             Gated on `jobVersionId`: without this version's
+             own JD row id there is nothing to scope the new
+             assessment to, and falling back to the parent
+             row's id would quietly attach it to a DIFFERENT
+             job version. No button is better than the wrong
+             association.
+
+             ENABLED on this row's own Status column, read
+             through the same helper the chip beside it
+             renders: Published and Republished only. An
+             Archived, Disabled or Draft version would take
+             the recruiter to the creation flow to author an
+             assessment against text that is closed, out of
+             circulation or not final - so the button greys
+             with the reason in its tooltip rather than
+             disappearing, which is how the rest of this
+             page reports "not for this row" and keeps the
+             Actions column the same shape down the table.
+
+             Each row decides for itself, so a job whose V3
+             is Published and whose V1 is Archived offers
+             Create on exactly one of them. */
+          (() => {
+            const canCreate = canCreateAssessmentForJobVersion(
+              group.jobStatus,
+              group.jobCurrentVersion,
+            );
+            const reason = canCreate
+              ? `Create ${vocabulary.childSingular === 'Assessment' ? 'an' : 'a'} ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
+              : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
+            return (
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={!canCreate}
+                onClick={() => {
+                  if (!canCreate) return;
+                  onCreateAssessment(group.jobVersionId!, group.jobVersion);
+                }}
+                title={reason}
+                aria-label={reason}
+                icon={<Plus className="w-3.5 h-3.5" />}
+              >
+                Create {vocabulary.childSingular === 'Assessment' ? 'AI Assessment' : vocabulary.childSingular}
+              </Button>
+            );
+          })()
+        ) : (
+          <span className="text-xs text-gray-500 dark:text-slate-400">{vocabulary.childNone}</span>
+        )}
+        {/* …or last, beside the View Assessment button it
+            belongs with. Same button either way. */}
+        {viewJobVersionPlacement === 'trailing' && viewJobVersionButton}
+      </div>
+    );
+  };
+
+  const renderJobVersionChildren = (group: (typeof groups)[number]) => {
+    const count = group.assessments.length;
+    const newestAssessmentVersion = group.assessments[0]?.version ?? 1;
+    return (
+      <>
+        {/* Indented and tinted so the nesting is
+            readable without a connector glyph per row. */}
+        <div className="px-3 sm:px-4 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-700">
+          <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="px-3 pt-2.5 pb-1.5">
+              <h5 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
+                {vocabulary.childVersionsHeading}{' '}
+                <span className="font-normal text-gray-500 dark:text-slate-400">({count})</span>
+              </h5>
+            </div>
+            <div className="overflow-x-auto">
+              {/* A real nested table, so its columns
+                  line up with each other. It sizes
+                  independently of the outer one on
+                  purpose: sharing a grid would force
+                  the inner rows into columns sized for
+                  eight outer ones. */}
+              <table
+                className="w-full text-left"
+                style={{ minWidth: `${assessmentTableMinWidth}px` }}
+              >
+                <thead>
+                  <tr>
+                    {[
+                      /* Select FIRST, Actions LAST, the
+                         data columns between - the order
+                         the table is specified in. */
+                      ...(showsAssessmentSelect
+                        ? [{ label: 'Select', minW: 'min-w-[70px]' }]
+                        : []),
+                      ...childColumns,
+                      ...(showsAssessmentActions
+                        ? [{ label: 'Actions', minW: assessmentActionsMinW }]
+                        : []),
+                    ].map(({ label, minW }) => (
+                      <th
+                        key={label}
+                        className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${isCountColumn(label) ? 'text-center' : ''} ${minW}`}
+                      >
+                        <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* The version HAS an assessment (the
+                      backend index says so) but this
+                      fetch returned no row for it. Say
+                      that, rather than opening onto an
+                      empty table that reads as "there
+                      is nothing here" and contradicts
+                      the button that was just clicked. */}
+                  {count === 0 && (
+                    <tr>
+                      <td
+                        colSpan={
+                          childColumns.length +
+                          (showsAssessmentSelect ? 1 : 0) +
+                          (showsAssessmentActions ? 1 : 0)
+                        }
+                        className="px-3 sm:px-4 py-4 text-xs text-gray-500 dark:text-slate-400"
+                      >
+                        This job version has an assessment, but its details could not be
+                        loaded. Reopen this panel to try again.
+                      </td>
+                    </tr>
+                  )}
+                  {(paginated
+                    ? pageSlice(group.assessments, childPagingOf(group.jobVersion).page, childPagingOf(group.jobVersion).size)
+                    : group.assessments
+                  ).map((assessment) => {
+                    const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
+                    const statusLabel = vocabulary.statusLabel(assessment.status);
+                    const invitations = assessment.invitations_count;
+                    const isPicked = isAssessmentPicked(assessment.id);
+                    /* The one row still in play once a
+                       pick exists. Matched on the row's
+                       own id under an already-matching
+                       job version, never on the version
+                       NUMBER: two job versions can each
+                       carry an "Assessment V1", and
+                       matching by number would light up
+                       a row in the wrong branch. */
+                    /* Faded because something else is
+                       picked - never barred. Clicking
+                       this row's radio replaces the
+                       selection, which is the whole
+                       point of a single-choice
+                       control. */
+                    const assessmentDimmed = !!activeSelection && !isPicked;
+                    return (
+                      <tr
+                        key={assessment.id}
+                        /* The finest scroll anchor of
+                           the three — see the job
+                           version row above. */
+                        data-tf-assessment-selected={isPicked ? 'true' : undefined}
+                        className={`border-b last:border-b-0 border-gray-100 dark:border-slate-700/70 transition-all ${
+                          isPicked
+                            ? 'bg-brand-blue/[0.10] dark:bg-brand-blue/[0.18] ring-1 ring-inset ring-brand-blue/40'
+                            : isCurrent
+                              ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14] hover:bg-brand-blue/[0.10]'
+                              : 'hover:bg-brand-blue/[0.03] dark:hover:bg-slate-800'
+                        } ${
+                          assessmentDimmed ? 'opacity-60 hover:opacity-100' : ''
+                        } ${onRowClick ? 'cursor-pointer' : ''}`}
+                        onClick={onRowClick ? () => onRowClick(assessment.id) : undefined}
+                      >
+                        {/* Select - the panel's ONLY
+                            radio, on an ASSESSMENT
+                            version row and nowhere
+                            else.
+
+                            One `name` for the whole
+                            panel, so the browser's own
+                            radio-group rule does the
+                            enforcing: picking any row
+                            unpicks whatever was picked
+                            before, including a row in a
+                            different expanded job
+                            version. Two selected at
+                            once is not a state this can
+                            represent.
+
+                            The click is stopped at the
+                            cell: the row itself opens
+                            the assessment, and choosing
+                            a version must not also
+                            navigate away from the table
+                            the choice was made in. */}
+                        {showsAssessmentSelect && (
+                          <td
+                            className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              /* Checkboxes in multi-select
+                                 mode (`selectedAssessmentIds`),
+                                 where the host toggles. */
+                              type={multiSelect ? 'checkbox' : 'radio'}
+                              name={multiSelect ? undefined : selectionGroupName}
+                              value={assessment.id}
+                              checked={isPicked}
+                              onChange={() =>
+                                onSelectAssessment?.(assessment.id, {
+                                  jobVersion: group.jobVersion,
+                                  jobVersionId: group.jobVersionId,
+                                })
+                              }
+                              aria-label={`Select assessment V${assessment.version ?? 1} of job V${group.jobVersion}`}
+                              className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 cursor-pointer"
+                            />
+                          </td>
+                        )}
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                          <span className="inline-flex items-center gap-1.5">
+                            <VersionChip kind="assessment" version={assessment.version} />
+                            {(assessment.version ?? 1) === newestAssessmentVersion && <LatestBadge />}
+                          </span>
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                          <StatusChip label={statusLabel} />
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                          <DateCell value={assessment.created_at} />
+                        </td>
+                        <td
+                          className="px-3 sm:px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
+                          title={assessment.created_by_name || ''}
+                        >
+                          {assessment.created_by_name || '—'}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                          {renderChildDetail ? renderChildDetail(assessment) : <RoundWeightageCell assessment={assessment} />}
+                        </td>
+                        {vocabulary.extraDetailColumn && (
+                          <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                            {renderChildExtraDetail ? renderChildExtraDetail(assessment) : '—'}
+                          </td>
+                        )}
+                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle text-center">
+                          {typeof invitations === 'number'
+                            ? <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
+                            : <UnknownMetric />}
+                        </td>
+                        {vocabulary.childCompletedColumn && (
+                          <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle text-center">
+                            {typeof assessment.completed_count === 'number'
+                              ? <MetricCell value={assessment.completed_count} label={assessment.completed_count === 1 ? 'Candidate' : 'Candidates'} />
+                              : <span className="text-sm text-gray-400">—</span>}
+                          </td>
+                        )}
+                        {/* Cell and header are gated
+                            on the same flag, so the
+                            row can never carry one
+                            more cell than the header
+                            declares - which is what
+                            shifts every column right
+                            of it out of alignment. */}
+                        {showsAssessmentActions && (
+                          <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                            {/* gap-1.5 matches the spacing
+                                inside the quick-action
+                                group, so all four
+                                controls read as one
+                                evenly spaced row. */}
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              {/* Read THIS assessment.
+                                  Same square bordered
+                                  eye the job version row
+                                  above carries, so the
+                                  two levels offer the
+                                  same affordance for
+                                  "show me this one".
+                                  Leads the cell, then
+                                  the host's own quick
+                                  actions and menu. */}
+                              {onViewAssessment && (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => onViewAssessment(assessment)}
+                                  aria-label={`View assessment V${assessment.version ?? 1} details`}
+                                  title={`View assessment V${assessment.version ?? 1} details`}
+                                  className="h-8 w-8 px-0 flex-shrink-0"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                              )}
+                              {/* The host's own menu and
+                                  quick actions, where a
+                                  host offers them. The
+                                  Send Invite dialog does
+                                  not: its rows are a
+                                  choice, and Send /
+                                  Track / Result all act
+                                  on an assessment rather
+                                  than help pick one. */}
+                              {renderAction?.(assessment)}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {paginated && count > 0 && (
+              <div>
+                <Pagination
+                  currentPage={Math.min(Math.max(1, childPagingOf(group.jobVersion).page), Math.max(1, Math.ceil((count) / (childPagingOf(group.jobVersion).size))))}
+                  totalPages={Math.max(1, Math.ceil((count) / (childPagingOf(group.jobVersion).size)))}
+                  totalItems={count}
+                  itemsPerPage={childPagingOf(group.jobVersion).size}
+                  onPageChange={(page) =>
+                    setChildPagingOf(group.jobVersion, { ...childPagingOf(group.jobVersion), page })
+                  }
+                  onItemsPerPageChange={(size) => setChildPagingOf(group.jobVersion, { page: 1, size })}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-      {loading && !assessments ? (
+      {/* Loading until there is something to draw. This used to read
+          `loading && !assessments`, but hosts always pass `assessments` (an
+          array, empty at worst), so the spinner never showed and the panel
+          printed "No version history" until the lineage request landed. */}
+      {loading && groups.length === 0 ? (
         <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
@@ -1077,14 +1501,76 @@ export default function AssessmentVersionHistoryPanel({
           No version history for this assessment.
         </p>
       ) : (
-        /* One shell owns BOTH scroll axes (x on narrow screens, y past 4 job
-           versions), so header and body live in one <table> and their columns
-           can never drift apart. The y-cap is deliberately NOT applied while an
-           inner table is open — an expanded list has to be readable without
-           fighting a fixed window. */
-        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden">
+        <>
+        {/* The Job Descriptions list's layout (JobVersionHistoryPanel): the
+            heading above the table, outside its border, with the file icon. */}
+        {jdStyle && (
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText className="w-4 h-4 text-brand-blue flex-shrink-0" />
+              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                Job Versions{' '}
+                <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
+              </p>
+            </div>
+            {headerAction && <div className="flex-shrink-0">{headerAction}</div>}
+          </div>
+        )}
+        {/* Phones, under `jdStyle`: one card per job version instead of the
+            wide table, as the JD list does — values under their names, the
+            actions below, and the version's interviews opening inside it. */}
+        {jdStyle && (
+          <div className="sm:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 divide-y divide-gray-200 overflow-hidden bg-white dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:divide-slate-700">
+            {(paginated ? pageSlice(groups, jobVersionsPage, jobVersionsPageSize) : groups).map((group) => {
+              const isOpen = expandedJobVersions.has(group.jobVersion);
+              const count = group.assessments.length;
+              const details: [string, ReactNode][] = [
+                ['Experience', group.experience || '—'],
+                ['Created', <CreatedCell key="c" createdOn={group.createdOn} createdBy={group.createdBy} />],
+                [vocabulary.childPlural, count],
+                ['Invitations Sent', group.totalInvitations ?? '—'],
+                ['Completed', group.totalCompleted ?? '—'],
+              ];
+              return (
+                <div
+                  key={`job-card-${group.jobVersion}`}
+                  className={`p-3 text-xs text-gray-600 dark:text-slate-400 ${
+                    group.isLatestJobVersion ? 'bg-brand-blue/[0.025] dark:bg-brand-blue/[0.06]' : ''
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <VersionChip kind="job" version={group.jobVersion} />
+                    {group.isLatestJobVersion && <LatestBadge />}
+                    <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
+                  </div>
+                  <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1">
+                    {details.map(([label, value]) => (
+                      <div key={label} className="contents">
+                        <dt className="text-gray-500 dark:text-slate-400">{label}</dt>
+                        <dd className="text-gray-800 dark:text-slate-200 font-medium min-w-0 [overflow-wrap:anywhere]">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <div className="mt-2.5">{renderJobVersionActions(group)}</div>
+                  {group.hasAssessment && isOpen && (
+                    <div className="mt-2.5 -mx-3 -mb-3">{renderJobVersionChildren(group)}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* One shell owns BOTH scroll axes (x on narrow screens, y past 4 job
+            versions), so header and body live in one <table> and their columns
+            can never drift apart. The y-cap is deliberately NOT applied while an
+            inner table is open — an expanded list has to be readable without
+            fighting a fixed window. */}
+        <div className={jdStyle
+          ? 'max-sm:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 bg-white dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 overflow-hidden'
+          : 'rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden'}>
           {/* Heading left, the host's control right - the table's own top
               corner, above the rows it acts on. */}
+          {!jdStyle && (
           <div className="px-3 sm:px-4 pt-3 pb-2 flex flex-wrap items-center justify-between gap-2">
             <h4 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
               Job Versions{' '}
@@ -1092,6 +1578,7 @@ export default function AssessmentVersionHistoryPanel({
             </h4>
             {headerAction && <div className="flex-shrink-0">{headerAction}</div>}
           </div>
+          )}
 
           <div
             className={`overflow-x-auto ${
@@ -1128,7 +1615,9 @@ export default function AssessmentVersionHistoryPanel({
                          sideways-scrolling table keeps every column, Actions and
                          Completed alike, fully readable at some scroll position
                          on every screen. */
-                      className={`sticky top-0 px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
+                      className={`sticky top-0 ${jdStyle
+                        ? 'py-2.5 px-3 text-xs font-bold text-gray-900 dark:text-slate-100 whitespace-nowrap bg-brand-sky dark:bg-slate-800'
+                        : 'px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800'} ${isCountColumn(label) ? 'text-center' : ''} ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
                     >
                       <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                     </th>
@@ -1170,36 +1659,6 @@ export default function AssessmentVersionHistoryPanel({
                   const holdsSelection =
                     (multiSelect ? selectedAssessmentIds!.length > 0 : !!selectedAssessmentId)
                     && group.assessments.some((child) => isAssessmentPicked(child.id));
-                  /* The newest assessment version in this group — the one its
-                     inner table badges Latest. Read off the sorted list rather
-                     than recomputed, so the badge and the ordering agree. */
-                  const newestAssessmentVersion = group.assessments[0]?.version ?? 1;
-                  /* Read THIS version. Never disabled and never conditional on
-                     the assessment state beside it: reading a job version is
-                     unrelated to whether one can be built against it, so an
-                     Archived, Disabled or Draft row opens exactly like a
-                     published one. Same button, same popup, as the eye on the
-                     Create Assessment picker's own version rows.
-
-                     Built once here and rendered on whichever side of the
-                     View / Create slot `viewJobVersionPlacement` names, so the
-                     two orders are one button in two positions rather than two
-                     copies that can drift apart. */
-                  const viewJobVersionButton =
-                    onViewJobVersion && group.jobVersionId ? (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
-                        aria-label={`View job V${group.jobVersion} details`}
-                        title={`View job V${group.jobVersion} details`}
-                        className="h-8 w-8 px-0 flex-shrink-0"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    ) : null;
-
                   return (
                     /* One <tr> per job version, then one more carrying its
                        inner table. A keyed Fragment, not a bare `<>`: the pair
@@ -1231,7 +1690,10 @@ export default function AssessmentVersionHistoryPanel({
                              competing. Hover still lifts either. */
                           holdsSelection
                             ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14] hover:bg-brand-blue/[0.10] dark:hover:bg-brand-blue/[0.18]'
-                            : 'bg-white dark:bg-slate-900 hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]'
+                            : jdStyle && group.isLatestJobVersion
+                              /* The JD table's live-version tint. */
+                              ? 'bg-brand-blue/[0.025] hover:bg-brand-blue/[0.05] dark:bg-brand-blue/[0.06] dark:hover:bg-brand-blue/[0.1]'
+                              : 'bg-white dark:bg-slate-900 hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]'
                         } ${
                           hasAssessments ? 'cursor-pointer' : ''
                         } ${
@@ -1245,33 +1707,35 @@ export default function AssessmentVersionHistoryPanel({
                            poor one. Only where there is something to expand. */
                         onClick={hasAssessments ? () => toggleJobVersion(group.jobVersion) : undefined}
                       >
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className={`${jobCell} whitespace-nowrap align-middle`}>
                           <span className="inline-flex items-center gap-1.5">
                             <VersionChip kind="job" version={group.jobVersion} />
                             {group.isLatestJobVersion && <LatestBadge />}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className={`${jobCell} whitespace-nowrap align-middle`}>
                           <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
                         </td>
                         <td
-                          className="px-3 sm:px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle"
+                          className={`${jobCell} text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle`}
                           title={group.experience || ''}
                         >
-                          {group.experience || <span className="text-gray-500 dark:text-slate-400">&mdash;</span>}
+                          {group.experience || (group.experiencePending
+                            ? <span aria-label="Loading experience" className="inline-block h-4 w-16 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
+                            : <span className="text-gray-500 dark:text-slate-400">&mdash;</span>)}
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className={`${jobCell} whitespace-nowrap align-middle`}>
                           <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} />
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className={`${jobCell} whitespace-nowrap align-middle text-center`}>
                           <MetricCell value={count} label={count === 1 ? vocabulary.childSingular : vocabulary.childPlural} />
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className={`${jobCell} whitespace-nowrap align-middle text-center`}>
                           {group.totalInvitations === null
                             ? <UnknownMetric />
                             : <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />}
                         </td>
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
+                        <td className={`${jobCell} whitespace-nowrap align-middle text-center`}>
                           {group.totalCompleted === null
                             ? <UnknownMetric />
                             : <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />}
@@ -1281,97 +1745,8 @@ export default function AssessmentVersionHistoryPanel({
                             NOT pinned right: an opaque pinned column overlaps the
                             Completed column beside it whenever the table is wider
                             than its host panel, clipping Completed from view. */}
-                        <td className="px-3 sm:px-4 py-3 whitespace-nowrap align-middle">
-                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            {/* The job version eye, when this surface wants it
-                                first. See `viewJobVersionPlacement`. */}
-                            {viewJobVersionPlacement === 'leading' && viewJobVersionButton}
-                            {/* Create Assessment and View Assessment are the
-                                SAME slot, decided per job version by one
-                                thing: whether an assessment exists against
-                                THIS version's JD row. Saving one — Draft or
-                                Published, it makes no difference — is what
-                                flips it, and because the answer is derived
-                                from the fetched data rather than held in
-                                component state, it is still flipped after a
-                                reload, and one version flipping leaves its
-                                siblings exactly as they were. */}
-                            {hasAssessments ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleJobVersion(group.jobVersion)}
-                                aria-expanded={isOpen}
-                                aria-label={
-                                  isOpen
-                                    ? `Hide the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
-                                    : `View the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
-                                }
-                                title={`View the ${vocabulary.childSingular.toLowerCase()} created for job V${group.jobVersion}`}
-                                className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue text-xs font-medium hover:bg-brand-blue/5 transition-colors"
-                              >
-                                View {vocabulary.childSingular}
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
-                                />
-                              </button>
-                            ) : onCreateAssessment && group.jobVersionId ? (
-                              /* No assessment for this job version yet, so the
-                                 row offers the one action that changes that.
-
-                                 Gated on `jobVersionId`: without this version's
-                                 own JD row id there is nothing to scope the new
-                                 assessment to, and falling back to the parent
-                                 row's id would quietly attach it to a DIFFERENT
-                                 job version. No button is better than the wrong
-                                 association.
-
-                                 ENABLED on this row's own Status column, read
-                                 through the same helper the chip beside it
-                                 renders: Published and Republished only. An
-                                 Archived, Disabled or Draft version would take
-                                 the recruiter to the creation flow to author an
-                                 assessment against text that is closed, out of
-                                 circulation or not final - so the button greys
-                                 with the reason in its tooltip rather than
-                                 disappearing, which is how the rest of this
-                                 page reports "not for this row" and keeps the
-                                 Actions column the same shape down the table.
-
-                                 Each row decides for itself, so a job whose V3
-                                 is Published and whose V1 is Archived offers
-                                 Create on exactly one of them. */
-                              (() => {
-                                const canCreate = canCreateAssessmentForJobVersion(
-                                  group.jobStatus,
-                                  group.jobCurrentVersion,
-                                );
-                                const reason = canCreate
-                                  ? `Create ${vocabulary.childSingular === 'Assessment' ? 'an' : 'a'} ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
-                                  : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
-                                return (
-                                  <Button
-                                    variant="primary"
-                                    size="sm"
-                                    disabled={!canCreate}
-                                    onClick={() => {
-                                      if (!canCreate) return;
-                                      onCreateAssessment(group.jobVersionId!, group.jobVersion);
-                                    }}
-                                    title={reason}
-                                    aria-label={reason}
-                                    icon={<Plus className="w-3.5 h-3.5" />}
-                                  >
-                                    Create {vocabulary.childSingular === 'Assessment' ? 'AI Assessment' : vocabulary.childSingular}
-                                  </Button>
-                                );
-                              })()
-                            ) : (
-                              <span className="text-xs text-gray-500 dark:text-slate-400">{vocabulary.childNone}</span>
-                            )}
-                            {/* …or last, beside the View Assessment button it
-                                belongs with. Same button either way. */}
-                            {viewJobVersionPlacement === 'trailing' && viewJobVersionButton}
-                          </div>
+                        <td className={`${jobCell} whitespace-nowrap align-middle`}>
+                          {renderJobVersionActions(group)}
                         </td>
                       </tr>
 
@@ -1389,271 +1764,7 @@ export default function AssessmentVersionHistoryPanel({
                               }`}
                             >
                               <div className="overflow-hidden">
-                                {/* Indented and tinted so the nesting is
-                                    readable without a connector glyph per row. */}
-                                <div className="px-3 sm:px-4 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-700">
-                                  <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
-                                    <div className="px-3 pt-2.5 pb-1.5">
-                                      <h5 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
-                                        {vocabulary.childVersionsHeading}{' '}
-                                        <span className="font-normal text-gray-500 dark:text-slate-400">({count})</span>
-                                      </h5>
-                                    </div>
-                                    <div className="overflow-x-auto">
-                                      {/* A real nested table, so its columns
-                                          line up with each other. It sizes
-                                          independently of the outer one on
-                                          purpose: sharing a grid would force
-                                          the inner rows into columns sized for
-                                          eight outer ones. */}
-                                      <table
-                                        className="w-full text-left"
-                                        style={{ minWidth: `${assessmentTableMinWidth}px` }}
-                                      >
-                                        <thead>
-                                          <tr>
-                                            {[
-                                              /* Select FIRST, Actions LAST, the
-                                                 data columns between - the order
-                                                 the table is specified in. */
-                                              ...(showsAssessmentSelect
-                                                ? [{ label: 'Select', minW: 'min-w-[70px]' }]
-                                                : []),
-                                              ...childColumns,
-                                              ...(showsAssessmentActions
-                                                ? [{ label: 'Actions', minW: assessmentActionsMinW }]
-                                                : []),
-                                            ].map(({ label, minW }) => (
-                                              <th
-                                                key={label}
-                                                className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
-                                              >
-                                                <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
-                                              </th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {/* The version HAS an assessment (the
-                                              backend index says so) but this
-                                              fetch returned no row for it. Say
-                                              that, rather than opening onto an
-                                              empty table that reads as "there
-                                              is nothing here" and contradicts
-                                              the button that was just clicked. */}
-                                          {count === 0 && (
-                                            <tr>
-                                              <td
-                                                colSpan={
-                                                  childColumns.length +
-                                                  (showsAssessmentSelect ? 1 : 0) +
-                                                  (showsAssessmentActions ? 1 : 0)
-                                                }
-                                                className="px-3 sm:px-4 py-4 text-xs text-gray-500 dark:text-slate-400"
-                                              >
-                                                This job version has an assessment, but its details could not be
-                                                loaded. Reopen this panel to try again.
-                                              </td>
-                                            </tr>
-                                          )}
-                                          {(paginated
-                                            ? pageSlice(group.assessments, childPagingOf(group.jobVersion).page, childPagingOf(group.jobVersion).size)
-                                            : group.assessments
-                                          ).map((assessment) => {
-                                            const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
-                                            const statusLabel = vocabulary.statusLabel(assessment.status);
-                                            const invitations = assessment.invitations_count;
-                                            const isPicked = isAssessmentPicked(assessment.id);
-                                            /* The one row still in play once a
-                                               pick exists. Matched on the row's
-                                               own id under an already-matching
-                                               job version, never on the version
-                                               NUMBER: two job versions can each
-                                               carry an "Assessment V1", and
-                                               matching by number would light up
-                                               a row in the wrong branch. */
-                                            /* Faded because something else is
-                                               picked - never barred. Clicking
-                                               this row's radio replaces the
-                                               selection, which is the whole
-                                               point of a single-choice
-                                               control. */
-                                            const assessmentDimmed = !!activeSelection && !isPicked;
-                                            return (
-                                              <tr
-                                                key={assessment.id}
-                                                /* The finest scroll anchor of
-                                                   the three — see the job
-                                                   version row above. */
-                                                data-tf-assessment-selected={isPicked ? 'true' : undefined}
-                                                className={`border-b last:border-b-0 border-gray-100 dark:border-slate-700/70 transition-all ${
-                                                  isPicked
-                                                    ? 'bg-brand-blue/[0.10] dark:bg-brand-blue/[0.18] ring-1 ring-inset ring-brand-blue/40'
-                                                    : isCurrent
-                                                      ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14] hover:bg-brand-blue/[0.10]'
-                                                      : 'hover:bg-brand-blue/[0.03] dark:hover:bg-slate-800'
-                                                } ${
-                                                  assessmentDimmed ? 'opacity-60 hover:opacity-100' : ''
-                                                } ${onRowClick ? 'cursor-pointer' : ''}`}
-                                                onClick={onRowClick ? () => onRowClick(assessment.id) : undefined}
-                                              >
-                                                {/* Select - the panel's ONLY
-                                                    radio, on an ASSESSMENT
-                                                    version row and nowhere
-                                                    else.
-
-                                                    One `name` for the whole
-                                                    panel, so the browser's own
-                                                    radio-group rule does the
-                                                    enforcing: picking any row
-                                                    unpicks whatever was picked
-                                                    before, including a row in a
-                                                    different expanded job
-                                                    version. Two selected at
-                                                    once is not a state this can
-                                                    represent.
-
-                                                    The click is stopped at the
-                                                    cell: the row itself opens
-                                                    the assessment, and choosing
-                                                    a version must not also
-                                                    navigate away from the table
-                                                    the choice was made in. */}
-                                                {showsAssessmentSelect && (
-                                                  <td
-                                                    className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                  >
-                                                    <input
-                                                      /* Checkboxes in multi-select
-                                                         mode (`selectedAssessmentIds`),
-                                                         where the host toggles. */
-                                                      type={multiSelect ? 'checkbox' : 'radio'}
-                                                      name={multiSelect ? undefined : selectionGroupName}
-                                                      value={assessment.id}
-                                                      checked={isPicked}
-                                                      onChange={() =>
-                                                        onSelectAssessment?.(assessment.id, {
-                                                          jobVersion: group.jobVersion,
-                                                          jobVersionId: group.jobVersionId,
-                                                        })
-                                                      }
-                                                      aria-label={`Select assessment V${assessment.version ?? 1} of job V${group.jobVersion}`}
-                                                      className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 cursor-pointer"
-                                                    />
-                                                  </td>
-                                                )}
-                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                  <span className="inline-flex items-center gap-1.5">
-                                                    <VersionChip kind="assessment" version={assessment.version} />
-                                                    {(assessment.version ?? 1) === newestAssessmentVersion && <LatestBadge />}
-                                                  </span>
-                                                </td>
-                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                  <StatusChip label={statusLabel} />
-                                                </td>
-                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                  <DateCell value={assessment.created_at} />
-                                                </td>
-                                                <td
-                                                  className="px-3 sm:px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
-                                                  title={assessment.created_by_name || ''}
-                                                >
-                                                  {assessment.created_by_name || '—'}
-                                                </td>
-                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                  {renderChildDetail ? renderChildDetail(assessment) : <RoundWeightageCell assessment={assessment} />}
-                                                </td>
-                                                {vocabulary.extraDetailColumn && (
-                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                    {renderChildExtraDetail ? renderChildExtraDetail(assessment) : '—'}
-                                                  </td>
-                                                )}
-                                                <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                  {typeof invitations === 'number'
-                                                    ? <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
-                                                    : <UnknownMetric />}
-                                                </td>
-                                                {vocabulary.childCompletedColumn && (
-                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                    {typeof assessment.completed_count === 'number'
-                                                      ? <MetricCell value={assessment.completed_count} label={assessment.completed_count === 1 ? 'Candidate' : 'Candidates'} />
-                                                      : <span className="text-sm text-gray-400">—</span>}
-                                                  </td>
-                                                )}
-                                                {/* Cell and header are gated
-                                                    on the same flag, so the
-                                                    row can never carry one
-                                                    more cell than the header
-                                                    declares - which is what
-                                                    shifts every column right
-                                                    of it out of alignment. */}
-                                                {showsAssessmentActions && (
-                                                  <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
-                                                    {/* gap-1.5 matches the spacing
-                                                        inside the quick-action
-                                                        group, so all four
-                                                        controls read as one
-                                                        evenly spaced row. */}
-                                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                      {/* Read THIS assessment.
-                                                          Same square bordered
-                                                          eye the job version row
-                                                          above carries, so the
-                                                          two levels offer the
-                                                          same affordance for
-                                                          "show me this one".
-                                                          Leads the cell, then
-                                                          the host's own quick
-                                                          actions and menu. */}
-                                                      {onViewAssessment && (
-                                                        <Button
-                                                          type="button"
-                                                          variant="secondary"
-                                                          size="sm"
-                                                          onClick={() => onViewAssessment(assessment)}
-                                                          aria-label={`View assessment V${assessment.version ?? 1} details`}
-                                                          title={`View assessment V${assessment.version ?? 1} details`}
-                                                          className="h-8 w-8 px-0 flex-shrink-0"
-                                                        >
-                                                          <Eye className="w-4 h-4" />
-                                                        </Button>
-                                                      )}
-                                                      {/* The host's own menu and
-                                                          quick actions, where a
-                                                          host offers them. The
-                                                          Send Invite dialog does
-                                                          not: its rows are a
-                                                          choice, and Send /
-                                                          Track / Result all act
-                                                          on an assessment rather
-                                                          than help pick one. */}
-                                                      {renderAction?.(assessment)}
-                                                    </div>
-                                                  </td>
-                                                )}
-                                              </tr>
-                                            );
-                                          })}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                    {paginated && count > 0 && (
-                                      <div>
-                                        <Pagination
-                                          currentPage={Math.min(Math.max(1, childPagingOf(group.jobVersion).page), Math.max(1, Math.ceil((count) / (childPagingOf(group.jobVersion).size))))}
-                                          totalPages={Math.max(1, Math.ceil((count) / (childPagingOf(group.jobVersion).size)))}
-                                          totalItems={count}
-                                          itemsPerPage={childPagingOf(group.jobVersion).size}
-                                          onPageChange={(page) =>
-                                            setChildPagingOf(group.jobVersion, { ...childPagingOf(group.jobVersion), page })
-                                          }
-                                          onItemsPerPageChange={(size) => setChildPagingOf(group.jobVersion, { page: 1, size })}
-                                        />
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                                {renderJobVersionChildren(group)}
                               </div>
                             </div>
                           </td>
@@ -1678,6 +1789,7 @@ export default function AssessmentVersionHistoryPanel({
             </div>
           )}
         </div>
+        </>
       )}
     </div>
   );

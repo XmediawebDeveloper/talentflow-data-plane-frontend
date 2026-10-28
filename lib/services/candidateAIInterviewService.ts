@@ -13,6 +13,44 @@ const candidateApi = axios.create({
   withCredentials: false,
 });
 
+export interface ProctorFrameConfig {
+  enabled: boolean;
+  interval_ms: number;
+  frame: { width: number; height: number; type: string; quality: number };
+  max_frame_bytes: number;
+}
+
+export interface ProctorFrameServerEvent {
+  event_type: string;
+  phase: 'start' | 'end' | null;
+  timestamp: string;
+  details: Record<string, any>;
+}
+
+export interface ProctorFrameResponse {
+  faces: number;
+  face_boxes?: unknown[];
+  raw_face_count?: number;
+  objects?: unknown[] | null;
+  objects_ran?: boolean;
+  persons?: number;
+  identity?: unknown;
+  brightness?: number;
+  state?: { face_missing?: boolean; multiple_faces?: boolean; camera_obstructed?: boolean };
+  events?: ProctorFrameServerEvent[];
+  frame_idx?: number;
+  timings_ms?: Record<string, number>;
+  unavailable?: unknown;
+  // 202
+  dropped?: boolean;
+  reason?: string;
+}
+
+export interface ProctorFrameSendResult {
+  status: number;
+  body: ProctorFrameResponse | null;
+}
+
 export interface CandidateInterviewInfo {
   id: string;
   candidate_name: string;
@@ -479,6 +517,40 @@ export const candidateAIInterviewService = {
       },
     );
     return response.data;
+  },
+
+  // ── Server "proctor frame" pipeline (flag PROCTOR_VISION_SERVER_ENABLED) ──
+  // The browser posts one small JPEG per interval; the server runs face count,
+  // object detection and identity, PERSISTS the resulting events itself and
+  // returns them so the page can show the same toasts. Never throws: callers
+  // branch on `status` (404/503 → fall back to browser models, 409 → stop).
+  async getProctorFrameConfig(token: string): Promise<ProctorFrameConfig> {
+    const res = await fetch(`${API_BASE_URL}/candidate/ai-interview/${token}/proctor-frame/config`, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`proctor-frame config failed (${res.status})`);
+    return res.json();
+  },
+
+  async sendProctorFrame(token: string, blob: Blob, ts: number): Promise<ProctorFrameSendResult> {
+    const res = await fetch(
+      `${API_BASE_URL}/candidate/ai-interview/${token}/proctor-frame?ts=${Math.round(ts)}`,
+      { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob },
+    );
+    let body: any = null;
+    try { body = await res.json(); } catch { /* non-JSON error body */ }
+    return { status: res.status, body };
+  },
+
+  async endProctorFrames(token: string): Promise<void> {
+    try {
+      // keepalive: this also runs from unmount / page teardown.
+      await fetch(
+        `${API_BASE_URL}/candidate/ai-interview/${token}/proctor-frame/end?ts=${Date.now()}`,
+        { method: 'POST', keepalive: true },
+      );
+    } catch { /* best-effort — the server also closes episodes on its own */ }
   },
 
   // Best-effort evidence capture for an OBJECT-DETECTION proctoring violation

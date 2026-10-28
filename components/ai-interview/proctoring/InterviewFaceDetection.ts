@@ -13,7 +13,7 @@
  *   - Emits events via callback (caller routes to InterviewEventBus)
  */
 
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback, useMemo, type MutableRefObject } from "react";
 import { createGazeEstimator, type GazeEstimator } from "@/lib/proctoring/gazeEstimator";
 
 interface UseInterviewFaceDetectionConfig {
@@ -46,7 +46,22 @@ interface UseInterviewFaceDetectionConfig {
    * without reloading anything. See `warmedUpRef`.
    */
   warmup?: boolean;
+  /**
+   * Where the face COUNT comes from.
+   *   'local'    (default) — MediaPipe FaceDetection runs here and drives
+   *              onFaceMissing / onMultipleFaces / their *_Cleared callbacks.
+   *   'external' — server proctor-frame mode: FaceDetection is NOT loaded or
+   *              run; face presence/multi-face events come from the server.
+   *              Only FaceMesh (gaze) runs, reading `externalFaceCountRef`
+   *              for "is a face visible". The face callbacks never fire.
+   */
+  faceCountSource?: 'local' | 'external';
+  /** Latest external face reading (faces, faceMissing, performance.now() `at`). */
+  externalFaceCountRef?: MutableRefObject<{ faces: number; faceMissing: boolean; at: number } | null>;
 }
+
+/** An external face reading older than this is ignored (see externalFaceVisible). */
+const EXTERNAL_FACE_STALE_MS = 3000;
 
 export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConfig) {
   // ALL state stored in refs — zero re-renders
@@ -74,6 +89,20 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
   // True once each model has completed a first frame (or failed) — the
   // pre-interview gate in InterviewUI waits on this.
   const warmedUpRef = useRef(false);
+  const faceCountSource = config?.faceCountSource ?? 'local';
+  const externalFace = faceCountSource === 'external';
+  const externalFaceCountRefRef = useRef(config?.externalFaceCountRef);
+  externalFaceCountRefRef.current = config?.externalFaceCountRef;
+  /**
+   * External mode only. true/false = the server's latest answer (fresh);
+   * null = no answer in > EXTERNAL_FACE_STALE_MS → caller decides from the
+   * FaceMesh landmarks themselves ("visible if landmarks present").
+   */
+  const externalFaceVisible = (): boolean | null => {
+    const r = externalFaceCountRefRef.current?.current;
+    if (!r || performance.now() - r.at > EXTERNAL_FACE_STALE_MS) return null;
+    return r.faces >= 1 && !r.faceMissing;
+  };
 
   // Stabilization counters
   const faceMissingCountRef = useRef(0);
@@ -139,6 +168,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
     const initialize = async () => {
       try {
+       if (!externalFace) {
         // Load from CDN — @mediapipe legacy packages break when webpack bundles them
         await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js");
         if (!mounted) return;
@@ -233,6 +263,9 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
         faceDetectorRef.current = faceDetection;
         console.log("[INTERVIEW_FACE_DETECTION] Initialized");
+       } else {
+        console.log("[INTERVIEW_FACE_DETECTION] Face count is external (server proctor frames) — FaceDetection not loaded");
+       }
 
         // Gaze tracking (FaceMesh)
         if (enableGazeTracking) {
@@ -258,13 +291,20 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
             faceMesh.onResults((results: any) => {
               if (!mounted) return;
               if (!enabledRef.current) return; // warm-up frame — discard
-              const reading = gazeEstimatorRef.current?.read(
-                results.multiFaceLandmarks?.[0],
+              const landmarks = results.multiFaceLandmarks?.[0];
+              let faceVisible: boolean;
+              if (externalFace) {
+                // Server answer when fresh; stale → visible iff the mesh
+                // itself found landmarks.
+                const ext = externalFaceVisible();
+                faceVisible = ext ?? !!landmarks;
+              } else {
                 // Gaze is judged only while the face DETECTOR sees a face right
                 // now and face_missing isn't active. Also tells "head turned so
                 // far the mesh lost it" (face still there) from "nobody there".
-                lastRawFaceCountRef.current >= 1 && lastFaceStateRef.current,
-              );
+                faceVisible = lastRawFaceCountRef.current >= 1 && lastFaceStateRef.current;
+              }
+              const reading = gazeEstimatorRef.current?.read(landmarks, faceVisible);
               if (!reading) {
                 // No visible face — face_missing owns it. Drop any partial
                 // "away" streak so it can't complete across the no-face gap.
@@ -374,7 +414,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
           return;
         }
 
-        if (timestamp - lastFaceDetectTime >= FACE_DETECT_INTERVAL && faceDetectorRef.current) {
+        if (!externalFace && timestamp - lastFaceDetectTime >= FACE_DETECT_INTERVAL && faceDetectorRef.current) {
           lastFaceDetectTime = timestamp;
           try { await faceDetectorRef.current.send({ image: video }); } catch {}
         }
@@ -384,10 +424,22 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
           // FaceMesh (the heavier graph) is pointless while the detector sees
           // no face — onResults discards the reading then anyway (gaze is only
           // judged with a face present), so skip the inference entirely.
-          if (lastRawFaceCountRef.current >= 1 && lastFaceStateRef.current) {
+          const faceThere = externalFace
+            ? externalFaceVisible() !== false // fresh "no face" skips; stale → let the mesh decide
+            : lastRawFaceCountRef.current >= 1 && lastFaceStateRef.current;
+          if (faceThere) {
             try { await faceMeshRef.current.send({ image: video }); } catch {}
           } else {
             gazeAwayCountRef.current = 0; // same reset onResults does for "no face"
+            // External mode: the server owns face_missing, so the "face first,
+            // gaze second" hand-off the local detector does before raising
+            // face_missing happens here — close an open gaze episode.
+            if (externalFace && !lastGazeStateRef.current) {
+              lastGazeStateRef.current = true;
+              isGazeOnScreenRef.current = true;
+              gazeRestoredCountRef.current = 0;
+              callbacksRef.current?.onGazeRestored?.("face_missing");
+            }
           }
         }
         warmedUpRef.current = true;
@@ -417,7 +469,9 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
       faceMeshRef.current?.close();
       faceMeshRef.current = null;
     };
-  }, [active, enableGazeTracking]);
+    // faceCountSource: switching server → local mid-session (fallback) tears
+    // down and re-initialises serially (FaceDetection, then FaceMesh).
+  }, [active, enableGazeTracking, externalFace]);
 
   // Memoised: every member is a ref or a stable callback. A fresh object per
   // render rebuilt InterviewUI's handleVideoReady (and re-ran Webcam's effect)

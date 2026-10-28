@@ -119,9 +119,13 @@ const LIP_SHAPES: Record<string, Record<string, number>> = {
 };
 const NO_SHAPE: Record<string, number> = {};
 /** Lip easing time constants (ms): open into a shape, relax out of it, and
- *  close at end of speech. Larger = slower, softer mouth movement. */
-const LIP_ATTACK_MS = 90;
-const LIP_RELEASE_MS = 110;
+ *  close at end of speech. Larger = slower, softer mouth movement.
+ *  Must stay well below one viseme (~70 ms per unit): at 90/110 the mouth
+ *  reached only about half of each shape before the next one and trailed the
+ *  voice — read as slow, out-of-sync lips (staging 2026-10-27). At 30/45 a
+ *  shape is ~90 % reached within one viseme while still smoothing the snap. */
+const LIP_ATTACK_MS = 30;
+const LIP_RELEASE_MS = 45;
 const LIP_CLOSE_MS = 60;
 const LIP_MORPHS = [
   "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
@@ -231,6 +235,12 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const visemeTimelineRef    = useRef<{viseme: string, startMs: number, durMs: number}[]>([]);
     const timelineTotalMsRef   = useRef(0);          // total viseme timeline length
     const totalAudioMsRef      = useRef(0);           // actual PCM audio duration accumulated
+    // All of this utterance's audio has arrived (notifyEnd). Until then
+    // totalAudioMsRef is PARTIAL, so audio/timeline under-states the scale and
+    // the lips ran ahead of the voice; the last finished line's scale is used
+    // as a floor meanwhile.
+    const audioCompleteRef     = useRef(false);
+    const lastLipScaleRef      = useRef(1);
     const speechStartRef       = useRef<number | null>(null);  // performance.now() when audio detected
     const currentMorphsRef     = useRef<Record<string, number>>({});
     const smoothAmpRef         = useRef(0);
@@ -259,6 +269,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       let mounted = true;
       let rafId: number | null = null;
+      // Set once the FPS watchdog permanently degrades to the static image —
+      // the enforce loop and TalkingHead's render loop stop for good.
+      let renderHalted = false;
       let workletPreload: Promise<void> = Promise.resolve();
       // Track head locally so cleanup can stop it even before headRef is set.
       // Without this, React StrictMode's double-invoke creates two TalkingHead
@@ -555,7 +568,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // ── Per-frame: eye contact + behavior guard + amplitude lip sync ──
           let lastLipFrameAt = performance.now();
           const enforce = () => {
-            if (!mounted || !headRef.current) return;
+            if (!mounted || renderHalted || !headRef.current) return;
             const h = headRef.current;
             const frameNow = performance.now();
             // Clamp so a background-tab pause doesn't make one giant step.
@@ -675,7 +688,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                   if (tl.length > 0 && tlTotal > 0 && audioTotal > 0) {
                     // Scale timeline to match actual audio duration
                     // scale > 1 means audio is slower than timeline estimate
-                    const scale = audioTotal / tlTotal;
+                    const exact = audioTotal / tlTotal;
+                    if (audioCompleteRef.current) lastLipScaleRef.current = exact;
+                    const scale = audioCompleteRef.current ? exact : Math.max(exact, lastLipScaleRef.current);
                     // Map real elapsed time back to timeline position
                     const timelinePos = elapsed / scale;
 
@@ -832,6 +847,28 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                   console.warn(
                     `[TalkingHead][FPS-watchdog] ${slowWindows} slow windows in a row — degrading to static fallback`
                   );
+                  // This fallback is PERMANENT (onFallback → avatar3DCantRun:
+                  // the parent never shows the 3D again), so stop paying for a
+                  // hidden canvas: end our per-frame enforce loop and halt
+                  // TalkingHead's own animate/render loop. NOT dispose()/stop():
+                  // Bina's voice streams through this head's playback worklet
+                  // (a mid-turn dispose would cut the audio and drop its
+                  // onAudioEnd), and stop() suspends the SHARED interview
+                  // AudioContext. With isRunning=false, render() is a no-op and
+                  // animate() never re-arms; the worklet callbacks
+                  // (playback-started / -ended) don't depend on it. Full
+                  // dispose still happens on unmount. (The parent's 12 s
+                  // slow-load timer never reaches here — it only sets
+                  // avatarFailed, and a slow 3D still takes over when ready.)
+                  renderHalted = true;
+                  if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+                  const hh = headRef.current;
+                  if (hh) {
+                    try {
+                      hh.isRunning = false;
+                      if (hh._raf != null) { cancelAnimationFrame(hh._raf); hh._raf = null; }
+                    } catch {}
+                  }
                   onFallback?.();
                   return;
                 }
@@ -965,6 +1002,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
+        audioCompleteRef.current = false;
         timelineTotalMsRef.current = 0;
         lastBuiltTextRef.current = "";
         fbNoMoreDataRef.current = false;
@@ -1129,6 +1167,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       },
 
       notifyEnd() {
+        audioCompleteRef.current = true;
         if (fbActiveRef.current) {
           fbNoMoreDataRef.current = true;
           // If all buffers already finished, fire immediately
@@ -1181,6 +1220,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
+        audioCompleteRef.current = false;
         // Fallback mode: close context to stop playback immediately
         if (fbActiveRef.current) {
           fbActiveRef.current = false;

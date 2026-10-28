@@ -1,20 +1,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { AlertTriangle, Lightbulb } from 'lucide-react';
-import { CANDIDATE_SOURCE_LABEL, type DeliveryMethod, type InviteCandidate, type InviteCandidateSource, type InviteKind } from './inviteVersions';
+import { AlertTriangle } from 'lucide-react';
+import { CANDIDATE_SOURCE_LABEL, type InviteCandidate, type InviteCandidateSource, type InviteKind } from './inviteVersions';
+import { CANDIDATE_NAME_PLACEHOLDER, EXPIRY_OPTIONS } from './inviteDefaults';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import FilterSelect from '@/components/ui/filter-select';
-
-/* The share modals' Link expiry options. */
-const EXPIRY_OPTIONS: { value: number; label: string }[] = [
-  { value: 1, label: '1 day' },
-  { value: 3, label: '3 days' },
-  { value: 7, label: '7 days' },
-  { value: 14, label: '14 days' },
-  { value: 30, label: '30 days' },
-  { value: 0, label: 'No expiry' },
-];
 
 /* The AI Talent Match tab's rating badge tones. */
 const ratingTone = (rank: number) =>
@@ -33,46 +24,32 @@ const SECTION ='text-xs font-semibold uppercase tracking-wider text-gray-500 dar
 
 
 /**
- * The split panel's right column: who it goes to (the candidates ticked on
- * the page — untick to leave someone out; no email, no invite), then the
- * optional message, delivery and link expiry.
+ * The invite popup's "who and how": the candidates ticked on the page that
+ * opened it (untick to leave someone out; no email, no invite), then
+ * `listSlot` (Select From lists + Manual / Upload Excel), the email message
+ * and the link expiry. Copy Link is per row, so there is no delivery choice.
  */
 export default function SendToPanel({
   kind,
   candidates,
   selectedIds,
   onSelectedIds,
-  method,
-  onMethod,
   message,
   onMessage,
   expiryDays,
   onExpiry,
-  candidatesOnly = false,
-  addInNextStep = false,
   listSlot,
 }: {
   kind: InviteKind;
+  /** Ticked on the opening page; [] = none (the list is then left out). */
   candidates: InviteCandidate[];
   selectedIds: string[];
   onSelectedIds: (ids: string[]) => void;
-  method: DeliveryMethod;
-  onMethod: (method: DeliveryMethod) => void;
   message: string;
   onMessage: (message: string) => void;
   expiryDays: number;
   onExpiry: (days: number) => void;
-  /** Just the candidate list — the Browse all view, whose Send hands over to
-   *  Share Assessment via Email (it has its own message and expiry). */
-  candidatesOnly?: boolean;
-  /** Next leads to the email step, which adds candidates itself (Manual,
-   *  Upload Excel, Resume Database): nobody ticked is fine, and the panel
-   *  says where to add them. */
-  addInNextStep?: boolean;
-  /** Job Details' Create / Send for a whole job: the server-paged picker
-   *  (ServerCandidatePicker) stands in for the candidate list — it has its
-   *  own heading, counts and Select all. The delivery, message and expiry
-   *  controls below are unchanged. */
+  /** Select From (the server-paged lists) and Manual / Upload Excel. */
   listSlot?: ReactNode;
 }) {
   /* The list, under the heading of where its candidates came from (the tab
@@ -89,19 +66,13 @@ export default function SendToPanel({
   const all = eligible.length > 0 && picked === eligible.length;
   const toggle = (id: string) =>
     onSelectedIds(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
-  /* An assessment invite is always emailed; its link is copyable from the
-     results once sent. AI interviews can create a link without emailing.
-     The reason is the disabled option's tooltip — no text under Delivery. */
-  const linkOff = kind === 'assessment'
-    ? 'Assessments are always emailed — copy each link from the results after sending'
-    : undefined;
 
   return (
     <div className="space-y-4">
-      {listSlot ?? (
+      {candidates.length > 0 && (
       <section aria-labelledby="send-to-heading">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-          <h3 id="send-to-heading" className={SECTION}>Candidates · {picked} of {candidates.length}</h3>
+          <h3 id="send-to-heading" className={SECTION}>Selected candidates · {picked} of {candidates.length}</h3>
           <div className="flex flex-wrap items-center gap-2">
           {eligible.length > 0 && (
             <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 dark:text-slate-300 cursor-pointer">
@@ -117,13 +88,7 @@ export default function SendToPanel({
           )}
           </div>
         </div>
-        {candidates.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
-            {addInNextStep
-              ? 'No candidates ticked. Add them in the next step: manually, by uploading an Excel file, or from the Resume Database.'
-              : 'No candidates selected. Close this panel and tick candidates in the results table.'}
-          </p>
-        ) : (
+        {(
           <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-64 overflow-y-auto">
             {groups.flatMap((g) => [
               ...(g.source ? [(
@@ -150,7 +115,6 @@ export default function SendToPanel({
                       <span className="block text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={c.name}>{kind === 'interview' ? formatCandidateFirstName(c.name) : c.name}</span>
                       <span className="block text-xs text-gray-500 dark:text-slate-400 truncate">
                         {hasEmail ? c.email : <span className="font-medium text-warning-strong">No email</span>}
-                        {c.phone ? ` · ${c.phone}` : ''}
                       </span>
                     </span>
                     {c.score === 'unscored' ? (
@@ -193,64 +157,27 @@ export default function SendToPanel({
             </span>
           </p>
         )}
-        {/* The app's tip card (Upload Resumes, My Resumes, JD Creation…):
-            brand-orange wash and border, lightbulb, "Tip:" lead. Only beside a
-            list — an empty one already says where to add candidates. */}
-        {addInNextStep && candidates.length > 0 && (
-          <p className="mt-3 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5 text-sm text-gray-700 dark:text-slate-300">
-            <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" aria-hidden="true" />
-            <span className="min-w-0">
-              <span className="font-semibold">Tip:</span> You can add more candidates in the next step: manually, by uploading an Excel file, or from the Resume Database.
-            </span>
-          </p>
-        )}
       </section>
       )}
 
-      {!candidatesOnly && (<>
-      <fieldset>
-        <legend className={`${SECTION} mb-1.5`}>Delivery</legend>
-        <div className="inline-flex flex-wrap gap-x-4 gap-y-1.5">
-          {([
-            { key: 'email', label: 'Send via Email' },
-            { key: 'link', label: 'Copy Invitation Link' },
-          ] as const).map((m) => {
-            const off = m.key === 'link' ? linkOff : undefined;
-            return (
-              <label key={m.key} title={off} className={`inline-flex items-center gap-2 text-sm ${off ? 'text-gray-400 cursor-not-allowed' : 'text-gray-800 dark:text-slate-200 cursor-pointer'}`}>
-                <input
-                  type="radio"
-                  name={`invite-delivery-${kind}`}
-                  checked={method === m.key}
-                  disabled={!!off}
-                  onChange={() => onMethod(m.key)}
-                  className="m-0 border-gray-300"
-                />
-                {m.label}
-              </label>
-            );
-          })}
-        </div>
-        {method === 'link' && !linkOff && (
-          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Creates each candidate’s personal link without emailing it — copy them from the results.</p>
-        )}
-      </fieldset>
+      {listSlot}
 
-      {method === 'email' && (
-        <div>
+      <div>
           <label htmlFor={`invite-message-${kind}`} className={SECTION}>
-            Message <span className="normal-case font-normal tracking-normal">(optional)</span>
+            Email message
           </label>
           <textarea
             id={`invite-message-${kind}`}
             value={message}
             onChange={(e) => onMessage(e.target.value)}
-            rows={3}
+            rows={4}
             placeholder="Added to the invitation email. Leave empty for the standard invitation."
             className="mt-1.5 w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-y"
           />
-        </div>
-      )}
+          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+            Use <code className="px-1 rounded bg-gray-100 dark:bg-slate-800">{CANDIDATE_NAME_PLACEHOLDER}</code> for each candidate’s name. The secure link is added below the message.
+          </p>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor={`invite-expiry-${kind}`} className={SECTION}>Link expiry</label>
@@ -262,7 +189,6 @@ export default function SendToPanel({
           className="w-auto sm:w-auto text-sm px-2 sm:pl-2 sm:pr-2 py-1 sm:py-1 rounded-lg sm:rounded-lg text-gray-700 dark:text-slate-300"
         />
       </div>
-      </>)}
     </div>
   );
 }
