@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AssessmentDetailsView from '@/components/AssessmentDetailsView';
 import { Skeleton } from '@/components/ui/skeleton';
-import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
@@ -192,7 +192,9 @@ function AssessmentDetailsContent() {
   }, [pagerList, assessmentId]);
 
   // Modal states
-  const [showShareModal, setShowShareModal] = useState(false);
+  /* Share opens THE invite popup (VersionInviteDialog) on this assessment —
+     the popup every Assessment / AI Interview invite button opens. */
+  const { open: openInviteDialog } = useInviteDialog();
   /* One-shot: the dialog opens once for this arrival, and closing it must not
      be undone by a re-render still reading `?share=1` off the URL. */
   const shareOnArrivalHandledRef = useRef(false);
@@ -354,20 +356,37 @@ function AssessmentDetailsContent() {
         ]
       : undefined;
 
+  const openAssessmentInvite = () => {
+    if (!assessment?.id) return;
+    openInviteDialog({
+      kind: 'assessment',
+      job: assessment.jd_id
+        ? {
+            jdId: assessment.jd_id,
+            jdTitle: assessment.jd_title || assessment.job?.title || '',
+            jdCode: assessment.jd_short_id || undefined,
+            versionNumber: typeof assessment.jd_version === 'number' ? assessment.jd_version : undefined,
+          }
+        : undefined,
+      versionId: assessment.id,
+      onSent: () => { void fetchAssessment(); },
+    });
+  };
+
   /* Opened only once the assessment has loaded and only if the recruiter may
      invite - the same permission the Share action itself is gated on. */
   useEffect(() => {
     if (!openShareOnArrival || shareOnArrivalHandledRef.current) return;
     if (isLoading || !assessment || !canInvite) return;
     shareOnArrivalHandledRef.current = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShowShareModal(true);
+    openAssessmentInvite();
     /* Consumed: drop `?share=1` so a refresh (which resets the ref above)
        does not pop the Share dialog open again. */
     const params = new URLSearchParams(window.location.search);
     params.delete('share');
     const qs = params.toString();
     router.replace(`${window.location.pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openShareOnArrival, isLoading, assessment, canInvite, router]);
 
   const handleViewResults = () => {
@@ -461,7 +480,7 @@ function AssessmentDetailsContent() {
           onBack={handleBack}
           onEdit={handleEdit}
           onPreview={() => setShowPreviewModal(true)}
-          onShare={() => setShowShareModal(true)}
+          onShare={openAssessmentInvite}
           canShare={canInvite}
           onViewResults={handleViewResults}
           onRefresh={fetchAssessment}
@@ -479,15 +498,6 @@ function AssessmentDetailsContent() {
         />
 
         {/* Modals */}
-        {showShareModal && (
-          <ShareAssessmentModal
-            isOpen={showShareModal}
-            onClose={() => setShowShareModal(false)}
-            assessment={assessment}
-            inviteSource="Assessment"
-          />
-        )}
-
         {showPreviewModal && (
           <AssessmentPreviewModal
             isOpen={showPreviewModal}

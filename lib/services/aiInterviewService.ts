@@ -415,6 +415,10 @@ export interface AIInterviewStatsResponse {
   cancelled: number;
   average_score: number | null;
   candidates_invited: number;
+  /** Distinct candidate emails with a finished interview (one per person). */
+  candidates_interviewed?: number;
+  /** Finished interviews (completed + terminated), repeats included. */
+  interview_sessions?: number;
 }
 
 export interface SendInviteRequest {
@@ -515,6 +519,10 @@ export interface AIInterviewAuditTrailResponse {
   page_size: number;
   total_lifecycle_events: number;
   total_candidate_events: number;
+  interviews_created?: number;
+  candidates_invited?: number;
+  candidates_in_progress?: number;
+  candidates_completed?: number;
 }
 
 export const aiInterviewService = {

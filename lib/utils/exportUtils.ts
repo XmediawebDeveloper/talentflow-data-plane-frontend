@@ -233,18 +233,13 @@ export function formatMemberUsageForExport(members: any[]): any[] {
 /**
  * Team usage export columns
  */
+// Units for the four unit modules (each is 1 unit per action, so no Actions columns).
 export const TEAM_USAGE_COLUMNS: ExportColumn[] = [
   { key: 'team_name', header: 'Team Name' },
-  { key: 'resume_scoring_units', header: 'Resume Scoring (Units)' },
-  { key: 'resume_scoring_actions', header: 'Resume Scoring (Actions)' },
-  { key: 'assessment_units', header: 'Assessment (Units)' },
-  { key: 'assessment_actions', header: 'Assessment (Actions)' },
-  { key: 'ai_interview_units', header: 'AI Interview (Units)' },
-  { key: 'ai_interview_actions', header: 'AI Interview (Actions)' },
-  { key: 'resume_upload_units', header: 'Resume Storage (Units)' },
-  { key: 'resume_upload_actions', header: 'Resume Storage (Actions)' },
-  { key: 'jds_created', header: 'JDs Created' },
-  { key: 'assessments_created', header: 'Assessments Created' },
+  { key: 'resume_upload_units', header: 'Resume Units' },
+  { key: 'resume_scoring_units', header: 'Resume Scoring' },
+  { key: 'assessment_units', header: 'AI Assessment' },
+  { key: 'ai_interview_units', header: 'AI Interview' },
   { key: 'total_units', header: 'Total Units' },
 ];
 
@@ -260,8 +255,8 @@ export const MEMBER_USAGE_COLUMNS: ExportColumn[] = [
   { key: 'assessment_actions', header: 'Assessment (Actions)' },
   { key: 'ai_interview_units', header: 'AI Interview (Units)' },
   { key: 'ai_interview_actions', header: 'AI Interview (Actions)' },
-  { key: 'resume_upload_units', header: 'Resume Storage (Units)' },
-  { key: 'resume_upload_actions', header: 'Resume Storage (Actions)' },
+  { key: 'resume_upload_units', header: 'Resume Units (Units)' },
+  { key: 'resume_upload_actions', header: 'Resume Units (Actions)' },
   { key: 'jds_created', header: 'JDs Created' },
   { key: 'assessments_created', header: 'Assessments Created' },
   { key: 'total_units', header: 'Total Units' },

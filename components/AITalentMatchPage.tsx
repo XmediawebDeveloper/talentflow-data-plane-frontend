@@ -27,16 +27,13 @@ import FilterSelect from '@/components/ui/filter-select';
 import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, resolveSelectionJobLock, type InviteTargetJob } from './ScoredResumesTable';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
-import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import {
-  buildCreateUrl,
   clearInviteHandoff,
   readInviteHandoff,
-  saveInviteHandoff,
-  withResumeInviteMarker,
   RESUME_INVITE_PARAM,
   type InviteHandoff,
   type InviteHandoffKind,
@@ -61,14 +58,7 @@ import { jdService, JDLineageVersion } from '@/lib/services/jdService';
 import RecordPager from '@/components/RecordPager';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
-import ShareAssessmentModal from './ShareAssessmentModal';
-import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
-import InviteToAssessmentFlow, { type AssessmentInviteCandidate } from './InviteToAssessmentFlow';
 import type { Resume } from '@/lib/types/types';
-
-/** One candidate handed to the Invite to AI Interview dialog. */
-type AIInviteSeed = { name: string; email: string; resumeId?: string; phone?: string; title?: string };
-import { isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -537,27 +527,9 @@ export default function AITalentMatchPage({
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  // Assessment-related state
-  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
-  const [assessments, setAssessments] = useState<any[]>([]);
-  const [selectedAssessments, setSelectedAssessments] = useState<any[]>([]); // Changed to store full assessment objects
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [currentAssessmentForShare, setCurrentAssessmentForShare] = useState<any>(null);
-  const [prefilledCandidates, setPrefilledCandidates] = useState<any[]>([]);
-  /* Override for `handleProceedToInvite`'s recipient list — set by the "All
-     Resumes" bulk Invite Assessment action, whose selection lives in
-     `selectedAllResumeKeys` (a cross-job roll-up), not `selectedCandidates`
-     (scoped to one job's own candidate list, which is what that function
-     normally reads). `null` means "use the normal selectedCandidates path". */
-  // The job a per-row Invite Assessment was started for (View by Candidates /
-  // All Resumes ⋮). Scopes the invite dialog to that job's assessment
-  // versions, as Invite AI Interview is; the cross-job bulk selection leaves
-  // it unset and gets the full list.
-  const [pendingInviteJobId, setPendingInviteJobId] = useState<string | null>(null);
-  const [pendingInviteRecipients, setPendingInviteRecipients] = useState<
-    { id: string; name: string; email: string; source: 'ai-match'; candidateId: string }[] | null
-  >(null);
-
+  /* Every Assessment / AI Interview invite here opens THE invite popup
+     (VersionInviteDialog) — via JobInviteDialogHost for one job, else this. */
+  const { open: openInvite } = useInviteDialog();
 
   // Track if we're in an active matching session to prevent URL effect interference
   const isMatchingInProgress = useRef(false);
@@ -1373,11 +1345,6 @@ export default function AITalentMatchPage({
      resume-selection step, opened from a row's ⋮ menu instead of navigating
      away to the full resume-view page. */
   const [previewResume, setPreviewResume] = useState<{ id: string; name: string; fileName?: string } | null>(null);
-
-  /* The shared Invite to AI Interview dialog, scoped to this job — the same
-     popup the resume page opens: Candidates Selected, then only this job's
-     active interview versions to pick from. */
-  const [aiInviteFlow, setAiInviteFlow] = useState<{ jobId: string; seed: AIInviteSeed[] } | null>(null);
 
   // AI match version history — all match runs for one job, not just the latest.
   // Inline expand-in-place under the job card, one open at a time (like the
@@ -2351,164 +2318,6 @@ export default function AITalentMatchPage({
     }
   };
 
-  // Assessment handlers
-  /* Same optional-ids pattern as handleSubmitToScoring — a row's ⋮ "Invite
-     Assessment" seeds this via an explicit id, not the (not-yet-committed)
-     selection state. `handleProceedToInvite` below still reads
-     `selectedCandidates` directly, but only fires later once the assessment
-     picker modal closes, by which point that setSelectedCandidates call has
-     committed. */
-  const handleAssessment = async (candidateIds?: string[]) => {
-    if ((candidateIds ?? selectedCandidates).length === 0) {
-      toast.warning('Please select at least one candidate');
-      return;
-    }
-
-    // Fetch active assessments (published status). Revoked assessments are
-    // excluded — once invites have been revoked the assessment is sealed
-    // and the recruiter must duplicate it for a fresh invite round.
-    try {
-      const response = await assessmentService.list({ status: 'published', page_size: 100 });
-      const revokedIds = getLocallyRevokedAssessmentIds();
-      const activeAssessments = response.items
-        .filter((a: any) => !isAssessmentRevoked(a, revokedIds))
-        .map((a: any) => ({
-          ...a,
-          created_by_name: a.created_by_name || 'System',
-          short_id: a.short_id || `AS-${String(a.id).slice(0, 8).toUpperCase()}`,
-        }));
-
-      setAssessments(activeAssessments);
-      setIsAssessmentModalOpen(true);
-    } catch (error) {
-      console.error('[AITalentMatch] Failed to fetch assessments:', error);
-      toast.error('Failed to load assessments');
-    }
-  };
-
-
-  const handleProceedToInvite = (invitees?: AssessmentInviteCandidate[]) => {
-    /* The candidates still ticked in the invite dialog's Candidates Selected
-       panel — unticking someone there has to mean they are left out. */
-    const keep = invitees ? new Set(invitees.map((i) => i.id)) : null;
-    if (selectedAssessments.length === 0) {
-      toast.error('Please select at least one assessment');
-      return;
-    }
-
-    // `pendingInviteRecipients` — set by the "All Resumes" bulk Invite
-    // Assessment action — already IS the final recipient list (built from a
-    // cross-job selection, not `selectedCandidates`); everything below only
-    // runs for the normal single-job selection path.
-    const candidateData = pendingInviteRecipients
-      ? pendingInviteRecipients.filter(r => !keep || keep.has(r.id))
-      : (() => {
-      const currentCandidates = viewMode === 'results'
-        ? matchedCandidates
-        : getResolvedHistoryCandidates(selectedHistoryItem);
-      return currentCandidates
-        .filter(c => selectedCandidates.includes(c.id) && (!keep || keep.has(c.id)))
-        .map((c, index) => ({
-          id: `${Date.now()}-${index}`,
-          name: c.name,
-          email: c.email || '',
-          source: 'ai-match' as const,
-          candidateId: c.id
-        }))
-        .filter(c => c.email); // Only include candidates with email
-    })();
-
-    if (candidateData.length === 0) {
-      toast.error('Selected candidates must have email addresses');
-      return;
-    }
-
-    // Open ShareAssessmentModal with first selected assessment
-    setPrefilledCandidates(candidateData);
-    setCurrentAssessmentForShare(selectedAssessments[0]);
-    setIsAssessmentModalOpen(false);
-    setIsShareModalOpen(true);
-  };
-
-  const handleSendInvitations = async (candidates: any[], message: string) => {
-    try {
-      let successCount = 0;
-      let failCount = 0;
-
-      // Bulk send invitations for all selected assessments
-      for (const assessment of selectedAssessments) {
-        for (const candidate of candidates) {
-          if (candidate.email) {
-            try {
-              await assessmentService.invite(assessment.id, {
-                candidate_email: candidate.email,
-                candidate_name: candidate.name,
-                resume_id: candidate.resumeId || candidate.candidateId,
-                custom_message: message,
-              });
-              successCount++;
-            } catch (err) {
-              console.error(`Failed to send invitation for ${candidate.email}:`, err);
-              failCount++;
-            }
-          }
-        }
-      }
-
-      if (successCount > 0) {
-        toast.success(`Sent ${successCount} invitation(s) for ${selectedAssessments.length} assessment(s)`);
-      }
-      if (failCount > 0) {
-        toast.error(`Failed to send ${failCount} invitation(s)`);
-      }
-
-      setIsShareModalOpen(false);
-      setSelectedAssessments([]);
-      setSelectedCandidates([]);
-      setPrefilledCandidates([]);
-      setPendingInviteRecipients(null);
-      setPendingInviteJobId(null);
-    } catch (error: any) {
-      console.error('Failed to send invitations:', error);
-      toast.error(error.message || 'Failed to send invitations');
-    }
-  };
-
-  /* Invite AI Interview — opens the shared Invite to AI Interview dialog for
-     this job: the candidates listed (untick to leave out), then this job's
-     active interview versions to choose from, then the share modal. */
-  const handleInviteAIInterview = (seed: AIInviteSeed[], jobIdOverride?: string) => {
-    const jobId = jobIdOverride || selectedJob || selectedHistoryItem?.jobId;
-    if (!jobId) {
-      toast.error('Job ID not found');
-      return;
-    }
-    setAiInviteFlow({ jobId, seed });
-  };
-
-  /* Bulk "Invite AI Interview" — the per-row entry point already builds a
-     one-candidate seed itself; this is the same idea for the toolbar's
-     multi-select, building the seed from every currently `selectedCandidates`
-     id the same way `handleProceedToInvite` does for bulk assessments. */
-  const handleBulkInviteAIInterview = () => {
-    if (selectedCandidates.length === 0) {
-      toast.warning('Please select at least one candidate');
-      return;
-    }
-    const currentCandidates = viewMode === 'results'
-      ? matchedCandidates
-      : getResolvedHistoryCandidates(selectedHistoryItem);
-    const seed = currentCandidates
-      .filter(c => selectedCandidates.includes(c.id))
-      .map(c => ({ name: c.name, email: c.email || '', resumeId: c.resumeId, phone: c.phone, title: c.title }))
-      .filter(c => c.email);
-    if (seed.length === 0) {
-      toast.error('Selected candidates must have email addresses');
-      return;
-    }
-    handleInviteAIInterview(seed);
-  };
-
   /* ---- No AI Assessment / AI Interview yet → create it → back → invite ----
      Resume Scoring's round trip (resumeScoringInviteHandoff), from here:
      1. An invite for a job that has none is greyed, with "＋ Create …" under
@@ -2528,6 +2337,13 @@ export default function AITalentMatchPage({
      per opening (a selection spanning jobs stays greyed: "one job at a time").
      null = closed; rendered with aiInviteDialog in every view. */
   const [createSendRequest, setCreateSendRequest] = useState<InviteDialogRequest | null>(null);
+  /** Recorded on the invitation as "AI Talent Match" (a caller's own source wins). */
+  const withMatchSource = (c: InviteCandidate): InviteCandidate =>
+    ({ source: 'talent-match', inviteSource: 'AI Talent Match', ...c });
+  const inviteGateFor = (kind: InviteHandoffKind) =>
+    kind === 'assessment'
+      ? { allowed: canInviteAssessmentFromMatch, reason: ASSESSMENT_INVITE_DENIED }
+      : { allowed: canInviteAIInterviewFromMatch, reason: AI_INTERVIEW_INVITE_DENIED };
   const inviteDialogJobOf = (jdId: string, title?: string): InviteDialogJob => {
     const job = jobs.find(j => j.id === jdId);
     return {
@@ -2539,24 +2355,14 @@ export default function AITalentMatchPage({
     };
   };
   const openCreateSend = (kind: InviteHandoffKind, jdId: string, candidates: InviteCandidate[], title?: string) =>
-    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates });
+    setCreateSendRequest({ kind, job: inviteDialogJobOf(jdId, title), candidates: candidates.map(withMatchSource) });
   const createSendDialogEl = (
     <JobInviteDialogHost
       request={createSendRequest}
       onClose={() => setCreateSendRequest(null)}
-      inviteGate={(kind) =>
-        kind === 'assessment'
-          ? { allowed: canInviteAssessmentFromMatch, reason: ASSESSMENT_INVITE_DENIED }
-          : { allowed: canInviteAIInterviewFromMatch, reason: AI_INTERVIEW_INVITE_DENIED }
-      }
+      inviteGate={inviteGateFor}
     />
   );
-  const [createInviteTarget, setCreateInviteTarget] = useState<{
-    kind: InviteHandoffKind;
-    job: InviteTargetJob;
-    rows: MatchInviteRow[];
-    view: 'job' | 'candidates' | 'results';
-  } | null>(null);
   const peopleIn = (rows: MatchInviteRow[]) =>
     new Set(rows.map(r => String(r.email || r.resumeId || r.key).toLowerCase())).size;
   const toInviteRow = (historyId: string, jobId: string, c: MatchedCandidateWithVersions): MatchInviteRow => ({
@@ -2569,35 +2375,6 @@ export default function AITalentMatchPage({
     title: c.title,
     resumeId: c.resumeId,
   });
-  const startCreateInviteTarget = () => {
-    const t = createInviteTarget;
-    if (!t) return;
-    // The results page comes back to the same job's results; the list views
-    // to the list (the persisted view state reopens the right one).
-    const returnUrl = t.view === 'results'
-      ? withResumeInviteMarker(`${window.location.pathname}${window.location.search}`)
-      : undefined;
-    saveInviteHandoff({
-      source: 'ai-talent-match',
-      kind: t.kind,
-      jdId: t.job.jdId,
-      jdCode: t.job.jdCode,
-      jdTitle: t.job.jdTitle,
-      scoreIds: t.rows.map(r => r.key),
-      candidateCount: peopleIn(t.rows),
-      view: t.view,
-      selectedJobKeys: Array.from(selectedJobKeys),
-      partialJobRows,
-      ratingBand: candidateRatingBand,
-      returnUrl,
-    });
-    // Same flag a resume round trip sets: search, filters and the open view
-    // are put back on return.
-    markAIMatchReturnTrip();
-    setCreateInviteTarget(null);
-    router.push(buildCreateUrl(t.kind, { id: t.job.jdId, title: t.job.jdTitle }, returnUrl, 'ai-talent-match'));
-  };
-
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
   const openInviteForRows = (kind: InviteHandoffKind, jdId: string, rows: MatchInviteRow[]) => {
@@ -2621,9 +2398,6 @@ export default function AITalentMatchPage({
   /** A candidate's invite items for its ⋮ menu — greyed with "＋ Create …"
    *  when its job has no AI Assessment / AI Interview yet. */
   const renderRowInviteItems = (row: MatchInviteRow, view: 'job' | 'candidates' | 'results', jobTitle?: string) => {
-    const job = inviteTargetJobOf(row.jobId, jobTitle);
-    const create = (kind: InviteHandoffKind) => (target: InviteTargetJob) =>
-      setCreateInviteTarget({ kind, job: target, rows: [row], view });
     const guardEmail = (): boolean => {
       if (row.email) return true;
       toast.error('Candidate has no email on file');
@@ -2646,7 +2420,6 @@ export default function AITalentMatchPage({
             }
             if (guardEmail()) openInviteForRows('assessment', row.jobId, [row]);
           },
-          onCreate: create('assessment'),
         })}
         {renderInviteTargetItems({
           kind: 'interview',
@@ -2668,23 +2441,10 @@ export default function AITalentMatchPage({
             }
             openInviteForRows('interview', row.jobId, [row]);
           },
-          onCreate: create('interview'),
         })}
       </>
     );
   };
-
-  const createInviteTargetModal = createInviteTarget ? (
-    <CreateInviteTargetModal
-      kind={createInviteTarget.kind}
-      jdCode={createInviteTarget.job.jdCode}
-      jdTitle={createInviteTarget.job.jdTitle}
-      candidateCount={peopleIn(createInviteTarget.rows)}
-      sourceLabel="AI Talent Match"
-      onCancel={() => setCreateInviteTarget(null)}
-      onStart={startCreateInviteTarget}
-    />
-  ) : null;
 
   // Back from a create: restore first, then — once match history is in —
   // re-check the job and open the invite.
@@ -3002,112 +2762,6 @@ export default function AITalentMatchPage({
         );
       }}
     />
-  );
-
-  const aiInviteDialog = (
-    <InviteToAIInterviewFlow
-      open={!!aiInviteFlow}
-      onClose={() => setAiInviteFlow(null)}
-      jobId={aiInviteFlow?.jobId}
-      candidates={(aiInviteFlow?.seed ?? []).map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }))}
-      resumes={(aiInviteFlow?.seed ?? []).map((c, i) => ({
-        id: c.resumeId || `seed-${i}`, name: c.name, email: c.email, phone: c.phone, title: c.title,
-      }) as unknown as Resume)}
-      onInvited={() => { setAiInviteFlow(null); setSelectedCandidates([]); clearJobSelection(); clearCandSelection(); }}
-    />
-  );
-
-
-  /* Invite to Assessment and its Share step — like `aiInviteDialog` above,
-     rendered in EVERY view branch that offers Invite Assessment (history,
-     results and the default view). Each branch returns its own tree, and the
-     two used to be mounted in the default view only, so the action did
-     nothing from the results or history views. */
-  const assessmentInviteDialogs = (
-    <>
-        {/* Invite to Assessment — the shared dialog (InviteToAssessmentFlow),
-            the same one a resume's Invite → Assessment opens: the Invite to AI
-            Interview dialog's layout, with this page's own assessment list,
-            multi-select and Send step. The candidates are the ones the action
-            was started for — the All Resumes selection when it seeded
-            `pendingInviteRecipients`, else the selected matches. */}
-        {(() => {
-          const inviteCandidates: { id: string; name: string; email?: string; phone?: string; title?: string }[] =
-            pendingInviteRecipients
-              ? pendingInviteRecipients.map(r => ({ id: r.id, name: r.name, email: r.email }))
-              : (viewMode === 'results' ? matchedCandidates : getResolvedHistoryCandidates(selectedHistoryItem))
-                  .filter(c => selectedCandidates.includes(c.id))
-                  .map(c => ({ id: c.id, name: c.name, email: c.email || undefined, phone: c.phone, title: c.title }));
-          return (
-            <InviteToAssessmentFlow
-              open={isAssessmentModalOpen}
-              onClose={() => {
-                setIsAssessmentModalOpen(false);
-                setSelectedAssessments([]);
-                setPendingInviteRecipients(null);
-                setPendingInviteJobId(null);
-              }}
-              assessments={assessments}
-              multiple
-              selectedAssessments={selectedAssessments}
-              onSelectedAssessmentsChange={setSelectedAssessments}
-              candidates={inviteCandidates.map(c => ({ id: c.id, name: c.name, email: c.email }))}
-              resumes={inviteCandidates.map(c => ({
-                id: c.id, name: c.name, email: c.email, phone: c.phone, title: c.title,
-              }) as unknown as Resume)}
-              onProceed={handleProceedToInvite}
-              /* The job the candidates were matched against — the same one the
-                 Invite AI Interview dialog is scoped to — so this opens on that
-                 job's assessment versions. None for the cross-job All Resumes
-                 selection, which gets the full list. */
-              jobId={pendingInviteRecipients
-                ? (pendingInviteJobId ?? undefined)
-                : (selectedJob || selectedHistoryItem?.jobId || undefined)}
-            />
-          );
-        })()}
-
-        {/* Share Assessment Modal */}
-        {isShareModalOpen && selectedAssessments.length > 0 && (
-          <ShareAssessmentModal
-            isOpen={isShareModalOpen}
-            onClose={() => {
-              setIsShareModalOpen(false);
-              setCurrentAssessmentForShare(null);
-              setSelectedAssessments([]);
-              setPrefilledCandidates([]);
-            }}
-            assessment={{
-              id: selectedAssessments[0].id,
-              title: selectedAssessments[0].title,
-              duration: `${selectedAssessments[0].duration_minutes || 0} min`,
-              questions: (selectedAssessments[0].hr_enabled ? 1 : 0) +
-                        (selectedAssessments[0].technical_enabled ? 1 : 0) +
-                        (selectedAssessments[0].coding_enabled ? 1 : 0),
-              type: 'AI-Generated',
-              short_id: selectedAssessments[0].short_id,
-              version: selectedAssessments[0].version,
-              jd_short_id: selectedAssessments[0].jd_short_id,
-              jd_title: selectedAssessments[0].jd_title,
-              jd_version: selectedAssessments[0].jd_version,
-            }}
-            additionalAssessments={selectedAssessments.map(a => ({
-              id: a.id,
-              title: a.title,
-              duration: `${a.duration_minutes || 0} min`,
-              questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
-              type: 'AI-Generated',
-              short_id: a.short_id,
-              version: a.version,
-              jd_short_id: a.jd_short_id,
-              jd_title: a.jd_title,
-              jd_version: a.jd_version
-            }))}
-            prefilledCandidates={prefilledCandidates}
-            inviteSource="Resume Scoring"
-          />
-        )}
-    </>
   );
 
   // View: Matching in Progress (direct flow from resume-view / deep link)
@@ -3487,67 +3141,45 @@ export default function AITalentMatchPage({
       await handleSubmitToScoring(ids, { candidates, jobId: item.jobId, jobTitle: item.jobTitle });
     };
 
-    /* "Invite Assessment" from the All Resumes selection. Assessments aren't
-       tied to one job, so — unlike scoring — this can run across every
-       selected row in one go: build the recipient list straight from the
-       rows' own name/email/resumeId (no per-job candidate lookup needed),
-       dedup by email so one person matched against several jobs gets exactly
-       one invite, then hand it to handleProceedToInvite via the override
-       state (its normal `selectedCandidates` path only knows one job's
-       candidate list, which can't answer for a cross-job selection). */
-    const handleInviteAssessmentSelectedAllResumes = () => {
+    /* "Invite Assessment" / "Invite AI Interview" from the All Resumes
+       selection — THE invite popup. One job ticked → that job's versions;
+       rows across several jobs → no job, so the popup opens on the list of
+       every published one and the pick names the job. One invite per email. */
+    const inviteSelectedAllResumes = (kind: InviteHandoffKind) => {
       if (selectedAllResumeEntries.length === 0) return;
       const seenEmails = new Set<string>();
-      const recipients = selectedAllResumeEntries
-        .map(({ row }, index) => ({
-          id: `${Date.now()}-${index}`,
-          name: row.name || 'Candidate',
-          email: row.email || '',
-          source: 'ai-match' as const,
-          candidateId: row.resumeId || row.key,
-        }))
-        .filter(r => {
-          if (!r.email || seenEmails.has(r.email.toLowerCase())) return false;
-          seenEmails.add(r.email.toLowerCase());
+      const candidates: InviteCandidate[] = selectedAllResumeEntries
+        .filter(({ row }) => {
+          const e = (row.email || '').toLowerCase();
+          if (!e || seenEmails.has(e)) return false;
+          seenEmails.add(e);
           return true;
-        });
-      if (recipients.length === 0) {
+        })
+        .map(({ row, job }) => withMatchSource({
+          id: job.resumeId || row.key,
+          name: row.name || 'Candidate',
+          email: row.email!,
+          resumeId: job.resumeId,
+        }));
+      if (candidates.length === 0) {
         toast.error('Selected candidates must have email addresses');
         return;
       }
-      setPendingInviteRecipients(recipients);
-      setPendingInviteJobId(null); // cross-job selection — full assessment list
-      // handleAssessment only reads its argument to check "is anything
-      // selected" — the real recipient list is the override just above —
-      // so any non-empty placeholder satisfies that check.
-      void handleAssessment(['__all_resumes_selection__']);
-    };
-
-    /* "Invite AI Interview" from the All Resumes selection — unlike
-       Assessment, an AI interview config is per-JD, so a selection spanning
-       more than one job has no single config to invite against; this asks
-       the user to narrow to one job rather than silently inviting against
-       whichever job happened to resolve first. */
-    const handleInviteAIInterviewSelectedAllResumes = () => {
-      if (selectedAllResumeEntries.length === 0) return;
-      if (selectedAllResumeJobGroups.length > 1) {
-        toast.error('AI Interview invites are per job — select candidates for one job at a time.');
-        return;
+      const jobIds = Array.from(new Set(selectedAllResumeJobGroups.map(g => g.jobId)));
+      const oneJobId = jobIds.length === 1 ? jobIds[0] : null;
+      if (oneJobId) {
+        const item = matchHistory.find(h => h.id === selectedAllResumeJobGroups[0].historyId);
+        if (item) {
+          setSelectedHistoryItem(item);
+          setSelectedJob(item.jobId);
+        }
       }
-      const group = selectedAllResumeJobGroups[0];
-      const item = matchHistory.find(h => h.id === group.historyId);
-      if (item) {
-        setSelectedHistoryItem(item);
-        setSelectedJob(item.jobId);
-      }
-      const seed = group.entries
-        .map(({ row, job }) => ({ name: row.name || 'Candidate', email: row.email || '', resumeId: job.resumeId }))
-        .filter(c => c.email);
-      if (seed.length === 0) {
-        toast.error('Selected candidates must have email addresses');
-        return;
-      }
-      handleInviteAIInterview(seed, item?.jobId);
+      openInvite({
+        kind,
+        job: oneJobId ? inviteDialogJobOf(oneJobId) : undefined,
+        candidates,
+        inviteGate: inviteGateFor(kind),
+      });
     };
 
     /* ---- Rating pills + View by Job (Resume Scoring's layout) ----
@@ -3891,8 +3523,6 @@ export default function AITalentMatchPage({
       };
       const targets: InviteTargetJob[] = Array.from(new Set(rows.map(r => r.jobId)))
         .map(jdId => inviteTargetJobOf(jdId, itemFor(jdId)?.jobTitle));
-      const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
-        setCreateInviteTarget({ kind, job, rows: rows.filter(r => r.jobId === job.jdId), view });
       /* Score Resumes and both invites run per job here, so with candidates
          from several jobs ticked all three are greyed with the reason —
          not just the assessment one (the shared resolver lets an AI
@@ -4017,8 +3647,7 @@ export default function AITalentMatchPage({
                   const jdId = oneJob();
                   if (jdId) openInviteForRows('assessment', jdId, rows);
                 },
-                onCreate: create('assessment'),
-              })}
+                    })}
               {renderInviteTargetItems({
                 kind: 'interview',
                 target: multiJob
@@ -4043,8 +3672,7 @@ export default function AITalentMatchPage({
                   }
                   openInviteForRows('interview', jdId, rows);
                 },
-                onCreate: create('interview'),
-              })}
+                    })}
             </DropdownMenuContent>
           </DropdownMenu>
           <button
@@ -5271,7 +4899,7 @@ export default function AITalentMatchPage({
                               e.preventDefault();
                               return;
                             }
-                            handleInviteAssessmentSelectedAllResumes();
+                            inviteSelectedAllResumes('assessment');
                           }}
                         >
                           <ClipboardList className="w-4 h-4 text-menu-icon-view" />
@@ -5286,7 +4914,7 @@ export default function AITalentMatchPage({
                               e.preventDefault();
                               return;
                             }
-                            handleInviteAIInterviewSelectedAllResumes();
+                            inviteSelectedAllResumes('interview');
                           }}
                         >
                           <Video className="w-4 h-4 text-menu-icon-ai" />
@@ -7641,11 +7269,8 @@ export default function AITalentMatchPage({
         );
       })()}
 
-      {aiInviteDialog}
       {createSendDialogEl}
       {scoringReviewDialog}
-      {assessmentInviteDialogs}
-      {createInviteTargetModal}
       {/* Preview Resume from a row's ⋮ menu (View by Job / View by Candidates) —
           this view returns early, so the results view's copy below never rendered here. */}
       {previewResume && (
@@ -7852,11 +7477,8 @@ export default function AITalentMatchPage({
 
     return (
       <>
-      {aiInviteDialog}
       {createSendDialogEl}
       {scoringReviewDialog}
-      {assessmentInviteDialogs}
-      {createInviteTargetModal}
       <ExportFormatModal
         open={showCandidateExportModal}
         onClose={() => setShowCandidateExportModal(false)}
@@ -8197,8 +7819,6 @@ export default function AITalentMatchPage({
                 // disabled with that as the reason, whatever the permission
                 // or the job's existing Assessment/AI Interview setup.
                 const jobLock = resolveSelectionJobLock(target);
-                const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
-                  setCreateInviteTarget({ kind, job, rows, view: 'results' });
                 const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
                 // Whether this job already has an AI Assessment / AI Interview
                 // set up: true → only Send applies, false → only Create applies,
@@ -8271,7 +7891,7 @@ export default function AITalentMatchPage({
                                 title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === true ? 'This job already has an assessment' : undefined}
                                 onSelect={(e) => {
                                   if (createDisabled) { e.preventDefault(); return; }
-                                  create('assessment')(target[0]);
+                                  openInviteForRows('assessment', selectedJob, rows);
                                 }}
                               >
                                 <Plus className="w-4 h-4 text-menu-icon-view" />
@@ -8305,7 +7925,7 @@ export default function AITalentMatchPage({
                                 title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === true ? 'This job already has an AI interview' : undefined}
                                 onSelect={(e) => {
                                   if (createDisabled) { e.preventDefault(); return; }
-                                  create('interview')(target[0]);
+                                  openInviteForRows('interview', selectedJob, rows);
                                 }}
                               >
                                 <Plus className="w-4 h-4 text-menu-icon-ai" />
@@ -8987,7 +8607,6 @@ export default function AITalentMatchPage({
         />
       )}
 
-      {aiInviteDialog}
       {createSendDialogEl}
       {scoringReviewDialog}
 
@@ -9032,7 +8651,6 @@ export default function AITalentMatchPage({
         />
       )}
 
-      {assessmentInviteDialogs}
 
     </>
   );

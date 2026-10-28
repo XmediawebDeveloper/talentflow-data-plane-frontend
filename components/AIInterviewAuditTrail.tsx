@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   Download, CheckCircle, Clock,
   FileText, Eye, Mail, User, Activity,
-  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive, Loader2,
+  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive, Loader2, Ban,
   ChevronLeft, ChevronRight, Square, CheckSquare
 } from 'lucide-react';
 import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiInterviewService';
@@ -34,6 +34,16 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   candidate_completed: <Award className="w-4 h-4" />,
   candidate_failed: <UserX className="w-4 h-4" />,
   candidate_expired: <TimerOff className="w-4 h-4" />,
+  candidate_terminated: <UserX className="w-4 h-4" />,
+  candidate_revoked: <Ban className="w-4 h-4" />,
+  candidate_cancelled: <Ban className="w-4 h-4" />,
+  candidate_consent: <CheckCircle className="w-4 h-4" />,
+  candidate_exited: <UserX className="w-4 h-4" />,
+  candidate_errored: <Activity className="w-4 h-4" />,
+  link_shared: <Send className="w-4 h-4" />,
+  invite_edited: <Edit className="w-4 h-4" />,
+  ai_interview_save_draft: <Edit className="w-4 h-4" />,
+  ai_interview_draft_update: <Edit className="w-4 h-4" />,
   /* The lifecycle rows arrive keyed by the raw audit action value. */
   ai_interview_recording_downloaded: <Download className="w-4 h-4" />,
   ai_interview_report_downloaded: <Download className="w-4 h-4" />,
@@ -51,6 +61,16 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   candidate_completed: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
   candidate_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   candidate_expired: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
+  candidate_terminated: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  candidate_revoked: { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-500', border: 'border-indigo-200' },
+  candidate_cancelled: { bg: 'bg-gray-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
+  candidate_consent: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
+  candidate_exited: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
+  candidate_errored: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  link_shared: { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-500', border: 'border-indigo-200' },
+  invite_edited: { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-500', border: 'border-indigo-200' },
+  ai_interview_save_draft: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-500', border: 'border-purple-200' },
+  ai_interview_draft_update: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-500', border: 'border-purple-200' },
   ai_interview_recording_downloaded: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
   ai_interview_report_downloaded: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
   ai_interview_config_exported: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
@@ -90,6 +110,10 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
   const [stats, setStats] = useState({
     total_lifecycle_events: 0,
     total_candidate_events: 0,
+    interviews_created: 0,
+    candidates_invited: 0,
+    candidates_in_progress: 0,
+    candidates_completed: 0,
   });
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -166,6 +190,10 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
         setStats({
           total_lifecycle_events: response.total_lifecycle_events,
           total_candidate_events: response.total_candidate_events,
+          interviews_created: response.interviews_created ?? 0,
+          candidates_invited: response.candidates_invited ?? 0,
+          candidates_in_progress: response.candidates_in_progress ?? 0,
+          candidates_completed: response.candidates_completed ?? 0,
         });
       }
     } catch (error) {
@@ -334,33 +362,82 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
 
   return (
     <div className="space-y-6">
-      {/* Header Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Total Events</span>
-            <Activity className="w-4 h-4 text-gray-400" />
-          </div>
-          {/* Both categories, whatever chip is selected: the card is the
-              overall figure, like the two beside it. `total` is the selected
-              category's count, which the heading and pagination follow. */}
-          <div className="text-2xl text-gray-900">{stats.total_lifecycle_events + stats.total_candidate_events}</div>
+      {/* Category control + breakdown — the Assessments Activity Logs header.
+          All Events is the sum of the two category counts, not `total`, so the
+          badge doesn't drop to the selected category's figure. */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div
+          role="group"
+          aria-label="Filter activity by category"
+          className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] self-start overflow-x-auto scrollbar-hide max-w-full"
+        >
+          {([
+            { key: 'all' as const, label: 'All Events', short: 'All', icon: Activity,
+              value: stats.total_lifecycle_events + stats.total_candidate_events,
+              text: 'text-gray-700 dark:text-slate-200', tint: 'bg-gray-200/70 dark:bg-slate-700/60', ring: 'ring-gray-300 dark:ring-slate-600' },
+            { key: 'config_lifecycle' as const, label: 'Interview Lifecycle', short: 'Lifecycle', icon: FileText,
+              value: stats.total_lifecycle_events,
+              text: 'text-brand-blue', tint: 'bg-brand-blue/10', ring: 'ring-brand-blue/20' },
+            { key: 'candidate_activity' as const, label: 'Candidate Activities', short: 'Candidate', icon: User,
+              value: stats.total_candidate_events,
+              text: 'text-brand-cyan', tint: 'bg-brand-cyan/10', ring: 'ring-brand-cyan/20' },
+          ]).map((segment) => {
+            const SegmentIcon = segment.icon;
+            const isActive = categoryFilter === segment.key;
+            return (
+              <button
+                key={segment.key}
+                type="button"
+                aria-pressed={isActive}
+                title={segment.key === 'all'
+                  ? 'Show all activity'
+                  : isActive
+                    ? `Stop filtering by ${segment.short.toLowerCase()}`
+                    : `Show only ${segment.short.toLowerCase()} activity`}
+                onClick={() => {
+                  setCategoryFilter(isActive && segment.key !== 'all' ? 'all' : segment.key);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+                  isActive
+                    ? `bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ${segment.text} ${segment.ring}`
+                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <SegmentIcon className={`w-3.5 h-3.5 flex-shrink-0 ${segment.text}`} />
+                <span className="hidden sm:inline">{segment.label}</span>
+                <span className="sm:hidden">{segment.short}</span>
+                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
+                  {isLoading ? '—' : segment.value.toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Config Lifecycle</span>
-            <FileText className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="text-2xl text-blue-600">{stats.total_lifecycle_events}</div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Candidate Activities</span>
-            <User className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="text-2xl text-indigo-600">{stats.total_candidate_events}</div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm lg:justify-end flex-shrink-0">
+          {([
+            { icon: Plus, value: stats.interviews_created, label: 'created', text: 'text-brand-blue' },
+            { icon: Mail, value: stats.candidates_invited, label: 'invited', text: 'text-brand-cyan' },
+            { icon: Clock, value: stats.candidates_in_progress, label: 'in progress', text: 'text-brand-orange' },
+            { icon: CheckCircle, value: stats.candidates_completed, label: 'completed', text: 'text-success' },
+          ]).map((item, index) => {
+            const ItemIcon = item.icon;
+            return (
+              <Fragment key={item.label}>
+                {index > 0 && (
+                  <span className="w-px h-3.5 bg-gray-200 dark:bg-slate-700 flex-shrink-0" aria-hidden />
+                )}
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <ItemIcon className={`w-3.5 h-3.5 flex-shrink-0 ${item.text}`} />
+                  <span className="font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                    {isLoading ? '—' : item.value.toLocaleString()}
+                  </span>
+                  <span className="text-gray-500 dark:text-slate-400">{item.label}</span>
+                </span>
+              </Fragment>
+            );
+          })}
         </div>
       </div>
 
@@ -399,41 +476,6 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               columns={AUDIT_EXPORT_HEADERS}
               onExport={handleExportAuditLogs}
             />
-          </div>
-
-          {/* Category Filter Chips */}
-          <div className="flex flex-wrap items-center gap-2 mb-4">
-            <span className="text-sm text-gray-600 mr-2">Filter:</span>
-            <button
-              onClick={() => setCategoryFilter('all')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                categoryFilter === 'all'
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All Activities
-            </button>
-            <button
-              onClick={() => setCategoryFilter('config_lifecycle')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                categoryFilter === 'config_lifecycle'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}
-            >
-              Config Lifecycle ({stats.total_lifecycle_events})
-            </button>
-            <button
-              onClick={() => setCategoryFilter('candidate_activity')}
-              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                categoryFilter === 'candidate_activity'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-              }`}
-            >
-              Candidate Activities ({stats.total_candidate_events})
-            </button>
           </div>
 
           {/* Search + filters in the job-openings format — portalled to the

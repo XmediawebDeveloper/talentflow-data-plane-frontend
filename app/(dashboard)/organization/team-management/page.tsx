@@ -14,7 +14,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
-import teamService, { Team, TeamStats } from '@/lib/services/teamService';
+import teamService, { Team, TeamStats, TeamUsageSummary } from '@/lib/services/teamService';
+import { RANGE_PRESETS, rememberRangePreset } from '@/components/teams/reportControls';
+import type { TeamStatsCardKey } from '@/components/teams/TeamStatsCards';
+import { formatTeamUnits, formatTeamDateTime, type TeamUnits } from '@/components/teams/TeamCard';
+import { UNIT_KEYS } from '@/lib/constants/unitColors';
 import userService, { ApiUser } from '@/lib/services/userService';
 import {
   TeamStatsCards,
@@ -32,6 +36,7 @@ import {
 import TeamHistory from '@/components/teams/TeamHistory';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { toISODateIST } from '@/lib/utils/dateUtils';
 import { PageHeader } from '@/components/ui/page-header';
 import { Button } from '@/components/ui/button';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -50,15 +55,58 @@ import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
 
+/** Every active user. The users API returns at most 100 per page (20 by
+ *  default), so a single call left everyone past the first page out of the
+ *  member picker and the Unassigned count. */
+async function fetchAllActiveUsers(): Promise<ApiUser[]> {
+  const PAGE = 100;
+  const all: ApiUser[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const batch = await userService.listUsers({ is_active: true, page, page_size: PAGE });
+    all.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return all;
+}
+
+/** Units per team over the last 30 days (all teams for admins, own teams otherwise). */
+async function fetchTeamUnits30(isAdmin: boolean): Promise<Record<string, TeamUnits>> {
+  const { from, to } = RANGE_PRESETS.find((p) => p.id === '30d')!.range();
+  const res = isAdmin ? await teamService.getAllTeamsUsage(from, to) : await teamService.getMyTeamsUsage(from, to);
+  const out: Record<string, TeamUnits> = {};
+  for (const t of (res.teams ?? []) as TeamUsageSummary[]) {
+    const row = { total: 0 } as TeamUnits;
+    for (const k of UNIT_KEYS) {
+      row[k] = t.by_type?.[k]?.total_consumed ?? 0;
+      row.total += row[k];
+    }
+    out[t.team_id] = row;
+  }
+  return out;
+}
+
+/** Team id → creator's name, from the history's "Team Created" events. The team
+ *  API has no created_by field; the history does (it's tenant-admin only). */
+async function fetchTeamCreators(): Promise<Record<string, string>> {
+  const PAGE = 500;
+  const out: Record<string, string> = {};
+  for (let offset = 0; offset < PAGE * 5; offset += PAGE) {
+    const res = await teamService.getTeamsHistory(PAGE, offset, 'TEAM_CREATED');
+    for (const e of res.items) if (e.actor_name && !out[e.team_id]) out[e.team_id] = e.actor_name;
+    if (res.items.length < PAGE || offset + PAGE >= res.total) break;
+  }
+  return out;
+}
+
 // Members / Unassigned lists — plain rows, so the usual list sizes.
 const PEOPLE_PAGE_SIZES = [10, 25, 50, 100];
 
-type TeamListView = 'teams-all' | 'members' | 'teams-by-jobs' | 'unassigned';
-const TEAM_LIST_VIEWS: TeamListView[] = ['teams-all', 'members', 'teams-by-jobs', 'unassigned'];
+type TeamListView = 'teams-all' | 'members' | 'unassigned';
+const TEAM_LIST_VIEWS: TeamListView[] = ['teams-all', 'members', 'unassigned'];
 // '' = all teams; the other two are the "needs attention" slices.
 type TeamAttention = '' | 'no-lead' | 'empty';
 
-const TEAMS_EXPORT_HEADERS = ['Team', 'Description', 'Team Lead', 'Lead Email', 'Members', 'Member Names', 'Active Jobs', 'Resumes', 'Created'];
+const TEAMS_EXPORT_HEADERS = ['Team', 'Description', 'Team Lead', 'Lead Email', 'Members', 'Member Names', 'Units (last 30 days)', 'Created', 'Created By'];
 const MEMBERS_EXPORT_HEADERS = ['Member', 'Email', 'Team', 'Role', 'Team Lead'];
 const UNASSIGNED_EXPORT_HEADERS = ['Name', 'Email', 'Role'];
 
@@ -72,8 +120,7 @@ const TEAM_SORTS: { value: TeamSort; label: string }[] = [
   { value: 'name', label: 'Name (A–Z)' },
   { value: 'newest', label: 'Newest first' },
   { value: 'members', label: 'Most members' },
-  { value: 'jobs', label: 'Most active jobs' },
-  { value: 'resumes', label: 'Most resumes' },
+  { value: 'units', label: 'Most units (30 days)' },
 ];
 
 
@@ -96,6 +143,11 @@ export default function TeamManagementPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [availableUsers, setAvailableUsers] = useState<ApiUser[]>([]);
+  // Units per team (last 30 days). null = not loaded or no access to usage —
+  // the Units column / box is then left out entirely.
+  const [unitsByTeam, setUnitsByTeam] = useState<Record<string, TeamUnits> | null>(null);
+  // Team id → creator's name (admins only; null = not available → column hidden).
+  const [createdBy, setCreatedBy] = useState<Record<string, string> | null>(null);
   // Every active user, for the Unassigned view. null = not loaded / no access to
   // the user list — the Unassigned card and view are then left out.
   const [allUsers, setAllUsers] = useState<ApiUser[] | null>(null);
@@ -125,7 +177,7 @@ export default function TeamManagementPage() {
   // Opens on the first card (Total Teams) already drilled in.
   const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const [listView, setListView] = useState<TeamListView>('teams-all');
-  const isTeamsView = listView === 'teams-all' || listView === 'teams-by-jobs';
+  const isTeamsView = listView === 'teams-all';
   const [attentionFilter, setAttentionFilter] = useState<TeamAttention>('');
   // Members + Unassigned views: their own team filter and pagination.
   const [memberTeamFilter, setMemberTeamFilter] = useState('');
@@ -147,10 +199,16 @@ export default function TeamManagementPage() {
     setCurrentPage(1);
   };
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('grid');
-  const openListView = (card: 'total' | 'members' | 'jobs' | 'unassigned') => {
-    setListView(card === 'total' ? 'teams-all' : card === 'members' ? 'members' : card === 'unassigned' ? 'unassigned' : 'teams-by-jobs');
-    // The Active Jobs card lands on the busiest teams first.
-    if (card === 'jobs') applyTeamSort('jobs');
+  const openListView = (card: TeamStatsCardKey) => {
+    if (card === 'units') {
+      // Same numbers as the card: Team Usage on "Last 30 days".
+      rememberRangePreset('30d');
+      setActiveTab('usage');
+      return;
+    }
+    setListView(card === 'members' ? 'members' : card === 'unassigned' ? 'unassigned' : 'teams-all');
+    if (card === 'total') setAttentionFilter('');
+    else if (card === 'no-lead') setAttentionFilter('no-lead');
     setPageView('list');
   };
 
@@ -219,8 +277,20 @@ export default function TeamManagementPage() {
         if (!isMounted) return;
         setTeams(teamsData);
         setStats(statsData);
+        // Units column — only for users who may see team usage; best effort.
+        if (isTenantAdmin || hasPermissionCode('teams:view_reports')) {
+          fetchTeamUnits30(isTenantAdmin)
+            .then((u) => { if (isMounted) setUnitsByTeam(u); })
+            .catch(() => { /* column stays hidden */ });
+        }
+        // "Created by" — read from the team history, which only tenant admins can read.
+        if (isTenantAdmin) {
+          fetchTeamCreators()
+            .then((c) => { if (isMounted) setCreatedBy(c); })
+            .catch(() => { /* column stays hidden */ });
+        }
         // Unassigned view — optional, so it never blocks or fails the page.
-        userService.listUsers({ is_active: true })
+        fetchAllActiveUsers()
           .then((users) => { if (isMounted) setAllUsers(users); })
           .catch(() => { /* no access to the user list: card stays hidden */ });
       } catch (error: unknown) {
@@ -271,26 +341,25 @@ export default function TeamManagementPage() {
       name: byName,
       newest: (a, b) => (b.created_at || '').localeCompare(a.created_at || ''),
       members: (a, b) => (b.member_count || 0) - (a.member_count || 0) || byName(a, b),
-      jobs: (a, b) => (b.active_jobs_count || 0) - (a.active_jobs_count || 0) || byName(a, b),
-      resumes: (a, b) => (b.resumes_count || 0) - (a.resumes_count || 0) || byName(a, b),
+      units: (a, b) => (unitsByTeam?.[b.id]?.total ?? -1) - (unitsByTeam?.[a.id]?.total ?? -1) || byName(a, b),
     };
     // sortDir opposite to the key's natural direction reverses the sorter.
     const sign = sortDir === naturalTeamSortDir(sortBy) ? 1 : -1;
     return [...result].sort((a, b) => sign * sorters[sortBy](a, b));
-  }, [teams, searchQuery, filterTeamLead, attentionFilter, sortBy, sortDir]);
+  }, [teams, searchQuery, filterTeamLead, attentionFilter, sortBy, sortDir, unitsByTeam]);
 
   const attentionCounts = useMemo(() => ({
     noLead: teams.filter((t) => !t.team_lead).length,
     empty: teams.filter((t) => (t.member_count || 0) === 0).length,
   }), [teams]);
+  const units30Total = useMemo(
+    () => (unitsByTeam ? Object.values(unitsByTeam).reduce((sum, u) => sum + u.total, 0) : null),
+    [unitsByTeam],
+  );
   const maxMembers = useMemo(() => teams.reduce((max, t) => Math.max(max, t.member_count || 0), 0), [teams]);
   // Teams that exist now — History only links these (a deleted team can't open).
   const existingTeamIds = useMemo(() => new Set(teams.map((t) => t.id)), [teams]);
 
-  const activeJobsTotal = useMemo(
-    () => teams.reduce((sum, team) => sum + (team.active_jobs_count || 0), 0),
-    [teams],
-  );
 
   // Deleting the last team on the last page used to leave an empty page — the
   // page shown is clamped to the last one that still has rows.
@@ -400,7 +469,7 @@ export default function TeamManagementPage() {
     />
   );
 
-  // Switching between the Teams / Members / Active Jobs views starts on page 1 too.
+  // Switching between the Teams / Members / Unassigned views starts on page 1 too.
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, filterTeamLead, attentionFilter, sortBy, listView]);
@@ -434,7 +503,7 @@ export default function TeamManagementPage() {
   const fetchAvailableUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const users = await userService.listUsers({ is_active: true });
+      const users = await fetchAllActiveUsers();
       setAvailableUsers(users);
       setAllUsers(users);
     } catch (error: unknown) {
@@ -453,6 +522,13 @@ export default function TeamManagementPage() {
       ]);
       setTeams(teamsData);
       setStats(statsData);
+      // Keep the Units column in step (members moving changes what a team used).
+      if (createdBy !== null) {
+        fetchTeamCreators().then(setCreatedBy).catch(() => { /* keep the last names */ });
+      }
+      if (unitsByTeam !== null) {
+        fetchTeamUnits30(isTenantAdmin).then(setUnitsByTeam).catch(() => { /* keep the last numbers */ });
+      }
       return true;
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -479,6 +555,7 @@ export default function TeamManagementPage() {
     { key: 'analytics', label: 'Analytics', short: 'Analytics', icon: TrendingUp, enabled: canViewAnalyticsTab, denyMsg: 'You do not have permission to view team analytics' },
     ...(isTenantAdmin ? [{ key: 'history' as const, label: 'Teams History', short: 'History', icon: History, enabled: true }] : []),
   ];
+  const shownTab: InnerTabKey = innerTabs.some((t) => t.key === activeTab && t.enabled) ? activeTab : 'teams';
   const selectInnerTab = (t: { key: InnerTabKey; enabled: boolean; denyMsg?: string }) => {
     // Locked tab: greyed with a hover tooltip; click is a no-op.
     if (!t.enabled) return;
@@ -490,7 +567,7 @@ export default function TeamManagementPage() {
   const exportHeaders = listView === 'members' ? MEMBERS_EXPORT_HEADERS : listView === 'unassigned' ? UNASSIGNED_EXPORT_HEADERS : TEAMS_EXPORT_HEADERS;
   const exportCount = listView === 'members' ? sortedMembers.length : listView === 'unassigned' ? filteredUnassigned.length : filteredTeams.length;
   const runExport = async (format: ExportFileFormat) => {
-    const date = new Date().toISOString().split('T')[0];
+    const date = toISODateIST(new Date());
     if (listView === 'members') {
       const rows = sortedMembers.map((r) => [r.name, r.email, r.teamName, formatRole(r.role), r.isLead ? 'Yes' : 'No']);
       await exportRows(format, MEMBERS_EXPORT_HEADERS, rows, `team-members-${date}`, { sheetName: 'Team Members' });
@@ -505,9 +582,9 @@ export default function TeamManagementPage() {
         t.team_lead?.email || '',
         t.member_count || 0,
         (t.members || []).map((m) => m.name).join('; '),
-        t.active_jobs_count || 0,
-        t.resumes_count || 0,
-        t.created_at ? new Date(t.created_at).toLocaleDateString() : '',
+        unitsByTeam?.[t.id] ? formatTeamUnits(unitsByTeam[t.id].total) : '',
+        formatTeamDateTime(t.created_at),
+        createdBy?.[t.id] ?? '',
       ]);
       await exportRows(format, TEAMS_EXPORT_HEADERS, rows, `teams-${date}`, { sheetName: 'Teams' });
     }
@@ -531,14 +608,17 @@ export default function TeamManagementPage() {
 
     setIsCreating(true);
     try {
-      await teamService.createTeam({
+      const created = await teamService.createTeam({
         name: data.name,
         description: data.description || undefined,
         member_ids: data.memberIds,
         team_lead_id: data.teamLeadId || undefined,
       });
 
-      toast.success('Team created successfully');
+      // "View team" opens the new team straight away.
+      toast.success('Team created successfully', created?.id
+        ? { action: { label: 'View team', onClick: () => { void handleViewDetails(created.id); } } }
+        : undefined);
       setShowCreateModal(false);
       await refreshData();
     } catch (error: unknown) {
@@ -609,16 +689,22 @@ export default function TeamManagementPage() {
     try {
       await teamService.updateTeam(selectedTeam.id, {
         name: data.name,
-        description: data.description || undefined,
+        // Sent even when emptied / removed — "undefined" left the old value in place.
+        description: data.description,
         member_ids: data.memberIds,
-        team_lead_id: data.teamLeadId || undefined,
+        team_lead_id: data.teamLeadId || null,
       });
 
       toast.success('Team updated successfully');
-      // Back to the details view, showing the saved team.
-      const [updatedTeam] = await Promise.all([teamService.getTeam(selectedTeam.id), refreshData()]);
-      setSelectedTeam(updatedTeam);
-      setTeamModal('view');
+      // Back to the details view, showing the saved team. A failed reload must
+      // not read as a failed save (it used to say "Failed to update team").
+      try {
+        const [updatedTeam] = await Promise.all([teamService.getTeam(selectedTeam.id), refreshData()]);
+        setSelectedTeam(updatedTeam);
+        setTeamModal('view');
+      } catch {
+        closeTeamModal();
+      }
     } catch (error: unknown) {
       console.error('Error updating team:', error);
       toast.error(getErrorDetail(error) || 'Failed to update team');
@@ -639,6 +725,16 @@ export default function TeamManagementPage() {
     onManageTeam: handleManageTeam,
     canManage: canEditTeams,
     maxMembers,
+    unitsByTeam,
+    createdBy,
+    // Units click → Team Usage on "Last 30 days", that team expanded (same numbers).
+    onOpenUsage: canViewUsageTab
+      ? (teamId: string) => {
+          rememberRangePreset('30d');
+          setUsageFocusTeamId(teamId);
+          setActiveTab('usage');
+        }
+      : undefined,
   };
 
   const handleDeleteTeam = async () => {
@@ -664,6 +760,12 @@ export default function TeamManagementPage() {
     teams.some((team) => team.id !== exceptTeamId && team.members?.some((member) => member.id === userId));
   const createPickerUsers = availableUsers.filter((user) => !inOtherTeam(user.id));
   const editPickerUsers = availableUsers.filter((user) => !inOtherTeam(user.id, selectedTeam?.id));
+  // Users already in another team — the picker lists them greyed with that team's name.
+  const unavailableFor = (exceptTeamId?: string) =>
+    availableUsers.flatMap((user) => {
+      const team = teams.find((t) => t.id !== exceptTeamId && t.members?.some((m) => m.id === user.id));
+      return team ? [{ user, teamName: team.name }] : [];
+    });
 
   if (isLoading) {
     return <TeamManagementSkeleton />;
@@ -702,7 +804,7 @@ export default function TeamManagementPage() {
                   short labels on phones, icons from sm up. */}
               <div className="border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-3 py-2.5 lg:hidden">
                 {(() => {
-                  const activeIndex = innerTabs.findIndex((t) => t.key === activeTab);
+                  const activeIndex = innerTabs.findIndex((t) => t.key === shownTab);
                   return (
                     <div
                       role="tablist"
@@ -722,7 +824,7 @@ export default function TeamManagementPage() {
                       )}
                       {innerTabs.map((t) => {
                         const Icon = t.icon;
-                        const active = activeTab === t.key;
+                        const active = shownTab === t.key;
                         return (
                           <button
                             key={t.key}
@@ -759,7 +861,7 @@ export default function TeamManagementPage() {
               >
                 {innerTabs.map((t) => {
                   const Icon = t.icon;
-                  const active = activeTab === t.key;
+                  const active = shownTab === t.key;
                   return (
                     <button
                       key={t.key}
@@ -784,31 +886,31 @@ export default function TeamManagementPage() {
               </div>
 
               <div className="p-3 sm:p-5">
-            {activeTab === 'usage' ? (
+            {shownTab === 'usage' ? (
               <TeamUsageAnalytics focusTeamId={usageFocusTeamId} onFocusHandled={() => setUsageFocusTeamId(null)} />
-            ) : activeTab === 'analytics' ? (
+            ) : shownTab === 'analytics' ? (
               <TeamAnalyticsDashboard
                 userRole={authUser?.role || 'standard_user'}
                 onOpenTeam={canViewUsageTab ? (teamId) => { setUsageFocusTeamId(teamId); setActiveTab('usage'); } : undefined}
               />
-            ) : activeTab === 'history' ? (
+            ) : shownTab === 'history' ? (
               <TeamHistory onOpenTeam={handleViewDetails} openableTeamIds={existingTeamIds} />
             ) : (
               <>
                 <TeamStatsCards
                   stats={stats}
-                  activeJobs={activeJobsTotal}
                   unassignedUsers={allUsers ? unassignedUsers.length : null}
+                  noLeadTeams={attentionCounts.noLead}
+                  units30={units30Total}
                   onCardClick={openListView}
+                  nonClickable={canViewUsageTab ? [] : ['units']}
                   activeCard={
                     pageView === 'list'
                       ? listView === 'teams-all'
-                        ? 'total'
+                        ? attentionFilter === 'no-lead' ? 'no-lead' : 'total'
                         : listView === 'members'
                           ? 'members'
-                          : listView === 'unassigned'
-                            ? 'unassigned'
-                            : 'jobs'
+                          : 'unassigned'
                       : null
                   }
                 />
@@ -840,7 +942,7 @@ export default function TeamManagementPage() {
                     }}
                     countBadge={
                       listView === 'members' ? (
-                        <ListCountBadge filtered={flattenedMembers.length} total={stats.total_members} noun="member" />
+                        <ListCountBadge filtered={flattenedMembers.length} total={teams.reduce((n, t) => n + (t.members?.length || 0), 0)} noun="member" />
                       ) : listView === 'unassigned' ? (
                         <ListCountBadge filtered={filteredUnassigned.length} total={unassignedUsers.length} noun="user" />
                       ) : (
@@ -896,7 +998,7 @@ export default function TeamManagementPage() {
                     )}
                     {isTeamsView && (
                       <ToolbarFilterSelect value={sortBy} onChange={(v) => applyTeamSort(v as TeamSort)} ariaLabel="Sort teams">
-                        {TEAM_SORTS.map((option) => (
+                        {TEAM_SORTS.filter((o) => o.value !== 'units' || unitsByTeam).map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -908,7 +1010,7 @@ export default function TeamManagementPage() {
                     {isTeamsView ? (
                       <ClearSortChip
                         sort={{ sortKey: sortBy, sortDir }}
-                        labels={{ name: 'Team', newest: 'Created', members: 'Members', jobs: 'Active Jobs', resumes: 'Resumes' }}
+                        labels={{ name: 'Team', newest: 'Created', members: 'Members', units: 'Units' }}
                         isDefault={sortBy === 'name' && sortDir === 'asc'}
                         onClear={() => { applyTeamSort('name'); setCurrentPage(1); }}
                       />
@@ -1118,7 +1220,8 @@ export default function TeamManagementPage() {
           onSubmit={handleCreateTeam}
           mode="create"
           availableUsers={createPickerUsers}
-          hiddenUsersCount={availableUsers.length - createPickerUsers.length}
+          unavailableUsers={unavailableFor()}
+          isNameTaken={(name) => isDuplicateTeamName(name)}
           isLoadingUsers={isLoadingUsers}
           isSubmitting={isCreating}
         />
@@ -1135,7 +1238,9 @@ export default function TeamManagementPage() {
           isPreparingEdit={isPreparingEdit}
           onDelete={handleOpenDeleteDialog}
           canDelete={canDeleteTeams}
-          showActivity={isTenantAdmin}
+          showUnits={!!unitsByTeam}
+          units={selectedTeam ? unitsByTeam?.[selectedTeam.id] : undefined}
+          createdByName={selectedTeam ? createdBy?.[selectedTeam.id] : undefined}
         />
 
         <TeamFormModal
@@ -1157,7 +1262,8 @@ export default function TeamManagementPage() {
               : undefined
           }
           availableUsers={editPickerUsers}
-          hiddenUsersCount={availableUsers.length - editPickerUsers.length}
+          unavailableUsers={unavailableFor(selectedTeam?.id)}
+          isNameTaken={(name) => isDuplicateTeamName(name, selectedTeam?.id)}
           isLoadingUsers={isLoadingUsers}
           isSubmitting={isUpdating}
           onDelete={handleOpenDeleteDialog}
@@ -1171,7 +1277,6 @@ export default function TeamManagementPage() {
           onOpenChange={setShowDeleteDialog}
           teamName={selectedTeam?.name || ''}
           memberCount={selectedTeam?.member_count || 0}
-          activeJobsCount={selectedTeam?.active_jobs_count || 0}
           onConfirm={handleDeleteTeam}
           isDeleting={isDeleting}
         />
