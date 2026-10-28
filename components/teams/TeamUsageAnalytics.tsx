@@ -285,7 +285,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
     requestedAt.current = allEntries.length;
     onLoadMore();
   }, [needMore, loadingMore, onLoadMore, allEntries.length]);
-  const TH = 'bg-gray-50 px-3 py-2 text-left text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:bg-slate-800 dark:text-slate-400';
+  const TH = 'bg-white px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300';
   return (
     <tr>
       <td colSpan={6} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
@@ -829,10 +829,10 @@ function TeamRow({
                         <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                           Member
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold">
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
-                            <span className="text-gray-500 dark:text-slate-500">Resume Units</span>
+                            <span className="text-gray-600 dark:text-slate-300">Resume Units</span>
                           </span>
                         </th>
                         <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
@@ -1180,7 +1180,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
     : [...visible].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
   const shell = 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden';
-  const TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500';
+  const TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300';
   const teamsText = (r: MemberUsageRow) => r.teams.join(', ');
   const empty = (
     <div className={TABLE_EMPTY_PANEL_CLASS}>
@@ -1244,7 +1244,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
       ) : (
         <div className={`${shell} tf-table-shell overflow-x-auto`}>
           <table className="w-full min-w-[900px]">
-            <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
+            <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 <th className={TH} aria-sort={ariaSort(sort, 'name')}><SortableHeader label="Member" column="name" sort={sort} /></th>
                 <th className={TH}>Team</th>

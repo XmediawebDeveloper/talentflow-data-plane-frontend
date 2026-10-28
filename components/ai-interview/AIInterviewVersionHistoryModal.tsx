@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Archive, BarChart3, CheckCircle, ChevronDown, ChevronUp, ChevronsUpDown, Clock, Eye, FileText, Info, Loader2,
-  RefreshCw, Video, X,
+  Archive, BarChart3, CheckCircle, Clock, Eye, FileText, Info, Loader2,
+  RefreshCw, Video, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
@@ -367,9 +367,6 @@ export default function AIInterviewVersionHistoryModal({
                               {key ? (
                                 <button type="button" onClick={() => toggleSort(key)} className="inline-flex items-center gap-1 hover:text-brand-blue">
                                   {h}
-                                  {active
-                                    ? (sort.dir === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)
-                                    : <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />}
                                 </button>
                               ) : h}
                             </th>

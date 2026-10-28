@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -2988,11 +2988,10 @@ export default function AITalentMatchPage({
     /** A View by Candidates column header that sorts the table (click again to flip). */
     const candidateSortHeader = (key: CandidateSortKey, label: string, align: 'left' | 'center' = 'left') => {
       const active = candidateSortBy === key;
-      const Icon = !active ? ArrowUpDown : candidateSortOrder === 'asc' ? ArrowUp : ArrowDown;
       return (
         <th
           aria-sort={active ? (candidateSortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
-          className={`${align === 'center' ? 'text-center' : 'text-left'} py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap`}
+          className={`${align === 'center' ? 'text-center' : 'text-left'} py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap`}
         >
           <button
             type="button"
@@ -3006,10 +3005,9 @@ export default function AITalentMatchPage({
               }
             }}
             title={`Sort by ${label}`}
-            className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+            className="inline-flex items-center transition-colors hover:text-brand-blue"
           >
             {label}
-            <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
           </button>
         </th>
       );
@@ -3222,11 +3220,10 @@ export default function AITalentMatchPage({
     const innerJobSortHeader = (rowKey: string, key: CandJobSortKey, label: string, align: 'left' | 'center', extraClass = '') => {
       const sort = candJobSortByRow[rowKey] ?? DEFAULT_CAND_JOB_SORT;
       const active = sort.key === key;
-      const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
       return (
         <th
           aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-          className={`${align === 'center' ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap ${extraClass}`}
+          className={`${align === 'center' ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap ${extraClass}`}
         >
           <button
             type="button"
@@ -3240,10 +3237,9 @@ export default function AITalentMatchPage({
               setCandidateJobsPage(rowKey, 1);
             }}
             title={`Sort by ${label}`}
-            className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+            className="inline-flex items-center transition-colors hover:text-brand-blue"
           >
             {label}
-            <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
           </button>
         </th>
       );
@@ -5789,11 +5785,10 @@ export default function AITalentMatchPage({
                 });
               const candSortHeader = (key: JobCandSortKey, label: string, align: 'left' | 'center') => {
                 const active = candSort.key === key;
-                const Icon = !active ? ArrowUpDown : candSort.dir === 'asc' ? ArrowUp : ArrowDown;
                 return (
                   <th
                     aria-sort={active ? (candSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    className={`${align === 'center' ? 'text-center' : 'text-left'} py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap`}
+                    className={`${align === 'center' ? 'text-center' : 'text-left'} py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap`}
                   >
                     <button
                       type="button"
@@ -5807,10 +5802,9 @@ export default function AITalentMatchPage({
                         setCandidateJobsPage(pagingKey, 1);
                       }}
                       title={`Sort by ${label}`}
-                      className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+                      className="inline-flex items-center transition-colors hover:text-brand-blue"
                     >
                       {label}
-                      <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                     </button>
                   </th>
                 );

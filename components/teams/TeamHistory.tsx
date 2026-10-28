@@ -491,10 +491,10 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
           <div className={`relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-opacity dark:border-slate-700/60 dark:bg-slate-900 dark:ring-white/[0.02] ${loading ? 'pointer-events-none opacity-50' : ''}`} aria-busy={loading}>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[900px]">
-                <thead className="border-b border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/50">
+                <thead className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                   <tr>
                     {['Date & time', 'Event', 'Team', 'Member', 'By', 'Details'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">{h}</th>
                     ))}
                   </tr>
                 </thead>

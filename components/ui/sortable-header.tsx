@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { cn } from './utils';
 
 /**
- * Click-to-sort table headings — the pattern the All Assessments table
- * (components/assessments/AllAssessmentsTable.tsx) established: a button with a
- * faint ⇅ that becomes a brand-blue ↑ / ↓ on the sorted column. Clicking the
- * sorted column flips direction; a new column opens in its most useful
+ * Click-to-sort table headings. The heading is plain header text (no sort
+ * arrows) so sortable and non-sortable columns look the same; clicking the
+ * sorted column flips direction, and a new column opens in its most useful
  * direction (names A–Z, numbers / dates largest-or-newest first).
  *
  *   const sort = useTableSort<'name' | 'total'>({ descFirst: ['total'] });
@@ -152,28 +151,21 @@ export function SortableHeader<K extends string>({
   align?: 'left' | 'center' | 'right';
   className?: string;
 }) {
-  const isSorted = sort.sortKey === column;
-  const Icon = !isSorted ? ArrowUpDown : sort.sortDir === 'asc' ? ArrowUp : ArrowDown;
+  /* Plain header text — no sort arrows, no highlight on the sorted column —
+     so a sortable heading looks exactly like every other table heading.
+     Clicking still sorts; the cell's aria-sort says which way. */
   return (
     <button
       type="button"
       onClick={() => sort.toggleSort(column)}
       title={typeof label === 'string' ? `Sort by ${label}` : 'Sort'}
       className={cn(
-        'group inline-flex items-center gap-1.5 font-[inherit] transition-colors hover:text-brand-blue focus-visible:outline-none focus-visible:underline',
-        align === 'right' && 'flex-row-reverse',
-        isSorted && 'text-brand-blue',
+        'inline-flex items-center font-[inherit] transition-colors hover:text-brand-blue focus-visible:outline-none focus-visible:underline',
+        align === 'right' && 'justify-end',
         className,
       )}
     >
       {label}
-      <Icon
-        aria-hidden
-        className={cn(
-          'h-3.5 w-3.5 shrink-0 transition-opacity',
-          isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100',
-        )}
-      />
     </button>
   );
 }

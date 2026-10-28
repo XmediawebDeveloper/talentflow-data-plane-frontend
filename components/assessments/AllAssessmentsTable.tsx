@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  X, ClipboardList, MoreVertical, Eye, Pencil,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
+  X, ClipboardList, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
-  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet,
+  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -1774,7 +1773,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     </th>
                     {COLUMNS.map((col) => {
                       const isSorted = sortKey === col.key;
-                      const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
                       return (
                         <th
                           key={col.key}
@@ -1794,18 +1792,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             type="button"
                             onClick={() => toggleSort(col.key)}
                             disabled={!!error}
-                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
-                              col.align === 'right' ? 'flex-row-reverse' : ''
-                            } ${isSorted ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue disabled:cursor-not-allowed"
                             title={`Sort by ${col.label}`}
                           >
                             {/* A long title (Invitations Sent, Interview Version…) wraps to two lines past 8rem. */}
                             <span className={`inline-block w-max max-w-[8rem] whitespace-normal leading-tight ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}>{col.label}</span>
-                            <SortIcon
-                              className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
-                                isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'
-                              }`}
-                            />
                           </button>
                           )}
                         </th>

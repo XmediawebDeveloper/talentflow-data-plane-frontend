@@ -471,7 +471,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                       /* Actions pinned right: the table is ~1000px wide, so on
                          a phone or tablet Edit / Delete sat off-screen behind a
                          sideways scroll. */
-                      className={`px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 ${c === config.columns.length - 1 ? 'tf-sticky-col w-px text-center lg:text-left !px-2 lg:!px-4 !tracking-normal lg:!tracking-[0.16em]' : ''}`}
+                      className={`px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 ${c === config.columns.length - 1 ? 'tf-sticky-col w-px text-center lg:text-left !px-2 lg:!px-4' : ''}`}
                     >
                       {col}
                     </th>

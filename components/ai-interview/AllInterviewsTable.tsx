@@ -5,10 +5,9 @@ import { ListBulkActions } from '@/components/ui/list-toolbar-slot';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Search, X, Video, MoreVertical, Eye, Pencil,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
+  Search, X, Video, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw, SlidersHorizontal,
   Square, CheckSquare, ChevronDown, FileDown, FileText, FileSpreadsheet,
-  Archive, ArchiveRestore, Trash2,
+  Archive, ArchiveRestore, Trash2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -1503,7 +1502,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                 </th>
                 {shownColumns.map((col) => {
                   const isSorted = sortKey === col.key;
-                  const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
                   return (
                     <th
                       key={col.key}
@@ -1520,18 +1518,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                         type="button"
                         onClick={() => toggleSort(col.key)}
                         disabled={!!error}
-                        className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
-                          col.align === 'right' ? 'flex-row-reverse' : ''
-                        } ${isSorted ? 'text-brand-blue' : ''}`}
+                        className="inline-flex items-center transition-colors hover:text-brand-blue disabled:cursor-not-allowed"
                         title={`Sort by ${col.label}`}
                       >
                         {/* A long title (Invitations Sent, Interview Version…) wraps to two lines past 8rem. */}
                         <span className={`inline-block w-max max-w-[8rem] whitespace-normal leading-tight ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}>{col.label}</span>
-                        <SortIcon
-                          className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
-                            isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'
-                          }`}
-                        />
                       </button>
                       )}
                     </th>

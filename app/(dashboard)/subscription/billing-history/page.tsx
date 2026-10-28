@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X, Copy, ArrowUp, ArrowDown, ArrowUpDown, FileSpreadsheet } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X, Copy, FileSpreadsheet } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { DateField } from '@/components/ui/date-field';
 import { exportRowsToCSV } from '@/lib/utils/exportUtils';
@@ -752,7 +752,6 @@ export default function BillingHistoryPage() {
                     <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]" aria-sort={invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" onClick={() => toggleSort('date')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                         Date
-                        {invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
                       </button>
                     </th>
                     <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
@@ -760,7 +759,6 @@ export default function BillingHistoryPage() {
                     <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]" aria-sort={invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" onClick={() => toggleSort('amount')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                         Amount
-                        {invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 opacity-50" />}
                       </button>
                     </th>
                     <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px]">Status</th>

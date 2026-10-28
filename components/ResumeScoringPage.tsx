@@ -5025,7 +5025,6 @@ export default function ResumeScoringPage({
         const breakdownSegments = breakdownRows.filter(row => row.value > 0);
         const breakdownPct = (value: number) => breakdownTotal > 0 ? Math.round((value / breakdownTotal) * 100) : 0;
 
-        const sortHeaderIcon = <ChevronsUpDown className="w-3 h-3 text-gray-400 dark:text-slate-500" />;
         const historySelectClass = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900';
         const historyFilterSelectClass = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg';
         const historyLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
@@ -5245,14 +5244,14 @@ export default function ResumeScoringPage({
                             <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Version</th>
                             <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Scored By</th>
                             <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
-                              <span className="inline-flex items-center gap-1">Date {sortHeaderIcon}</span>
+                              Date
                             </th>
                             <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
-                              <span className="inline-flex items-center gap-1">Resumes Scored {sortHeaderIcon}</span>
+                              Resumes Scored
                             </th>
                             <th colSpan={3} className="py-1.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 text-center border-b border-gray-200 dark:border-slate-700">Status</th>
                             <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
-                              <span className="inline-flex items-center gap-1">Average Score {sortHeaderIcon}</span>
+                              Average Score
                             </th>
                             <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom text-right">Action</th>
                           </tr>

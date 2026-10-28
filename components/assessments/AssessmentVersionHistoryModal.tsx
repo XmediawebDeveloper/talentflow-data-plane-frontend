@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Archive, BarChart3, CheckCircle, ChevronDown, ChevronUp, ChevronsUpDown, ClipboardList, Clock, Eye, FileText, Info, Loader2,
-  RefreshCw, X,
+  Archive, BarChart3, CheckCircle, ClipboardList, Clock, Eye, FileText, Info, Loader2,
+  RefreshCw, X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
@@ -396,9 +396,6 @@ export default function AssessmentVersionHistoryModal({
                           <th key={h} rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-left" aria-sort={sort.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                             <button type="button" onClick={() => toggleSort(key)} className="inline-flex items-center gap-1 hover:text-brand-blue">
                               {h}
-                              {sort.key === key
-                                ? (sort.dir === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)
-                                : <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />}
                             </button>
                           </th>
                         ))}
@@ -413,9 +410,6 @@ export default function AssessmentVersionHistoryModal({
                         <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-left" aria-sort={sort.key === 'status' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
                           <button type="button" onClick={() => toggleSort('status')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                             Status
-                            {sort.key === 'status'
-                              ? (sort.dir === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />)
-                              : <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />}
                           </button>
                         </th>
                         <th rowSpan={2} className="px-3 font-semibold whitespace-nowrap text-center">Action</th>

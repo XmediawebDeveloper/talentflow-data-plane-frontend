@@ -848,7 +848,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           aria-pressed={allReasoningOpen}
                           aria-label={allReasoningOpen ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
                           title={allReasoningOpen ? 'Collapse all reasoning' : 'Expand all reasoning'}
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
                         >
                           {allReasoningOpen
                             ? <ChevronsDownUp className="w-3.5 h-3.5" />
