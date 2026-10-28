@@ -29,6 +29,7 @@ import { UNIT_ICON, TOTAL_UNITS_ICON } from '@/lib/constants/unitColors';
 import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHelp, UnitStatCard, UNIT_STAT_GRID, useSessionState } from './reportControls';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
+import UnitActivityLog from './UnitActivityLog';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,25 @@ function getMUnits(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
 /** Units consumed, as shown under a count: whole numbers stay whole, fractions get one decimal. */
 function formatUnits(units: number) {
   return Number.isInteger(units) ? String(units) : units.toFixed(1);
+}
+
+/** Green "+N returned" under a member's unit cell, when units were credited back
+ *  (a deleted resume returns its 1 RU). Hidden when nothing was returned. */
+function ReturnedNote({ member, k }: { member: TeamMemberUsage; k: 'RS' | 'AS' | 'AIU' | 'RU' }) {
+  const t = member.by_type[k];
+  const returned = t?.units_returned ?? 0;
+  if (returned <= 0) return null;
+  const used = t?.total_consumed ?? 0;
+  const net = t?.net_consumed ?? used - returned;
+  const why = k === 'RU' ? ' — resumes deleted, so their upload units came back' : '';
+  return (
+    <p
+      className="text-[11px] font-medium text-success whitespace-nowrap"
+      title={`${formatUnits(used)} used, ${formatUnits(returned)} returned${why}. Net ${formatUnits(net)}.`}
+    >
+      +{formatUnits(returned)} returned · net {formatUnits(net)}
+    </p>
+  );
 }
 
 // ─── Measure: actions (how many times) or units (how much was consumed) ─────
@@ -332,8 +352,11 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right">
                     {/* Units charged only — the before → after balance was the whole
-                        organisation's pool, which read as this member's. */}
-                    <p className="font-semibold tabular-nums text-gray-900 dark:text-slate-50">{e.units_consumed > 0 ? e.units_consumed : '0'}</p>
+                        organisation's pool, which read as this member's. A negative
+                        entry is a unit credited back (e.g. a deleted resume). */}
+                    <p className={`font-semibold tabular-nums ${e.units_consumed < 0 ? 'text-success' : 'text-gray-900 dark:text-slate-50'}`}>
+                      {e.units_consumed > 0 ? e.units_consumed : e.units_consumed < 0 ? `+${Math.abs(e.units_consumed)}` : '0'}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -540,7 +563,7 @@ function MemberBadges({ member, isTop }: { member: TeamMemberUsage; isTop: boole
 
 // ─── Single member row ────────────────────────────────────────────────────────
 
-function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; fromDate: string; toDate: string; isTop?: boolean }) {
+function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; teamId: string; fromDate: string; toDate: string; isTop?: boolean }) {
   const { expanded, toggle, entries, loading, total, loadMore, loadingMore } = useMemberLog(member, fromDate, toDate);
   const measure = useContext(MeasureContext);
 
@@ -580,6 +603,7 @@ function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMe
               ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(ru, measure)}
             </span>
+            <ReturnedNote member={member} k="RU" />
           </div>
         </td>
 
@@ -590,6 +614,7 @@ function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMe
               ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(rs, measure)}
             </span>
+            <ReturnedNote member={member} k="RS" />
           </div>
         </td>
 
@@ -600,6 +625,7 @@ function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMe
               ${as_ > 0 ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(as_, measure)}
             </span>
+            <ReturnedNote member={member} k="AS" />
           </div>
         </td>
 
@@ -610,6 +636,7 @@ function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMe
               ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(aiu, measure)}
             </span>
+            <ReturnedNote member={member} k="AIU" />
           </div>
         </td>
 
@@ -618,6 +645,21 @@ function MemberRow({ member, fromDate, toDate, isTop = false }: { member: TeamMe
           {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
         </td>
       </tr>
+
+      {/* Unit activity — units deducted and returned (e.g. deleted resume → +1 RU) */}
+      {expanded && (
+        <tr>
+          <td colSpan={6} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
+            <UnitActivityLog
+              teamId={teamId}
+              userId={member.user_id}
+              memberName={member.user_name || member.user_email}
+              fromDate={fromDate}
+              toDate={toDate}
+            />
+          </td>
+        </tr>
+      )}
 
       {/* Loading — mirrors MemberLogEntries: label + entry rows */}
       {expanded && loading && (
@@ -818,7 +860,7 @@ function TeamRow({
                     </thead>
                     <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-50 dark:divide-slate-700/60">
                       {view.rows.map(m => (
-                        <MemberRow key={m.user_id} member={m} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
+                        <MemberRow key={m.user_id} member={m} teamId={team.team_id} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
                       ))}
                       {view.rows.length === 0 && (
                         <tr>
@@ -863,7 +905,7 @@ function MobileLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
               </span>
               <p className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800 dark:text-slate-100">{entryItem(e)}</p>
               <span className="shrink-0 text-xs font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                {e.units_consumed > 0 ? `−${e.units_consumed}` : '0'}
+                {e.units_consumed > 0 ? `−${e.units_consumed}` : e.units_consumed < 0 ? `+${Math.abs(e.units_consumed)}` : '0'}
               </span>
             </div>
             <div className="mt-1 flex items-center justify-between gap-2">
@@ -883,7 +925,7 @@ function MobileLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
   );
 }
 
-function MobileMemberCard({ member, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; fromDate: string; toDate: string; isTop?: boolean }) {
+function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; teamId: string; fromDate: string; toDate: string; isTop?: boolean }) {
   const { expanded, toggle, entries, loading, total, loadMore, loadingMore } = useMemberLog(member, fromDate, toDate);
   const measure = useContext(MeasureContext);
   const stats: [string, string | number, boolean][] = [
@@ -924,6 +966,18 @@ function MobileMemberCard({ member, fromDate, toDate, isTop = false }: { member:
       <p className="border-t border-gray-100 px-2.5 py-1.5 text-2xs text-gray-500 dark:border-slate-700/60 dark:text-slate-500">
         Last active: {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
       </p>
+      {expanded && (
+        <div className="border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
+          <UnitActivityLog
+            teamId={teamId}
+            userId={member.user_id}
+            memberName={member.user_name || member.user_email}
+            fromDate={fromDate}
+            toDate={toDate}
+            compact
+          />
+        </div>
+      )}
       {expanded && loading && (
         <div className="space-y-1.5 border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -1017,7 +1071,7 @@ function MobileTeamCard({
               <MemberListControls view={view} className="mb-2" />
               <ul className="space-y-2">
                 {view.rows.map(m => (
-                  <MobileMemberCard key={m.user_id} member={m} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
+                  <MobileMemberCard key={m.user_id} member={m} teamId={team.team_id} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
                 ))}
               </ul>
               {view.rows.length === 0 && <p className="px-2 py-2 text-xs italic text-gray-400 dark:text-slate-500">No members match “{view.query}”.</p>}
