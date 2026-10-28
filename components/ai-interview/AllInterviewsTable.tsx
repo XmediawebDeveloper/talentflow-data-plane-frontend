@@ -495,7 +495,7 @@ export async function prefetchInterviewRows(): Promise<void> {
   writeListSnapshot('ai-interviews:rows', rows.map((row) => ({ ...row })));
 }
 
-export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortActionSlot, defaultSort = 'newest', seedConfigs, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', seedConfigs, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -1417,7 +1417,6 @@ export default function AllInterviewsTable({ toolbarSlot, bulkActionSlot, sortAc
   return (
     <div className="p-3 sm:p-6">
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
-      {bulkActionSlot && selectionControls && createPortal(selectionControls, bulkActionSlot)}
       {clearSortButton && (sortActionSlot
         ? createPortal(clearSortButton, sortActionSlot)
         : <div className="flex justify-end mb-3">{clearSortButton}</div>)}
