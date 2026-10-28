@@ -1330,7 +1330,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     onClick={() => setShowSelectMenu((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={showSelectMenu}
-                    className={tabPill(selectedJobs.size > 0)}
+                    className={`${tabPill(selectedJobs.size > 0)} h-9`}
                   >
                     {allPagesSelected ? (
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -1538,7 +1538,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <button
                 key={status}
                 onClick={() => search.setFilter('status', status.toLowerCase())}
-                className={tabPill(statusFilter.toLowerCase() === status.toLowerCase())}
+                className={`${tabPill(statusFilter.toLowerCase() === status.toLowerCase())} h-9`}
               >
                 {status === 'all' ? 'All Jobs' : status}
                 {pillCountBadge(statusFilter.toLowerCase() === status.toLowerCase(), statusPillCount(status))}
