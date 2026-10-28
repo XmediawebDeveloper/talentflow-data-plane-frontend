@@ -155,62 +155,118 @@ function bucketByDay(entries: ConsumptionLogEntry[], from: string, to: string): 
 
 // ─── Chart → PNG ──────────────────────────────────────────────────────────────
 
-/** Saves the chart's SVG as a PNG. Colours are copied in as computed values —
- *  CSS variables don't resolve once the SVG leaves the page. `centerText` is
- *  drawn in the middle (the donut's total is HTML, not part of the SVG). */
-async function downloadChartPng(container: HTMLElement | null, filename: string, centerText?: [string, string]) {
-  const svg = container?.querySelector('svg.recharts-surface') as SVGSVGElement | null;
-  if (!svg) return;
-  const { width, height } = svg.getBoundingClientRect();
+/** "2026-10-01" → "1 Oct 2026" (the date as picked, no timezone shift). */
+function formatRangeDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** An SVG as an image, with colours and fonts copied in as computed values —
+ *  CSS variables don't resolve once the SVG leaves the page. */
+async function svgToImage(svg: SVGSVGElement, width: number, height: number) {
   const clone = svg.cloneNode(true) as SVGSVGElement;
-  const src = svg.querySelectorAll('*');
-  const dst = clone.querySelectorAll('*');
+  const src = [svg, ...svg.querySelectorAll('*')];
+  const dst = [clone, ...clone.querySelectorAll('*')];
   src.forEach((el, i) => {
     const cs = getComputedStyle(el);
     const target = dst[i] as SVGElement;
-    for (const prop of ['fill', 'stroke', 'stroke-width', 'opacity', 'font-size', 'font-family', 'font-weight']) {
+    for (const prop of ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'opacity', 'font-size', 'font-family', 'font-weight']) {
       target.style.setProperty(prop, cs.getPropertyValue(prop));
     }
   });
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   clone.setAttribute('width', String(width));
   clone.setAttribute('height', String(height));
-
-  const card = container?.closest('[data-chart-card]') as HTMLElement | null;
-  const background = (card && getComputedStyle(card).backgroundColor) || '#ffffff';
   const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: 'image/svg+xml;charset=utf-8' }));
   try {
     const img = new Image();
     await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(); img.src = url; });
-    const scale = 2;
-    const canvas = document.createElement('canvas');
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(scale, scale);
-    ctx.fillStyle = background;
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(img, 0, 0, width, height);
-    if (centerText) {
-      ctx.textAlign = 'center';
-      ctx.fillStyle = getComputedStyle(container!).color || '#111827';
-      ctx.font = '600 20px sans-serif';
-      ctx.fillText(centerText[0], width / 2, height / 2 + 2);
-      ctx.font = '12px sans-serif';
-      ctx.fillText(centerText[1], width / 2, height / 2 + 20);
-    }
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${filename}.png`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    }, 'image/png');
+    return img;
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Saves a chart as a PNG laid out like its card: the card's title and `subtitle`
+ *  on top, then everything inside `root` where it sits on screen — the chart SVG,
+ *  Recharts' legend (HTML, so not part of the SVG), and any HTML marked
+ *  `data-export-text` (single-line text) or `data-export-swatch` (a colour dot). */
+async function downloadChartPng(root: HTMLElement | null, filename: string, subtitle: string) {
+  if (!root) return;
+  const card = root.closest('[data-chart-card]') as HTMLElement | null;
+  const box = root.getBoundingClientRect();
+  if (!box.width || !box.height) return;
+
+  const pad = 24;
+  const titleEl = card?.querySelector('h4') as HTMLElement | null;
+  const title = titleEl?.textContent?.trim() ?? '';
+  const headerH = title ? 52 : 0;
+  const width = box.width + pad * 2;
+  const height = box.height + headerH + pad * 2;
+  const at = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return { x: pad + r.left - box.left, y: pad + headerH + r.top - box.top, w: r.width, h: r.height };
+  };
+
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.scale(scale, scale);
+  ctx.fillStyle = (card && getComputedStyle(card).backgroundColor) || '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  if (titleEl) {
+    const cs = getComputedStyle(titleEl);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = cs.color;
+    ctx.font = `600 16px ${cs.fontFamily}`;
+    ctx.fillText(title, pad, pad + 16);
+    ctx.fillStyle = getComputedStyle(root).getPropertyValue('--muted-foreground').trim() || '#6b7280';
+    ctx.font = `400 12px ${cs.fontFamily}`;
+    ctx.fillText(subtitle, pad, pad + 36);
+  }
+
+  // Every outermost SVG: the chart itself and the legend's little icons.
+  const svgs = [...root.querySelectorAll('svg')].filter((el) => !el.parentElement?.closest('svg'));
+  for (const svg of svgs) {
+    const p = at(svg);
+    if (!p.w || !p.h) continue;
+    try {
+      ctx.drawImage(await svgToImage(svg, p.w, p.h), p.x, p.y, p.w, p.h);
+    } catch {
+      // One icon failing shouldn't cost the whole image.
+    }
+  }
+
+  root.querySelectorAll<HTMLElement>('[data-export-swatch]').forEach((el) => {
+    const p = at(el);
+    ctx.fillStyle = getComputedStyle(el).backgroundColor;
+    ctx.beginPath();
+    ctx.arc(p.x + p.w / 2, p.y + p.h / 2, Math.min(p.w, p.h) / 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  root.querySelectorAll<HTMLElement>('.recharts-legend-item-text, [data-export-text]').forEach((el) => {
+    const p = at(el);
+    const cs = getComputedStyle(el);
+    ctx.fillStyle = cs.color;
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    ctx.fillText(el.textContent ?? '', p.x, p.y + p.h / 2);
+  });
+
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${filename}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, 'image/png');
 }
 
 function ChartDownloadButton({ onClick }: { onClick: () => void }) {
@@ -423,6 +479,8 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
   };
 
   const loadTrend = () => fetchTrend(fetchSeq.current, fromDate, toDate);
+  // Shown under the title in downloaded chart images.
+  const rangeLabel = `${formatRangeDate(fromDate)} – ${formatRangeDate(toDate)}`;
 
   const hasTeams = !!teamsUsage?.teams && teamsUsage.teams.length > 0;
   const trendStep: TrendStep = trendStepChoice ?? (trend.rows.length > 31 ? 'week' : 'day');
@@ -509,7 +567,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                       {showAllTeams ? `Top ${CHART_TEAM_LIMIT}` : `Show all ${teamComparisonData.length}`}
                     </button>
                   )}
-                  <ChartDownloadButton onClick={() => downloadChartPng(barChartRef.current, `usage-by-team-${measureNoun}-${fromDate}-to-${toDate}`)} />
+                  <ChartDownloadButton onClick={() => downloadChartPng(barChartRef.current, `usage-by-team-${fromDate}-to-${toDate}`, rangeLabel)} />
                 </div>
               </div>
               <div ref={barChartRef} className="w-full" style={{ height: chartHeight }}>
@@ -572,15 +630,17 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                     </ToolbarFilterSelect>
                   )}
                   <ChartDownloadButton
-                    onClick={() => downloadChartPng(pieChartRef.current, `unit-distribution-${pieTeam ? pieTeam.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'all-teams'}-${fromDate}-to-${toDate}`, [formatMeasure(pieValues.total, measure), `total ${measureNoun}`])}
+                    onClick={() => downloadChartPng(pieChartRef.current, `unit-distribution-${pieTeam ? pieTeam.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'all-teams'}-${fromDate}-to-${toDate}`, `${pieTeam ? pieTeam.name : 'All teams'} · ${rangeLabel}`)}
                   />
                 </div>
               </div>
-              <div ref={pieChartRef} className="relative h-[220px] sm:h-[300px] w-full text-gray-900 dark:text-slate-50">
+              {/* The ref wraps the donut and its legend so both land in the downloaded image. */}
+              <div ref={pieChartRef}>
+              <div className="relative h-[220px] sm:h-[300px] w-full text-gray-900 dark:text-slate-50">
                 {/* Total in the donut's hole */}
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-lg sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">{formatMeasure(pieValues.total, measure)}</span>
-                  <span className="text-2xs sm:text-xs text-gray-500 dark:text-slate-400">total {measureNoun}</span>
+                  <span data-export-text className="text-lg sm:text-2xl font-semibold tabular-nums text-gray-900 dark:text-slate-50">{formatMeasure(pieValues.total, measure)}</span>
+                  <span data-export-text className="text-2xs sm:text-xs text-gray-500 dark:text-slate-400">total {measureNoun}</span>
                 </div>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -617,12 +677,14 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                 {unitDistributionData.map((item) => (
                   <div key={item.name} className="flex items-center gap-2">
                     <div
+                      data-export-swatch
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{item.name}</span>
+                    <span data-export-text className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{item.name}</span>
                   </div>
                 ))}
+              </div>
               </div>
             </div>
           )}
@@ -655,7 +717,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                       ))}
                     </div>
                   )}
-                  <ChartDownloadButton onClick={() => downloadChartPng(trendChartRef.current, `${trendStep === 'week' ? 'weekly' : 'daily'}-trend-${fromDate}-to-${toDate}`)} />
+                  <ChartDownloadButton onClick={() => downloadChartPng(trendChartRef.current, `${trendStep === 'week' ? 'weekly' : 'daily'}-trend-${fromDate}-to-${toDate}`, rangeLabel)} />
                 </div>
               )}
             </div>
