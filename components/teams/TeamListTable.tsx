@@ -3,13 +3,13 @@
 import { Crown, ChevronRight } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
 import { SortableHeader, ariaSort, type SortDir, type TableSort } from '@/components/ui/sortable-header';
-import { TeamAvatar, MemberStack, TeamActionHandlers, formatTeamDate } from './TeamCard';
+import { TeamAvatar, MemberStack, TeamActionHandlers, formatTeamDate, AttentionChip, TeamSizeBar } from './TeamCard';
 
 /** The page's sort keys ('newest' is the Created column). `sortDir` is the true
  *  direction of the column's values, so newest-first Created is 'desc'. */
 export type TeamListSortKey = 'name' | 'newest' | 'members' | 'jobs' | 'resumes';
 
-interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails'> {
+interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails' | 'maxMembers'> {
   teams: Team[];
   /** Rendered inside the card under the table — e.g. `<ListPagination attached />`. */
   footer?: React.ReactNode;
@@ -25,7 +25,7 @@ const TH = 'px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500';
  * List-view counterpart of the TeamCard grid: same data, one row per team.
  * Clicking a row opens the Team popup, like clicking a card.
  */
-export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort }: TeamListTableProps) {
+export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort, maxMembers = 0 }: TeamListTableProps) {
   const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
@@ -49,8 +49,9 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                       <span className="truncate">{team.team_lead.name}</span>
                     </>
                   ) : (
-                    <span className="italic text-gray-400 dark:text-slate-500">No lead</span>
+                    <AttentionChip>No lead</AttentionChip>
                   )}
+                  {team.member_count === 0 && <AttentionChip>No members</AttentionChip>}
                 </span>
                 <span className="mt-0.5 block truncate text-2xs text-gray-400 dark:text-slate-500">
                   {team.member_count} members · {team.active_jobs_count.toLocaleString()} jobs · {team.resumes_count.toLocaleString()} resumes
@@ -120,14 +121,17 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                       {team.team_lead.name}
                     </span>
                   ) : (
-                    <span className="italic text-gray-400 dark:text-slate-500">No lead</span>
+                    <AttentionChip>No lead</AttentionChip>
                   )}
                 </td>
                 <td className="px-4 py-3">
                   {team.member_count > 0 ? (
-                    <MemberStack members={team.members} total={team.member_count} max={3} size="sm" />
+                    <div className="w-fit">
+                      <MemberStack members={team.members} total={team.member_count} max={3} size="sm" />
+                      <TeamSizeBar count={team.member_count} max={maxMembers} className="mt-1.5" />
+                    </div>
                   ) : (
-                    <span className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">—</span>
+                    <AttentionChip>No members</AttentionChip>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">

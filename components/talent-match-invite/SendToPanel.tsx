@@ -150,7 +150,6 @@ export default function SendToPanel({
                       <span className="block text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={c.name}>{kind === 'interview' ? formatCandidateFirstName(c.name) : c.name}</span>
                       <span className="block text-xs text-gray-500 dark:text-slate-400 truncate">
                         {hasEmail ? c.email : <span className="font-medium text-warning-strong">No email</span>}
-                        {c.phone ? ` · ${c.phone}` : ''}
                       </span>
                     </span>
                     {c.score === 'unscored' ? (

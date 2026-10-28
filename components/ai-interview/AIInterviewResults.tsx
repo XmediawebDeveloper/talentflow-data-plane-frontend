@@ -13,7 +13,7 @@ import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggl
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SortByControl } from '@/components/ui/select-all-menu';
-import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS, useScoringActionPermissions } from '@/components/ScoredResumesTable';
+import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import FilterSelect from '@/components/ui/filter-select';
 
 /* FilterSelect trigger classes matching the filter bar's other controls:
@@ -37,7 +37,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Download,
-  Play, Video, MoreVertical, ClipboardList, X,
+  Play, MoreVertical, X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -305,8 +305,6 @@ const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value
 
 export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   const scoped = !!jobScope && jobScope.length > 0;
-  /* Create / Send Assessment | AI Interview's gates — the AI Talent Match tab's own. */
-  const { canCreateAssessments, assessmentDeniedReason, mayInviteAIInterview, aiInterviewDeniedReason } = useScoringActionPermissions(true);
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, also enforced by the audit
@@ -1086,144 +1084,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 }
                 onClear={() => setSelected(new Map())}
               />
-              {/* Actions — the Scored Resumes / AI Talent Match pill: shown
-                  once a row is ticked (one, several or Select All) and gone
-                  again when nothing is. Holds Customize Columns and Export
-                  (the toolbar has no separate buttons for them in Job
-                  Details) plus the bulk ops — Revoke / Resend / Download PDF
-                  Reports. */}
-              {selected.size > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
-                      aria-label={`Actions for ${selected.size} selected`}
-                    >
-                      <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
-                        <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
-                      </span>
-                      {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                      Actions ({selected.size})
-                      <ChevronDown className="w-4 h-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                      {selected.size.toLocaleString()} selected
-                    </div>
-                    <DropdownMenuItem
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                      onSelect={() => setShowColumnModal(true)}
-                    >
-                      <SlidersHorizontal className="w-4 h-4 text-menu-icon-view" />
-                      <span>Customize Columns</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                      aria-disabled={!canExport || undefined}
-                      title={canExport ? undefined : EXPORT_DENIED}
-                      onSelect={(e) => {
-                        if (!canExport) { e.preventDefault(); return; }
-                        setShowExportModal(true);
-                      }}
-                    >
-                      <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
-                      <span>Export</span>
-                    </DropdownMenuItem>
-                    {revocableSelected.length > 0 && (
-                      <DropdownMenuItem
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-destructive"
-                        disabled={isBulkWorking}
-                        onSelect={() => setBulkAction('revoke')}
-                      >
-                        <Ban className="w-4 h-4" />
-                        <span>Revoke ({revocableSelected.length})</span>
-                      </DropdownMenuItem>
-                    )}
-                    {resendableSelected.length > 0 && (
-                      <DropdownMenuItem
-                        className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
-                        disabled={isBulkWorking}
-                        onSelect={() => setBulkAction('resend')}
-                      >
-                        <Mail className="w-4 h-4 text-menu-icon-score" />
-                        <span>Resend ({resendableSelected.length})</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
-                      disabled={!!downloadingPdfs}
-                      aria-disabled={!canDownloadReports || undefined}
-                      title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
-                      onSelect={(e) => { if (!canDownloadReports) { e.preventDefault(); return; } handleDownloadSelectedPdfs(); }}
-                    >
-                      <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
-                      <span>
-                        {downloadingPdfs
-                          ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
-                          : 'Download PDF Reports'}
-                      </span>
-                    </DropdownMenuItem>
-                    {/* Create / Send Assessment | AI Interview — the AI Talent
-                        Match tab's items: the ticked candidates (once each, as
-                        a candidate can have several sessions) go to the host's
-                        version popup of that type. */}
-                    {onOpenInviteDialog && (() => {
-                      const openInvite = (kind: 'assessment' | 'interview', allowed: boolean, deniedReason: string) => (e: Event) => {
-                        if (!allowed) {
-                          // Locked: tooltip only (title on the item), no toast.
-                          e.preventDefault();
-                          return;
-                        }
-                        const invitees = new Map<string, InviteCandidate>();
-                        selected.forEach((s) => {
-                          const email = s.candidate_email || '';
-                          const key = s.resume_id || email.trim().toLowerCase() || s.id;
-                          if (!invitees.has(key)) {
-                            invitees.set(key, { id: s.resume_id || s.id, name: s.candidate_name || '', email, resumeId: s.resume_id });
-                          }
-                        });
-                        onOpenInviteDialog(kind, Array.from(invitees.values()));
-                      };
-                      return (
-                        <>
-                          <DropdownMenuItem
-                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canCreateAssessments ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                            aria-disabled={!canCreateAssessments}
-                            title={canCreateAssessments ? undefined : assessmentDeniedReason}
-                            onSelect={openInvite('assessment', canCreateAssessments, assessmentDeniedReason)}
-                          >
-                            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-                            <span>Create / Send Assessment</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${mayInviteAIInterview ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                            aria-disabled={!mayInviteAIInterview}
-                            title={mayInviteAIInterview ? undefined : aiInterviewDeniedReason}
-                            onSelect={openInvite('interview', mayInviteAIInterview, aiInterviewDeniedReason)}
-                          >
-                            <Video className="w-4 h-4 text-menu-icon-ai" />
-                            <span>Create / Send AI Interview</span>
-                          </DropdownMenuItem>
-                        </>
-                      );
-                    })()}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {selected.size > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelected(new Map())}
-                  title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
-                >
-                  <X className="w-4 h-4" />
-                  Clear
-                </button>
-              )}
             </>
           ) : undefined}
           // Six controls beside the search — lay out by the toolbar's own
@@ -1324,6 +1184,93 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </Button>
           )}
         </ListToolbar>
+
+        {/* Actions + Clear — embedded in Job Details: their own full-width
+            row under the toolbar once a row is ticked. Inside `beforeSearch`
+            they shared a shrink-wrapped box with Select All and wrapped out
+            of line; h-9 matches the toolbar band. Holds Customize Columns and
+            Export plus the bulk ops — Revoke / Resend / Download PDF Reports. */}
+        {portaled && selected.size > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                  aria-label={`Actions for ${selected.size} selected`}
+                >
+                  <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
+                    <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
+                  </span>
+                  {isBulkWorking || downloadingPdfs ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Actions ({selected.size})
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                  {selected.size.toLocaleString()} selected
+                </div>
+                <DropdownMenuItem
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                  aria-disabled={!canExport || undefined}
+                  title={canExport ? undefined : EXPORT_DENIED}
+                  onSelect={(e) => {
+                    if (!canExport) { e.preventDefault(); return; }
+                    setShowExportModal(true);
+                  }}
+                >
+                  <FileDown className={`w-4 h-4 ${canExport ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                  <span>Export</span>
+                </DropdownMenuItem>
+                {revocableSelected.length > 0 && (
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-destructive"
+                    disabled={isBulkWorking}
+                    onSelect={() => setBulkAction('revoke')}
+                  >
+                    <Ban className="w-4 h-4" />
+                    <span>Revoke ({revocableSelected.length})</span>
+                  </DropdownMenuItem>
+                )}
+                {resendableSelected.length > 0 && (
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer"
+                    disabled={isBulkWorking}
+                    onSelect={() => setBulkAction('resend')}
+                  >
+                    <Mail className="w-4 h-4 text-menu-icon-score" />
+                    <span>Resend ({resendableSelected.length})</span>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canDownloadReports ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
+                  disabled={!!downloadingPdfs}
+                  aria-disabled={!canDownloadReports || undefined}
+                  title={canDownloadReports ? undefined : AI_REPORT_DOWNLOAD_DENIED}
+                  onSelect={(e) => { if (!canDownloadReports) { e.preventDefault(); return; } handleDownloadSelectedPdfs(); }}
+                >
+                  <Download className={`w-4 h-4 ${canDownloadReports ? 'text-menu-icon-download' : 'text-gray-300'}`} />
+                  <span>
+                    {downloadingPdfs
+                      ? (downloadingPdfs.total > 1 ? `Preparing ${downloadingPdfs.done}/${downloadingPdfs.total}…` : 'Preparing…')
+                      : 'Download PDF Reports'}
+                  </span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              type="button"
+              onClick={() => setSelected(new Map())}
+              title="Clear the selection"
+              className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          </div>
+        )}
 
         {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
             colours: red for revoke, brand blue for resend. */}

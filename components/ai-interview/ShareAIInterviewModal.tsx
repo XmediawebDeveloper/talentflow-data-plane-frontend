@@ -27,6 +27,7 @@ import ResumeVersionsModal from '@/components/ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeSelectionSummary from '@/components/ResumeSelectionSummary';
 import { togglePick, toggleAllPicks, partitionPicks, countBySource, sourceBreakdown, type ResumePicks } from '@/lib/utils/resumeSelection';
+import InviteEntryModeTabs, { DEFAULT_INVITE_ENTRY_MODE, type InviteEntryMode } from '@/components/talent-match-invite/InviteEntryModeTabs';
 
 // Delegates to the one shared, comprehensive format rule (lib/utils/email)
 // rather than this file's own regex, which didn't catch consecutive/
@@ -147,7 +148,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   } | null>(null);
   const [quotaStatsLoading, setQuotaStatsLoading] = useState(false);
 
-  const [inputMode, setInputMode] = useState<'manual' | 'database' | 'excel'>('manual');
+  const [inputMode, setInputMode] = useState<InviteEntryMode>(DEFAULT_INVITE_ENTRY_MODE);
   const [candidates, setCandidates] = useState<CandidateEmail[]>(() =>
     initialCandidates && initialCandidates.length > 0
       ? withEntryRow(initialCandidates.map((candidate, index) => ({
@@ -493,12 +494,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   /* Manual / Upload Excel / Select From — plain buttons; only the icons carry
      colour. The active one is marked by a darker border and a light fill. */
-  const modeTabClass = (active: boolean) =>
-    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
-      active
-        ? 'bg-gray-100 dark:bg-slate-800 border-gray-400 dark:border-slate-500 text-gray-900 dark:text-slate-50 font-medium'
-        : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
-    }`;
 
   // Email Preview is collapsed by default — opened on demand from its header.
   const [showEmailPreview, setShowEmailPreview] = useState(false);
@@ -1232,7 +1227,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   : 'bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 border-brand-blue/15'
               }`;
             const iconTile = (tone: 'ok' | 'low' | 'out') => (
-              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 flex items-center justify-center ${
+              /* Phones: no tile — it squeezed the counts and the note into a
+                 strip beside it. */
+              <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 max-sm:hidden flex items-center justify-center ${
                 tone === 'out' ? 'bg-destructive/10 ring-destructive/20' : tone === 'low' ? 'bg-brand-orange/10 ring-brand-orange/20' : 'bg-brand-blue/10 ring-brand-blue/15'
               }`}>
                 {tone === 'out'
@@ -1303,9 +1300,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         <div className={`h-full transition-all duration-300 ${tone === 'out' ? 'bg-red-600' : tone === 'low' ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
                         <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
                       </div>
-                      <div className="flex items-start justify-between gap-2 mt-1.5">
-                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400">
-                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
+                      {/* Phones: the pill above the breakdown, not a side column. */}
+                      <div className="flex items-start justify-between gap-2 mt-1.5 max-sm:flex-col-reverse max-sm:gap-1.5">
+                        <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400 max-sm:w-full">
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums max-sm:[&>span]:whitespace-nowrap">
                             <span>Total: {total_quota}</span>
                             <span>Attended (consumed): {consumed}</span>
                             {pending > 0 && (
@@ -1313,8 +1311,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             )}
                           </div>
                           {pending > 0 && (
-                            <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-0.5 text-brand-blue dark:text-slate-200">
-                              <Info className="w-3 h-3 flex-shrink-0" />
+                            <p className="mt-1.5 inline-flex max-sm:flex items-start sm:items-center gap-1.5 rounded-lg sm:rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-1 sm:py-0.5 text-brand-blue dark:text-slate-200">
+                              <Info className="w-3 h-3 flex-shrink-0 mt-0.5 sm:mt-0" />
                               <span>
                                 <span className="font-semibold">Note:</span>{' '}
                                 {pending} unit{pending > 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.
@@ -1368,36 +1366,19 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             {/* Mode Switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
               <label className="text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => { commitPicks(); setInputMode('manual'); }}
-                  className={modeTabClass(inputMode === 'manual')}
-                >
-                  <Upload className="w-4 h-4 text-brand-blue" />
-                  Manual
-                </button>
-                <button
-                  onClick={() => { commitPicks(); excelInputRef.current?.click(); }}
-                  className={modeTabClass(inputMode === 'excel')}
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  Upload Excel
-                </button>
-                <input
-                  ref={excelInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleExcelUpload}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => setInputMode('database')}
-                  className={modeTabClass(inputMode === 'database')}
-                >
-                  <Database className="w-4 h-4 text-brand-orange" />
-                  Select From
-                </button>
-              </div>
+              <InviteEntryModeTabs
+                mode={inputMode}
+                onManual={() => { commitPicks(); setInputMode('manual'); }}
+                onExcel={() => { commitPicks(); excelInputRef.current?.click(); }}
+                onSelectFrom={() => setInputMode('database')}
+              />
+              <input
+                ref={excelInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleExcelUpload}
+                className="hidden"
+              />
             </div>
 
             {/* Manual Input Mode */}
@@ -2188,7 +2169,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hidden sm:flex items-center justify-center flex-shrink-0">
               <Mail className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">

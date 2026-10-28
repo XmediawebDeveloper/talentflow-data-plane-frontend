@@ -597,6 +597,9 @@ export default function AIInterview() {
   // Beside Refresh in the pill row: the All Interviews table portals its
   // Clear Sort button here.
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
+  /* The line under the tab pills: each tab's Actions (N) + Clear portal into
+     it while rows are ticked. */
+  const [bulkActionSlotEl, setBulkActionSlotEl] = useState<HTMLDivElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -2827,6 +2830,34 @@ export default function AIInterview() {
   if (redirectingToConfig) {
     return <AIInterviewFlowLoader message="Loading configuration…" />;
   }
+  /* Job-row skeleton: the first load's page skeleton, and the Total Jobs list
+     while its Refresh runs (as All Interviews swaps its rows for a skeleton). */
+  const configRowsSkeleton = (
+    <>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="@container/ai-row p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-sm shadow-brand-blue/5">
+                  <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
+                    <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                    <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                      {Array.from({ length: 4 }).map((_, j) => (
+                        <div key={j} className="space-y-1.5">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-4 w-10" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+    </>
+  );
   if (loading) {
     return (
       <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
@@ -2864,30 +2895,7 @@ export default function AIInterview() {
               ))}
             </div>
             {/* Config rows — one per job, matching the loaded list's row shape */}
-            <div className="space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-sm shadow-brand-blue/5">
-                  <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
-                    <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
-                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
-                      <Skeleton className="h-4 w-40" />
-                    </div>
-                    <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
-                      <Skeleton className="h-5 w-20 rounded-full" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
-                      {Array.from({ length: 4 }).map((_, j) => (
-                        <div key={j} className="space-y-1.5">
-                          <Skeleton className="h-3 w-16" />
-                          <Skeleton className="h-4 w-10" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="space-y-3">{configRowsSkeleton}</div>
           </div>
         </div>
       </main>
@@ -3327,23 +3335,9 @@ export default function AIInterview() {
               );
             })}
           </div>
-        </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
+              tabs line, just before Refresh, as Clear Sort sits on Assessments. */}
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
-          {/* Invitation Status's Resend / Revoke used to be buttons here,
-              beside Refresh. They now live in the tab's Actions (N) menu in
-              its toolbar row; this confirm is the one Resend opens. */}
-          <ConfirmationDialog
-            isOpen={statusBulkResendOpen}
-            onClose={() => { if (!isStatusBulkResending) setStatusBulkResendOpen(false); }}
-            onConfirm={handleStatusBulkResend}
-            title="Resend invitations to selected candidates?"
-            description={`A fresh interview link will be emailed to ${statusResendableSelectedRows.length} selected candidate${statusResendableSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-            confirmText={isStatusBulkResending ? 'Sending…' : `Yes, resend to ${statusResendableSelectedRows.length}`}
-            cancelText="Cancel"
-            variant="info"
-          />
           {/* Sort by — moved out of More Filters to sit before Refresh, in the
               shared SortByControl's shape (components/ui/select-all-menu.tsx):
               the label always shown, p-1 + h-7 = the toolbar's 36px band and
@@ -3379,7 +3373,9 @@ export default function AIInterview() {
           {/* Refresh — right corner of the pill row. Refetches whichever tab
               is on screen: the config-list/processing/invitation-status/
               settings tabs this component owns directly, plus a bump of
-              `refreshSignal` for the three that manage their own data. */}
+              `refreshSignal` for the three that manage their own data.
+              Hidden on Settings — a form, not a list. */}
+          {activeTab !== 'settings' && (
           <Button
             variant="secondary"
             size="sm"
@@ -3392,6 +3388,7 @@ export default function AIInterview() {
           >
             <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
+          )}
           </div>
         </div>
         {/* Actions (N) + Clear for ticked rows land on this third line. */}
@@ -3442,7 +3439,15 @@ export default function AIInterview() {
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && !showUngroupedList && (
             <div className="p-3 sm:p-6">
-              {collapsedConfigs.length === 0 ? (
+              {isRefreshingTab ? (
+                <div
+                  aria-busy="true"
+                  aria-label="Refreshing jobs"
+                  className={listDisplayMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start' : 'space-y-3'}
+                >
+                  {configRowsSkeleton}
+                </div>
+              ) : collapsedConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
                     <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
@@ -4300,7 +4305,6 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
-                      afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       /* Shown only while rows are ticked ("N selected"): the
                          tab pills already carry the totals. */
@@ -4475,6 +4479,9 @@ export default function AIInterview() {
                     </div>
 
                     {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
+                    {/* Actions + Clear — on the line under the tab pills (the
+                        page's bulk slot), at the pills' h-8 height. */}
+                    {bulkActionSlotEl && statusBulkActions && createPortal(statusBulkActions, bulkActionSlotEl)}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable

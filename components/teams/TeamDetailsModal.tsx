@@ -1,8 +1,10 @@
 'use client';
 
-import { Users, Shield, Briefcase, FileText, Pencil, Trash2, Crown } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Users, Shield, Briefcase, FileText, Pencil, Trash2, Crown, History, Loader2 } from 'lucide-react';
 import AppModal, { AppModalAction } from '@/components/ui/app-modal';
-import { Team } from '@/lib/services/teamService';
+import teamService, { Team, TeamHistoryEntry } from '@/lib/services/teamService';
+import { EVENT_CONFIG, eventLabel, entryTime } from './TeamHistory';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import NameAvatar from '@/components/ui/name-avatar';
 
@@ -23,7 +25,12 @@ interface TeamDetailsModalProps {
   canDelete?: boolean;
   /** True while the edit form is loading its user list. */
   isPreparingEdit?: boolean;
+  /** Show the team's latest history events (only for those who can read the history). */
+  showActivity?: boolean;
 }
+
+/** How far back the popup looks for this team's events (the API can't filter by team). */
+const ACTIVITY_SCAN = 200;
 
 export default function TeamDetailsModal({
   isOpen,
@@ -34,7 +41,22 @@ export default function TeamDetailsModal({
   onDelete,
   canDelete = false,
   isPreparingEdit = false,
+  showActivity = false,
 }: TeamDetailsModalProps) {
+  // This team's last few events, read from the latest history.
+  const [activity, setActivity] = useState<TeamHistoryEntry[] | null>(null);
+  const teamId = isOpen && showActivity ? team?.id : undefined;
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    setActivity(null);
+    teamService
+      .getTeamsHistory(ACTIVITY_SCAN, 0, 'ALL')
+      .then((r) => { if (!cancelled) setActivity(r.items.filter((e) => e.team_id === teamId).slice(0, 5)); })
+      .catch(() => { if (!cancelled) setActivity([]); });
+    return () => { cancelled = true; };
+  }, [teamId]);
+
   if (!isOpen || !team) return null;
 
   const actions: AppModalAction[] = [];
@@ -148,6 +170,39 @@ export default function TeamDetailsModal({
             </div>
           )}
         </div>
+
+        {showActivity && (
+          <div>
+            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
+              <History className="h-3.5 w-3.5" /> Recent Activity
+            </h4>
+            {activity === null ? (
+              <p className="flex items-center gap-2 text-xs text-gray-400 dark:text-slate-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+              </p>
+            ) : activity.length === 0 ? (
+              <p className="text-xs italic text-gray-400 dark:text-slate-500">No recent activity for this team.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {activity.map((e) => {
+                  const config = EVENT_CONFIG[e.event_type];
+                  return (
+                    <li key={e.id} className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium ${config ? `${config.bg} ${config.color}` : 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+                        {eventLabel(e.event_type)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">
+                        {e.target_user_name && <span className="font-medium text-gray-800 dark:text-slate-200">{e.target_user_name}</span>}
+                        {e.actor_name && <>{e.target_user_name ? ' · ' : ''}by {e.actor_name}</>}
+                      </span>
+                      <span className="shrink-0 text-gray-400 dark:text-slate-500">{entryTime(e.event_at)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     </AppModal>
   );

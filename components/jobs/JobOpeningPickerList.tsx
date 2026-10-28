@@ -10,6 +10,7 @@ import {
   isVersionVisibleForScoring,
   lineageKey,
   mapJDToJob,
+  needsVersionPicker,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -102,6 +103,14 @@ export interface JobOpeningPickerListProps {
    */
   excludeDraftsOnly?: boolean;
   /**
+   * Show View Versions only when the job has another version that can be
+   * PICKED (Published / Republished) — a job whose card version is its one
+   * available version is picked straight from the card, with no extra step.
+   * Archived / Disabled reference versions stay readable through the eye.
+   * Off by default, so every other host keeps the visible-version rule.
+   */
+  availableVersionsOnly?: boolean;
+  /**
    * Anchor placed immediately above the first job card, for a host that wants
    * to scroll this list to the top of the screen when it opens (Resume
    * Scoring's "Score Resumes" does). Sits above the cards rather than on the
@@ -143,6 +152,7 @@ export default function JobOpeningPickerList({
   proceedDisabled = false,
   showAllStatuses = false,
   excludeDraftsOnly = false,
+  availableVersionsOnly = false,
   listAnchorRef,
   showCandidateCounts = false,
   coloredCountBadges = false,
@@ -502,7 +512,9 @@ export default function JobOpeningPickerList({
                   .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants, true))
                   .map(sibling => sibling.versionNumber ?? 1),
               ).size;
-              const hasVersionHistory = visibleVersionCount > 1;
+              const hasVersionHistory = availableVersionsOnly
+                ? needsVersionPicker(job, lineageSiblings, () => false)
+                : visibleVersionCount > 1;
 
               return (
                 <div
@@ -686,7 +698,7 @@ export default function JobOpeningPickerList({
                       the Job Openings list opens, minus the action menu
                       (nothing here changes a JD). Titles open in a new tab
                       so the page selection isn't thrown away mid-pick. */}
-                  {versionsExpanded && (
+                  {hasVersionHistory && versionsExpanded && (
                     <JobVersionHistoryPanel
                       job={job}
                       versions={versionLineage.lineages[versionKey]}

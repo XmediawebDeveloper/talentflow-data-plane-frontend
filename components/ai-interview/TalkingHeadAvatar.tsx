@@ -119,9 +119,13 @@ const LIP_SHAPES: Record<string, Record<string, number>> = {
 };
 const NO_SHAPE: Record<string, number> = {};
 /** Lip easing time constants (ms): open into a shape, relax out of it, and
- *  close at end of speech. Larger = slower, softer mouth movement. */
-const LIP_ATTACK_MS = 90;
-const LIP_RELEASE_MS = 110;
+ *  close at end of speech. Larger = slower, softer mouth movement.
+ *  Must stay well below one viseme (~70 ms per unit): at 90/110 the mouth
+ *  reached only about half of each shape before the next one and trailed the
+ *  voice — read as slow, out-of-sync lips (staging 2026-10-27). At 30/45 a
+ *  shape is ~90 % reached within one viseme while still smoothing the snap. */
+const LIP_ATTACK_MS = 30;
+const LIP_RELEASE_MS = 45;
 const LIP_CLOSE_MS = 60;
 const LIP_MORPHS = [
   "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
@@ -231,6 +235,12 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const visemeTimelineRef    = useRef<{viseme: string, startMs: number, durMs: number}[]>([]);
     const timelineTotalMsRef   = useRef(0);          // total viseme timeline length
     const totalAudioMsRef      = useRef(0);           // actual PCM audio duration accumulated
+    // All of this utterance's audio has arrived (notifyEnd). Until then
+    // totalAudioMsRef is PARTIAL, so audio/timeline under-states the scale and
+    // the lips ran ahead of the voice; the last finished line's scale is used
+    // as a floor meanwhile.
+    const audioCompleteRef     = useRef(false);
+    const lastLipScaleRef      = useRef(1);
     const speechStartRef       = useRef<number | null>(null);  // performance.now() when audio detected
     const currentMorphsRef     = useRef<Record<string, number>>({});
     const smoothAmpRef         = useRef(0);
@@ -678,7 +688,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                   if (tl.length > 0 && tlTotal > 0 && audioTotal > 0) {
                     // Scale timeline to match actual audio duration
                     // scale > 1 means audio is slower than timeline estimate
-                    const scale = audioTotal / tlTotal;
+                    const exact = audioTotal / tlTotal;
+                    if (audioCompleteRef.current) lastLipScaleRef.current = exact;
+                    const scale = audioCompleteRef.current ? exact : Math.max(exact, lastLipScaleRef.current);
                     // Map real elapsed time back to timeline position
                     const timelinePos = elapsed / scale;
 
@@ -990,6 +1002,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
+        audioCompleteRef.current = false;
         timelineTotalMsRef.current = 0;
         lastBuiltTextRef.current = "";
         fbNoMoreDataRef.current = false;
@@ -1154,6 +1167,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       },
 
       notifyEnd() {
+        audioCompleteRef.current = true;
         if (fbActiveRef.current) {
           fbNoMoreDataRef.current = true;
           // If all buffers already finished, fire immediately
@@ -1206,6 +1220,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
+        audioCompleteRef.current = false;
         // Fallback mode: close context to stop playback immediately
         if (fbActiveRef.current) {
           fbActiveRef.current = false;
