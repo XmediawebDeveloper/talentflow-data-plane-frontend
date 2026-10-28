@@ -41,7 +41,7 @@ const UNIT_TYPE_CONFIG = {
   RS: { label: 'Resume Scoring', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-600' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-success', textColor: 'text-success' },
   AIU: { label: 'AI Interview', icon: Users, color: 'bg-purple-500', textColor: 'text-purple-600' },
-  RU: { label: 'Resume Storage', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
+  RU: { label: 'Resume Units', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
 };
 
 /** Green "+N returned · net M" under a cell when units were credited back
@@ -253,7 +253,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
           {/* Clear sort — only when moved off the default (Total, highest first) */}
           <ClearSortChip
             sort={sort}
-            labels={{ name: 'Member', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', jds: 'JDs', assessments: 'Assessments', total: 'Total', recent: 'Last Active' }}
+            labels={{ name: 'Member', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Units', jds: 'JDs', assessments: 'Assessments', total: 'Total', recent: 'Last Active' }}
             isDefault={sort.sortKey === 'total' && sort.sortDir === 'desc'}
             onClear={() => sort.clearSort?.()}
           />
@@ -308,7 +308,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   <SortableHeader label="AI Interview" column="AIU" sort={sort} align="center" />
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'RU')}>
-                  <SortableHeader label="Resume Storage" column="RU" sort={sort} align="center" />
+                  <SortableHeader label="Resume Units" column="RU" sort={sort} align="center" />
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'jds')}>
                   <SortableHeader label="JDs" column="jds" sort={sort} align="center" />

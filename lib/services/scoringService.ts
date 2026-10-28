@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import { ensureUnitsAvailable } from './unitGuard';
 
 /**
  * Normalizes a scoring batch/item status string from the backend into one of
@@ -350,6 +351,9 @@ export const scoringService = {
    * Returns a batch_id to poll for status
    */
   async startBulkScoringAsync(jdId: string, resumeIds: string[]): Promise<AsyncBulkScoringResponse> {
+    // Pre-check: don't start a batch the unit pool can't cover (1 RS per resume) —
+    // it used to start and then fail resume by resume. Throws a readable message.
+    await ensureUnitsAvailable('RS', resumeIds.length, 'resume_scoring', jdId);
     try {
       const response = await api.post<AsyncBulkScoringResponse>('/scoring/bulk-async', {
         jd_id: jdId,

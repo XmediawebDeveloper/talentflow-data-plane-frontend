@@ -165,7 +165,8 @@ export interface UpdateTeamRequest {
   name?: string;
   description?: string;
   member_ids?: string[];
-  team_lead_id?: string;
+  /** null removes the lead. */
+  team_lead_id?: string | null;
 }
 
 class TeamService {
