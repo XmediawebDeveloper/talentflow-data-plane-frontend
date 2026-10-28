@@ -782,6 +782,11 @@ export default function AuditTrailPage() {
       }
       return { text: `-${units} ${log.unit_type}`, negative: true };
     }
+    // Negative = a unit credited back (e.g. resume_delete writes -1 RU). It used
+    // to fall through to "—", so a returned unit was invisible here.
+    if (units && units < 0 && log.unit_type) {
+      return { text: `+${Math.abs(units)} ${log.unit_type}`, negative: false, positive: true };
+    }
     if (units === 0 && log.unit_type) {
       return { text: `0 ${log.unit_type}`, negative: false };
     }

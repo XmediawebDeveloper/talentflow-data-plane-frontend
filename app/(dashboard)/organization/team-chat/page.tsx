@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   LogOut,
   Trash2,
+  UserPlus,
   Menu,
   X,
   RefreshCw,
@@ -62,6 +63,11 @@ export default function TeamChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
+  // Unsent text per conversation, so a draft never follows you into another chat.
+  const draftsRef = useRef<Record<string, string>>({});
+  // One send at a time — Enter twice (or Enter + click) used to post twice.
+  const sendingRef = useRef(false);
+  const [isSending, setIsSending] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -255,13 +261,19 @@ export default function TeamChatPage() {
 
   // Scroll to the bottom only when a new message arrives (or a conversation
   // opens) — not when an existing one changes (reaction, pin, edit).
+  // Waits for the skeleton to go: the list (and its end marker) isn't rendered
+  // while messages load, so scrolling then did nothing and a conversation
+  // opened at its oldest messages. Opening jumps; new messages glide.
   const lastMessageIdRef = useRef<string | undefined>(undefined);
+  const jumpToEndRef = useRef(true);
   useEffect(() => {
+    if (isLoadingMessages) return;
     const lastId = messages[messages.length - 1]?.id;
     if (lastId === lastMessageIdRef.current) return;
     lastMessageIdRef.current = lastId;
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: jumpToEndRef.current ? 'auto' : 'smooth' });
+    jumpToEndRef.current = false;
+  }, [messages, isLoadingMessages]);
 
   useEffect(() => {
     if (selectedChannel) {
@@ -278,8 +290,9 @@ export default function TeamChatPage() {
 
     const channelId = selectedChannel.id;
     // After a drop, the socket reconnects on its own — then catch up on
-    // whatever was sent while it was down.
-    let wasDisconnected = false;
+    // whatever was sent while it was down. Starts true: messages sent between
+    // the first load and the socket opening would otherwise be missed.
+    let wasDisconnected = true;
     const unsubscribeStatus = chatService.onStatus((status) => {
       setConnectionStatus(status);
       if (status === 'closed') wasDisconnected = true;
@@ -319,7 +332,8 @@ export default function TeamChatPage() {
                   : dm
               )
             );
-            chatService.markAsRead(selectedChannel.id);
+            // Away (tab hidden): leave it unread; returning to the tab refetches and marks it read.
+            if (document.visibilityState === 'visible') chatService.markAsRead(selectedChannel.id);
           }
           break;
         }
@@ -421,9 +435,12 @@ export default function TeamChatPage() {
     }
   };
 
-  const fetchChannels = async () => {
+  // `initial`: the first load (full-page skeleton). Later reloads (after create,
+  // leave, delete, new DM) keep the page. `selectFirst`: pick the first channel
+  // even though one was open (the open one was just left or deleted).
+  const fetchChannels = async ({ initial = true, selectFirst = false }: { initial?: boolean; selectFirst?: boolean } = {}) => {
     try {
-      setIsLoading(true);
+      if (initial) setIsLoading(true);
       const response = await chatService.listChannels();
       setChannels(response.channels);
       setDirectMessages(response.direct_messages);
@@ -444,7 +461,7 @@ export default function TeamChatPage() {
         }
       }
 
-      if (!selectedChannel && response.channels.length > 0) {
+      if ((selectFirst || !selectedChannel) && response.channels.length > 0) {
         setSelectedChannel(response.channels[0]);
       }
     } catch (error: any) {
@@ -453,7 +470,7 @@ export default function TeamChatPage() {
         toast.error('Failed to load channels');
       }
     } finally {
-      setIsLoading(false);
+      if (initial) setIsLoading(false);
     }
   };
 
@@ -495,9 +512,10 @@ export default function TeamChatPage() {
     try {
       await chatService.leaveChannel(selectedChannel.id);
       toast.success('Left channel');
+      delete draftsRef.current[selectedChannel.id];
       setSelectedChannel(null);
       setMessages([]);
-      await fetchChannels();
+      await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
       toast.error(friendlyErrorMessage(e, "Couldn't leave channel. Please try again."));
     }
@@ -518,9 +536,10 @@ export default function TeamChatPage() {
     try {
       await chatService.deleteChannel(selectedChannel.id);
       toast.success('Channel deleted');
+      delete draftsRef.current[selectedChannel.id];
       setSelectedChannel(null);
       setMessages([]);
-      await fetchChannels();
+      await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
       toast.error(friendlyErrorMessage(e, "Couldn't delete channel. Please try again."));
     }
@@ -530,13 +549,28 @@ export default function TeamChatPage() {
   // skeleton, no error toast.
   const fetchMessages = async (channelId: string, { silent = false }: { silent?: boolean } = {}) => {
     try {
-      if (!silent) setIsLoadingMessages(true);
+      if (!silent) {
+        setIsLoadingMessages(true);
+        // Never show the previous conversation's messages under this one's header
+        // (they stayed when this load failed, and pin / react acted on them).
+        setMessages([]);
+        jumpToEndRef.current = true;
+      }
       const response = await chatService.listMessages(channelId);
       // A slow response for a channel the user has already left must not
       // overwrite the open conversation.
       if (selectedChannelIdRef.current !== channelId) return;
-      setMessages(response.messages);
-      await chatService.markAsRead(channelId);
+      // Merge, don't replace: a message that came over the socket after the
+      // server built this snapshot (refetch on a reaction, refocus, reconnect)
+      // used to vanish until the next refetch.
+      setMessages((prev) => {
+        const ids = new Set(response.messages.map((m) => m.id));
+        const lastAt = response.messages[response.messages.length - 1]?.created_at ?? '';
+        const newer = prev.filter((m) => !ids.has(m.id) && m.channel_id === channelId && m.created_at > lastAt);
+        return newer.length > 0 ? [...response.messages, ...newer] : response.messages;
+      });
+      // Only while it's actually on screen.
+      if (document.visibilityState === 'visible') await chatService.markAsRead(channelId);
 
       setChannels((prev) => {
         const updated = prev.map((ch) => (ch.id === channelId ? { ...ch, unread_count: 0 } : ch));
@@ -550,9 +584,10 @@ export default function TeamChatPage() {
       });
     } catch (error) {
       console.error('Error fetching messages:', error);
-      if (!silent) toast.error('Failed to load messages');
+      if (!silent && selectedChannelIdRef.current === channelId) toast.error('Failed to load messages');
     } finally {
-      if (!silent) setIsLoadingMessages(false);
+      // A stale request (the user already moved on) must not end the newer one's loading state.
+      if (!silent && selectedChannelIdRef.current === channelId) setIsLoadingMessages(false);
     }
   };
 
@@ -592,8 +627,18 @@ export default function TeamChatPage() {
     }
   };
 
-  const handleSelectChannel = (channel: Channel) => {
+  /** Opens a conversation, keeping each one's unsent draft. */
+  const openChannel = (channel: Channel) => {
+    const prevId = selectedChannelIdRef.current;
+    if (prevId !== channel.id) {
+      if (prevId) draftsRef.current[prevId] = messageInput;
+      setMessageInput(draftsRef.current[channel.id] ?? '');
+    }
     setSelectedChannel(channel);
+  };
+
+  const handleSelectChannel = (channel: Channel) => {
+    openChannel(channel);
     setListOpen(false);
     setShowPinnedPanel(false);
     setShowHeaderMenu(false);
@@ -627,22 +672,34 @@ export default function TeamChatPage() {
   };
 
   const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedChannel) return;
+    const content = messageInput;
+    if (sendingRef.current || !content.trim() || !selectedChannel) return;
+    const channelId = selectedChannel.id;
+    sendingRef.current = true;
+    setIsSending(true);
     stopTyping();
+    // Cleared now (not after the request), so a second Enter has nothing to send.
+    setMessageInput('');
+    delete draftsRef.current[channelId];
 
     try {
-      const newMessage = await chatService.sendMessage(selectedChannel.id, {
-        content: messageInput,
-      });
-      // Functional + de-duplicated: messages that arrived over the socket while
-      // this request was in flight must not be dropped, and the socket may
-      // already have delivered this one.
-      setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
-      setMessageInput('');
-      inputRef.current?.focus();
+      const newMessage = await chatService.sendMessage(channelId, { content });
+      // Only into the conversation it was sent from — the user may have switched.
+      // Functional + de-duplicated: socket messages that arrived meanwhile stay,
+      // and the socket may already have delivered this one.
+      if (selectedChannelIdRef.current === channelId) {
+        setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
+      // Give the text back — to the box if still here, else to that chat's draft.
+      if (selectedChannelIdRef.current === channelId) setMessageInput((cur) => cur || content);
+      else if (!draftsRef.current[channelId]) draftsRef.current[channelId] = content;
+    } finally {
+      sendingRef.current = false;
+      setIsSending(false);
+      if (selectedChannelIdRef.current === channelId) inputRef.current?.focus();
     }
   };
 
@@ -670,10 +727,14 @@ export default function TeamChatPage() {
       return;
     }
 
+    const channelId = selectedChannel.id;
     setIsUploadingAttachment(true);
     try {
-      const newMessage = await chatService.uploadAttachment(selectedChannel.id, file);
-      setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+      const newMessage = await chatService.uploadAttachment(channelId, file);
+      // Only into the conversation it was uploaded to.
+      if (selectedChannelIdRef.current === channelId) {
+        setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
+      }
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't upload image. Please try again."));
@@ -686,6 +747,12 @@ export default function TeamChatPage() {
     setShowEmojiPicker(null);
     const me = currentUser?.id;
     const myName = currentUser?.name || 'You';
+    // Already mine → this click takes it back.
+    const alreadyMine = !!me && !!messages
+      .find((m) => m.id === messageId)
+      ?.reactions.find((r) => r.emoji === emoji)
+      ?.user_ids?.includes(me);
+    const channelId = selectedChannel?.id;
     // Optimistic: toggle my reaction in place — no loading skeleton, no scroll.
     if (me) {
       setMessages((prev) =>
@@ -720,13 +787,14 @@ export default function TeamChatPage() {
       );
     }
     try {
-      await chatService.addReaction(messageId, emoji);
+      if (alreadyMine) await chatService.removeReaction(messageId, emoji);
+      else await chatService.addReaction(messageId, emoji);
     } catch (error) {
-      console.error('Error adding reaction:', error);
-      toast.error('Failed to add reaction');
+      console.error('Error updating reaction:', error);
+      toast.error(alreadyMine ? 'Failed to remove reaction' : 'Failed to add reaction');
     }
     // Reconcile with the server quietly (also undoes the optimistic change on failure).
-    if (selectedChannel) void fetchMessages(selectedChannel.id, { silent: true });
+    if (channelId) void fetchMessages(channelId, { silent: true });
   };
 
   const handleCreateChannel = async () => {
@@ -751,8 +819,8 @@ export default function TeamChatPage() {
       setNewChannelPrivate(false);
       setSelectedMemberIds([]);
 
-      await fetchChannels();
-      setSelectedChannel(channel);
+      await fetchChannels({ initial: false });
+      openChannel(channel);
     } catch (error: any) {
       console.error('Error creating channel:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't create channel. Please try again."));
@@ -781,13 +849,21 @@ export default function TeamChatPage() {
   const openCreateModal = async () => {
     // Locked controls are greyed with a hover tooltip; the click is a no-op.
     if (!permissions.can_create_channel) return;
-    await fetchAvailableUsers();
     setShowCreateModal(true);
+    await fetchAvailableUsers();
   };
 
   const openNewDMModal = async () => {
-    await fetchAvailableUsers();
     setShowNewDMModal(true);
+    await fetchAvailableUsers();
+  };
+
+  // #10 — the Add members popup existed but nothing opened it.
+  const openAddMembersModal = async () => {
+    setShowHeaderMenu(false);
+    setSelectedMemberIds([]);
+    setShowAddMembersModal(true);
+    await fetchAvailableUsers();
   };
 
   const handleStartDM = async (userId: string, userName: string) => {
@@ -803,14 +879,14 @@ export default function TeamChatPage() {
       toast.success(`Started conversation with ${userName}`);
       setShowNewDMModal(false);
 
-      await fetchChannels();
-      setSelectedChannel(channel);
+      await fetchChannels({ initial: false });
+      openChannel(channel);
     } catch (error: any) {
       console.error('Error creating DM:', error);
       if (error.response?.data?.detail?.includes('already exists')) {
         const existingDM = directMessages.find((dm) => dm.members.some((m) => m.user_id === userId));
         if (existingDM) {
-          setSelectedChannel(existingDM);
+          openChannel(existingDM);
           setShowNewDMModal(false);
           return;
         }
@@ -1289,6 +1365,13 @@ export default function TeamChatPage() {
                             <>
                               <button
                                 type="button"
+                                onClick={openAddMembersModal}
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                              >
+                                <UserPlus className="h-4 w-4 text-gray-400" /> Add members
+                              </button>
+                              <button
+                                type="button"
                                 onClick={handleLeaveChannel}
                                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
                               >
@@ -1638,7 +1721,7 @@ export default function TeamChatPage() {
                   <button
                     type="button"
                     onClick={handleSendMessage}
-                    disabled={!messageInput.trim()}
+                    disabled={!messageInput.trim() || isSending}
                     className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 transition-colors hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:disabled:bg-slate-700"
                     aria-label="Send message"
                     title="Send (Enter)"
@@ -1829,14 +1912,19 @@ export default function TeamChatPage() {
 
                 <div>
                   <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Add members (optional)</span>
-                  {availableUsers.length === 0 ? (
+                  {isLoadingUsers ? (
+                    <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+                      {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}
+                    </div>
+                  ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center">
                       <Users className="mx-auto mb-2 h-6 w-6 text-gray-300" />
                       <p className="text-xs text-gray-500">No teammates available</p>
                     </div>
                   ) : (
                     <div className="max-h-44 overflow-y-auto rounded-xl border border-gray-200 bg-white">
-                      {availableUsers.map((user) => {
+                      {/* You're in the channel anyway. */}
+                      {availableUsers.filter((u) => u.id !== currentUser?.id).map((user) => {
                         const checked = selectedMemberIds.includes(user.id);
                         return (
                           <button
@@ -1890,7 +1978,11 @@ export default function TeamChatPage() {
             },
           ]}
         >
-                {availableUsers.filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
+                {isLoadingUsers ? (
+                  <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
+                  </div>
+                ) : availableUsers.filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
                     <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />

@@ -1,6 +1,6 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, UserCheck, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -16,14 +16,11 @@ import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggl
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import InviteShareModal from './InviteShareModal';
-import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
-import type { Resume } from '@/lib/types/types';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { CREATE_SEND_BUTTON_CLASS } from '@/lib/constants/createSendActions';
 import { scoringService } from '@/lib/services/scoringService';
-import { assessmentService } from '@/lib/services/assessmentService';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ScoreTableModal from './ScoreTableModal';
@@ -36,7 +33,6 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
@@ -418,13 +414,6 @@ interface ScoredResumesTableProps {
    */
   viewPillsSlot?: React.ReactNode;
   /**
-   * Offer "＋ Create AI Assessment / AI Interview" under a greyed invite when
-   * the ticked candidates' one job has none yet. The host takes it from
-   * there (Resume Scoring: explain, keep the selection, go create, come
-   * back and invite). Without it the invite is just greyed with the reason.
-   */
-  onCreateInviteTarget?: (kind: 'assessment' | 'interview', job: InviteTargetJob, rows: ScoredResume[]) => void;
-  /**
    * The selection Actions menu's AI Assessment / AI Interview Invite open the
    * host's version popup (the AI Talent Match tab's VersionInviteDialog) with
    * the ticked candidates, instead of this table's own invite flow. The popup
@@ -689,7 +678,6 @@ export default function ScoredResumesTable({
   assessmentConfigured,
   aiInterviewConfigured,
   viewPillsSlot,
-  onCreateInviteTarget,
   compact = false,
   hideSelectionBar = false,
   toolbarPortal,
@@ -736,59 +724,13 @@ export default function ScoredResumesTable({
     jobLockReason,
   } = useScoringActionPermissions(!!onInviteAIInterview || enableInternalAIInterviewInvite);
 
-  // Only the cross-job global list needs this — a single-job host (JobDetailView,
-  // or this page's own per-job "Scoring History" list) already knows its one
-  // answer via the assessmentConfigured/aiInterviewConfigured props above,
-  // computed once for the whole table by useJobInviteTargets.
-  const needsBulkInviteTargets =
-    enableInternalAIInterviewInvite && assessmentConfigured === undefined && aiInterviewConfigured === undefined;
-  const bulkInviteTargets = useAllJobInviteTargets(needsBulkInviteTargets);
-
-  /* Per-row invite availability. A row that carries its own `jdId` (the
-     cross-job global list) is answered from the bulk map above, keyed by
-     THAT row's job — never the table-level assessmentConfigured/
-     aiInterviewConfigured, which for that list is `undefined` (spans many
-     jobs, nothing to hand down). A row without its own `jdId` (every
-     single-job table) falls back to the table-level flag, unchanged.
-     `undefined` either way keeps meaning "unknown, don't gate". */
-  const resolveAssessmentConfigured = (resume: ScoredResume): boolean | undefined =>
-    resume.jdId && needsBulkInviteTargets ? bulkInviteTargets.hasAssessment(resume.jdId) : assessmentConfigured;
-  const resolveAIInterviewConfigured = (resume: ScoredResume): boolean | undefined =>
-    resume.jdId && needsBulkInviteTargets ? bulkInviteTargets.hasAIInterview(resume.jdId) : aiInterviewConfigured;
-
-  /* Invite gating. An entry is offered when the viewer may use it AND the JD
-     has something to invite to; `undefined` from the host means unknown, which
-     is treated as "don't gate" so the global scoring view is unchanged.
-     With neither entry available the trigger itself goes disabled — matching
-     the Assessment / AI Interview sections' own Send Invite buttons on the Job
-     Details page, which read the same two flags.
-
-     AI Interview specifically: when the host supplies its own
-     `onInviteAIInterview` (e.g. JobDetailView, resolving against its one
-     fixed job), that handler runs as before. When it doesn't — the cross-job
-     global list, where every row belongs to a different job — this
-     component resolves and shares the invite itself per row (see
-     `aiInterviewInviteCandidate` below), the same "resolve on click, then
-     explain why not" pattern already used for Assessment via
-     InviteShareModal, just extended to AI Interview. Either way the option
-     is only ever offered when `mayInviteAIInterview` is true.
-
-     `canInviteAssessment`/`canInviteAIInterview`/`inviteDisabled` below stay
-     table-wide — used only by the bulk-selection invite flow further down,
-     which acts on the table's own job, not a specific row. The per-row
-     dropdown in renderInviteSubmenu computes its own row-scoped versions from
-     resolveAssessmentConfigured/resolveAIInterviewConfigured above instead. */
-  const canInviteAssessment = canCreateAssessments && assessmentConfigured !== false;
-  const canInviteAIInterview = mayInviteAIInterview && aiInterviewConfigured !== false;
-  const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
-  const inviteDisabledTitle =
-    jobLockReason
-      ? jobLockReason
-      : canCreateAssessments || mayInviteAIInterview
-      ? 'No published assessment or AI interview for this job yet'
-      : invitePlanLocked
-        ? PLAN_LOCKED_MESSAGE
-        : undefined;
+  /* Invite gating is permission (+ plan + job lock) only: every Assessment /
+     AI Interview invite here opens THE invite popup (VersionInviteDialog),
+     which itself offers Create when the job has none yet and a picker when
+     the rows span several jobs — so "nothing published" no longer greys an
+     entry out. Without a host opener (`onOpenInviteDialog`) the table opens
+     the global one (`openRowsInvite` below). */
+  const { open: openInvite } = useInviteDialog();
   // Resume Scoring's own Export / Download Scorecard toggles — previously both
   // checked the generic, module-agnostic canExport flag (which defaults true
   // for most roles), so disabling either one here had no effect.
@@ -944,23 +886,9 @@ Best regards`);
     setInternalDisplayMode(mode);
     onDisplayModeChange?.(mode);
   };
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
-
-  // Self-contained "Invite -> AI Interview" flow for a row whose host didn't
-  // supply its own `onInviteAIInterview` (Resume Scoring) — opens the shared
-  // Invite to AI Interview dialog scoped to the CLICKED ROW's own job: the
-  // candidate, then that job's active interview versions to pick from. Never
-  // runs when a host DOES supply `onInviteAIInterview` — that path is untouched.
-  const [aiInterviewInviteCandidate, setAiInterviewInviteCandidate] = useState<ScoredResume | null>(null);
-  const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
-  // Actions ▸ AI Interview Invite — the ticked candidates, all at once.
-  const [showBulkAIInterviewInvite, setShowBulkAIInterviewInvite] = useState(false);
-  /* Actions menu: the action whose "what this does" popup is open, and the
-     rows that popup confirmed (the ticked rows narrowed by the statuses kept
-     on). The invite dialogs act on exactly those rows. */
+  /* Actions ▸ Download All Scorecards: its "what this does" popup is open.
+     (The invites skip it — they open THE invite popup straight away.) */
   const [bulkAction, setBulkAction] = useState<BulkActionKind | null>(null);
-  const [bulkActionRows, setBulkActionRows] = useState<ScoredResume[] | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortBy, setSortBy] = useState<SortKey>('date');
@@ -1258,18 +1186,53 @@ Best regards`);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
 
-  /* The jobs the ticked rows belong to — a row's own JD, or this table's
-     one job on a single-job host. */
-  const selectionJobs = useMemo((): InviteTargetJob[] => {
-    const byId = new Map<string, InviteTargetJob>();
-    for (const r of effectiveSelectedRows) {
-      const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
-      if (!id || byId.has(id)) continue;
-      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle });
+  /** A scored row as THE invite popup lists it. */
+  const toInvitee = (r: ScoredResume): InviteCandidate => ({
+    id: r.resumeId || r.id,
+    name: r.candidateName,
+    email: r.email,
+    phone: r.phone,
+    rating: Math.round(rowRating10(r) * 10) / 10,
+    resumeId: r.resumeId,
+  });
+
+  /**
+   * Assessment / AI Interview invite for these rows. A host opener
+   * (`onOpenInviteDialog`) gets them as is; otherwise THE invite popup opens
+   * here — for the rows' one job when they share one, else (several jobs, or
+   * none) on the popup's own picker of every published one. A candidate
+   * ticked on several jobs is listed once.
+   */
+  const openRowsInvite = (kind: 'assessment' | 'interview', rows: ScoredResume[]) => {
+    const seen = new Set<string>();
+    const people = rows.filter((r) => {
+      const k = String(r.email || r.resumeId || r.id).toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (onOpenInviteDialog) {
+      onOpenInviteDialog(kind, people.map(toInvitee));
+      return;
     }
-    return Array.from(byId.values());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveSelectedRows, jobId, jobTitle]);
+    const ownJobId = jobId && jobId !== 'global' && jobId !== 'jd-1' ? jobId : '';
+    const jdIds = Array.from(new Set(rows.map((r) => r.jdId || ownJobId).filter(Boolean)));
+    const jobRow = jdIds.length === 1 ? rows.find((r) => (r.jdId || ownJobId) === jdIds[0]) : undefined;
+    openInvite({
+      kind,
+      job: jobRow
+        ? {
+            jdId: jdIds[0],
+            jdTitle: jobRow.jobTitle || jobTitle,
+            jdCode: rowJobCode(jobRow) || undefined,
+            versionNumber: jobRow.jobVersion,
+          }
+        : undefined,
+      candidates: people.map((r) => ({ ...toInvitee(r), source: 'score-resume', inviteSource: 'Resume Scoring' })),
+      // A bulk send clears the ticks, as the old bulk invite did.
+      onSent: rows.length > 1 ? () => clearSelection() : undefined,
+    });
+  };
 
   const candidateGroups = useMemo(() => {
     const groups = new Map<string, ScoredResume[]>();
@@ -1812,21 +1775,16 @@ Best regards`);
   // Just the invite control itself, with no `<td>` wrapper, so the grid
   // view's card can place it next to its own View/Actions buttons instead
   // of inside a table row.
-  /** Which invites a row can offer. Row-scoped: for the cross-job global list
-   *  this reads THIS row's own job from the bulk map
-   *  (resolveAssessmentConfigured / resolveAIInterviewConfigured, see above),
-   *  not the table-wide flags, which are `undefined` for that list. A
-   *  single-job table's rows all resolve to the same table-wide flag. Shared
-   *  by the table's Invite button and the grid card's Actions → Invite
-   *  submenu, so the two can never offer different things. */
+  /** Which invites a row can offer — permission / plan / job lock only (see
+   *  below). Shared by the table's Invite button and the grid card's
+   *  Actions → Invite submenu, so the two can never offer different things. */
   const getRowInviteGate = (resume: ScoredResume) => {
-    /* With a host version popup (onOpenInviteDialog) the row's Invite opens
-       it just like the selection's Create / Send items, and is gated the same
-       way — permission only: the popup itself offers Create when this job has
-       no assessment / AI interview yet, so "none configured" no longer
-       greys it out. */
-    const rowCanInviteAssessment = canCreateAssessments && (!!onOpenInviteDialog || resolveAssessmentConfigured(resume) !== false);
-    const rowCanInviteAIInterview = mayInviteAIInterview && (!!onOpenInviteDialog || resolveAIInterviewConfigured(resume) !== false);
+    /* The row's Invite opens THE invite popup just like the selection's
+       items, and is gated the same way — permission only: the popup itself
+       offers Create when this job has no assessment / AI interview yet, so
+       "none configured" no longer greys it out. */
+    const rowCanInviteAssessment = canCreateAssessments;
+    const rowCanInviteAIInterview = mayInviteAIInterview;
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
@@ -1844,115 +1802,43 @@ Best regards`);
   /** The Invite menu's two entries — Assessment and AI Interview. */
   const renderInviteMenuItems = (resume: ScoredResume) => {
     const { rowCanInviteAssessment, rowCanInviteAIInterview } = getRowInviteGate(resume);
-    if (onOpenInviteDialog) {
-      /* Same two entries, but each opens the host's version popup for THIS
-         row's candidate — the very handler (and invitee shape) the selection
-         Actions menu's Create / Send Assessment | AI Interview use, so pick an
-         existing version, create the next one, come back and confirm the send
-         all run through the one flow. */
-      const invitee: InviteCandidate = {
-        id: resume.resumeId || resume.id,
-        name: resume.candidateName,
-        email: resume.email,
-        phone: resume.phone,
-        rating: Math.round(rowRating10(resume) * 10) / 10,
-        resumeId: resume.resumeId,
-      };
-      return (
-        <>
-          <DropdownMenuItem
-            className={`${scoredResumesMenuItemClass} ${!rowCanInviteAssessment ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-            aria-disabled={!rowCanInviteAssessment || undefined}
-            title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
-            onSelect={(e) => {
-              if (!rowCanInviteAssessment) { e.preventDefault(); return; }
-              onOpenInviteDialog('assessment', [invitee]);
-            }}
-          >
-            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-            <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className={`${scoredResumesMenuItemClass} ${!rowCanInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-            aria-disabled={!rowCanInviteAIInterview || undefined}
-            title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
-            onSelect={(e) => {
-              if (!rowCanInviteAIInterview) { e.preventDefault(); return; }
-              onOpenInviteDialog('interview', [invitee]);
-            }}
-          >
-            <Video className="w-4 h-4 text-menu-icon-ai" />
-            <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
-          </DropdownMenuItem>
-        </>
-      );
-    }
+    /* Both open THE invite popup for THIS row's candidate (openRowsInvite —
+       the host's opener when it has one). Labels: the host popup's
+       "Create / Send …" names, else the list's own short ones. */
     return (
       <>
-          <DropdownMenuItem
-            className={`${scoredResumesMenuItemClass} ${!canCreateAssessments ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-            /* Off unless this JD has a published assessment —
-               and assessment invites spend a unit, so the entry
-               also goes quiet when there are none left rather
-               than opening a form that cannot be submitted.
-               No permission: greyed via aria-disabled so the hover shows. */
-            disabled={canCreateAssessments && (!rowCanInviteAssessment || availableUnits === 0)}
-            aria-disabled={!canCreateAssessments || undefined}
-            title={
-              !canCreateAssessments
-                ? assessmentDeniedReason
-                : !rowCanInviteAssessment
-                  ? 'No published assessment for this job yet'
-                  : availableUnits === 0
-                    ? 'No assessment units available'
-                    : undefined
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!rowCanInviteAssessment ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+          aria-disabled={!rowCanInviteAssessment || undefined}
+          title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
+          onSelect={(e) => {
+            if (!rowCanInviteAssessment) { e.preventDefault(); return; }
+            openRowsInvite('assessment', [resume]);
+          }}
+        >
+          <ClipboardList className="w-4 h-4 text-menu-icon-view" />
+          <span className={MENU_ITEM_SCALE_CLASS}>{onOpenInviteDialog ? 'Create / Send Assessment' : 'Assessment'}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!rowCanInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+          aria-disabled={!rowCanInviteAIInterview || undefined}
+          title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
+          onSelect={(e) => {
+            if (!rowCanInviteAIInterview) { e.preventDefault(); return; }
+            if (!onOpenInviteDialog && onInviteAIInterview) {
+              onInviteAIInterview({
+                name: resume.candidateName || 'Unknown',
+                email: resume.email || '',
+                resumeId: resume.resumeId,
+              });
+              return;
             }
-            onSelect={(e) => {
-              if (!canCreateAssessments) {
-                e.preventDefault();
-                return;
-              }
-              setInviteCandidate(resume);
-              setShowInviteModal(true);
-            }}
-          >
-            <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-            <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className={`${scoredResumesMenuItemClass} ${!mayInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-            /* Same rule on the interview side: nothing live on
-               this JD means nothing to invite the candidate to. */
-            disabled={mayInviteAIInterview && !rowCanInviteAIInterview}
-            aria-disabled={!mayInviteAIInterview || undefined}
-            title={
-              !mayInviteAIInterview
-                ? aiInterviewDeniedReason
-                : !rowCanInviteAIInterview
-                  ? 'No published AI interview for this job yet'
-                  : undefined
-            }
-            onSelect={(e) => {
-              if (!mayInviteAIInterview) {
-                e.preventDefault();
-                return;
-              }
-                if (onInviteAIInterview) {
-                  onInviteAIInterview({
-                    name: resume.candidateName || 'Unknown',
-                    email: resume.email || '',
-                    resumeId: resume.resumeId,
-                  });
-                } else {
-                  // No host-supplied handler (the cross-job global list) —
-                  // resolve and share THIS ROW's own job's AI interview.
-                  setAiInterviewInviteCandidate(resume);
-                }
-              }}
-            >
-              <Video className="w-4 h-4 text-menu-icon-ai" />
-              <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
-            </DropdownMenuItem>
+            openRowsInvite('interview', [resume]);
+          }}
+        >
+          <Video className="w-4 h-4 text-menu-icon-ai" />
+          <span className={MENU_ITEM_SCALE_CLASS}>{onOpenInviteDialog ? 'Create / Send AI Interview' : 'AI Interview'}</span>
+        </DropdownMenuItem>
       </>
     );
   };
@@ -2178,99 +2064,40 @@ Best regards`);
   /** Create / Send Assessment | AI Interview for the selection. */
   const renderSelectionInviteItems = () => (
     <>
-      {(() => {
-        /* Per invite: ready, greyed with the reason, or greyed plus
-           "＋ Create …" when the one job has none yet. */
-        const rowOf = (jdId: string) => effectiveSelectedRows.find((r) => (r.jdId || jobId) === jdId) ?? effectiveSelectedRows[0];
-        const assessmentTarget = resolveInviteTargetState('assessment', selectionJobs, (id) => resolveAssessmentConfigured(rowOf(id)));
-        const interviewTarget = resolveInviteTargetState('interview', selectionJobs, (id) => resolveAIInterviewConfigured(rowOf(id)));
-        if (onOpenInviteDialog) {
-          /* The AI Talent Match tab's way: always offered (permission
-             aside), opening the host's version popup with the ticked rows. */
-          const invitees: InviteCandidate[] = effectiveSelectedRows.map((r) => ({
-            id: r.resumeId || r.id,
-            name: r.candidateName,
-            email: r.email,
-            phone: r.phone,
-            rating: Math.round(rowRating10(r) * 10) / 10,
-            resumeId: r.resumeId,
-          }));
-          return (
-            <>
-              {renderInviteTargetItems({
-                kind: 'assessment',
-                target: { state: 'ready' },
-                label: 'Create / Send Assessment',
-                itemClass: scoredResumesMenuItemClass,
-                allowed: canCreateAssessments,
-                deniedReason: assessmentDeniedReason,
-                onInvite: (e) => {
-                  if (!canCreateAssessments) {
-                    e.preventDefault();
-                    return;
-                  }
-                  onOpenInviteDialog('assessment', invitees);
-                },
-              })}
-              {renderInviteTargetItems({
-                kind: 'interview',
-                target: { state: 'ready' },
-                label: 'Create / Send AI Interview',
-                itemClass: scoredResumesMenuItemClass,
-                allowed: mayInviteAIInterview,
-                deniedReason: aiInterviewDeniedReason,
-                onInvite: (e) => {
-                  if (!mayInviteAIInterview) {
-                    e.preventDefault();
-                    return;
-                  }
-                  onOpenInviteDialog('interview', invitees);
-                },
-              })}
-            </>
-          );
-        }
-        const create = onCreateInviteTarget
-          ? (kind: 'assessment' | 'interview') => (job: InviteTargetJob) =>
-              onCreateInviteTarget(kind, job, effectiveSelectedRows.filter((r) => (r.jdId || jobId) === job.jdId))
-          : undefined;
-        return (
-          <>
-            {renderInviteTargetItems({
-              kind: 'assessment',
-              target: assessmentTarget,
-              itemClass: scoredResumesMenuItemClass,
-              allowed: canCreateAssessments,
-              deniedReason: assessmentDeniedReason,
-              extraDisabled: availableUnits === 0,
-              extraDisabledReason: 'No assessment units available',
-              onInvite: (e) => {
-                if (!canCreateAssessments) {
-                  e.preventDefault();
-                  return;
-                }
-                setBulkAction('assessment');
-              },
-              onCreate: create?.('assessment'),
-            })}
-            {renderInviteTargetItems({
-              kind: 'interview',
-              target: interviewTarget,
-              itemClass: scoredResumesMenuItemClass,
-              allowed: mayInviteAIInterview,
-              deniedReason: aiInterviewDeniedReason,
-              onInvite: (e) => {
-                if (!mayInviteAIInterview) {
-                  e.preventDefault();
-                  return;
-                }
-                setBulkAction('interview');
-              },
-              onCreate: create?.('interview'),
-            })}
-          </>
-        );
-      })()}
+      {/* Always offered (permission aside): THE invite popup with the ticked
+          rows — for their one job, or the popup's picker when they span
+          several. Labels: the host popup's "Create / Send …", else the list's
+          "AI Assessment / AI Interview Invite". */}
+      {renderInviteTargetItems({
+        kind: 'assessment',
+        target: { state: 'ready' },
+        label: onOpenInviteDialog ? 'Create / Send Assessment' : undefined,
+        itemClass: scoredResumesMenuItemClass,
+        allowed: canCreateAssessments,
+        deniedReason: assessmentDeniedReason,
+        onInvite: (e) => {
+          if (!canCreateAssessments) {
+            e.preventDefault();
+            return;
+          }
+          openRowsInvite('assessment', effectiveSelectedRows);
+        },
+      })}
+      {renderInviteTargetItems({
+        kind: 'interview',
+        target: { state: 'ready' },
+        label: onOpenInviteDialog ? 'Create / Send AI Interview' : undefined,
+        itemClass: scoredResumesMenuItemClass,
+        allowed: mayInviteAIInterview,
+        deniedReason: aiInterviewDeniedReason,
+        onInvite: (e) => {
+          if (!mayInviteAIInterview) {
+            e.preventDefault();
+            return;
+          }
+          openRowsInvite('interview', effectiveSelectedRows);
+        },
+      })}
     </>
   );
 
@@ -2477,7 +2304,7 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
+          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Score — right beside More Filters in Job Details, where the header's
@@ -2524,7 +2351,7 @@ Best regards`);
             shrink-wrapped box with Select All and wrapped out of line; h-9
             matches the Job Details toolbar band. */}
         {embedded && selectionActions && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
           </div>
         )}
@@ -3602,50 +3429,58 @@ Best regards`);
               </div>
             </div>
 
-            {/* Card Content */}
-            <div className="space-y-2 text-sm mb-3">
+            {/* Card Content — pl-10 lines it up under the name (the 28px
+                checkbox + 12px gap), one 16px icon + gap-2 per line so the
+                text starts on one edge; the email truncates, full on hover. */}
+            <div className="space-y-1.5 text-sm mb-3 pl-10 text-gray-600">
               {resume.email && (
-                <div className="flex items-start gap-2 text-gray-600 min-w-0">
-                  <Mail className="w-4 h-4 mt-0.5 shrink-0" />
-                  <span className="min-w-0 break-all">{resume.email}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Mail className="w-4 h-4 shrink-0 text-gray-400" />
+                  <span className="min-w-0 truncate" title={resume.email}>{resume.email}</span>
                 </div>
               )}
               {/* Same fields as the fixed table columns — phone, experience and
                   education are export-only now (see ScoredResumesExportModal). */}
-              <div className="text-gray-600">
-                <span className="text-gray-500">Scored by:</span> {resume.scoredBy}
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <UserCheck className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="min-w-0 truncate"><span className="text-gray-500">Scored by:</span> {resume.scoredBy}</span>
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <Calendar className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="min-w-0 truncate">{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
               </div>
             </div>
 
-            {/* Card Actions */}
-            <div className="space-y-2">
-              {/* Invite Button - For Exact Match & Partial Match + assessment permission.
-                  Same two blockers as the table row's Assessment entry: no
-                  published assessment on this JD, or no units left. */}
+            {/* Card Actions — Download Scorecard and View Resume share one
+                line (two columns, full card width); Invite / Share keep
+                their own full line. Below 380px "Download" / "View" are cut from
+                the labels ("Scorecard" / "Resume") so both fit on one line at
+                320px; min-w-0 + overflow-hidden keep text inside the button. */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Invite Button - For Exact Match & Partial Match. Opens THE
+                  invite popup for this candidate (the popup offers Create
+                  when the job has none yet). No permission: greyed, with the
+                  reason on hover, and a no-op. No units left: disabled. */}
               {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
-                <div className="relative group">
+                <div className="relative group col-span-2">
                   {/* Create / Send Assessment's shared look (createSendActions). */}
                   <button
                     type="button"
-                    disabled={!canCreateAssessments || !canInviteAssessment || availableUnits === 0}
+                    disabled={canCreateAssessments && availableUnits === 0}
+                    aria-disabled={!canCreateAssessments || undefined}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (!canCreateAssessments) {
                         return;
                       }
-                      setInviteCandidate(resume);
-                      setShowInviteModal(true);
+                      openRowsInvite('assessment', [resume]);
                     }}
-                    className={`${CREATE_SEND_BUTTON_CLASS.assessment} w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug justify-center`}
+                    className={`${CREATE_SEND_BUTTON_CLASS.assessment} w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug justify-center ${!canCreateAssessments ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     <ClipboardList className="w-4 h-4 flex-shrink-0" />
                     Invite for Assessment
                   </button>
-                  {(!canCreateAssessments || !canInviteAssessment || availableUnits === 0) && (
+                  {(!canCreateAssessments || availableUnits === 0) && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
                       <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
                         <div className="flex items-center gap-2">
@@ -3653,9 +3488,7 @@ Best regards`);
                           <span>
                             {!canCreateAssessments
                               ? assessmentDeniedReason
-                              : !canInviteAssessment
-                                ? 'No published assessment for this job yet'
-                                : 'No assessment units available'}
+                              : 'No assessment units available'}
                           </span>
                         </div>
                         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
@@ -3680,10 +3513,10 @@ Best regards`);
                 disabled={downloadingId === resume.id}
                 aria-disabled={!canDownloadScorecard}
                 title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${resume.resumeId ? '' : 'col-span-2'} ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
-                {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
+                {downloadingId === resume.id ? 'Downloading...' : <><span className="hidden min-[380px]:inline">Download&nbsp;</span>Scorecard</>}
               </Button>
 
               {resume.resumeId && (
@@ -3695,9 +3528,9 @@ Best regards`);
                     setViewResumeCandidate(resume);
                   }}
                   icon={<FileText className="w-4 h-4" />}
-                  className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
+                  className="w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
                 >
-                  View Resume
+                  <span className="hidden min-[380px]:inline">View&nbsp;</span>Resume
                 </Button>
               )}
 
@@ -3715,7 +3548,7 @@ Best regards`);
                   aria-disabled={!canShareResume}
                   title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`col-span-2 w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>
@@ -3768,9 +3601,9 @@ Best regards`);
       />
 
 
-      {/* Actions ▸ … — the "what this does" popup every bulk action goes
-          through: explains the action and lets the user keep / drop each
-          match status before anything happens. */}
+      {/* Actions ▸ Download All Scorecards — its "what this does" popup:
+          explains the action and lets the user keep / drop each match status
+          before anything happens. */}
       {bulkAction && (
         <BulkActionConfirmModal
           action={bulkAction}
@@ -3782,96 +3615,10 @@ Best regards`);
             setBulkAction(null);
             if (action === 'download') {
               await handleDownloadBulkScorecards(rows);
-            } else if (action === 'assessment') {
-              setBulkActionRows(rows);
-              setShowBulkInviteModal(true);
-            } else {
-              setBulkActionRows(rows);
-              setShowBulkAIInterviewInvite(true);
             }
           }}
         />
       )}
-
-      {/* Invite to Assessment Modal — opens the shared ShareAssessmentModal
-          used by the Assessment module (resolves the JD's assessment first).
-          Uses the CLICKED ROW's own job (falling back to the table-level one
-          for a single-job host, where every row already shares it) — the
-          global cross-job list's rows each belong to a different job, and
-          resolving against the table's own "global" placeholder job id
-          instead of the real one meant this could never find a real
-          assessment, so the candidate never even reached the share form. */}
-      {showInviteModal && inviteCandidate && (
-        <InviteShareModal
-          candidate={inviteCandidate}
-          jobId={inviteCandidate.jdId || jobId}
-          jobTitle={inviteCandidate.jobTitle || jobTitle}
-          onClose={() => setShowInviteModal(false)}
-        />
-      )}
-
-      {/* Invite to AI Interview — self-contained counterpart to the Assessment
-          modal above, for a row whose host didn't supply its own
-          onInviteAIInterview: the shared dialog, scoped to the row's own job. */}
-      <InviteToAIInterviewFlow
-        open={!!aiInterviewInviteCandidate}
-        onClose={() => setAiInterviewInviteCandidate(null)}
-        jobId={aiInterviewInviteCandidate ? (aiInterviewInviteCandidate.jdId || (jobId && jobId !== 'global' ? jobId : undefined)) : undefined}
-        candidates={aiInterviewInviteCandidate ? [{
-          id: aiInterviewInviteCandidate.resumeId || aiInterviewInviteCandidate.id,
-          name: aiInterviewInviteCandidate.candidateName || 'Unknown',
-          email: aiInterviewInviteCandidate.email || undefined,
-        }] : []}
-        resumes={aiInterviewInviteCandidate ? [{
-          id: aiInterviewInviteCandidate.resumeId || aiInterviewInviteCandidate.id,
-          name: aiInterviewInviteCandidate.candidateName || 'Unknown',
-          email: aiInterviewInviteCandidate.email,
-          phone: aiInterviewInviteCandidate.phone,
-        } as unknown as Resume] : undefined}
-        onInvited={() => setAiInterviewInviteCandidate(null)}
-      />
-
-      {/* Actions ▸ AI Interview Invite — every ticked candidate at once. One
-          invite per person (a candidate ticked on several jobs is listed
-          once). Scoped to a job's interviews when the ticked rows share one
-          job; otherwise the picker lists every interview. */}
-      {showBulkAIInterviewInvite && (() => {
-        const picked = bulkActionRows ?? effectiveSelectedRows;
-        const seen = new Set<string>();
-        const people = picked.filter((r) => {
-          const k = (r.email || r.resumeId || r.id).toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-        const jdIds = Array.from(new Set(picked.map((r) => r.jdId).filter(Boolean)));
-        const scopedJobId = jdIds.length === 1
-          ? jdIds[0]
-          : jdIds.length === 0 && jobId && jobId !== 'global' && jobId !== 'jd-1' ? jobId : undefined;
-        return (
-          <InviteToAIInterviewFlow
-            open
-            onClose={() => { setShowBulkAIInterviewInvite(false); setBulkActionRows(null); }}
-            jobId={scopedJobId}
-            candidates={people.map((r) => ({
-              id: r.resumeId || r.id,
-              name: r.candidateName || 'Unknown',
-              email: r.email || undefined,
-            }))}
-            resumes={people.map((r) => ({
-              id: r.resumeId || r.id,
-              name: r.candidateName || 'Unknown',
-              email: r.email,
-              phone: r.phone,
-            }) as unknown as Resume)}
-            onInvited={() => {
-              setShowBulkAIInterviewInvite(false);
-              setBulkActionRows(null);
-              setSelectedResumes([]);
-            }}
-          />
-        );
-      })()}
 
       {/* Share Resume — the same dialog the resume table and the resume page
           open: the attachment with an eye to read it, then recipient, subject
@@ -4123,31 +3870,6 @@ Best regards`);
         </div>
       )}
 
-      {/* Bulk Invite Modal */}
-      {showBulkInviteModal && (
-        <BulkInviteModal
-          selectedResumes={bulkActionRows ?? selectedResumes.map(id => {
-            const resume = resumes.find(r => r.id === id);
-            return resume!;
-          }).filter(Boolean)}
-          // A cross-job list has no one job of its own: use the selection's
-          // (the Actions menu only offers this when it is a single job).
-          jobId={jobId === 'global' && selectionJobs.length === 1 ? selectionJobs[0].jdId : jobId}
-          jobTitle={jobId === 'global' && selectionJobs.length === 1 ? selectionJobs[0].jdTitle : jobTitle}
-          onClose={() => { setShowBulkInviteModal(false); setBulkActionRows(null); }}
-          onSuccess={() => {
-            setShowBulkInviteModal(false);
-            setBulkActionRows(null);
-            // Clear selection after successful bulk invite
-            if (onSelectAll) {
-              onSelectAll([]);
-            } else {
-              setInternalSelectedResumes([]);
-            }
-          }}
-        />
-      )}
-
       {/* Export dialog — shared with View by Job (ScoredResumesExportModal).
           Exports the ticked rows; Export asks for a selection first. */}
       {showExportModal && (
@@ -4319,460 +4041,6 @@ export function BulkActionConfirmModal({
               icon={busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
             >
               {info.continueLabel}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Bulk Invite Modal Component
-interface BulkInviteModalProps {
-  selectedResumes: ScoredResume[];
-  jobId: string;
-  jobTitle: string;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-export function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess }: BulkInviteModalProps) {
-  const [assessments, setAssessments] = useState<any[]>([]);
-  const [selectedAssessment, setSelectedAssessment] = useState<string>('');
-  const [isLoadingAssessments, setIsLoadingAssessments] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [expiryDays, setExpiryDays] = useState(7);
-  const [showNoMatchWarning, setShowNoMatchWarning] = useState(false);
-
-  // Quota stats
-  const [quotaStats, setQuotaStats] = useState<{
-    total_quota: number; consumed: number; pending: number; available: number;
-  } | null>(null);
-
-  // Everyone handed in is invited — which statuses to include was the
-  // recruiter's choice in the popup before this. No Match is only counted,
-  // to say so in the summary.
-  const validCandidates = selectedResumes;
-  const noMatchCandidates = selectedResumes.filter(r =>
-    (normalizeMatchResult(r.matchStatus) ?? 'No Match') === 'No Match'
-  );
-
-  useEffect(() => {
-    fetchAssessments();
-    // Show warning if there are no match candidates
-    if (noMatchCandidates.length > 0) {
-      setShowNoMatchWarning(true);
-    }
-    // Fetch quota stats
-    assessmentService.getInvitationStats()
-      .then(stats => setQuotaStats(stats))
-      .catch(() => setQuotaStats(null));
-  }, [jobId]);
-
-  const fetchAssessments = async () => {
-    setIsLoadingAssessments(true);
-    try {
-      const response = await assessmentService.list({ jd_id: jobId });
-      const revokedIds = getLocallyRevokedAssessmentIds();
-      // Only show PUBLISHED assessments (not draft, not archived) and
-      // exclude any whose invites the recruiter has revoked — once revoked
-      // an assessment is sealed against further invites (duplicate to V2
-      // for a fresh round).
-      const activeAssessments = response.items.filter(
-        (a: any) =>
-          a.status === 'published' &&
-          !a.is_archived &&
-          !isAssessmentRevoked(a, revokedIds)
-      );
-      setAssessments(activeAssessments);
-      // Auto-select if only one assessment
-      if (activeAssessments.length === 1) {
-        setSelectedAssessment(activeAssessments[0].id);
-      }
-    } catch (error) {
-      console.error('Failed to fetch assessments:', error);
-      toast.error('Failed to load assessments');
-    } finally {
-      setIsLoadingAssessments(false);
-    }
-  };
-
-  const handleSendBulkInvitations = async () => {
-    if (!selectedAssessment) {
-      toast.error('Please select an assessment first');
-      return;
-    }
-
-    if (validCandidates.length === 0) {
-      toast.error('No candidates to invite.');
-      return;
-    }
-
-    // Quota check
-    if (quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length) {
-      const pendingMsg = quotaStats.pending > 0
-        ? ` ${quotaStats.pending} unit(s) held by pending invitations will be released when links expire.`
-        : '';
-      toast.error(`Insufficient quota. ${quotaStats.available} unit(s) available, need ${validCandidates.length}.${pendingMsg}`);
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      const candidates = validCandidates.map(resume => ({
-        candidate_name: resume.candidateName,
-        candidate_email: resume.email,
-        resume_id: resume.resumeId,
-        // This is the table's own Bulk Invite button, gated on scoring:invite
-        // (canCreateAssessments above) — unlike the per-row Invite dropdown,
-        // this call goes straight to the API rather than through
-        // InviteShareModal/ShareAssessmentModal, so invite_source was never
-        // set here. Without it, the backend has no way to tell this apart
-        // from any other assessment invite and can't enforce scoring:invite.
-        invite_source: 'Resume Scoring',
-      }));
-
-      await assessmentService.bulkInvite(selectedAssessment, {
-        candidates,
-        expiry_days: expiryDays,
-      });
-
-      const message = `Successfully sent ${validCandidates.length} invitation${validCandidates.length > 1 ? 's' : ''}!`;
-
-      toast.success(message);
-      onSuccess();
-    } catch (error: any) {
-      console.error('Failed to send bulk invitations:', error);
-      const errorMessage = error.message || 'Failed to send invitations. Please try again.';
-
-      // Check for quota error
-      if (errorMessage.includes('quota') || errorMessage.includes('units')) {
-        toast.error('Insufficient assessment units available');
-      } else if (errorMessage.includes('409') || errorMessage.includes('duplicate')) {
-        toast.error('Some candidates have already been invited to this assessment');
-      } else {
-        toast.error(errorMessage);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
-
-  if (isLoadingAssessments) {
-    // Structure-matched skeleton mirroring the loaded Bulk Invite modal it
-    // replaces: same modal shell + gradient header (icon tile + title/subtitle),
-    // then a body of the quota banner, the assessment-select field and the
-    // expiry field, and the footer action buttons.
-    return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="bg-white border-b border-gray-100 px-6 py-5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <Skeleton className="w-10 h-10 rounded-lg" />
-              <div className="space-y-1.5">
-                <Skeleton className="h-5 w-48" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-            </div>
-            <Skeleton className="w-9 h-9 rounded-lg" />
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Quota banner */}
-            <Skeleton className="h-16 w-full rounded-lg" />
-            {/* Assessment selection field */}
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-40" />
-              <Skeleton className="h-12 w-full rounded-lg" />
-              <Skeleton className="h-3 w-56" />
-            </div>
-            {/* Expiry field */}
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-36" />
-              <Skeleton className="h-12 w-full rounded-lg" />
-            </div>
-          </div>
-
-          {/* Footer actions */}
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3 shrink-0">
-            <Skeleton className="h-10 w-24 rounded-lg" />
-            <Skeleton className="h-10 w-36 rounded-lg" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (assessments.length === 0) {
-    return (
-      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col">
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
-            <h3 className="text-gray-900 text-lg font-medium">No Assessment Found</h3>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onClose}
-              className="px-2"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-
-          {/* Body */}
-          <div className="px-6 py-6 overflow-y-auto flex-1">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-10 h-10 text-warning" />
-              </div>
-              <p className="text-gray-600 text-sm">
-                There is no published assessment for this job description yet.
-                Please create and publish an assessment first.
-              </p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-              <Send className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">Bulk Invite Candidates</h2>
-              <p className="text-blue-100 text-sm">{jobTitle}</p>
-            </div>
-          </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            className="px-2"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Quota Banner */}
-          {quotaStats !== null && (() => {
-            const isUnlimited = quotaStats.total_quota >= 999999;
-            const isInsufficient = !isUnlimited && quotaStats.available === 0;
-            const isLow = !isUnlimited && !isInsufficient && quotaStats.available <= 3;
-            if (isUnlimited) return null;
-            return (
-              <div className={`px-4 py-3 rounded-lg border text-sm flex items-start gap-2 ${
-                isInsufficient ? 'bg-destructive-subtle border-destructive-line text-destructive-strong'
-                : isLow ? 'bg-warning-subtle border-warning-line text-warning-strong'
-                : 'bg-blue-50 border-blue-200 text-blue-800'
-              }`}>
-                {isInsufficient
-                  ? <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  : <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                }
-                <div className="flex-1">
-                  <div className="font-medium mb-0.5">
-                    {isInsufficient ? 'No assessment units available'
-                      : isLow ? `Only ${quotaStats.available} unit(s) available`
-                      : `${quotaStats.available} assessment unit(s) available`}
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs opacity-80">
-                    <span>Total: {quotaStats.total_quota}</span>
-                    <span>Consumed: {quotaStats.consumed}</span>
-                    {quotaStats.pending > 0 && <span>Pending: {quotaStats.pending}</span>}
-                  </div>
-                  {quotaStats.pending > 0 && (
-                    <p className="text-xs mt-1 opacity-80">
-                      {quotaStats.pending} unit(s) held by active invitations — released when links expire.
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Assessment Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment *</label>
-            <FilterSelect
-              value={selectedAssessment}
-              onChange={(v) => setSelectedAssessment(v)}
-              ariaLabel="Select Assessment"
-              className="w-full sm:w-full px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300"
-              options={[
-              { value: '', label: '-- Choose an assessment --' },
-              ...assessments.map((assessment) => {
-                // Strip any "- Version N" baked into the stored title and
-                // append the live version from `assessment.version` so the
-                // dropdown always reflects the assessment's real version.
-                const parsed = parseAssessmentTitle(assessment.title || '');
-                const displayVersion = typeof assessment.version === 'number'
-                  ? assessment.version
-                  : parsed.version;
-                const base = parsed.cleanTitle || assessment.short_id || 'Untitled assessment';
-                const versionSuffix = displayVersion ? ` — Version ${displayVersion}` : '';
-                const shortIdSuffix = assessment.short_id ? ` (${assessment.short_id})` : '';
-                return {
-                  value: String(assessment.id),
-                  label: `${base}${versionSuffix}${shortIdSuffix} • ${assessment.duration_minutes} min`,
-                };
-              }),
-              ]}
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              {assessments.length} assessment{assessments.length !== 1 ? 's' : ''} available for this job
-            </p>
-          </div>
-
-          {/* Expiry Settings */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Invitation Expiry</label>
-            <FilterSelect
-              value={String(expiryDays)}
-              onChange={(v) => setExpiryDays(Number(v))}
-              ariaLabel="Invitation Expiry"
-              className="w-full sm:w-full px-4 sm:px-4 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
-              options={[
-                { value: '1', label: '1 day' },
-                { value: '3', label: '3 days' },
-                { value: '7', label: '7 days' },
-                { value: '14', label: '14 days' },
-                { value: '30', label: '30 days' },
-              ]}
-            />
-          </div>
-
-          {/* Included No Match candidates — a note, not an exclusion. */}
-          {showNoMatchWarning && noMatchCandidates.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="flex-1 text-sm text-amber-800">
-                Includes <strong>{noMatchCandidates.length}</strong> No Match candidate{noMatchCandidates.length > 1 ? 's' : ''} — they did not meet the job's must-have requirements. They will be invited as you chose.
-              </p>
-              <button
-                onClick={() => setShowNoMatchWarning(false)}
-                className="text-xs text-amber-700 hover:text-amber-900 underline flex-shrink-0"
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-
-          {/* Candidates to invite */}
-          {validCandidates.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Candidates to Invite ({validCandidates.length})
-              </label>
-              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg bg-white">
-                {validCandidates.map((resume, index) => (
-                  <div
-                    key={resume.id}
-                    className={`p-3 flex items-center gap-3 ${
-                      index < validCandidates.length - 1 ? 'border-b border-gray-100' : ''
-                    }`}
-                  >
-                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 font-medium text-sm">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900 text-sm">{resume.candidateName}</div>
-                      <div className="text-xs text-gray-600">{resume.email}</div>
-                    </div>
-                    {resume.matchStatus && (
-                      <div
-                        /* Was a two-branch test, so No Match wore the Partial
-                           colour here. The shared map answers all three. */
-                        className={`px-2 py-1 text-xs rounded-full border ${matchBadgeClass(resume.matchStatus)}`}
-                      >
-                        {resume.matchStatus}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* No Valid Candidates Warning */}
-          {validCandidates.length === 0 && (
-            <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-6 text-center">
-              <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                <AlertCircle className="w-8 h-8 text-gray-600" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-2">No Candidates Selected</h4>
-              <p className="text-sm text-gray-600">
-                Select the candidates you want to invite and try again.
-              </p>
-            </div>
-          )}
-
-          {/* Preview */}
-          {selectedAssessment && validCandidates.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Mail className="w-5 h-5 text-blue-600" />
-                <span className="font-medium text-blue-800">Ready to Send</span>
-              </div>
-              <div className="text-sm text-blue-700 space-y-1">
-                <p><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
-                <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
-                <p><strong>Recipients:</strong> {validCandidates.length} candidate(s)</p>
-                {noMatchCandidates.length > 0 && (
-                  <p className="text-amber-700">
-                    <strong>Includes:</strong> {noMatchCandidates.length} No Match candidate(s)
-                  </p>
-                )}
-                <p><strong>Expires in:</strong> {expiryDays} day{expiryDays > 1 ? 's' : ''}</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between shrink-0">
-          <div className="text-sm">
-            {validCandidates.length > 0 ? (
-              (() => {
-                const insufficient = quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length;
-                return (
-                  <span className={insufficient ? 'text-destructive font-medium' : 'text-gray-600'}>
-                    <strong className={insufficient ? 'text-destructive' : 'text-success'}>{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
-                    {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
-                    {!insufficient && noMatchCandidates.length > 0 && (
-                      <span className="ml-2 text-amber-700">(incl. {noMatchCandidates.length} No Match)</span>
-                    )}
-                  </span>
-                );
-              })()
-            ) : (
-              <span className="text-gray-500">No candidates to invite</span>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={handleSendBulkInvitations}
-              disabled={!selectedAssessment || isSubmitting || validCandidates.length === 0 || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              icon={isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            >
-              {isSubmitting ? 'Sending...' : 'Send Invitations'}
             </Button>
           </div>
         </div>

@@ -296,9 +296,6 @@ export interface AllInterviewsTableProps {
    * rendering inline when unset (e.g. a future standalone use).
    */
   toolbarSlot?: HTMLDivElement | null;
-  /** The host page's slot in its tab-pills row (before Refresh). When given,
-   *  Actions (N) + Clear render there instead of inline in the toolbar. */
-  bulkActionSlot?: HTMLElement | null;
   /**
    * DOM node beside the host's Refresh button that the Clear Sort button
    * portals into, so it sits in the pill row with the page's other list

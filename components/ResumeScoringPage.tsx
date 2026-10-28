@@ -19,6 +19,8 @@ import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProg
 import { normalizeMatchResult } from '@/lib/utils/matchStatus';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
@@ -43,13 +45,10 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { BulkActionConfirmModal, BulkInviteModal, useScoringActionPermissions, renderInviteTargetItems, resolveInviteTargetState, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
-import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
-import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
+import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTargetItems, type BulkActionKind } from './ScoredResumesTable';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff, type InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
-import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import { clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff } from '@/lib/utils/resumeScoringInviteHandoff';
 import { downloadScorecardPdf, downloadScorecardsZip, formatFileDate, scorecardVersionTag } from '@/lib/utils/scorecardDownload';
 import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
@@ -681,6 +680,32 @@ export default function ResumeScoringPage({
      each of those views' returns via `inviteDialogEl`. */
   const [inviteRequest, setInviteRequest] = useState<InviteDialogRequest | null>(null);
   const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} />;
+  /* THE invite popup, global opener — for the lists that span jobs (View by
+     Job's Actions, a create round trip's return). */
+  const { open: openInvite } = useInviteDialog();
+  /** Candidates handed to the popup from this page: recorded as Resume Scoring. */
+  const asScoreCandidates = (list: InviteCandidate[]): InviteCandidate[] =>
+    list.map((c) => ({ ...c, source: c.source ?? 'score-resume', inviteSource: c.inviteSource ?? 'Resume Scoring' }));
+  /** Scored rows as popup candidates — one per person (a candidate scored on
+   *  several jobs is listed once). */
+  const scoreRowsToInvitees = (rows: any[]): InviteCandidate[] => {
+    const seen = new Set<string>();
+    return asScoreCandidates(rows
+      .filter((r) => {
+        const k = String(r.email || r.resumeId || r.id).toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .map((r) => ({
+        id: r.resumeId || r.id,
+        name: r.candidateName || 'Unknown',
+        email: r.email || '',
+        phone: r.phone,
+        resumeId: r.resumeId,
+        rating: typeof r.overallRating10 === 'number' ? Math.round(r.overallRating10 * 10) / 10 : undefined,
+      })));
+  };
   /** The drill-in job (`selectedHistoryItem`) as the popup names it. */
   const inviteJobOf = (it: { jobId: string; jobTitle: string; jdJobId?: string; jdVersionNumber?: number; jdStatus?: string }, versionNumber?: number): InviteDialogJob => ({
     jdId: it.jobId,
@@ -976,9 +1001,6 @@ export default function ResumeScoringPage({
   /* View by Job's Actions menu — the same three actions, popup and dialogs
      as View by Candidates', run on the candidates of the ticked jobs. */
   const [jobBulkAction, setJobBulkAction] = useState<BulkActionKind | null>(null);
-  const [jobBulkRows, setJobBulkRows] = useState<any[] | null>(null);
-  const [showJobAssessmentInvite, setShowJobAssessmentInvite] = useState(false);
-  const [showJobAIInterviewInvite, setShowJobAIInterviewInvite] = useState(false);
   const [jobBulkDownloading, setJobBulkDownloading] = useState(false);
   const jobActionPerms = useScoringActionPermissions(true);
   const toggleJobExpanded = (key: string) =>
@@ -1187,23 +1209,12 @@ export default function ResumeScoringPage({
     [globalScoredResumes, versionLineage.filterLineages],
   );
 
-  /* ---- No AI Assessment / AI Interview yet → create it → back → invite ----
-     1. Actions greys the invite and offers "＋ Create …" (one job).
-     2. A popup explains the three steps; Start saves the view, the ticks and
-        the pending invite (resumeScoringInviteHandoff) and opens the create
-        page with `from=resume-scoring` (its breadcrumb starts here).
-     3. Its published screen links back with `?resume_invite=1`; here the
-        ticks come back, the job is re-checked, and the invite opens for the
-        same candidates. Nothing published → ticks back, no invite. */
-  const jobViewInviteTargets = useAllJobInviteTargets(
-    !isGlobalView && (selectedHistoryItems.size > 0 || Object.keys(partialJobRows).length > 0),
-  );
-  const [createInviteTarget, setCreateInviteTarget] = useState<{
-    kind: InviteHandoffKind;
-    job: InviteTargetJob;
-    rows: any[];
-    view: 'job' | 'candidates';
-  } | null>(null);
+  /* ---- Back from creating an AI Assessment / AI Interview → invite ----
+     An earlier "＋ Create …" round trip (resumeScoringInviteHandoff) links
+     back with `?resume_invite=1`: the ticks come back, the job is
+     re-checked, and THE invite popup opens for the same candidates.
+     Nothing published → ticks back, no invite. (New round trips start in
+     the invite popup itself, which offers Create.) */
   const peopleIn = (rows: any[]) => new Set(rows.map(r => String(r.email || r.resumeId || r.id).toLowerCase())).size;
   /* The progress popup's View (and a click on a settled row): that
      candidate's scoring result for THIS job, opened in place — the same
@@ -1251,30 +1262,10 @@ export default function ResumeScoringPage({
     router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}&score_id=${row.id}&view=job`, { scroll: false });
   };
 
-  const startCreateInviteTarget = () => {
-    const t = createInviteTarget;
-    if (!t) return;
-    saveInviteHandoff({
-      kind: t.kind,
-      jdId: t.job.jdId,
-      jdCode: t.job.jdCode,
-      jdTitle: t.job.jdTitle,
-      scoreIds: t.rows.map(r => r.id),
-      candidateCount: peopleIn(t.rows),
-      view: t.view,
-      selectedJobKeys: Array.from(selectedHistoryItems),
-      partialJobRows,
-      selectedScoredResumes,
-    });
-    setCreateInviteTarget(null);
-    router.push(buildCreateUrl(t.kind, { id: t.job.jdId, title: t.job.jdTitle }));
-  };
-
   // Back from a create: restore first (the persisted list state has already
   // put the view and filters back), then — once scores are loaded — check.
   const [handoffReturn, setHandoffReturn] = useState<InviteHandoff | null>(null);
   const handoffCheckedRef = useRef(false);
-  const [handoffInvite, setHandoffInvite] = useState<{ handoff: InviteHandoff; rows: any[]; confirmed: boolean } | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (!params.has(RESUME_INVITE_PARAM)) return;
@@ -1322,12 +1313,16 @@ export default function ResumeScoringPage({
         return;
       }
       toast.success(`${what} is live for ${jobName} — now invite your ${peopleIn(rows)} candidate${peopleIn(rows) === 1 ? '' : 's'}.`);
-      setHandoffInvite({ handoff: h, rows, confirmed: false });
+      openInvite({
+        kind: h.kind,
+        job: { jdId: h.jdId, jdTitle: h.jdTitle, jdCode: h.jdCode },
+        candidates: scoreRowsToInvitees(rows),
+        onSent: () => finishHandoffInvite(true),
+      });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handoffReturn, globalLoaded]);
   const finishHandoffInvite = (sent: boolean) => {
-    setHandoffInvite(null);
     if (sent) {
       clearJobSelection();
       setSelectedScoredResumes([]);
@@ -1895,7 +1890,8 @@ export default function ResumeScoringPage({
         }, 2000);
       } catch (err) {
         console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
-        toast.error('Failed to start scoring. Please try again.');
+        // Show the reason (e.g. not enough Resume Scoring units) when there is one.
+        toast.error(err instanceof Error && err.message ? err.message : 'Failed to start scoring. Please try again.');
         // Mark all queued items as failed so the modal shows the error
         for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
@@ -2385,7 +2381,7 @@ export default function ResumeScoringPage({
       <CandidateScoringDetailPage
         allowCreateInviteTarget
         /* Invite ▾ → Create / Send for this job, this candidate. */
-        onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates })}
+        onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates: asScoreCandidates(candidates) })}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
           const row = _scoredList.find((r: any) => r.id === scoreId);
@@ -2503,7 +2499,8 @@ export default function ResumeScoringPage({
       <CandidateScoringDetailPage
         allowCreateInviteTarget
         /* Invite ▾ → Create / Send for this score's own job. A row with no
-           job ('global') keeps the older invite flow. */
+           job ('global'): the detail page opens THE popup itself, on its
+           picker of every published one. */
         onOpenInviteDialog={candidateJdId !== 'global' ? (kind, candidates) => setInviteRequest({
           kind,
           job: {
@@ -2512,7 +2509,7 @@ export default function ResumeScoringPage({
             jdCode: selectedCandidateForView.jobCode,
             versionNumber: selectedCandidateForView.jobVersion,
           },
-          candidates,
+          candidates: asScoreCandidates(candidates),
         }) : undefined}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId, resumeVersion) => {
@@ -2912,7 +2909,7 @@ export default function ResumeScoringPage({
           resumes={scoredResumesData}
           /* Row Invite ▸ and the selection's Actions → Create / Send
              Assessment | AI Interview for this job — Job Details' popup. */
-          onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates })}
+          onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem, detailsVersionNumber), candidates: asScoreCandidates(candidates) })}
           displayMode={jobResumesDisplayMode}
           onDisplayModeChange={setJobResumesDisplayMode}
           jobTitle={selectedHistoryItem.jobTitle}
@@ -3531,11 +3528,10 @@ export default function ResumeScoringPage({
                 jobId="global"
                 availableUnits={availableASUnits ?? 10}
                 /* This list spans every job, so neither invite target can be
-                   pre-checked (no single jd_id to ask) - each row resolves
-                   its OWN job's Assessment/AI Interview when actually
-                   clicked (InviteShareModal already does this for
-                   Assessment; this opts the same row into it for AI
-                   Interview too), rather than being pre-gated here. */
+                   pre-checked (no single jd_id to ask) - each invite opens
+                   THE invite popup for its row's OWN job (or, for ticked
+                   rows across jobs, on the popup's picker), rather than
+                   being pre-gated here. */
                 enableInternalAIInterviewInvite
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
@@ -3564,7 +3560,6 @@ export default function ResumeScoringPage({
                 groupByEmail={globalListMode === 'candidates'}
                 onCandidateOrderChange={(candidates) => { candidateNavOrderRef.current = candidates; }}
                 viewPillsSlot={viewPills}
-                onCreateInviteTarget={(kind, job, rows) => setCreateInviteTarget({ kind, job, rows, view: 'candidates' })}
               />
             )}
           </div>
@@ -3864,23 +3859,21 @@ export default function ResumeScoringPage({
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="my-1 bg-gray-100" />
                     {(() => {
-                      /* The ticked jobs, each as the job its invite goes to
-                         (its latest version — the one the row shows). */
-                      const tickedJobs: InviteTargetJob[] = selectableJobs
-                        .filter(item => {
-                          const k = resolveHistoryGroupKey(item);
-                          return selectedHistoryItems.has(k) || isJobPartlySelected(k);
-                        })
-                        .map(item => ({ jdId: item.jobId, jdCode: jdCodeOf(item) || undefined, jdTitle: item.jobTitle }));
-                      const assessmentTarget = resolveInviteTargetState('assessment', tickedJobs, id => jobViewInviteTargets.hasAssessment(id));
-                      const interviewTarget = resolveInviteTargetState('interview', tickedJobs, id => jobViewInviteTargets.hasAIInterview(id));
-                      const create = (kind: InviteHandoffKind) => (job: InviteTargetJob) =>
-                        setCreateInviteTarget({ kind, job, rows: jobViewExportRows, view: 'job' });
+                      /* THE invite popup with the ticked jobs' candidates:
+                         for the one ticked job (its latest version — the one
+                         the row shows), or with several on the popup's own
+                         picker. It offers Create when the job has none yet. */
+                      const openJobBulkInvite = (kind: 'assessment' | 'interview') => openInvite({
+                        kind,
+                        job: singleSelectedJob ? inviteJobOf(singleSelectedJob) : undefined,
+                        candidates: scoreRowsToInvitees(jobViewExportRows),
+                        onSent: () => clearJobSelection(),
+                      });
                       return (
                         <>
                           {renderInviteTargetItems({
                             kind: 'assessment',
-                            target: assessmentTarget,
+                            target: { state: 'ready' },
                             itemClass: itemCls,
                             allowed: jobActionPerms.canCreateAssessments,
                             deniedReason: jobActionPerms.assessmentDeniedReason,
@@ -3889,13 +3882,12 @@ export default function ResumeScoringPage({
                                 e.preventDefault();
                                 return;
                               }
-                              if (guard()) setJobBulkAction('assessment');
+                              if (guard()) openJobBulkInvite('assessment');
                             },
-                            onCreate: create('assessment'),
                           })}
                           {renderInviteTargetItems({
                             kind: 'interview',
-                            target: interviewTarget,
+                            target: { state: 'ready' },
                             itemClass: itemCls,
                             allowed: jobActionPerms.mayInviteAIInterview,
                             deniedReason: jobActionPerms.aiInterviewDeniedReason,
@@ -3904,9 +3896,8 @@ export default function ResumeScoringPage({
                                 e.preventDefault();
                                 return;
                               }
-                              if (guard()) setJobBulkAction('interview');
+                              if (guard()) openJobBulkInvite('interview');
                             },
-                            onCreate: create('interview'),
                           })}
                         </>
                       );
@@ -4731,61 +4722,9 @@ export default function ResumeScoringPage({
               const action = jobBulkAction;
               setJobBulkAction(null);
               if (action === 'download') await runJobBulkDownload(rows);
-              else if (action === 'assessment') { setJobBulkRows(rows); setShowJobAssessmentInvite(true); }
-              else { setJobBulkRows(rows); setShowJobAIInterviewInvite(true); }
             }}
           />
         )}
-
-        {showJobAssessmentInvite && singleSelectedJob && jobBulkRows && (
-          <BulkInviteModal
-            selectedResumes={jobBulkRows}
-            jobId={singleSelectedJob.jobId}
-            jobTitle={singleSelectedJob.jobTitle}
-            onClose={() => { setShowJobAssessmentInvite(false); setJobBulkRows(null); }}
-            onSuccess={() => {
-              setShowJobAssessmentInvite(false);
-              setJobBulkRows(null);
-              clearJobSelection();
-            }}
-          />
-        )}
-
-        {showJobAIInterviewInvite && jobBulkRows && (() => {
-          // One invite per person — a candidate scored on several ticked
-          // jobs is listed once.
-          const seen = new Set<string>();
-          const people = jobBulkRows.filter((r) => {
-            const k = String(r.email || r.resumeId || r.id).toLowerCase();
-            if (seen.has(k)) return false;
-            seen.add(k);
-            return true;
-          });
-          return (
-            <InviteToAIInterviewFlow
-              open
-              onClose={() => { setShowJobAIInterviewInvite(false); setJobBulkRows(null); }}
-              // One ticked job → only its interviews; several → every interview.
-              jobId={singleSelectedJob?.jobId}
-              candidates={people.map((r) => ({
-                id: r.resumeId || r.id,
-                name: r.candidateName || 'Unknown',
-                email: r.email || undefined,
-              }))}
-              resumes={people.map((r) => ({
-                id: r.resumeId || r.id,
-                name: r.candidateName || 'Unknown',
-                email: r.email,
-                phone: r.phone,
-              })) as any}
-              onInvited={() => {
-                setShowJobAIInterviewInvite(false);
-                setJobBulkRows(null);
-                clearJobSelection();
-              }}
-            />
-          );
-        })()}
 
         {showJobExportModal && (
           <ScoredResumesExportModal
@@ -5500,55 +5439,6 @@ export default function ResumeScoringPage({
               </div>
             </div>
           </div>
-        );
-      })()}
-
-      {createInviteTarget && (
-        <CreateInviteTargetModal
-          kind={createInviteTarget.kind}
-          jdCode={createInviteTarget.job.jdCode}
-          jdTitle={createInviteTarget.job.jdTitle}
-          candidateCount={peopleIn(createInviteTarget.rows)}
-          onCancel={() => setCreateInviteTarget(null)}
-          onStart={startCreateInviteTarget}
-        />
-      )}
-
-      {/* Back from creating it: confirm who (the same popup as Actions), then invite. */}
-      {handoffInvite && !handoffInvite.confirmed && (
-        <BulkActionConfirmModal
-          action={handoffInvite.handoff.kind}
-          rows={handoffInvite.rows}
-          onCancel={() => finishHandoffInvite(false)}
-          onConfirm={(rows) => setHandoffInvite({ ...handoffInvite, rows, confirmed: true })}
-        />
-      )}
-      {handoffInvite?.confirmed && handoffInvite.handoff.kind === 'assessment' && (
-        <BulkInviteModal
-          selectedResumes={handoffInvite.rows}
-          jobId={handoffInvite.handoff.jdId}
-          jobTitle={handoffInvite.handoff.jdTitle}
-          onClose={() => finishHandoffInvite(false)}
-          onSuccess={() => finishHandoffInvite(true)}
-        />
-      )}
-      {handoffInvite?.confirmed && handoffInvite.handoff.kind === 'interview' && (() => {
-        const seen = new Set<string>();
-        const people = handoffInvite.rows.filter((r) => {
-          const k = String(r.email || r.resumeId || r.id).toLowerCase();
-          if (seen.has(k)) return false;
-          seen.add(k);
-          return true;
-        });
-        return (
-          <InviteToAIInterviewFlow
-            open
-            onClose={() => finishHandoffInvite(false)}
-            jobId={handoffInvite.handoff.jdId}
-            candidates={people.map((r) => ({ id: r.resumeId || r.id, name: r.candidateName || 'Unknown', email: r.email || undefined }))}
-            resumes={people.map((r) => ({ id: r.resumeId || r.id, name: r.candidateName || 'Unknown', email: r.email, phone: r.phone })) as any}
-            onInvited={() => finishHandoffInvite(true)}
-          />
         );
       })()}
 

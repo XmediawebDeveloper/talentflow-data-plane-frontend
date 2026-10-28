@@ -6,11 +6,8 @@ import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, B
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
-import ShareAssessmentModal from './ShareAssessmentModal';
-import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
-import InviteToAssessmentFlow from './InviteToAssessmentFlow';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
-import type { Resume as ResumeRecord } from '@/lib/types/types';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -365,17 +362,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // version to open, so the button can show a spinner instead of looking dead.
   const [loadingResumeDetail, setLoadingResumeDetail] = useState(false);
 
-  // Invite flows — both render their existing modal over this page.
-  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
-  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
-  /* The shared Invite to Assessment dialog (the Invite to AI Interview
-     dialog's layout): what it offers, what is picked, and whether it is
-     loading. Several can be picked, as this page always allowed. */
-  const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
-  const [pickedAssessments, setPickedAssessments] = useState<any[]>([]);
-  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
-  const [loadingPickerAssessments, setLoadingPickerAssessments] = useState(false);
-  const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
+  // Invite ▾ — THE invite popup (see openInviteDialogFor).
+  const { open: openInvite } = useInviteDialog();
   /* The open tab survives a refresh (sessionStorage, this tab only). Read in
      the initializer: this view only mounts client-side, after the scores load. */
   const [activeTab, setActiveTabState] = useState<DetailTab>(() => {
@@ -1120,83 +1108,34 @@ Best regards`);
     }
   };
 
-  // Invite for assessment — opens the shared Invite to Assessment dialog
-  // scoped to this JD, as Invite for AI interview below does: this candidate,
-  // then the job's assessment versions as cards (the dialog says so when there
-  // are none), with "Browse all assessments instead" for the rest. Same
-  // selection rule as before: only published, non-revoked assessments are
-  // invitable — loaded across every job, like the other Invite → Assessment
-  // entry points, so "Browse all" really is all of them.
-  /* Opens with this job's latest assessment version already ticked (the
-     one tagged "Latest" — the only one when there is just one; after a
-     create round trip, the one just published), so it is ready to send. */
-  /* This candidate, as the Create / Send popup lists it. */
+  /* Invite ▾ → Assessment | AI Interview: THE invite popup (VersionInviteDialog)
+     with this candidate ticked. A host that tracks the job itself hands its
+     own opener (`onOpenInviteDialog`); otherwise (Resume Scoring's cross-job
+     list) the global one opens for this score's job, or — with no job — on
+     the popup's picker of every published one. */
   const openInviteDialogFor = (kind: 'assessment' | 'interview') => {
     setShowInviteMenu(false);
-    onOpenInviteDialog?.(kind, [{
+    const candidate: InviteCandidate = {
       id: resume.resumeId || resume.id,
       name: resume.candidateName,
       email: resume.email,
       phone: resume.phone,
       resumeId: resume.resumeId,
-    }]);
+    };
+    if (onOpenInviteDialog) { onOpenInviteDialog(kind, [candidate]); return; }
+    openInvite({
+      kind,
+      job: jobId && jobId !== 'global'
+        ? { jdId: jobId, jdTitle: jobTitle, jdCode: resume.jobCode || jdDetails?.job_id, versionNumber: resume.jobVersion }
+        : undefined,
+      candidates: [{ ...candidate, source: 'score-resume', inviteSource: 'Resume Scoring' }],
+    });
   };
 
-  const handleInviteForAssessment = async () => {
-    setShowInviteMenu(false);
-    if (onOpenInviteDialog) { openInviteDialogFor('assessment'); return; }
+  const handleInviteForAssessment = () => openInviteDialogFor('assessment');
 
-    setPickedAssessments([]);
-    setPickerAssessments([]);
-    setShowAssessmentPicker(true);
-    setLoadingPickerAssessments(true);
-    try {
-      const { assessmentService } = await import('@/lib/services/assessmentService');
-      const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
-
-      const resp = await assessmentService.list({ status: 'published', page_size: 100 });
-      const revokedIds = getLocallyRevokedAssessmentIds();
-      const items: any[] = (resp?.items || []).filter((a: any) => {
-        const status = String(a?.status || '').toLowerCase();
-        if (status !== 'published' && status !== 'active') return false;
-        return !isAssessmentRevoked(a, revokedIds);
-      });
-      setPickerAssessments(items);
-      if (jobId) {
-        const { latestJobAssessment } = await import('@/components/assessments/JobAssessmentVersionPicker');
-        const newest = latestJobAssessment(items, jobId);
-        if (newest) setPickedAssessments([newest]);
-      }
-    } catch (err) {
-      console.error('[CandidateScoringDetailPage] Failed to load assessments:', err);
-      toast.error('Could not load assessments. Please try again.');
-    } finally {
-      setLoadingPickerAssessments(false);
-    }
-  };
-
-  /* Send Invitations in the dialog: the picked assessments into the same
-     Share Assessment modal as before — the first as primary, the rest as
-     additional. */
-  const handleConfirmAssessmentPick = () => {
-    if (pickedAssessments.length === 0) {
-      toast.error('Please select at least one assessment.');
-      return;
-    }
-    setShareAssessments(pickedAssessments);
-    setShowAssessmentPicker(false);
-    setPickedAssessments([]);
-    setShowShareAssessmentModal(true);
-  };
-
-  // Invite for AI interview — opens the shared Invite to AI Interview dialog
-  // scoped to this JD: this candidate, then the job's active interview
-  // versions to pick from (the dialog says so when there are none).
-  const handleInviteForAIInterview = () => {
-    setShowInviteMenu(false);
-    if (onOpenInviteDialog) { openInviteDialogFor('interview'); return; }
-    setShowAIInviteFlow(true);
-  };
+  // Invite for AI interview — THE invite popup, as Assessment above.
+  const handleInviteForAIInterview = () => openInviteDialogFor('interview');
 
   /* "+ Create AI Assessment / AI Interview" - the landing page's round trip
      for this one candidate: CreateInviteTargetModal explains it, the create
@@ -1259,8 +1198,7 @@ Best regards`);
       setPublishedOnReturn((p) => ({ ...p, [h.kind]: true }));
       inviteTargets.refresh();
       toast.success(`${what} is live for ${jobName} - now invite ${resume.candidateName || 'this candidate'}.`);
-      if (h.kind === 'assessment') handleInviteForAssessment();
-      else setShowAIInviteFlow(true);
+      openInviteDialogFor(h.kind);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, resume.id]);
@@ -3132,35 +3070,6 @@ Best regards`);
       </div>
           </>
 
-          {/* Invite to Assessment — the shared dialog (the same one AI Talent
-              Match, a resume's Invite and Resume Scoring's Invite open),
-              scoped to this JD and prefilled with THIS candidate. */}
-          <InviteToAssessmentFlow
-            open={showAssessmentPicker}
-            onClose={() => {
-              setShowAssessmentPicker(false);
-              setPickedAssessments([]);
-            }}
-            assessments={pickerAssessments}
-            loading={loadingPickerAssessments}
-            multiple
-            selectedAssessments={pickedAssessments}
-            onSelectedAssessmentsChange={setPickedAssessments}
-            candidates={[{
-              id: fullResumeData.resumeId || resume.resumeId || resume.id,
-              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
-              email: fullResumeData.email || resume.email || undefined,
-            }]}
-            resumes={[{
-              id: fullResumeData.resumeId || resume.resumeId || resume.id,
-              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
-              email: fullResumeData.email || resume.email,
-              phone: fullResumeData.phone || resume.phone,
-            } as unknown as ResumeRecord]}
-            onProceed={handleConfirmAssessmentPick}
-            jobId={jobId || undefined}
-          />
-
           {/* Share Resume — the same dialog the resume table and the resume
               page open. The eye reuses View Resume, whose preview sits at
               z-[60], so it opens above this. */}
@@ -3370,92 +3279,6 @@ Best regards`);
               </div>
             </div>
           )}
-
-          {/* Share Assessment via Email — the same modal the JD and assessment
-              pages use, opened here without leaving the candidate page.
-              Prefilled with THIS candidate, same as the row-level Invite in
-              ScoredResumesTable — this page's own Invite button was opening
-              both share modals with a blank candidate form; the recruiter had
-              to retype the name and email of the very candidate they were
-              already looking at. */}
-          {showShareAssessmentModal && shareAssessments.length > 0 && (
-            <ShareAssessmentModal
-              isOpen={showShareAssessmentModal}
-              onClose={() => {
-                setShowShareAssessmentModal(false);
-                setShareAssessments([]);
-              }}
-              prefilledCandidates={
-                (fullResumeData.email || resume.email)
-                  ? [{
-                      id: fullResumeData.resumeId || resume.resumeId || resume.id,
-                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
-                      email: fullResumeData.email || resume.email || '',
-                      phone: fullResumeData.phone || resume.phone,
-                      source: 'manual',
-                      resumeId: fullResumeData.resumeId || resume.resumeId,
-                    }]
-                  : undefined
-              }
-              assessment={{
-                id: shareAssessments[0].id,
-                title: shareAssessments[0].title,
-                duration: `${shareAssessments[0].duration_minutes || 30} min`,
-                questions: (shareAssessments[0].hr_enabled ? 1 : 0)
-                  + (shareAssessments[0].technical_enabled ? 1 : 0)
-                  + (shareAssessments[0].coding_enabled ? 1 : 0),
-                type: 'AI-Generated',
-                short_id: shareAssessments[0].short_id,
-                version: shareAssessments[0].version,
-                // The job's display ID (JD-133), never `jobId` — that is the
-                // JD row's UUID, and the modal header printed it verbatim. The
-                // assessment's own job first: "Browse all" can pick another job's.
-                jd_short_id: shareAssessments[0].jd_short_id || resume.jobCode || jdDetails?.job_id,
-                jd_title: shareAssessments[0].jd_title || jobTitle,
-                jd_version: shareAssessments[0].jd_version,
-              }}
-              additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
-                id: a.id,
-                title: a.title,
-                duration: `${a.duration_minutes || 30} min`,
-                questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
-                type: 'AI-Generated',
-                short_id: a.short_id,
-                version: a.version,
-                jd_short_id: a.jd_short_id || resume.jobCode || jdDetails?.job_id,
-                jd_title: a.jd_title || jobTitle,
-                jd_version: a.jd_version,
-              }))}
-              // This page is the Resume Scoring candidate detail view (opened
-              // from a scored resume), not the JD page — "JD" here was a
-              // copy-paste artifact that mistagged every invite sent from
-              // this page, which meant a backend check keyed on invite_source
-              // would never see these invites as Resume-Scoring-originated.
-              inviteSource="Resume Scoring"
-            />
-          )}
-
-          {/* Invite to AI Interview — the shared dialog, scoped to this JD and
-              prefilled with THIS candidate. */}
-          <InviteToAIInterviewFlow
-            open={showAIInviteFlow}
-            onClose={() => setShowAIInviteFlow(false)}
-            jobId={jobId || undefined}
-            // The job's latest Active interview version, picked on open.
-            preselectLatest
-            candidates={[{
-              id: fullResumeData.resumeId || resume.resumeId || resume.id,
-              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
-              email: fullResumeData.email || resume.email || undefined,
-            }]}
-            resumes={[{
-              id: fullResumeData.resumeId || resume.resumeId || resume.id,
-              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
-              email: fullResumeData.email || resume.email,
-              phone: fullResumeData.phone || resume.phone,
-            } as unknown as ResumeRecord]}
-            onInvited={() => setShowAIInviteFlow(false)}
-          />
 
           {/* View JD tab: confirm before leaving the candidate scorecard for
               the standalone JD Details page. */}

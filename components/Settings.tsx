@@ -34,6 +34,10 @@ import {
 // ApiError (handleApiError) carries the backend `detail` as its message.
 const noopSubscribe = () => () => {};
 
+// Largest original image accepted for a profile picture. (What is uploaded is the
+// 256px downscaled copy; the backend separately caps that payload.)
+const AVATAR_MAX_BYTES = 10 * 1024 * 1024;
+
 // Fallback when /auth/me sent no role_display (same labels as the header).
 const ROLE_LABELS: Record<string, string> = {
   tenant_admin: 'Owner',
@@ -290,8 +294,9 @@ export default function Settings() {
       toast.error('Please choose a JPG or PNG image');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be 5MB or smaller');
+    if (file.size > AVATAR_MAX_BYTES) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      toast.error(`This image is ${sizeMb} MB. Profile pictures must be 10 MB or smaller — please choose a smaller image.`);
       return;
     }
     setIsAvatarBusy(true);

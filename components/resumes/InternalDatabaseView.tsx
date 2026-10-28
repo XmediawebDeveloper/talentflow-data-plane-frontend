@@ -18,7 +18,8 @@ import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import VersionHistoryModal from '@/components/VersionHistoryModal';
-import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
@@ -77,8 +78,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
-  // AI Interview invite — same shared flow the My Resumes list uses.
-  const [isAIInterviewFlowOpen, setIsAIInterviewFlowOpen] = useState(false);
   const [isDownloadingSelection, setIsDownloadingSelection] = useState(false);
   // ZIP download confirmation modal — shown when more than one resume is selected.
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -116,8 +115,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // AI Talent Match modal state
   const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
 
-  // Assessment modal state
-  const [showAssessmentJobModal, setShowAssessmentJobModal] = useState(false);
+  // Invite Assessment / Invite AI Interview both open the one shared invite
+  // popup (VersionInviteDialog); it asks for the assessment / interview itself.
+  const { open: openInvite } = useInviteDialog();
 
   // Version History modal state
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -600,7 +600,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error('Please select at least one resume');
       return;
     }
-    setIsAIInterviewFlowOpen(true);
+    openInvite({
+      kind: 'interview',
+      candidates: selectedInviteCandidates(),
+      onSent: () => setSelectedResumes([]),
+    });
   };
 
   /**
@@ -708,46 +712,40 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     setShowApplyToJobModal(true); // Use the same modal for selecting JD
   };
 
-  // ✅ Handle bulk Assessment creation - Show job selection modal first
+  /* The ticked resumes as invite-popup candidates. Resumes without an email
+     are still passed — the popup lists them as disabled "No email" rows.
+     Rows carry "No email" / "No phone" placeholders, stripped back here. */
+  const selectedInviteCandidates = (): InviteCandidate[] =>
+    resumes
+      .filter((r) => selectedResumes.includes(r.id))
+      .map((r) => {
+        const email = typeof r.email === 'string' && r.email.includes('@') ? r.email.trim() : '';
+        const rawPhone = (r as any).phone;
+        const phone = typeof rawPhone === 'string' && rawPhone && rawPhone !== 'No phone' ? rawPhone : undefined;
+        return {
+          id: r.id,
+          name: r.name,
+          email,
+          phone,
+          resumeId: r.id,
+          inviteSource: 'Internal DB',
+        };
+      });
+
+  // Bulk Invite Assessment — opens the shared invite popup, which starts with
+  // a picker of every published assessment. (It used to pick a job and route
+  // to the assessments page with candidates in sessionStorage that nothing
+  // read, so no invite was ever sent.)
   const handleBulkAssessment = () => {
-    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
-    if (selectedResumesList.length === 0) {
+    if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
       return;
     }
-    setResumesForApply(selectedResumesList);
-    fetchJobs();
-    setShowAssessmentJobModal(true); // Show job selection modal
-  };
-
-  // Handle job selection for Assessment creation
-  const handleAssessmentJobSelect = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
-    if (jobIds.length === 0 || resumeIds.length === 0) return;
-
-    setShowAssessmentJobModal(false);
-
-    // Get the selected job and resumes
-    const jobId = jobIds[0]; // Take first selected job
-    const selectedJob = jobRecords?.[0] || jobs.find(j => j.id === jobId);
-    const selectedResumesList = resumeIds.map(id => {
-      const resume = resumes.find(r => r.id === id);
-      return {
-        id: id,
-        candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
-        email: resume?.email || '',
-      };
+    openInvite({
+      kind: 'assessment',
+      candidates: selectedInviteCandidates(),
+      onSent: () => setSelectedResumes([]),
     });
-
-    // Store resumes in session storage for assessment page
-    sessionStorage.setItem('assessmentResumes', JSON.stringify(selectedResumesList));
-
-    // Clear selection
-    setSelectedResumes([]);
-    setResumesForApply([]);
-
-    // Navigate to assessment creation page with job pre-selected
-    const encodedTitle = encodeURIComponent(selectedJob?.title || '');
-    router.push(`/recruitment/assessments?create=true&jd_id=${jobId}&jd_title=${encodedTitle}`);
   };
 
   // Handle actual apply action from modal - using async Celery scoring
@@ -1216,20 +1214,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         )}
       </div>
 
-      {/* AI Interview invite — the same component My Resumes uses, so the two
-          lists can't drift apart again. */}
-      <InviteToAIInterviewFlow
-        open={isAIInterviewFlowOpen}
-        onClose={() => setIsAIInterviewFlowOpen(false)}
-        candidates={resumes
-          .filter((r) => selectedResumes.includes(r.id))
-          .map((r) => ({ id: r.id, name: r.name, email: r.email }))}
-        /* The full rows too, so the dialog can show the shared Candidates
-           Selected panel rather than a bare count. */
-        resumes={resumes.filter((r) => selectedResumes.includes(r.id)) as any}
-        onInvited={() => setSelectedResumes([])}
-      />
-
       {isUploadModalOpen && (
         <UploadModal
           folders={folders}
@@ -1310,20 +1294,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             // Navigate to AI Talent Match page with the selected JD
             router.push(`/recruitment/ai-talent-match?jdId=${jobId}&view=new`);
           }}
-        />
-      )}
-
-      {/* Assessment Job Selection Modal */}
-      {showAssessmentJobModal && (
-        <ApplyToJobModal
-          resumes={resumesForApply}
-          jobs={jobs}
-          mode="assessment"
-          onClose={() => {
-            setShowAssessmentJobModal(false);
-            setResumesForApply([]);
-          }}
-          onApply={handleAssessmentJobSelect}
         />
       )}
 

@@ -879,6 +879,7 @@ export default function JobOpeningsPage() {
     <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <JobsListing
         jobs={jobs}
+        onRefresh={fetchJobs}
         jobsFullyLoaded={jobsFullyLoaded}
         onCreateNew={handleCreateNew}
         onCreateNewDisabled={!(hasPermission('canCreateJD') || isTenantAdmin)}

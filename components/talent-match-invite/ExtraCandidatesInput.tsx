@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { CheckCircle, Copy, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import readXlsxFile from 'read-excel-file/browser';
 import { isValidEmailFormat } from '@/lib/utils/email';
@@ -27,6 +27,8 @@ interface EntryRow {
   email: string;
   phone: string;
   origin: 'manual' | 'excel';
+  /** Copy Link already invited this row by link — it is not emailed. */
+  linked?: boolean;
 }
 
 const newRow = (partial: Partial<EntryRow> = {}): EntryRow => ({
@@ -87,6 +89,7 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
   const seen = new Set<string>();
   const out: BulkExtraCandidate[] = [];
   for (const r of rows) {
+    if (r.linked) continue;
     const email = r.email.trim().toLowerCase();
     const name = r.name.trim();
     if (!email || !name || !isValidEmailFormat(email) || seen.has(email)) continue;
@@ -107,10 +110,15 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
 export default function ExtraCandidatesInput({
   onChange,
   disabled = false,
+  onCopyLink,
 }: {
   onChange: (next: BulkExtraCandidate[]) => void;
   disabled?: boolean;
+  /** Per-row Copy Link: creates this candidate's invitation without an email
+   *  and resolves to the link; the row is then left out of the email send. */
+  onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
 }) {
+  const [linking, setLinking] = useState<string | null>(null);
   // Opens on Manual with one empty card, like every other invite popup.
   // Upload Excel only opens the file chooser; its rows land in these cards.
   const mode: InviteEntryMode = DEFAULT_INVITE_ENTRY_MODE;
@@ -128,6 +136,20 @@ export default function ExtraCandidatesInput({
   const updateRow = (id: string, field: 'name' | 'email' | 'phone', value: string) =>
     commit(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   const removeRow = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const copyLink = async (row: EntryRow) => {
+    if (!onCopyLink) return;
+    setLinking(row.id);
+    try {
+      const link = await onCopyLink({ name: row.name.trim(), email: row.email.trim().toLowerCase() });
+      try { await navigator.clipboard.writeText(link); } catch { /* shown in the toast below */ }
+      commit(rows.map((r) => (r.id === row.id ? { ...r, linked: true } : r)));
+      toast.success(`Invitation link for ${row.name.trim()} copied`, { description: link });
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not create the link. Please try again.');
+    } finally {
+      setLinking(null);
+    }
+  };
   const clearAll = () => commit([]);
 
   const emailOf = (r: EntryRow) => r.email.trim().toLowerCase();
@@ -248,7 +270,7 @@ export default function ExtraCandidatesInput({
                           value={row.name}
                           onChange={(e) => updateRow(row.id, 'name', e.target.value)}
                           placeholder="e.g., John Doe"
-                          disabled={disabled}
+                          disabled={disabled || row.linked}
                           aria-invalid={missingName || undefined}
                           className={`${INPUT} ${missingName ? INPUT_BAD : INPUT_OK}`}
                         />
@@ -261,7 +283,7 @@ export default function ExtraCandidatesInput({
                           value={row.email}
                           onChange={(e) => updateRow(row.id, 'email', e.target.value)}
                           placeholder="e.g., john.doe@example.com"
-                          disabled={disabled}
+                          disabled={disabled || row.linked}
                           aria-invalid={badEmail || dup || undefined}
                           className={`${INPUT} ${badEmail || dup ? INPUT_BAD : INPUT_OK}`}
                         />
@@ -269,6 +291,23 @@ export default function ExtraCandidatesInput({
                         {dup && <p className="text-xs text-destructive mt-1">This email is already in the list</p>}
                       </div>
                     </div>
+                    {onCopyLink && (
+                      <button
+                        type="button"
+                        onClick={() => { if (!row.linked) void copyLink(row); }}
+                        disabled={disabled || linking === row.id || (!row.linked && (!row.name.trim() || !email || badEmail || dup))}
+                        title={row.linked ? 'Invited by link — not emailed' : "Create and copy this candidate’s invitation link (no email is sent)"}
+                        className={`mt-6 shrink-0 flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-xs border transition-colors whitespace-nowrap disabled:opacity-50 ${
+                          row.linked
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {linking === row.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : row.linked ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></> : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => removeRow(row.id)}
