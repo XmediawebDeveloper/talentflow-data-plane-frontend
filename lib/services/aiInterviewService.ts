@@ -519,6 +519,10 @@ export interface AIInterviewAuditTrailResponse {
   page_size: number;
   total_lifecycle_events: number;
   total_candidate_events: number;
+  interviews_created?: number;
+  candidates_invited?: number;
+  candidates_in_progress?: number;
+  candidates_completed?: number;
 }
 
 export const aiInterviewService = {

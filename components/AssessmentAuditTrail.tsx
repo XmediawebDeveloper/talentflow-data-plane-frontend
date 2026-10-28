@@ -50,6 +50,12 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   candidate_exited: <LogOut className="w-4 h-4" />,
   candidate_errored: <AlertTriangle className="w-4 h-4" />,
   recording_downloaded: <Download className="w-4 h-4" />,
+  assessment_create_failed: <AlertTriangle className="w-4 h-4" />,
+  invite_resent: <RefreshCw className="w-4 h-4" />,
+  link_shared: <Copy className="w-4 h-4" />,
+  invite_bounced: <MailWarning className="w-4 h-4" />,
+  invite_revoked: <Ban className="w-4 h-4" />,
+  invite_edited: <Edit className="w-4 h-4" />,
 };
 
 // Color mapping for each activity type
@@ -74,6 +80,12 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   candidate_exited: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
   candidate_errored: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   recording_downloaded: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
+  assessment_create_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  invite_resent: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
+  link_shared: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
+  invite_bounced: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  invite_revoked: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  invite_edited: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
 };
 
 export interface AssessmentAuditTrailProps {
