@@ -19,4 +19,5 @@ middleware.ts.bak
 Dockerfile
 docker-compose*.yml
 .dockerignore
+.gitlab/
 README.md
