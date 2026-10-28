@@ -5682,9 +5682,9 @@ function AIMatchTabContent({
           activeFilterCount={aiMatchActiveFilterCount}
           filtersApplied={aiMatchActiveFilterCount > 0}
           onClearFilters={clearAiMatchFilters}
-          /* sm:h-9 on the List/Grid switch so it matches the 36px toolbar band
-             from sm; phones keep its own 28px (the Job Openings pill height). */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />}
+          /* h-9 on the List/Grid switch at every width so it lines up with
+             Select All on phones too (36px, 16px icons), not only from sm. */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" />}
           beforeSearch={
             <>
               {/* Select All — the shared ToolbarSelectAll (this page / all /
@@ -5805,9 +5805,11 @@ function AIMatchTabContent({
            row under the toolbar (Score, Invite to Assessment / AI Interview,
            Export). Rendered outside ListToolbar: its `beforeSearch` slot is
            a shrink-wrapped box beside Select All, so a row inside it
-           wrapped cramped and misaligned. h-9 matches the toolbar band. */
+           wrapped cramped and misaligned. h-9 matches the toolbar band.
+           Below sm both buttons split the row edge to edge, like the
+           stacked toolbar lines above them. */
         const bulkActionsRow = selectedIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex flex-wrap items-center gap-2 mb-3 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
