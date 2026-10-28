@@ -53,15 +53,37 @@ variables:
   - SSH_OPTS="-i $AWS_SSH_KEY.pem -o BatchMode=yes -o StrictHostKeyChecking=accept-new"
   - SSH_TARGET="$AWS_SERVER_USER@$AWS_SERVER_HOST"
 
+# Only production may be merged into aws_live: if aws_live's code differs from
+# production (another branch was merged), stop before anything is built.
+"Only from production":
+  extends: .aws-live
+  stage: check
+  script:
+    - git fetch --depth=1 origin production
+    - if [ "$(git rev-parse 'HEAD^{tree}')" != "$(git rev-parse 'FETCH_HEAD^{tree}')" ]; then
+        echo "aws_live does not match production. Only production may be merged into aws_live — nothing was deployed.";
+        exit 1;
+      fi
+    - echo "aws_live matches production"
+
 # Lint is advisory, same as the existing "Code style (advisory)" job —
 # type errors are still caught by `next build` in the Build stage.
 "Check":
   extends: .aws-live
   stage: check
+  # The full report goes to an artifact — printed in full it exceeds GitLab's
+  # 4 MB job-log limit. The log shows only the tail and the problem count.
   script:
     - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
         -v "$CI_PROJECT_DIR:/src" -w /src node:22-alpine
-        sh -c "npm ci --no-audit --no-fund && npx eslint ."
+        sh -c "npm ci --no-audit --no-fund --loglevel=error && npx eslint . -f unix -o eslint-report.txt"
+        || lint_failed=1
+    - tail -n 40 eslint-report.txt 2>/dev/null || true
+    - test -z "${lint_failed:-}"
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths: [eslint-report.txt]
   allow_failure: true
 
 "Build":
