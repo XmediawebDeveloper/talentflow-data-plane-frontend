@@ -39,7 +39,7 @@ import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { distributeSkillsLocally } from '@/lib/utils/questionDistribution';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
-import ShareAIInterviewModal from './ShareAIInterviewModal';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import SuccessAnimation from '@/components/ui/success-animation';
 import type { Job } from '@/lib/types/types';
 import { formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
@@ -293,7 +293,9 @@ export default function AIInterviewPreview() {
   /* Flipped by a successful publish: the page then shows the published
      screen in place of the review. */
   const [published, setPublished] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  // "Share Invite Link" opens THE invite popup (the one Assessments uses)
+  // for this job and this interview version.
+  const { open: openInvite } = useInviteDialog();
   /* This interview's own version (V1, V2..) for the published screen — the
      same sibling ordinal the All Interviews table shows, resolved once the
      publish lands. Undefined until then, and the row is left out. */
@@ -692,7 +694,19 @@ export default function AIInterviewPreview() {
                       type="button"
                       onClick={() => {
                         if (!canInviteAIInterview) return;
-                        setShareOpen(true);
+                        openInvite({
+                          kind: 'interview',
+                          job: interview.jd_id
+                            ? {
+                                jdId: interview.jd_id,
+                                jdTitle: interview.jd_title || interview.position || '',
+                                jdCode: interview.jd_short_id,
+                                versionNumber: interview.jd_version,
+                                status: isJdDisabled(interview.jd_status) ? 'Disabled' : interview.jd_status,
+                              }
+                            : undefined,
+                          versionId: interview.id,
+                        });
                       }}
                       aria-disabled={!canInviteAIInterview}
                       title={!canInviteAIInterview ? 'You do not have permission to invite candidates' : undefined}
@@ -716,14 +730,6 @@ export default function AIInterviewPreview() {
           </div>
         </main>
 
-        {shareOpen && (
-          <ShareAIInterviewModal
-            isOpen
-            config={interview}
-            onClose={() => setShareOpen(false)}
-            onInviteSent={() => setShareOpen(false)}
-          />
-        )}
       </>
     );
   }

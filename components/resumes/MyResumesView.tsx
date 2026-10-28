@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardList, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, HelpCircle } from 'lucide-react';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -29,15 +29,12 @@ const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeM
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
-import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
 import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
-import ShareAssessmentModal from '@/components/ShareAssessmentModal';
-import AssessmentPicker from '@/components/assessments/AssessmentPicker';
-import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
@@ -46,7 +43,6 @@ import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resum
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
-import { assessmentService } from '@/lib/services';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -1033,29 +1029,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isArchivingResumes, setIsArchivingResumes] = useState(false);
 
-  // Assessment modal state
-  const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
-  const [selectedJobForAssessment, setSelectedJobForAssessment] = useState<string | null>(null);
-  const [activeAssessments, setActiveAssessments] = useState<any[]>([]);
-  // The Invite to Assessment dialog's scroller — the picker's paging scrolls it to the top.
-  const assessmentBodyScrollRef = useRef<HTMLDivElement>(null);
-  const [loadingAssessments, setLoadingAssessments] = useState(false);
-  const [selectedAssessments, setSelectedAssessments] = useState<any[]>([]); // Changed to array for multi-select
-
-  // Share Assessment Modal state
-  const [isShareAssessmentModalOpen, setIsShareAssessmentModalOpen] = useState(false);
-  const [prefilledCandidates, setPrefilledCandidates] = useState<any[]>([]);
-  /* Candidates unticked inside an invite dialog. Kept out here so both the
-     assessment and AI-interview flows can drop someone without disturbing the
-     page's own selection. */
-  const [excludedInviteIds, setExcludedInviteIds] = useState<string[]>([]);
+  // Invite Assessment / Invite AI Interview both open the one shared invite
+  // popup (VersionInviteDialog); it asks for the assessment / interview itself.
+  const { open: openInvite } = useInviteDialog();
 
   // AI Talent Match modal state
   const [isAITalentMatchModalOpen, setIsAITalentMatchModalOpen] = useState(false);
 
-  // AI Interview: pick a published interview, then send invites to the selected
-  // candidates through the same share modal the AI Interviews module uses.
-  const [isAIInterviewPickerOpen, setIsAIInterviewPickerOpen] = useState(false);
 
   // Delete resume confirmation state
   const [deleteResumeConfirm, setDeleteResumeConfirm] = useState<{
@@ -2607,41 +2587,42 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     }
   };
 
-  // Handle Assessment button click
-  const handleAssessment = async () => {
+  /* The ticked resumes as invite-popup candidates. Resumes without an email
+     are still passed — the popup lists them as disabled "No email" rows.
+     The row mapper fills blanks with "No email" / "No phone" placeholders,
+     so those are stripped back to empty here. */
+  const selectedInviteCandidates = (): InviteCandidate[] =>
+    resumes
+      .filter((r) => selectedResumes.includes(r.id))
+      .map((r) => {
+        const email = typeof r.email === 'string' && r.email.includes('@') ? r.email.trim() : '';
+        const rawPhone = (r as any).phone;
+        const phone = typeof rawPhone === 'string' && rawPhone && rawPhone !== 'No phone' ? rawPhone : undefined;
+        return {
+          id: r.id,
+          name: r.name,
+          email,
+          phone,
+          resumeId: r.id,
+          inviteSource: 'My Resumes',
+        };
+      });
+
+  // Handle Assessment button click — opens the shared invite popup, which
+  // starts with a picker of every published assessment.
+  const handleAssessment = () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
       return;
     }
-    // Fetch active assessments if not already loaded
-    if (activeAssessments.length === 0) {
-      await fetchActiveAssessments();
-    }
-    setIsAssessmentModalOpen(true);
+    openInvite({
+      kind: 'assessment',
+      candidates: selectedInviteCandidates(),
+      onSent: () => setSelectedResumes([]),
+    });
   };
 
-  // Fetch active assessments for the Assessment modal.
-  // Revoked assessments are filtered out — once the recruiter has revoked
-  // invites on an assessment they shouldn't be able to send fresh invites
-  // through any other module; they must duplicate it to start a new round.
-  const fetchActiveAssessments = async () => {
-    setLoadingAssessments(true);
-    try {
-      const response = await assessmentService.list({ status: 'published', page_size: 100 });
-      const revokedIds = getLocallyRevokedAssessmentIds();
-      const filtered = (response.items || []).filter(
-        (a: any) => !isAssessmentRevoked(a, revokedIds)
-      );
-      setActiveAssessments(filtered);
-    } catch (error) {
-      console.error('Failed to load active assessments:', error);
-      toast.error('Failed to load active assessments');
-    } finally {
-      setLoadingAssessments(false);
-    }
-  };
-
-  // Handle AI Talent Match button click
+  // Handle AI Interview button click
   const handleAIInterview = () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
@@ -2656,7 +2637,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
-    setIsAIInterviewPickerOpen(true);
+    openInvite({
+      kind: 'interview',
+      candidates: selectedInviteCandidates(),
+      onSent: () => setSelectedResumes([]),
+    });
   };
 
   const handleAITalentMatch = async () => {
@@ -6244,197 +6229,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             fetchData(appliedSearchQuery, filters, selectedFolder, true);
             refreshAllResumesTotal();
           }}
-        />
-      )}
-
-      {/* Assessment Modal - Select Assessment */}
-      {isAssessmentModalOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-            onClick={() => {
-              setIsAssessmentModalOpen(false);
-              setSelectedAssessments([]);
-              setExcludedInviteIds([]);
-            }}
-          />
-          {/* Shell, header, body and footer are the Invite to AI Interview
-              dialog's (InviteToAIInterviewFlow), width included, so the two
-              invite actions read as one dialog wearing different labels. */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-              {/* Header */}
-              <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                    <ClipboardList className="w-4 h-4 text-brand-blue" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Invite to Assessment</h2>
-                    {/* What the dialog is for. The count lives on the Candidates
-                        Selected panel below, which tracks unticking. */}
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select candidates to invite for an assessment</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div ref={assessmentBodyScrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
-                {/* The same Candidates Selected panel the Score Resume and
-                    Apply to Job dialogs use — full list, untick to drop
-                    someone, resume version, and the eye to read a resume. */}
-                <SelectedCandidatesPanel
-                  resumes={resumes.filter(r => selectedResumes.includes(r.id))}
-                  excludedIds={excludedInviteIds}
-                  onToggleCandidate={(id) =>
-                    setExcludedInviteIds(prev =>
-                      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-                    )
-                  }
-                  tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
-                />
-
-                {/* The assessment list — the shared AssessmentPicker, which is
-                    the Invite to AI Interview dialog's picker with assessments
-                    in it: search, Grouped/Ungrouped, the one-at-a-time note,
-                    paging and the preview. It lists exactly the assessments
-                    this dialog loads (published, not revoked) and hands the
-                    one picked back to the same selection as before. */}
-                {loadingAssessments ? (
-                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                  </div>
-                ) : (
-                  <AssessmentPicker
-                    assessments={activeAssessments}
-                    selectedId={selectedAssessments[0]?.id ?? null}
-                    onSelect={(assessment) => setSelectedAssessments(assessment ? [assessment] : [])}
-                    scrollContainerRef={assessmentBodyScrollRef}
-                  />
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
-                {/* Reads like the Score Resume footer: what is still missing,
-                    and once nothing is, what is about to happen. */}
-                {(() => {
-                  const inviteeCount = selectedResumes.filter(id => !excludedInviteIds.includes(id)).length;
-                  // One line, always: it sits beside the buttons, and a second
-                  // line would push the footer taller.
-                  return (
-                    <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                      {inviteeCount === 0
-                        ? 'Select at least one candidate to continue'
-                        : selectedAssessments.length === 0
-                          ? 'Select one assessment to continue'
-                          : (
-                            <span className="inline-flex items-center gap-1.5 align-middle">
-                              <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                              Ready to invite {inviteeCount} candidate{inviteeCount === 1 ? '' : 's'} to 1 assessment
-                            </span>
-                          )}
-                    </div>
-                  );
-                })()}
-                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <button
-                    onClick={() => {
-                      setIsAssessmentModalOpen(false);
-                      setSelectedAssessments([]);
-                    }}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm whitespace-nowrap text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (selectedAssessments.length === 0) {
-                        toast.error('Please select an assessment');
-                        return;
-                      }
-
-                      // Prepare candidate data from the candidates still ticked
-                      // in the panel above — unticking has to mean something.
-                      const candidateData = resumes
-                        .filter(r => selectedResumes.includes(r.id) && !excludedInviteIds.includes(r.id))
-                        .map((r, index) => ({
-                          id: `${Date.now()}-${index}`,
-                          name: r.name,
-                          email: r.email || '',
-                          source: 'database' as const,
-                          resumeId: r.id
-                        }))
-                        .filter(c => c.email); // Only include candidates with email
-
-                      if (candidateData.length === 0) {
-                        toast.error('Selected resumes must have email addresses');
-                        return;
-                      }
-
-                      // Open ShareAssessmentModal for customization (works for both single and multiple)
-                      setPrefilledCandidates(candidateData);
-                      setIsAssessmentModalOpen(false);
-                      setIsShareAssessmentModalOpen(true);
-                    }}
-                    /* Both halves have to be answered, as in the job dialog. */
-                    disabled={
-                      selectedAssessments.length === 0 ||
-                      selectedResumes.filter(id => !excludedInviteIds.includes(id)).length === 0
-                    }
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Mail className="w-4 h-4" />
-                    Send Invitations
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* AI Interview invite — shared with the Internal Database page so both
-          lists offer the identical action. */}
-      <InviteToAIInterviewFlow
-        open={isAIInterviewPickerOpen}
-        onClose={() => setIsAIInterviewPickerOpen(false)}
-        candidates={resumes
-          .filter((r) => selectedResumes.includes(r.id))
-          .map((r) => ({ id: r.id, name: r.name, email: r.email }))}
-        /* The full rows too, so the dialog can show the shared Candidates
-           Selected panel rather than a bare count. */
-        resumes={resumes.filter((r) => selectedResumes.includes(r.id)) as any}
-        onInvited={() => setSelectedResumes([])}
-      />
-
-      {/* Share Assessment Modal with Pre-filled Candidates — one assessment,
-          the one picked in the invite dialog. */}
-      {isShareAssessmentModalOpen && selectedAssessments.length > 0 && (
-        <ShareAssessmentModal
-          isOpen={isShareAssessmentModalOpen}
-          onClose={() => {
-            setIsShareAssessmentModalOpen(false);
-            setSelectedAssessments([]);
-            setPrefilledCandidates([]);
-            setSelectedResumes([]);
-          }}
-          assessment={{
-            id: selectedAssessments[0].id,
-            title: selectedAssessments[0].title,
-            duration: `${selectedAssessments[0].duration_minutes || 0} min`,
-            questions: selectedAssessments[0].sections?.reduce((total: number, section: any) =>
-              total + (section.questions?.length || 0), 0) || 0,
-            type: selectedAssessments[0].sections?.length > 0 && selectedAssessments[0].sections[0]?.section_type === 'ai_generated'
-              ? 'AI-Generated'
-              : 'Manual',
-            short_id: selectedAssessments[0].short_id,
-            jd_short_id: selectedAssessments[0].jd_short_id,
-            jd_title: selectedAssessments[0].jd_title,
-            jd_version: selectedAssessments[0].jd_version
-          }}
-          prefilledCandidates={prefilledCandidates}
-          inviteSource="My Resumes"
         />
       )}
 

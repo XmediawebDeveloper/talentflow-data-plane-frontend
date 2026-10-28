@@ -84,6 +84,9 @@ interface AIInterviewTrackInvitesModalProps {
   /** Footer "Invite More" — the host closes this tracker and opens its own
    *  invite flow. Left out, the button is not shown. */
   onInviteMore?: () => void;
+  /** Shown (greyed, as the tooltip) when Invite More is not allowed — the
+   *  button stays visible (RBAC grey-out rule). */
+  inviteMoreDeniedReason?: string;
   /** Called after a resend / revoke / edit changed invitations, once this
    *  tracker's own rows are reloaded — so the host's counts and lists (the
    *  Invitation Status tab, interview cards, activity) refresh at once rather
@@ -120,6 +123,7 @@ export default function AIInterviewTrackInvitesModal({
   embedded = false,
   jdDisabled: jdDisabledProp,
   onInviteMore,
+  inviteMoreDeniedReason,
   onChanged,
   refreshSignal,
 }: AIInterviewTrackInvitesModalProps) {
@@ -828,13 +832,15 @@ export default function AIInterviewTrackInvitesModal({
                 Cancel
               </Button>
             )}
-            {onInviteMore && !embedded && (
+            {(onInviteMore || inviteMoreDeniedReason) && !embedded && (
               <Button
                 variant="primary"
                 size="sm"
-                onClick={onInviteMore}
+                onClick={() => { if (onInviteMore) onInviteMore(); }}
                 disabled={jdDisabled}
-                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
+                aria-disabled={!onInviteMore || undefined}
+                className={!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined}
+                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !onInviteMore ? inviteMoreDeniedReason : undefined}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More
