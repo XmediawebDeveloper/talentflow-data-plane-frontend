@@ -121,7 +121,11 @@ function errorText(error: unknown, fallback: string): string {
 const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 const formatBytes = (n: number) =>
   n < 1024 * 1024 ? `${(n / 1024).toFixed(0)} KB` : `${(n / (1024 * 1024)).toFixed(1)} MB`;
+// At most 5 files per upload (one bulk pick / one reply), 25 on a ticket in total.
 const ATTACHMENT_MAX_FILES = 5;
+const ATTACHMENT_MAX_PER_TICKET = 25;
+// Never accepted; named so the user gets a clear "no video" message.
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.wmv', '.flv', '.m4v', '.mpg', '.mpeg', '.3gp', '.3g2', '.ogv', '.ts', '.mts', '.m2ts', '.vob'];
 // Shown under "Supported formats". The extra types are still accepted
 // (same allowlist as the backend's ATTACHMENT_GROUPS).
 const ATTACHMENT_SHOWN_EXTS = ['.pdf', '.doc', '.docx', '.txt', '.png', '.jpg', '.jpeg', '.webp'];
@@ -994,19 +998,35 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   };
 
   // Checks type / combined size / count; returns the files that may be added.
-  // The 10 MB limit is for all files sent together, not per file.
-  const acceptFiles = (incoming: File[], alreadyChosen: File[]): File[] => {
+  // The 10 MB limit is for all files sent together, not per file. `onTicket`
+  // is how many files the ticket already has (25 max across all uploads).
+  const acceptFiles = (incoming: File[], alreadyChosen: File[], onTicket = 0): File[] => {
     const accepted: File[] = [];
     let totalBytes = alreadyChosen.reduce((sum, f) => sum + f.size, 0);
+    if (incoming.length > ATTACHMENT_MAX_FILES) {
+      toast.error(`You can upload up to ${ATTACHMENT_MAX_FILES} files at a time — only the first ${ATTACHMENT_MAX_FILES} were considered`);
+    }
     for (const f of incoming) {
       const ext = f.name.includes('.') ? `.${f.name.split('.').pop()!.toLowerCase()}` : '';
-      if (!ATTACHMENT_EXTENSIONS.includes(ext)) {
+      const chosen = alreadyChosen.length + accepted.length;
+      if (VIDEO_EXTENSIONS.includes(ext) || f.type.startsWith('video/')) {
+        toast.error(`${f.name}: video files can't be attached`);
+      } else if (!ATTACHMENT_EXTENSIONS.includes(ext)) {
         toast.error(`${f.name}: this file type can't be attached`);
-      } else if (totalBytes + f.size > ATTACHMENT_MAX_BYTES) {
-        toast.error(`${f.name} wasn't added: all attachments together must be 10 MB or less (${formatBytes(totalBytes)} already chosen)`);
-      } else if (alreadyChosen.length + accepted.length >= ATTACHMENT_MAX_FILES) {
-        toast.error(`You can attach up to ${ATTACHMENT_MAX_FILES} files at a time`);
+      } else if (onTicket + chosen >= ATTACHMENT_MAX_PER_TICKET) {
+        toast.error(`A ticket can have at most ${ATTACHMENT_MAX_PER_TICKET} attachments`);
         break;
+      } else if (chosen >= ATTACHMENT_MAX_FILES) {
+        // Per-upload limit; the oversized-pick case was announced above.
+        if (incoming.length <= ATTACHMENT_MAX_FILES) {
+          toast.error(`You can upload up to ${ATTACHMENT_MAX_FILES} files at a time`);
+        }
+        break;
+      } else if (f.size > ATTACHMENT_MAX_BYTES) {
+        // Same wording as the profile-picture limit (Settings.tsx).
+        toast.error(`${f.name} is ${formatBytes(f.size)}. Attachments must be 10 MB or smaller — please choose a smaller file.`);
+      } else if (totalBytes + f.size > ATTACHMENT_MAX_BYTES) {
+        toast.error(`${f.name} (${formatBytes(f.size)}) wasn't added. Files in one upload must total 10 MB or less, and ${formatBytes(totalBytes)} is already chosen — remove a file or choose a smaller one.`);
       } else {
         accepted.push(f);
         totalBytes += f.size;
@@ -1106,7 +1126,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const handleReplyFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files || []);
     e.target.value = '';
-    const ok = acceptFiles(picked, replyFiles);
+    const ok = acceptFiles(picked, replyFiles, selectedTicket?.attachments?.length ?? 0);
     if (ok.length) setReplyFiles(prev => [...prev, ...ok]);
   };
 
@@ -1878,7 +1898,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           {ATTACHMENT_SHOWN_EXTS.join(', ')}
                         </span>
                         <span className="mt-1 text-xs text-gray-500 dark:text-slate-400">
-                          Up to {ATTACHMENT_MAX_FILES} files, 10 MB in total
+                          Up to {ATTACHMENT_MAX_FILES} files per upload (10 MB in total) · {ATTACHMENT_MAX_PER_TICKET} files per ticket · no videos
                         </span>
                       </div>
                     </label>
@@ -2637,7 +2657,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 onChange={handleReplyFileSelect}
                                 className="hidden"
                               />
-                              <Tooltip content={`Attach up to ${ATTACHMENT_MAX_FILES} files, 10 MB in total`}>
+                              <Tooltip content={`Up to ${ATTACHMENT_MAX_FILES} files per upload (10 MB in total), ${ATTACHMENT_MAX_PER_TICKET} per ticket · no videos`}>
                                 <button
                                   type="button"
                                   onClick={() => replyFileInputRef.current?.click()}
