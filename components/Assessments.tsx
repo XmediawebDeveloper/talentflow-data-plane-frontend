@@ -19,7 +19,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AssessmentCreation from './AssessmentCreation';
 import ListPagination from './ListPagination';
 import AssessmentResults from './AssessmentResults';
-import ShareAssessmentModal from './ShareAssessmentModal';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
 import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
@@ -545,55 +545,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [selectedAssessmentForShare, setSelectedAssessmentForShare] = useState<any>(null);
-  // Page-level Send Invite: the share modal needs one assessment, so this picker
-  // stands in front of it when more than one is shareable.
-  const [showInvitePicker, setShowInvitePicker] = useState(false);
-  const [invitePickerQuery, setInvitePickerQuery] = useState('');
-  /* The row ticked in the picker, held until the footer button is pressed.
-     The picker used to have no such state — clicking a row set
-     `selectedAssessmentForShare` and opened the share modal in the same
-     breath, so there was never a moment where a choice existed but had not
-     been acted on. The Invite to Assessment dialog's flow needs exactly that
-     moment: pick, see it confirmed, then continue (or change your mind).
-
-     The id rather than the row, unlike the `selectedAssessmentFor*` states
-     above: a copy taken at click time goes stale if `reloadAssessments` lands
-     while the dialog is open, and the row is one `find` away whenever it is
-     actually needed. It also types itself, so this is the one piece of picker
-     state that does not have to be `any`. */
-  /**
-   * What the Send Invite dialog has picked: ONE job, ONE job version, ONE
-   * assessment version - the whole triple, held together.
-   *
-   * Two ids used to be kept side by side (the assessment, and the job whose
-   * cards to lock). That was not enough. An assessment version number restarts
-   * per job version, so "Assessment V1" names a different row under job V2
-   * than under job V5, and the id alone cannot say which branch produced it.
-   * The lock needs the job version; so does the Share modal, which prints
-   * "JD-025 - Senior QA v2" beside the assessment badge.
-   *
-   * The job's own identity (`jdShortId`, `jobTitle`) is recorded here too,
-   * because the row it is read from is a JOB card that has both, while the
-   * assessment the panel hands back comes from the lineage cache, whose rows
-   * carry `jd_id` and `jd_version` but neither the JD's short id nor its
-   * title. Resolving the pick later and hoping those fields are on it is what
-   * put an empty JD line in the share dialog.
-   */
-  const [invitePickerSelection, setInvitePickerSelection] = useState<{
-    jobKey: string;
-    jdId?: string;
-    jdShortId?: string;
-    jobTitle: string;
-    jobVersion: number;
-    jobVersionId?: string;
-    assessmentId: string;
-  } | null>(null);
-  /* The Send Invite picker's paging - one row per sendable assessment. */
-  const [invitePickerPage, setInvitePickerPage] = useState(1);
-  const [invitePickerPageSize, setInvitePickerPageSize] = useState(10);
-  const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
   /* The Send Invite picker's eye: the Configure Assessment form, read-only —
@@ -747,11 +698,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     jobVersionByJdId: Map<string, number>;
   } | null>(null);
   const [selectedAssessmentForTracking, setSelectedAssessmentForTracking] = useState<any>(null);
-  /* When Share is opened from the tracking popup's Invite More, the popup it
-     came from — its assessment and, for a job-wide Track, its job — so closing
-     Share reopens that popup rather than dropping the user on the list. The AI
-     Interview page's Invite More works the same way (`shareReturnToInvites`). */
-  const [shareReturnToTracking, setShareReturnToTracking] = useState<{ assessment: typeof selectedAssessmentForTracking; job: typeof trackingJob } | null>(null);
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
   /* Bumped by every tracking-popup list / summary load, and on close, so an
@@ -878,24 +824,54 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *  job version, or null. */
   const jobLockReason = (assessment: { jd_id?: string } | null | undefined): string | null =>
     assessment?.jd_id ? assessmentJobLockMessage(jobVersionStatusById[assessment.jd_id]) : null;
-  /* Share/Invite opens from many places (menus, details page, Send Invite,
-     Track's Invite More). Whichever one did, the job version is read fresh
-     here and a locked one closes the popup with the message. */
-  useEffect(() => {
-    if (!showShareModal || !selectedAssessmentForShare?.jd_id) return;
-    let cancelled = false;
-    void checkAssessmentJobLock(selectedAssessmentForShare.jd_id).then((lock) => {
-      if (cancelled || !lock) return;
-      setShowShareModal(false);
-      toast.error(lock);
+  /* THE invite popup (VersionInviteDialog, via the dashboard-level provider) —
+     the one AI Interviews and every other invite button open. Share/Invite
+     opens from many places (row menus, details page, Track's Invite More);
+     whichever one did, the job version is read fresh first and a locked one
+     shows the message instead of the popup. */
+  const { open: openInviteDialog } = useInviteDialog();
+  /** Reopen the tracking popup on the assessment / job Invite More left. */
+  const reopenTracking = (ret: { assessment: typeof selectedAssessmentForTracking; job: typeof trackingJob }) => {
+    setIsLoadingInvitations(true);
+    setTrackingJob(ret.job);
+    setSelectedAssessmentForTracking(ret.assessment);
+    setTrackingFilters(EMPTY_INVITE_FILTERS);
+    setTrackingCurrentPage(1);
+    setShowTrackInvitesModal(true);
+  };
+  const openAssessmentInvite = async (
+    assessment: any,
+    returnTo?: { assessment: typeof selectedAssessmentForTracking; job: typeof trackingJob },
+  ) => {
+    if (!assessment?.id) return;
+    if (assessment.jd_id) {
+      const lock = await checkAssessmentJobLock(assessment.jd_id);
+      if (lock) {
+        toast.error(lock);
+        if (returnTo) reopenTracking(returnTo);
+        return;
+      }
+    }
+    const jdTitle = assessment.jd_title || assessment.job?.title || stripVersionFromTitle(assessment.title || '') || '';
+    const versionNumber = jobVersionOfAssessment(assessment, jobVersionByJdIdRef.current) ?? assessment.jd_version ?? assessment.job?.version;
+    openInviteDialog({
+      kind: 'assessment',
+      job: assessment.jd_id
+        ? { jdId: assessment.jd_id, jdTitle, jdCode: assessment.jd_short_id || undefined, versionNumber: typeof versionNumber === 'number' ? versionNumber : undefined }
+        : undefined,
+      versionId: assessment.id,
+      onSent: () => {
+        void reloadAssessments();
+        void refreshInviteSurfaces();
+      },
+      onClose: () => {
+        /* Opened from the tracking popup's Invite More: reopen that popup, on
+           the same assessment and (for a job-wide Track) the same job. Its
+           effect refetches the invitations, so the ones just sent are listed. */
+        if (returnTo) reopenTracking(returnTo);
+      },
     });
-    return () => { cancelled = true; };
-  }, [showShareModal, selectedAssessmentForShare]);
-  /* What the page-level Send Invite offers. Loaded on click, with no status
-     filter, because `apiAssessments` is narrowed to the active tab: on Draft or
-     Archived it holds no sendable row, which used to disable the button. */
-  const [inviteSourceAssessments, setInviteSourceAssessments] = useState<any[]>([]);
-  const [isPreparingInvite, setIsPreparingInvite] = useState(false);
+  };
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
   const [assessmentItemsPerPage, setAssessmentItemsPerPage] = useState(10);
 
@@ -3980,106 +3956,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   // Reload assessments from API
-  /**
-   * Assessments that can actually take an invite — the same three rules the
-   * per-row Share button enforces: published, not archived, invites not revoked.
-   */
-  const isShareableAssessment = (assessment: any) =>
-    assessment.status !== 'Draft' && assessment.status !== 'Archived' && !assessment.has_revoked_invites;
-  /* Over the tab-independent set Send Invite loads, not the tab's `assessments`. */
-  const shareableAssessments = inviteSourceAssessments.filter(isShareableAssessment);
-
-  /**
-   * The assessment version picked in the dialog, resolved against live data.
-   *
-   * NOT a lookup in `shareableAssessments`. The pick is now made in the
-   * assessment table inside a job's version panel, and that table lists every
-   * version of the job - Draft and Archived included. A Draft is exactly what
-   * `shareableAssessments` filters out, so looking there would return nothing
-   * for a real, visible selection and the dialog would report "select a job"
-   * over a ticked radio.
-   *
-   * The loaded list first (already mapped), then the panel's own lineage cache
-   * (raw rows, so they go through the list's mapper) - the two sources the
-   * table's rows actually come from. Resolved at the moment it is needed, so a
-   * reload under the open dialog cannot hand the share modal a stale row.
-   */
-  const resolveInvitePickerChoice = () => {
-    const pickedId = invitePickerSelection?.assessmentId;
-    if (!pickedId) return null;
-    const fromList =
-      inviteSourceAssessments.find((a) => a.id === pickedId)
-      ?? assessments.find((a) => a.id === pickedId);
-    if (fromList) return fromList;
-    for (const rows of Object.values(assessmentLineages)) {
-      const raw = rows?.find((r) => r.id === pickedId);
-      if (raw) return mapAssessmentFromApi(raw, 0);
-    }
-    return null;
-  };
-
-  /**
-   * Can the picked version actually take an invite? The same three rules the
-   * per-row Share button and `shareableAssessments` enforce, asked of one row
-   * - because the table it is picked from does not pre-filter by them, so the
-   * answer has to be given here rather than assumed.
-   */
-  const invitePickerBlockedReason = (choice: ReturnType<typeof resolveInvitePickerChoice>) => {
-    if (!choice) return 'Select an assessment version to continue';
-    if (choice.status === 'Draft') return 'This version is a Draft — publish it, or pick another version';
-    if (choice.status === 'Archived') return 'This version is Archived — pick another version';
-    if ((choice as { has_revoked_invites?: boolean }).has_revoked_invites)
-      return 'Invitations were revoked for this version — pick another version';
-    return null;
-  };
-
-  /**
-   * Page-level Send Invite. With exactly one shareable assessment the picker is
-   * pointless, so it goes straight to the share modal.
-   */
-  const handleSendInvite = async () => {
-    if (isPreparingInvite) return;
-    /* Every status, whatever tab is open, so the button never depends on the
-       tab; `isShareableAssessment` then applies the usual eligibility rules. */
-    setIsPreparingInvite(true);
-    let sendable: any[];
-    try {
-      const all = await fetchAllAssessments(preSelectedJdId ? { jd_id: preSelectedJdId } : {});
-      setInviteSourceAssessments(all);
-      sendable = all.filter(isShareableAssessment);
-    } catch (error) {
-      console.log('[TalentFlow] Failed to load assessments for Send Invite:', error);
-      toast.error('Could not load assessments. Please try again.');
-      return;
-    } finally {
-      setIsPreparingInvite(false);
-    }
-    if (sendable.length === 0) {
-      toast.error('No published assessment to invite candidates to. Publish one first.');
-      return;
-    }
-    if (sendable.length === 1) {
-      setSelectedAssessmentForShare(sendable[0]);
-      setShowShareModal(true);
-      return;
-    }
-    setInvitePickerQuery('');
-    setInvitePickerSelection(null);
-    setInvitePickerPage(1);
-    setShowInvitePicker(true);
-  };
-
-  /* Closing has to reset the pick as well as the query, and it is reachable
-     four ways (backdrop, X, Cancel, and continuing through) — so it is one
-     function rather than the same two setters copied into four handlers, which
-     is how the query got left behind on some paths before. */
-  const closeInvitePicker = () => {
-    setShowInvitePicker(false);
-    setInvitePickerQuery('');
-    setInvitePickerSelection(null);
-    setInvitePickerPage(1);
-  };
-
   const reloadAssessments = async () => {
     // The Active tab's table keeps its own rows — have it refetch too.
     setFlatTableReloadSignal((n) => n + 1);
@@ -5006,9 +4882,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setShowPreviewModal(true);
           }}
           onShare={() => {
-            // Keep details view open, modal will overlay on top
-            setSelectedAssessmentForShare(selectedAssessmentForDetails);
-            setShowShareModal(true);
+            // Keep details view open; THE invite popup overlays it.
+            void openAssessmentInvite(selectedAssessmentForDetails);
           }}
           canShare={isTenantAdmin || hasPermissionCode('assessments:share')}
           canEdit={canUpdateAssessment}
@@ -5021,29 +4896,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         />
 
         {/* Modals - rendered as overlays on top of details view */}
-        {showShareModal && selectedAssessmentForShare && (
-          <ShareAssessmentModal
-            isOpen={showShareModal}
-            onClose={() => {
-              setShowShareModal(false);
-              setSelectedAssessmentForShare(null);
-              // Refresh the list so invitation counts / Track Invites
-              // badges reflect the just-sent invites.
-              reloadAssessments();
-            }}
-            // reloadAssessments() above only refreshes the assessment cards'
-            // own counters, not the Track Invites / Invitation Status row
-            // data — that row sat stale (or on whatever it last loaded)
-            // until some OTHER action (Resend/Revoke/Edit) happened to
-            // trigger refreshInviteSurfaces. Fire it as soon as the send
-            // actually completes, not just on modal close.
-            onInviteSent={() => { void refreshInviteSurfaces(); }}
-            onInvitesChanged={() => { void refreshInviteSurfaces(true); }}
-            assessment={selectedAssessmentForShare}
-            inviteSource="Assessment"
-          />
-        )}
-
         {showPreviewModal && selectedAssessmentForPreview && (
           <AssessmentPreviewModal
             isOpen={showPreviewModal}
@@ -6613,7 +6465,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         {
           key: 'share', label: 'Share/Invite', icon: Send, iconClassName: 'text-menu-icon-share',
           disabled: !!shareReason, title: shareReason || 'Share via email',
-          run: () => { setSelectedAssessmentForShare(assessment); setShowShareModal(true); },
+          run: () => { void openAssessmentInvite(assessment); },
         },
         {
           key: 'track', label: 'Track', icon: Radar, iconClassName: 'text-menu-icon-secondary',
@@ -6752,8 +6604,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           onClick={() => {
             if (!canShare || isShareBlocked) return;
             setOpenMenuId(null);
-            setSelectedAssessmentForShare(assessment);
-            setShowShareModal(true);
+            void openAssessmentInvite(assessment);
           }}
           disabled={isShareBlocked && canShare}
           aria-disabled={isShareBlocked || !canShare}
@@ -6938,25 +6789,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <span className="hidden sm:inline">HR Question Bank</span>
               <span className="sm:hidden">Questions</span>
             </Button>
-            {/* Send Invite — same permission as the per-row Share action. Always
-                visible and enabled on every tab; whether anything can be sent is
-                checked on click (`handleSendInvite`), not read off the tab's rows. */}
+            {/* Send Invite — opens THE invite popup with no job, so it starts on
+                its own picker of every published assessment (the AI Interviews
+                page's Send Invite does the same). Gated on the permission the
+                server checks for sending (`assessments:invite`); greyed with a
+                tooltip, never hidden. */}
             <Button
               variant="secondary"
               size="md"
               onClick={() => {
-                if (!canUpdateAssessment) return;
-                void handleSendInvite();
+                if (!canInviteFromStatusTab) return;
+                openInviteDialog({
+                  kind: 'assessment',
+                  /* Opened from a job's Assessments page: start on that job. */
+                  job: preSelectedJdId && preSelectedJdTitle
+                    ? { jdId: preSelectedJdId, jdTitle: preSelectedJdTitle }
+                    : undefined,
+                  onSent: () => {
+                    void reloadAssessments();
+                    void refreshInviteSurfaces();
+                  },
+                });
               }}
-              loading={isPreparingInvite}
-              aria-disabled={!canUpdateAssessment}
+              aria-disabled={!canInviteFromStatusTab}
               title={
-                !canUpdateAssessment
-                  ? 'You do not have permission to edit assessments'
+                !canInviteFromStatusTab
+                  ? 'You do not have permission to invite candidates'
                   : 'Send an assessment invitation'
               }
               icon={<Mail className="w-4 h-4" />}
-              className={`${!canUpdateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`${!canInviteFromStatusTab ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Send Invite</span>
               <span className="sm:hidden">Invite</span>
@@ -10124,430 +9986,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       </div>
       </div>
 
-      {/* Share Assessment Modal */}
-      {/* Send Invite picker — which assessment are we inviting to? Only shown
-          when more than one is shareable; a single one goes straight through.
-
-          Rebuilt on the Invite to Assessment dialog in My Resumes
-          (`app/(dashboard)/recruitment/my-resumes/page.tsx`), which is the
-          fuller treatment of the same question, and which in turn takes its
-          shell, header, body and footer from the Apply to Job / Score Resume
-          dialogs. So this is not a new design; it is this dialog rejoining the
-          one the rest of the candidate actions already share.
-
-          What that changes, beyond paint:
-
-            - The pick is now a pick. Rows are radios, one at a time, in a
-              card that lights up when chosen — instead of a plain button that
-              fired on click and closed the dialog before you could see what
-              you had done.
-            - A footer that reports the state ("Select one job to continue",
-              then what is about to happen) and carries Cancel and the primary
-              action, so leaving and committing are both explicit.
-            - The list IS the Total Jobs list. It is not styled after it and
-              not grouped into a hierarchy of its own: `renderJobListRow` and
-              `collapseByLineage` are the functions the Job List on this page
-              renders from, called here over `shareableAssessments`. One job
-              per row, with that job's Job ID chip, title, status pill and all
-              four metrics, exactly as the list behind the dialog draws them.
-              The earlier job → job version → assessment version hierarchy is
-              gone; picking a job sends against the assessment that represents
-              it, which is the same assessment Total Jobs shows on that row.
-            - The header loses its `from-brand-blue via-brand-cyan` gradient for
-              the reference's plain bar and small tinted icon chip. Same reason
-              the Topic Availability header lost its gradient: nothing retunes
-              the `from-`/`to-` utilities for dark mode.
-
-          The icon stays `Mail` rather than the reference's `ClipboardCheck` —
-          the chip's shape and tint are what make it the same dialog, and this
-          one is about sending rather than about assessments.
-
-          One deliberate divergence in wording: the reference's primary button
-          says "Send Invitations" because by then the candidates are already
-          picked and unticked on that screen. Here nobody has been addressed
-          yet — the recipients are entered in the Share modal this opens — so
-          the button says "Continue". Same position, same styling, same icon;
-          only the promise is scaled to what actually happens next. */}
-      {showInvitePicker && (
-        <>
-          <div
-            className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-            onClick={closeInvitePicker}
-          />
-          {/* Shell, header and footer are the AI Interviews page's Send Invite
-              picker's, class for class, and the body below is its layout -
-              search, the selection line, the single-pick
-              note, the list, the pager - so the two pages' Send Invite read
-              as one dialog. */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              {/* Header */}
-              <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                    <Mail className="w-4 h-4 text-brand-blue" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Send Invite</h2>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Pick the active assessment to send</p>
-                  </div>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={closeInvitePicker}
-                  className="px-2 flex-shrink-0"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-
-              {/* Content */}
-              <div ref={invitePickerScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-                {/* Search first, then the list — the reference's order and its
-                    labelled, icon-led field, rather than a bare input. */}
-                {/* Sticky: stays at the top of the scroll area while the list
-                    scrolls. The negative margins + matching padding stretch
-                    its background over the area's own padding so rows don't
-                    show around it. Only Preview stays pinned in the table
-                    below; Select scrolls with the row. */}
-                <div className="sticky -top-4 sm:-top-6 z-[8] -mx-4 -mt-4 px-4 pt-4 pb-4 mb-0 sm:-mx-6 sm:-mt-6 sm:px-6 sm:pt-6 bg-white dark:bg-slate-900">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                    <input
-                      type="text"
-                      autoFocus
-                      value={invitePickerQuery}
-                      onChange={(e) => { setInvitePickerQuery(e.target.value); setInvitePickerPage(1); }}
-                      placeholder="Search by job title, Job ID, assessment name or assessment ID..."
-                      className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                    />
-                  </div>
-                </div>
-
-                {(() => {
-                  const query = invitePickerQuery.trim().toLowerCase();
-                  const matchesQuery = (assessment: (typeof assessments)[number]) =>
-                    !query ||
-                    `${assessment.title || ''} ${assessment.short_id || ''} ${assessment.job?.title || ''} ${assessment.jd_short_id || ''}`
-                      .toLowerCase()
-                      .includes(query);
-
-                  /* Every assessment that can take an invite —
-                     `shareableAssessments`, the per-row Share button's rules —
-                     newest first, as the AI Interviews picker lists its
-                     active interviews. */
-                  const pickerRows = shareableAssessments
-                    .filter(matchesQuery)
-                    .slice()
-                    .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
-
-                  const pickerTotal = pickerRows.length;
-                  const pickerTotalPages = Math.max(1, Math.ceil(pickerTotal / invitePickerPageSize));
-                  const pickerSafePage = Math.min(Math.max(1, invitePickerPage), pickerTotalPages);
-                  const pageSlice = <T,>(list: T[]) =>
-                    list.slice((pickerSafePage - 1) * invitePickerPageSize, pickerSafePage * invitePickerPageSize);
-                  const pagedPickerRows = pageSlice(pickerRows);
-                  const selection = invitePickerSelection;
-                  const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
-                  return (
-                    <>
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                        <label className="min-w-0 text-sm font-medium text-gray-700 dark:text-slate-300">
-                          Select an Assessment
-                          <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                            {`${pickerRows.length} active assessment${pickerRows.length !== 1 ? 's' : ''}`}
-                          </span>
-                        </label>
-                        {selection && (
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                              <CheckCircle className="w-3 h-3" />
-                              1 selected
-                            </span>
-                            <button
-                              onClick={() => setInvitePickerSelection(null)}
-                              className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                            >
-                              Clear Selection
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Why the pick is single — the AI Interviews picker's note. */}
-                      <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
-                        <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One assessment per invite</p>
-                          <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
-                            You can pick only one assessment at a time, so everyone you invite gets the same assessment. To invite people to a different assessment, send another invite.
-                          </p>
-                        </div>
-                      </div>
-
-                      {pickerRows.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-                            <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-                            <p>{query ? 'No active assessments match your search' : 'No active assessments'}</p>
-                            <p className="text-sm">{query ? 'Try a different job title or Job ID.' : 'Publish an assessment to invite candidates to it.'}</p>
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
-                            <div className="overflow-x-auto scrollbar-visible">
-                              <table className="w-full text-sm border-collapse">
-                                <thead className="sticky top-0 z-[6]">
-                                  <tr className="border-b border-gray-200 dark:border-slate-700">
-                                    <th className={`${PICKER_TH} w-14 !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Select</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Name</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invitations Sent</span></th>
-                                    <th className={PICKER_TH}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Created On</span></th>
-                                    <th className={`${PICKER_TH} pr-6`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Created By</span></th>
-                                    <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-slate-50 dark:!bg-slate-800`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Preview</span></th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {pagedPickerRows.map((assessment) => {
-                                    const isSelected = selection?.assessmentId === assessment.id;
-                                    const jobTitle = assessment.job?.title || stripVersionFromTitle(assessment.title);
-                                    const jobVersion = jobVersionOfAssessment(assessment, jobVersionByJdIdRef.current) ?? 1;
-                                    /* Everything Continue hands the Share modal. */
-                                    const pick = () => setInvitePickerSelection(
-                                      isSelected
-                                        ? null
-                                        : {
-                                            jobKey: lineageKeyOf(assessment),
-                                            jdId: assessment.jd_id,
-                                            jdShortId: assessment.jd_short_id,
-                                            jobTitle,
-                                            jobVersion,
-                                            jobVersionId: assessment.jd_id,
-                                            assessmentId: assessment.id,
-                                          },
-                                    );
-                                    return (
-                                      <tr
-                                        key={assessment.id}
-                                        onClick={pick}
-                                        aria-selected={isSelected}
-                                        data-row-selected={isSelected ? 'true' : undefined}
-                                        className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors ${
-                                          isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
-                                        }`}
-                                      >
-                                        <td className="px-3 py-2.5 align-middle">
-                                          <input
-                                            type="radio"
-                                            name="assessment-invite-picker-selection"
-                                            checked={isSelected}
-                                            onChange={pick}
-                                            onClick={(e) => e.stopPropagation()}
-                                            aria-label={`Select ${jobTitle || assessment.title || 'assessment'}`}
-                                            className="w-4 h-4 accent-brand-blue cursor-pointer"
-                                          />
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                                          {assessment.jd_short_id ? <JobIdBadge>{assessment.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle">
-                                          <span className="block max-w-[16rem] truncate font-medium text-gray-900 dark:text-slate-50" title={jobTitle || 'Untitled'}>
-                                            {jobTitle || 'Untitled'}
-                                          </span>
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                                          <VersionPill kind="job" version={jobVersion} />
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                                          <VersionPill kind="assessment" version={assessment.version ?? 1} />
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 bg-success-subtle text-success ring-success-line">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
-                                            Active
-                                          </span>
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
-                                          <span className="tabular-nums text-gray-900 dark:text-slate-100">{(assessment.invitations_count ?? 0).toLocaleString()}</span>
-                                          <span className="text-xs text-gray-400 ml-1">sent</span>
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
-                                          {assessment.created_at ? formatIST(assessment.created_at) : '—'}
-                                        </td>
-                                        <td className="px-3 pr-6 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
-                                          {assessment.created_by_name || 'System'}
-                                        </td>
-                                        <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                                          {/* The picker's preview — the read-only
-                                              Configure view (`previewAssessmentInPicker`). */}
-                                          <button
-                                            type="button"
-                                            onClick={() => previewAssessmentInPicker(assessment)}
-                                            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
-                                            aria-label="Preview assessment"
-                                            title="Preview"
-                                          >
-                                            <Eye className="w-4 h-4" />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        )}
-
-                      {pickerTotal > 0 && (
-                        <ListPagination
-                          currentPage={pickerSafePage}
-                          itemsPerPage={invitePickerPageSize}
-                          totalItems={pickerTotal}
-                          onPageChange={setInvitePickerPage}
-                          onItemsPerPageChange={(size) => { setInvitePickerPageSize(size); setInvitePickerPage(1); }}
-                          itemLabel="assessments"
-                          scrollContainerRef={invitePickerScrollRef}
-                          compact
-                          alwaysShow
-                        />
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-
-              {/* Footer */}
-              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
-                {/* One line, always: it sits beside the buttons, and a second
-                    line would push the footer taller. */}
-                <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                  {/* Names the VERSION that will be sent, or says why the
-                      picked one cannot be - the table offers every version of
-                      a job, Drafts and Archived among them, so "selected" and
-                      "sendable" are two different questions and the footer has
-                      to answer the second. Resolved off live data for the same
-                      reason Continue is. */}
-                  {(() => {
-                    const chosen = resolveInvitePickerChoice();
-                    const blocked = invitePickerBlockedReason(chosen);
-                    if (!invitePickerSelection) {
-                      return 'Select an assessment to continue';
-                    }
-                    if (blocked) {
-                      return (
-                        <span className="inline-flex items-center gap-1.5 align-middle text-brand-orange-deep">
-                          <Info className="w-4 h-4 flex-shrink-0" />
-                          {blocked}
-                        </span>
-                      );
-                    }
-                    const jobV = invitePickerSelection.jobVersion;
-                    const assessmentV = typeof chosen?.version === 'number' ? chosen.version : null;
-                    return (
-                      <span className="inline-flex items-center gap-1.5 align-middle">
-                        <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                        {assessmentV
-                          ? `Ready to invite candidates to Assessment V${assessmentV}${jobV ? ` (Job V${jobV})` : ''}`
-                          : 'Ready to invite candidates to 1 assessment'}
-                      </span>
-                    );
-                  })()}
-                </div>
-                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <Button
-                    variant="primary"
-                    size="md"
-                    onClick={() => {
-                      const choice = resolveInvitePickerChoice();
-                      const blocked = invitePickerBlockedReason(choice);
-                      if (!choice || !invitePickerSelection || blocked) {
-                        toast.error(blocked ?? 'Please select an assessment version');
-                        return;
-                      }
-                      /* Hand the share dialog the triple that was actually
-                         picked, not just the assessment record.
-                         `resolveInvitePickerChoice` may have found the row in
-                         the panel's lineage cache, and those rows carry
-                         `jd_id` and `jd_version` but neither the JD's short id
-                         nor its title - so the modal's "JD-025 - Senior QA v2"
-                         line came out blank, or worse, showed the job version
-                         recorded on the assessment rather than the one the
-                         reader chose it under.
-
-                         The selection knows all three parts because each was
-                         recorded where it was known: the job from the card,
-                         the job version from the panel group the radio sat in,
-                         the assessment from the row. Selection wins over the
-                         record for exactly those fields; everything else on
-                         the assessment is passed through untouched. */
-                      setSelectedAssessmentForShare({
-                        ...choice,
-                        jd_id: invitePickerSelection.jobVersionId ?? choice.jd_id,
-                        jd_short_id: choice.jd_short_id ?? invitePickerSelection.jdShortId,
-                        jd_title: choice.jd_title || invitePickerSelection.jobTitle,
-                        jd_version: invitePickerSelection.jobVersion,
-                        job: {
-                          ...(choice.job ?? {}),
-                          title: choice.job?.title || invitePickerSelection.jobTitle,
-                          version: invitePickerSelection.jobVersion,
-                        },
-                      });
-                      closeInvitePicker();
-                      setShowShareModal(true);
-                    }}
-                    disabled={!!invitePickerBlockedReason(resolveInvitePickerChoice())}
-                    icon={<Mail className="w-4 h-4" />}
-                    className="flex-1 sm:flex-none whitespace-nowrap"
-                  >
-                    Continue
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {showShareModal && selectedAssessmentForShare && (
-        <ShareAssessmentModal
-          isOpen={showShareModal}
-          onClose={() => {
-            setShowShareModal(false);
-            setSelectedAssessmentForShare(null);
-            // Refresh the list so invitation counts / Track Invites
-            // badges reflect the just-sent invites.
-            reloadAssessments();
-            /* Opened from the tracking popup's Invite More: reopen that popup,
-               on the same assessment and (for a job-wide Track) the same job,
-               the way handleTrackInvites opens it. Its effect refetches the
-               invitations, so the ones just sent are listed. */
-            if (shareReturnToTracking) {
-              setIsLoadingInvitations(true);
-              setTrackingJob(shareReturnToTracking.job);
-              setSelectedAssessmentForTracking(shareReturnToTracking.assessment);
-              setTrackingFilters(EMPTY_INVITE_FILTERS);
-              setTrackingCurrentPage(1);
-              setShowTrackInvitesModal(true);
-              setShareReturnToTracking(null);
-            }
-          }}
-          // See the other ShareAssessmentModal above — onClose's
-          // reloadAssessments() doesn't touch the Track Invites /
-          // Invitation Status row data, so fire the dedicated refetch as
-          // soon as the send itself completes.
-          onInviteSent={() => { void refreshInviteSurfaces(); }}
-            onInvitesChanged={() => { void refreshInviteSurfaces(true); }}
-          assessment={selectedAssessmentForShare}
-          inviteSource="Assessment"
-        />
-      )}
-      
       {/* The Send Invite picker's preview — read-only Configure Assessment.
           Renders nothing while no row is being previewed. */}
       <AssessmentConfigureModal
@@ -11194,8 +10632,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 )}
                 {/* Invite More — the AI Interview tracking popup's button (primary,
                     sm, Send icon first) and its interaction: this popup closes,
-                    the Share dialog opens on the SAME assessment, and closing
-                    Share brings this popup back (see `shareReturnToTracking`).
+                    the invite popup opens on the SAME assessment, and closing
+                    the invite popup brings this popup back (see `openAssessmentInvite`).
                     Gated exactly as every other Share on this page is. */}
                 <Button variant="secondary" size="sm" onClick={closeTrackInvitesModal}>
                   Cancel
@@ -11221,11 +10659,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       className={!canShare ? 'opacity-50 cursor-not-allowed' : ''}
                       onClick={() => {
                         if (blockedReason) return;
-                        // Remember where we came from so closing Share returns here.
-                        setShareReturnToTracking({ assessment: target, job: trackingJob });
+                        // Remember where we came from so closing the popup returns here.
+                        const returnTo = { assessment: target, job: trackingJob };
                         closeTrackInvitesModal();
-                        setSelectedAssessmentForShare(target);
-                        setShowShareModal(true);
+                        void openAssessmentInvite(target, returnTo);
                       }}
                       icon={<Send className="w-3.5 h-3.5" />}
                     >

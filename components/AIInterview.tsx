@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, RefreshCw, Layers, Radar } from 'lucide-react';
 import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { mapLimit } from '@/lib/utils/mapLimit';
@@ -31,14 +31,13 @@ import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
-import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
 import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
-import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
@@ -187,7 +186,7 @@ export default function AIInterview() {
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canInviteAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
-  // Share and Invite are the same action (both open ShareAIInterviewModal to
+  // Share and Invite are the same action (both open THE invite popup to
   // send a candidate their interview link) — kept as one alias rather than a
   // second independent check so both entry points agree on one permission.
   const canShareAIInterviews = canInviteAIInterviews;
@@ -312,22 +311,9 @@ export default function AIInterview() {
     writeListSnapshot('ai-interview:page', { configs, archivedConfigs, stats, interviewedCount });
   }, [loading, configs, archivedConfigs, stats, interviewedCount]);
 
-  // Share modal
-  const [shareConfig, setShareConfig] = useState<AIInterviewResponse | null>(null);
-  // "Send Invite" picker — lists published/active configs to pick one, then
-  // opens the existing Share (invite) modal for the chosen config.
-  const [showInvitePicker, setShowInvitePicker] = useState(false);
-  /* The list itself (search, Grouped/Ungrouped, paging, preview) is the shared
-     <AIInterviewPicker>; this page keeps only the pick and the dialog's
-     scroller, which the picker's pagination scrolls back to the top. */
-  const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
-  const [invitePickerSelection, setInvitePickerSelection] = useState<
-    { jobKey: string; jdId?: string; interviewId: string } | null
-  >(null);
-  // When the Share modal is opened from the Candidate Invitations modal
-  // ("Invite More"), remember the config so closing Share returns to that
-  // invitations popup instead of dropping the user back on the list.
-  const [shareReturnToInvites, setShareReturnToInvites] = useState<AIInterviewResponse | null>(null);
+  // Every invite button here opens THE invite popup (VersionInviteDialog via
+  // InviteDialogProvider) — the same one Assessments uses.
+  const { open: openInvite } = useInviteDialog();
 
   // View invitations
   const [viewInvitationsConfig, setViewInvitationsConfig] = useState<AIInterviewResponse | null>(null);
@@ -599,7 +585,6 @@ export default function AIInterview() {
   const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
   /* The line under the tab pills: each tab's Actions (N) + Clear portal into
      it while rows are ticked. */
-  const [bulkActionSlotEl, setBulkActionSlotEl] = useState<HTMLDivElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -1201,6 +1186,38 @@ export default function AIInterview() {
     await loadData();
     setRefreshSignal((n) => n + 1);
   }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses, loadData, invalidateInviteCounts]);
+
+  /* The popup lives in the dashboard-level provider, so its onSent runs after
+     this page may have re-rendered — read the latest refreshers via a ref. */
+  const inviteSentRefreshRef = useRef<() => void>(() => {});
+  inviteSentRefreshRef.current = () => {
+    invalidateInviteCounts();
+    loadData();
+    if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
+    setRefreshSignal((n) => n + 1);
+  };
+
+  /** Open THE invite popup. With a config: that job + that interview version
+   *  (version cards hidden). Without: the popup's own picker of every
+   *  published AI interview. `returnToTracker` reopens the Candidate
+   *  Invitations popup on close (the "Invite More" round trip). */
+  const openInterviewInvite = useCallback((config?: AIInterviewResponse | null, returnToTracker = false) => {
+    openInvite({
+      kind: 'interview',
+      job: config?.jd_id
+        ? {
+            jdId: config.jd_id,
+            jdTitle: config.jd_title || config.position || '',
+            jdCode: config.jd_short_id,
+            versionNumber: config.jd_version,
+            status: isJdDisabled(config.jd_status) ? 'Disabled' : config.jd_status,
+          }
+        : undefined,
+      versionId: config?.id,
+      onSent: () => inviteSentRefreshRef.current(),
+      onClose: returnToTracker && config ? () => setViewInvitationsConfig(config) : undefined,
+    });
+  }, [openInvite]);
 
   /* Manual Refresh in the tracking popup — same refetch the row actions use,
      in place with no page reload. Guarded so rapid clicks (or a click while
@@ -1907,7 +1924,7 @@ export default function AIInterview() {
         return;
       }
 
-      setShareConfig(publishedConfig);
+      openInterviewInvite(publishedConfig);
       clearQuickActionUrl();
       return;
     }
@@ -1935,6 +1952,7 @@ export default function AIInterview() {
     canInviteAIInterviews,
     canViewAIInterviews,
     router,
+    openInterviewInvite,
   ]);
 
   // Deep-link from the "AI Interview Published" screen (and its Back-button
@@ -2538,7 +2556,7 @@ export default function AIInterview() {
                   <button
                     onClick={() => {
                       if (inviteBlocked) return;
-                      setShareConfig(config); setOpenMenuId(null);
+                      openInterviewInvite(config); setOpenMenuId(null);
                     }}
                     disabled={jdLocked}
                     aria-disabled={!!inviteBlocked}
@@ -2971,7 +2989,7 @@ export default function AIInterview() {
               size="md"
               onClick={() => {
                 if (!canShareAIInterviews) return;
-                setShowInvitePicker(true);
+                openInterviewInvite();
               }}
               aria-disabled={!canShareAIInterviews}
               className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
@@ -3663,15 +3681,20 @@ export default function AIInterview() {
                                 onClick={(e) => { e.stopPropagation(); toggleVersions(); }}
                                 aria-expanded={openVersionsFor === config.id}
                                 title={openVersionsFor === config.id ? 'Hide version history' : 'View version history'}
-                                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                /* The Job Descriptions list's View Versions
+                                   (JobsListing.tsx): solid brand blue while
+                                   closed, the version table's brand-sky tint
+                                   while open, label shown at every width.
+                                   h-8 keeps it level with Track / Result. */
+                                className={`h-8 px-3 inline-flex items-center gap-1 whitespace-nowrap border rounded-lg text-xs font-medium transition-all duration-200 ${
                                   openVersionsFor === config.id
-                                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                                    : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                                    ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
+                                    : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'
                                 }`}
                               >
-                                <span className="hidden sm:inline">{openVersionsFor === config.id ? 'Hide' : 'View'} Versions</span>
+                                {openVersionsFor === config.id ? 'Hide Versions' : 'View Versions'}
                                 <ChevronDown
-                                  className={`w-3.5 h-3.5 transition-transform ${
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
                                     openVersionsFor === config.id ? 'rotate-180' : ''
                                   }`}
                                 />
@@ -3732,11 +3755,12 @@ export default function AIInterview() {
                         </div>
 
                         {openVersionsFor === config.id && config.jd_id && (
-                          <div
-                            className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60"
-                            onClick={(e) => e.stopPropagation()}
-                          >
+                          /* No divider of its own: the panel draws the one
+                             line above its heading, as on the JD list. */
+                          <div onClick={(e) => e.stopPropagation()}>
                             <AssessmentVersionHistoryPanel
+                              /* Drawn as the Job Descriptions list's version table. */
+                              jdStyle
                               /* Same rule the Assessments Job List panel uses:
                                  a Draft is not yet a version of the job, and
                                  the row's count beside Layers reads `active`
@@ -4330,6 +4354,7 @@ export default function AIInterview() {
                         setInviteStatusPage(1);
                       }}
                       className="mb-0"
+                      afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
                       /* Shown only while rows are ticked ("N selected"): the
                          tab pills already carry the totals. */
@@ -4504,9 +4529,6 @@ export default function AIInterview() {
                     </div>
 
                     {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
-                    {/* Actions + Clear — on the line under the tab pills (the
-                        page's bulk slot), at the pills' h-8 height. */}
-                    {bulkActionSlotEl && statusBulkActions && createPortal(statusBulkActions, bulkActionSlotEl)}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable
@@ -4895,156 +4917,6 @@ export default function AIInterview() {
         )}
       </div>
       </div>
-
-      {/* Send Invite — a flat table of every active interview version (the
-          Active tab's list view), a single radio pick across the dialog, an
-          eye per row for the Configure Details preview, and Continue hands the
-          chosen interview to the existing Share modal. */}
-      {showInvitePicker && (() => {
-        const closePicker = () => {
-          setShowInvitePicker(false);
-          setInvitePickerSelection(null);
-        };
-
-        /* Resolve the picked interview off live data, and say why it cannot be
-           sent if so — the version table offers every version of a job, Drafts
-           and Archived among them, so "picked" and "sendable" are two different
-           questions and the footer answers the second. */
-        const chosen = invitePickerSelection
-          ? [...configs, ...archivedConfigs].find((c) => c.id === invitePickerSelection.interviewId) ?? null
-          : null;
-        const chosenStatus = chosen ? normalizeConfigStatus(chosen.status) : null;
-        const blockedReason = !invitePickerSelection
-          ? null
-          : !chosen
-            ? 'Select an interview version'
-            : isJdDisabled(chosen.jd_status)
-              ? JD_DISABLED_ACTION_MESSAGE
-            : chosenStatus === 'draft'
-              ? 'Publish this interview version before inviting'
-              : chosenStatus === 'archived'
-                ? 'Archived interview versions cannot be invited'
-                : chosenStatus !== 'published'
-                  ? 'Only active interview versions can be invited'
-                  : null;
-
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm p-3 sm:p-6"
-            onClick={(e) => { if (e.target === e.currentTarget) closePicker(); }}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-                    <Mail className="w-4 h-4 text-brand-blue" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Send Invite</h2>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Pick the active interview to send</p>
-                  </div>
-                </div>
-                <Button variant="secondary" size="sm" onClick={closePicker} aria-label="Close" className="px-2 flex-shrink-0">
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-
-              {/* Content */}
-              <div ref={invitePickerScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-                <AIInterviewPicker
-                  configs={[...configs, ...archivedConfigs]}
-                  selection={invitePickerSelection}
-                  onSelectionChange={setInvitePickerSelection}
-                  scrollContainerRef={invitePickerScrollRef}
-                />
-              </div>
-
-              {/* Footer */}
-              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
-                <div className="min-w-0 truncate whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                  {!invitePickerSelection ? (
-                    'Select an interview to continue'
-                  ) : blockedReason ? (
-                    <span className="inline-flex items-center gap-1.5 align-middle text-brand-orange-deep">
-                      <Info className="w-4 h-4 flex-shrink-0" />
-                      {blockedReason}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 align-middle">
-                      <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                      Ready to invite candidates to {chosen?.jd_title || chosen?.position || 'this interview'}
-                    </span>
-                  )}
-                </div>
-                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <Button
-                    variant="primary"
-                    size="md"
-                    onClick={() => {
-                      if (!chosen || blockedReason) {
-                        toast.error(blockedReason ?? 'Please select an interview version');
-                        return;
-                      }
-                      setShareConfig(chosen);
-                      closePicker();
-                    }}
-                    disabled={!chosen || !!blockedReason}
-                    icon={<Mail className="w-4 h-4" />}
-                    className="flex-1 sm:flex-none whitespace-nowrap"
-                  >
-                    Continue
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Share Modal */}
-      {shareConfig && (
-        <ShareAIInterviewModal
-          isOpen={!!shareConfig}
-          onClose={() => {
-            setShareConfig(null);
-            // Return to the Candidate Invitations popup if we opened Share
-            // from there (via "Invite More").
-            if (shareReturnToInvites) {
-              setViewInvitationsConfig(shareReturnToInvites);
-              setShareReturnToInvites(null);
-            }
-          }}
-          config={shareConfig}
-          onInvitesChanged={() => {
-            // Immediate, silent refresh the moment an invite / copied link
-            // exists — the 2s success popup no longer delays the trackers.
-            invalidateInviteCounts();
-            loadData();
-            if (viewInvitationsConfig) {
-              loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
-              loadInvitationOverview(viewInvitationsConfig.id);
-            }
-            if (activeTab === 'invitation-status') loadAllInviteStatuses(true);
-          }}
-          onInviteSent={() => {
-            invalidateInviteCounts();
-            loadData();
-            // loadData() only refreshes the config list's own counters — the
-            // Candidate Invitations popup (if it's the one Share was opened
-            // from) reads a separate list + stat-card fetch that this never
-            // touched, so a newly-sent invite's row sat on stale/no data
-            // until some OTHER action (Resend/Revoke/Edit) happened to
-            // trigger refreshInvitationsView. Refresh it here too, whichever
-            // config is currently open in that popup.
-            if (viewInvitationsConfig) {
-              refreshInvitationsView(viewInvitationsConfig.id);
-            }
-          }}
-        />
-      )}
 
       {/* Candidate Detail Loading Overlay */}
       {candidateDetailLoading && (
@@ -5436,10 +5308,10 @@ export default function AIInterview() {
                     onClick={() => {
                       if (!canInviteAIInterviews) return;
                       if (blockIfJdDisabled(viewInvitationsConfig)) return;
-                      // Remember where we came from so closing Share returns here.
-                      setShareReturnToInvites(viewInvitationsConfig);
+                      // The popup reopens this tracker when it closes.
+                      const cfg = viewInvitationsConfig;
                       setViewInvitationsConfig(null);
-                      setShareConfig(viewInvitationsConfig);
+                      openInterviewInvite(cfg, true);
                     }}
                     aria-disabled={!canInviteAIInterviews}
                     className={!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
