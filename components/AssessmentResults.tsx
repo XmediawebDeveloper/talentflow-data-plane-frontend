@@ -2249,7 +2249,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ariaLabel="Filter by result"
               />
             )}
-            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
+            trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
             activeFilterCount={activeFilterCount}
@@ -2296,7 +2296,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               of line; h-9 matches the toolbar band. Holds Customize Columns
               and Export plus the selection-bound Download PDF Reports. */}
           {portaled && selectedRows.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

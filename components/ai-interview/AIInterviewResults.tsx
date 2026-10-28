@@ -1095,7 +1095,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // instead of shrinking to an icon.
           fitToContainer
           containerBreakpoint={portaled ? '5xl' : '4xl'}
-          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
+          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -1191,7 +1191,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             of line; h-9 matches the toolbar band. Holds Customize Columns and
             Export plus the bulk ops — Revoke / Resend / Download PDF Reports. */}
         {portaled && selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
