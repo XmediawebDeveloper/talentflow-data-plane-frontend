@@ -504,7 +504,14 @@ export type AuditActivityType =
   | 'invite_failed'
   | 'invite_email_changed'
   | 'candidate_exited'
-  | 'candidate_errored';
+  | 'candidate_errored'
+  | 'recording_downloaded'
+  | 'assessment_create_failed'
+  | 'invite_resent'
+  | 'link_shared'
+  | 'invite_bounced'
+  | 'invite_revoked'
+  | 'invite_edited';
 
 export interface CombinedAuditActivity {
   id: string;
