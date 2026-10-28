@@ -59,14 +59,14 @@ export type BulkInviteSelection =
   | { mode: 'ids'; resume_ids: string[] }
   | ({ mode: 'filter'; source: InviteCandidateSourceTab; exclude_ids: string[] } & InviteCandidateFilters);
 
-/** A candidate typed in (or read from a sheet) on top of the selection. */
-export interface BulkExtraCandidate { name: string; email: string; phone?: string }
+/** A candidate typed in (or read from a sheet), or ticked on the page that
+ *  opened the popup (then with its resume and the list it was ticked on). */
+export interface BulkExtraCandidate { name: string; email: string; phone?: string; resume_id?: string; invite_source?: string }
 
 export interface BulkInviteRequest {
   kind: BulkInviteKind;
   version_id: string;
   selection: BulkInviteSelection;
-  /** At most 500 per send (the backend's cap). */
   extra_candidates?: BulkExtraCandidate[];
   delivery?: 'email' | 'link';
   message?: string;
