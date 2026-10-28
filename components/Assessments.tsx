@@ -6071,6 +6071,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      reason. */
   const candidatesAssessed =
     stats.total_candidates_completed || stats.total_candidates_tested || 0;
+  /* The Total Assessed card counts PEOPLE: one per candidate email, however
+     many assessments they took. `candidatesAssessed` above stays the attempt
+     count, which is what the Results tab lists row by row. Falls back to the
+     attempt count while an older backend doesn't send the unique figure. */
+  const uniqueCandidatesAssessed =
+    (stats as { total_unique_candidates?: number }).total_unique_candidates ?? candidatesAssessed;
 
   const visibleAssessments = collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
@@ -7128,7 +7134,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               value={isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('all')}
-            />
+            >
+              {!isLoadingStats && (
+                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                  {stats.total_assessments} {stats.total_assessments === 1 ? 'version' : 'versions'}
+                </span>
+              )}
+            </StatsCard>
             <StatsCard
               tone="neutral"
               active={isOverviewCardActive('active')}
@@ -7138,17 +7150,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               value={isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('active')}
-            />
+            >
+              {!isLoadingStats && (
+                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                  {stats.active_assessments} {stats.active_assessments === 1 ? 'version' : 'versions'}
+                </span>
+              )}
+            </StatsCard>
             <StatsCard
               tone="neutral"
               active={isOverviewCardActive('completed-candidates')}
               showClickArrow
               icon={Users}
               label="Total Assessed"
-              value={isLoadingStats ? '...' : candidatesAssessed.toLocaleString()}
+              value={isLoadingStats ? '...' : uniqueCandidatesAssessed.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('completed-candidates')}
-            />
+            >
+              {/* The attempts behind the people count, like the versions pill
+                  under Configured Jobs. */}
+              {!isLoadingStats && (
+                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                  {candidatesAssessed} {candidatesAssessed === 1 ? 'interview' : 'interviews'}
+                </span>
+              )}
+            </StatsCard>
           </StatsCardGrid>
         </div>
 
@@ -8251,8 +8277,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 inviteStatusRows.map((inv) => [inv, currentInviteStatus(inv)]),
               );
               const statusOf = (inv: InviteRow) => statusOfInvite.get(inv) ?? currentInviteStatus(inv);
+              /* The chip a row counts in: exactly one, so the chips add up to
+                 Total. Not-yet-engaged statuses (pending, opened) sit with
+                 Invited, abandoned with In Progress, and delivery failures
+                 (failed, bounced) get their own Failed chip. The Status badge
+                 keeps reading `statusOf` and so keeps its precise label. */
+              const chipOf = (inv: InviteRow): string => {
+                const s = statusOf(inv);
+                if (s === 'pending' || s === 'opened') return 'sent';
+                if (s === 'abandoned') return 'started';
+                if (s === 'bounced') return 'failed';
+                return s;
+              };
               const bucketCount = (bucket: string) =>
-                inviteStatusRows.filter((inv) => statusOf(inv) === bucket).length;
+                inviteStatusRows.filter((inv) => chipOf(inv) === bucket).length;
               /* The More Filters Status dropdown — the tabs below, as options. */
               const INVITATION_STATUS_TAB_OPTIONS = [
                 { value: 'all', label: 'All Statuses' },
@@ -8261,6 +8299,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 { value: 'expired', label: 'Expired' },
                 { value: 'started', label: 'In Progress' },
                 { value: 'completed', label: 'Completed' },
+                { value: 'failed', label: 'Failed' },
               ];
               const totalInvites = inviteStatusRows.length;
               const completedInvites = bucketCount('completed');
@@ -8272,7 +8311,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
               const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
               const filtered = (listSortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
-                if (inviteStatusFilters.status !== 'all' && statusOf(inv) !== inviteStatusFilters.status) return false;
+                if (inviteStatusFilters.status !== 'all' && chipOf(inv) !== inviteStatusFilters.status) return false;
                 if (search) {
                   /* Every identifier the row shows is searchable, plus the
                      assessment title, which the table no longer has a column
@@ -8802,6 +8841,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               text: 'text-status-progress', hover: 'hover:text-status-progress', tint: 'bg-status-progress/10', ring: 'ring-status-progress/20' },
                             { key: 'completed', label: 'Completed', icon: CheckCircle, value: completedInvites,
                               text: 'text-status-completed', hover: 'hover:text-status-completed', tint: 'bg-status-completed/10', ring: 'ring-status-completed/20' },
+                            { key: 'failed', label: 'Failed', icon: AlertTriangle, value: bucketCount('failed'),
+                              text: 'text-orange-700', hover: 'hover:text-orange-700', tint: 'bg-orange-50', ring: 'ring-orange-200' },
                           ] as const).map((segment) => {
                             const SegmentIcon = segment.icon;
                             const isActive = inviteStatusFilters.status === segment.key;

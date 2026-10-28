@@ -3027,6 +3027,7 @@ export default function AIInterview() {
             {
               label: 'Total Interviews',
               value: allConfigs.length || (stats?.total_configs ?? 0),
+              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
               icon: FileText,
               tab: 'all-interviews' as TabKey,
               cardKey: 'interviews' as OverviewCardKey,
@@ -3040,13 +3041,20 @@ export default function AIInterview() {
               value: configs.length
                 ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
                 : (stats?.published_configs ?? 0),
+              versions: (configs.length
+                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
+                : (stats?.published_configs ?? 0)) as number | undefined,
               icon: Globe,
               tab: 'published' as TabKey,
               cardKey: 'active' as OverviewCardKey,
             },
             {
               label: 'Total Interviewed',
-              value: interviewedCount ?? stats?.completed ?? 0,
+              // One per candidate email; the session count (what the Results
+              // tab lists) rides beside it as the pill.
+              value: stats?.candidates_interviewed ?? interviewedCount ?? stats?.completed ?? 0,
+              versions: undefined as number | undefined,
+              attempts: (stats?.interview_sessions ?? interviewedCount ?? undefined) as number | undefined,
               icon: Users,
               tab: 'candidate-results' as TabKey,
               cardKey: 'interviewed' as OverviewCardKey,
@@ -3054,7 +3062,7 @@ export default function AIInterview() {
           ];
           return (
             <StatsCardGrid className="mb-5 sm:mb-8" columns={4}>
-              {cards.map(({ label, value, versions, icon: Icon, tab, cardKey }) => (
+              {cards.map(({ label, value, versions, attempts, icon: Icon, tab, cardKey }) => (
                 <StatsCard
                   key={label}
                   tone="neutral"
@@ -3069,6 +3077,11 @@ export default function AIInterview() {
                   {versions !== undefined && (
                     <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                       {versions} {versions === 1 ? 'version' : 'versions'}
+                    </span>
+                  )}
+                  {attempts !== undefined && (
+                    <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                      {attempts} {attempts === 1 ? 'interview' : 'interviews'}
                     </span>
                   )}
                 </StatsCard>
@@ -4013,12 +4026,24 @@ export default function AIInterview() {
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
                 /* Same resolved status the Invited pill filters on: an invite
                    past its deadline is counted under Expired only, not both. */
-                const invitedCount = bucketCount((inv) => resolveInviteStatus(inv) === 'invited');
-                const expiredCount = bucketCount((inv) => resolveInviteStatus(inv) === 'expired');
-                const inProgressCount = bucketCount((inv) => inv.status === 'in_progress');
-                const completedCount = bucketCount((inv) => inv.status === 'completed');
-                const terminatedCount = bucketCount((inv) => inv.status === 'terminated');
-                const revokedCount = bucketCount((inv) => inv.status === 'revoked');
+                /* Exactly one chip per invitation, so the chips add up to Total.
+                   Past-deadline rows count as Expired even when the status
+                   never left system_check / consent_pending (the row's own
+                   Expired flag); cancelled invites sit with Revoked; the other
+                   pre-start statuses sit with Invited. */
+                const bucketOf = (inv: any): string => {
+                  const s = inv.status;
+                  if (s === 'completed' || s === 'terminated' || s === 'revoked' || s === 'in_progress') return s;
+                  if (isExpiredForActions(inv)) return 'expired';
+                  if (s === 'cancelled') return 'revoked';
+                  return 'invited';
+                };
+                const invitedCount = bucketCount((inv) => bucketOf(inv) === 'invited');
+                const expiredCount = bucketCount((inv) => bucketOf(inv) === 'expired');
+                const inProgressCount = bucketCount((inv) => bucketOf(inv) === 'in_progress');
+                const completedCount = bucketCount((inv) => bucketOf(inv) === 'completed');
+                const terminatedCount = bucketCount((inv) => bucketOf(inv) === 'terminated');
+                const revokedCount = bucketCount((inv) => bucketOf(inv) === 'revoked');
                 const completionRate = totalInvites > 0 ? Math.round((completedCount / totalInvites) * 100) : 0;
 
                 const search = inviteStatusFilters.search.trim().toLowerCase();
@@ -4028,7 +4053,7 @@ export default function AIInterview() {
                 const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
                 const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
                 const filtered = (sortBy === 'oldest' ? [...inviteStatusRows].reverse() : inviteStatusRows).filter((inv) => {
-                  if (inviteStatusFilters.status !== 'all' && resolveInviteStatus(inv) !== inviteStatusFilters.status) return false;
+                  if (inviteStatusFilters.status !== 'all' && bucketOf(inv) !== inviteStatusFilters.status) return false;
                   if (search) {
                     const haystack = [inv.candidate_name, inv.candidate_email, inv.candidate_cid, inv._config_title, inv._jd_short_id]
                       .filter(Boolean).join(' ').toLowerCase();
