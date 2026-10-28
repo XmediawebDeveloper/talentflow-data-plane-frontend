@@ -1,6 +1,6 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, UserCheck, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -3428,33 +3428,40 @@ Best regards`);
               </div>
             </div>
 
-            {/* Card Content */}
-            <div className="space-y-2 text-sm mb-3">
+            {/* Card Content — pl-10 lines it up under the name (the 28px
+                checkbox + 12px gap), one 16px icon + gap-2 per line so the
+                text starts on one edge; the email truncates, full on hover. */}
+            <div className="space-y-1.5 text-sm mb-3 pl-10 text-gray-600">
               {resume.email && (
-                <div className="flex items-start gap-2 text-gray-600 min-w-0">
-                  <Mail className="w-4 h-4 mt-0.5 shrink-0" />
-                  <span className="min-w-0 break-all">{resume.email}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Mail className="w-4 h-4 shrink-0 text-gray-400" />
+                  <span className="min-w-0 truncate" title={resume.email}>{resume.email}</span>
                 </div>
               )}
               {/* Same fields as the fixed table columns — phone, experience and
                   education are export-only now (see ScoredResumesExportModal). */}
-              <div className="text-gray-600">
-                <span className="text-gray-500">Scored by:</span> {resume.scoredBy}
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <UserCheck className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="min-w-0 truncate"><span className="text-gray-500">Scored by:</span> {resume.scoredBy}</span>
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <Calendar className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="min-w-0 truncate">{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
               </div>
             </div>
 
-            {/* Card Actions */}
-            <div className="space-y-2">
+            {/* Card Actions — Download Scorecard and View Resume share one
+                line (two columns, full card width); Invite / Share keep
+                their own full line. Below 380px "Download" / "View" are cut from
+                the labels ("Scorecard" / "Resume") so both fit on one line at
+                320px; min-w-0 + overflow-hidden keep text inside the button. */}
+            <div className="grid grid-cols-2 gap-2">
               {/* Invite Button - For Exact Match & Partial Match. Opens THE
                   invite popup for this candidate (the popup offers Create
                   when the job has none yet). No permission: greyed, with the
                   reason on hover, and a no-op. No units left: disabled. */}
               {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
-                <div className="relative group">
+                <div className="relative group col-span-2">
                   {/* Create / Send Assessment's shared look (createSendActions). */}
                   <button
                     type="button"
@@ -3505,10 +3512,10 @@ Best regards`);
                 disabled={downloadingId === resume.id}
                 aria-disabled={!canDownloadScorecard}
                 title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${resume.resumeId ? '' : 'col-span-2'} ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
-                {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
+                {downloadingId === resume.id ? 'Downloading...' : <><span className="hidden min-[380px]:inline">Download&nbsp;</span>Scorecard</>}
               </Button>
 
               {resume.resumeId && (
@@ -3520,9 +3527,9 @@ Best regards`);
                     setViewResumeCandidate(resume);
                   }}
                   icon={<FileText className="w-4 h-4" />}
-                  className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
+                  className="w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
                 >
-                  View Resume
+                  <span className="hidden min-[380px]:inline">View&nbsp;</span>Resume
                 </Button>
               )}
 
@@ -3540,7 +3547,7 @@ Best regards`);
                   aria-disabled={!canShareResume}
                   title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`col-span-2 w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>
