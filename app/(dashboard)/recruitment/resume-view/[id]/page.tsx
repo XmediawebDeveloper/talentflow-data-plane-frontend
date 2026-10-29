@@ -15,7 +15,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Database, Paperclip, ClipboardList, Video
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Database, Paperclip, ClipboardList, Video, Archive
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -434,12 +434,19 @@ export default function ResumeViewPage() {
       ? hasPermissionCode('internal_db:delete')
       : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
   );
+  // An archived resume is off-limits for every action below (Score, AI Talent
+  // Match, Invite) — it can still be viewed, downloaded, shared and deleted,
+  // same as the Resume Database list's own rule (ResumeTable.tsx / MyResumesView.tsx).
+  const isArchived = !!(resume?.is_archived ?? resume?.isArchived);
+  const ARCHIVED_ACTION_MESSAGE = 'This resume is archived — unarchive it first to use this action';
+
   // Plan gates DISABLE (hover explains), they never hide: permission decides
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
-    isTenantAdmin ||
+    !isArchived &&
+    (isTenantAdmin ||
     (hasPermission('canRunScoring') &&
-      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score'));
+      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score')));
   const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'
@@ -448,28 +455,31 @@ export default function ResumeViewPage() {
         ? hasPermissionCode('my_resumes:ai_match')
         : true;
   const canRunAITalentMatch =
-    isTenantAdmin || (hasPermission('canRunAiMatch') && hasAITalentMatchSourcePermission);
+    !isArchived &&
+    (isTenantAdmin || (hasPermission('canRunAiMatch') && hasAITalentMatchSourcePermission));
   const aiMatchPlanLocked = isPlanLocked('ai_talent_match');
 
   // ── Invite (Assessment / AI Interview) ──────────────────────────────────
   // Same two flows the Resume Scoring candidate page offers. A resume has no
   // job context here, so the user picks the JD first.
   const canInviteAssessment =
-    isTenantAdmin || (
+    !isArchived &&
+    (isTenantAdmin || (
       hasPermission('canCreateAssessments') && hasPermissionCode(
         viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
       )
-    );
+    ));
   // "Invite to AI Interview" is its own permission per resume source (My
   // Resumes / Shared Database), plus AI Interview's own Invite.
   const canInviteAIInterview =
-    isTenantAdmin ||
+    !isArchived &&
+    (isTenantAdmin ||
     (hasPermission('canInviteAIInterviews') &&
       (viewSource === 'resume-database'
         ? hasPermissionCode('internal_db:invite_ai_interview')
         : viewSource === 'my-resumes'
           ? hasPermissionCode('my_resumes:invite_ai_interview')
-          : true));
+          : true)));
   const assessmentPlanLocked = isPlanLocked('assessment');
   const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
@@ -1404,9 +1414,21 @@ Best regards`);
                         sliver on a phone; sm+ keeps them beside the name. */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
                       <div className="min-w-0">
-                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight break-words sm:truncate">
-                          {name}
-                        </h2>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight break-words sm:truncate">
+                            {name}
+                          </h2>
+                          {/* Same badge the Resume Database list uses (ResumeTable.tsx)
+                              — this is the one place the detail page was missing it,
+                              so an archived resume could be opened with no indication
+                              that every action on it is now blocked. */}
+                          {isArchived && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
+                              <Archive className="w-3 h-3" />
+                              Archived
+                            </span>
+                          )}
+                        </div>
                         {title && (
                           <p className="text-sm sm:text-base text-gray-600 break-words sm:truncate">{title}</p>
                         )}
@@ -1489,7 +1511,7 @@ Best regards`);
                         onClick={() => { if (!canInviteAssessment) return; openCreateSend('assessment'); }}
                         disabled={!jobForInvite || assessmentPlanLocked}
                         aria-disabled={!canInviteAssessment}
-                        title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                         className={canInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <ClipboardList className="w-4 h-4" />
@@ -1501,7 +1523,7 @@ Best regards`);
                         onClick={() => { if (!canInviteAIInterview) return; openCreateSend('interview'); }}
                         disabled={!jobForInvite || aiInterviewPlanLocked}
                         aria-disabled={!canInviteAIInterview}
-                        title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                         className={canInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <Video className="w-4 h-4" />
@@ -1515,11 +1537,13 @@ Best regards`);
                           disabled={canInvite && invitePlanLocked}
                           aria-disabled={!canInvite}
                           title={
-                            assessmentPlanLocked && aiInterviewPlanLocked
-                              ? PLAN_LOCKED_MESSAGE
-                              : !canInvite
-                                ? 'You do not have permission to invite candidates'
-                                : invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined
+                            isArchived
+                              ? ARCHIVED_ACTION_MESSAGE
+                              : assessmentPlanLocked && aiInterviewPlanLocked
+                                ? PLAN_LOCKED_MESSAGE
+                                : !canInvite
+                                  ? 'You do not have permission to invite candidates'
+                                  : invitePlanLocked ? PLAN_LOCKED_MESSAGE : undefined
                           }
                           aria-haspopup="menu"
                           aria-expanded={showInviteMenu}
@@ -1541,7 +1565,7 @@ Best regards`);
                               onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
                               disabled={assessmentPlanLocked}
                               aria-disabled={!canInviteAssessment}
-                              title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                               }`}
@@ -1556,7 +1580,7 @@ Best regards`);
                               onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
                               disabled={aiInterviewPlanLocked}
                               aria-disabled={!canInviteAIInterview}
-                              title={aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                               }`}
@@ -1578,7 +1602,7 @@ Best regards`);
                         onClick={() => { if (!canRunAITalentMatch) return; handleAITalentMatch(); }}
                         disabled={aiMatchPlanLocked}
                         aria-disabled={!canRunAITalentMatch}
-                        title={aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : !canRunAITalentMatch ? 'You do not have permission to run AI Talent Match' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : !canRunAITalentMatch ? 'You do not have permission to run AI Talent Match' : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
                           aiMatchPlanLocked || !canRunAITalentMatch
                             ? `bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed${!canRunAITalentMatch ? ' opacity-60' : ''}`
@@ -1625,7 +1649,7 @@ Best regards`);
                         onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                         disabled={applyPlanLocked || jobScoreStatus === 'checking'}
                         aria-disabled={!canApplyResumeToJob}
-                        title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
                         className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
                           applyPlanLocked || jobScoreStatus === 'checking' || !canApplyResumeToJob
                             ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
@@ -1649,7 +1673,7 @@ Best regards`);
                       onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                       disabled={applyPlanLocked}
                       aria-disabled={!canApplyResumeToJob}
-                      title={applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
+                      title={isArchived ? ARCHIVED_ACTION_MESSAGE : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
                       className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
                         applyPlanLocked || !canApplyResumeToJob
                           ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`

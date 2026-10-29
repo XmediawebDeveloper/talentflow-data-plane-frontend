@@ -4938,9 +4938,10 @@ export default function AIInterview() {
            status-class or the other (see allTrackerRevocable /
            allTrackerResendable below); a mixed Invited+Expired selection
            shows neither — an action valid for one status must never be
-           applied to the other. A disabled job's tracker is view-only, so it
-           has no bulk mode at all. */
-        const trackerJdLocked = isJdDisabled(viewInvitationsConfig.jd_status);
+           applied to the other. A disabled or archived job's tracker is
+           view-only, so it has no bulk mode at all. */
+        const trackerJdLockReason = jdActionLockReason(viewInvitationsConfig.jd_status);
+        const trackerJdLocked = !!trackerJdLockReason;
         const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
         const isTrackerBulkActionable = (inv: any) => isRevocableInvite(inv) || isTrackerResendable(inv);
         const selectableIds = trackerJdLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
@@ -5303,7 +5304,7 @@ export default function AIInterview() {
                     title={
                       !canInviteAIInterviews
                         ? 'You do not have permission to invite candidates'
-                        : trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined
+                        : trackerJdLockReason ?? undefined
                     }
                     onClick={() => {
                       if (!canInviteAIInterviews) return;

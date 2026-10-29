@@ -6338,8 +6338,13 @@ export default function AITalentMatchPage({
 
                     {/* Below sm: rating stack + actions stack vertically (full
                         width) so the justify-end row can't overflow the card's
-                        left edge on a phone; sm+ keeps the side-by-side layout. */}
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto">
+                        left edge on a phone; sm+ keeps the side-by-side layout.
+                        In grid cards the outer row stays column (see above), so
+                        this block must self-align right or it hugs the left edge
+                        next to the title instead of sitting in the card's corner. */}
+                    <div className={`flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto ${
+                      jobListDisplayMode === 'grid' && !isJobExpanded ? 'sm:self-end' : ''
+                    }`}>
                       {/* Rating 10 / 9 – 7 / Below 7, one below another — the
                           Job Descriptions cards' Applicants / Assessed /
                           Interviewed stack, in the rating colours. Under a

@@ -2615,6 +2615,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error('Please select at least one resume');
       return;
     }
+    // An archived resume can't be assessed, same rule Score and AI Interview apply.
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isResumeArchived(r)).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
+      return;
+    }
     openInvite({
       kind: 'assessment',
       candidates: selectedInviteCandidates(),
@@ -2647,6 +2655,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const handleAITalentMatch = async () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    // An archived resume can't be matched against a job, same rule Score,
+    // Assessment and AI Interview apply.
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isResumeArchived(r)).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
       return;
     }
     /* The dialog loads the job list itself now, so this no longer gates the

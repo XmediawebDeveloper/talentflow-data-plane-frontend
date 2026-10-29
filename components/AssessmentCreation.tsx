@@ -36,7 +36,9 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import {
+  archivedAssessmentRepresentative,
   buildAssessmentJobList,
+  groupByLineage,
   isSelectableVersion,
   jobSearchMatcher,
   lineageKey,
@@ -3268,13 +3270,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
      Falling through a taken version never relaxes the status test: v3 taken
      with v4 archived above it goes to v2, never up to v4.
 
-     A job with no version passing both — nothing but drafts, every version
-     archived or disabled, or every published version already assessed — has no
+     A job with no version passing both — nothing but drafts, newest live
+     version Disabled, or every published version already assessed — has no
      row (`buildAssessmentJobList` returns nothing for it), and a list left
      empty that way lands on the picker's existing empty state. The versions
      still exist and the job is still reachable from Job Openings; it simply
      has nothing a NEW assessment could be built against, which is the only
-     question this list answers.
+     question this list answers. An Archived lineage is the one exception:
+     it gets its row back below, greyed out, rather than disappearing.
 
      The skipped versions are not lost, and this is what View Versions is for:
      it lists the entire lineage below, newest first — Published, Republished,
@@ -3287,9 +3290,23 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
      fetched per-lineage detail — that the card controls and every history row
      below are gated on, so the version this list opens on and the version its
      radio will accept can never disagree. */
-  const availableJobs = buildAssessmentJobList(allJdVersions, version =>
+  const buildableJobs = buildAssessmentJobList(allJdVersions, version =>
     versionHasAssessment(lineageKey(version), version.id),
   );
+  /* An Archived job keeps its row instead of vanishing the moment it has none
+     `buildAssessmentJobList` is willing to give it — same card, on its newest
+     version, greyed out and unselectable below, so it reads as "archived"
+     rather than as a job that disappeared. A lineage dropped for any other
+     reason (nothing but Draft, newest live version Disabled, or every live
+     version already assessed) still has no row; only Archived gets it back. */
+  const buildableLineages = new Set(buildableJobs.map(lineageKey));
+  const archivedJobs: Job[] = [];
+  groupByLineage(allJdVersions).forEach((bucket, key) => {
+    if (buildableLineages.has(key)) return;
+    const archivedRep = archivedAssessmentRepresentative(bucket);
+    if (archivedRep) archivedJobs.push(archivedRep);
+  });
+  const availableJobs = [...buildableJobs, ...archivedJobs];
   /* Does this recruiter have ANY published version at all? Only the empty
      state reads it, to tell "you have not published a job yet" apart from "you
      have, and every published version is already assessed" — two empty lists
@@ -3532,7 +3549,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   ran into the button. */}
               <JobEligibilityNote
                 className="mt-3"
-                description="Only Published (or Republished) job versions without an assessment are listed. Archived, Disabled, Draft and already-assessed jobs are hidden. A job with only one available version is selected straight from its card; View Versions appears when there are versions to choose from, and the eye icon shows a job's full history."
+                description="Only Published (or Republished) job versions without an assessment are listed. Archived jobs are shown greyed out for reference; Disabled, Draft and already-assessed jobs are hidden. A job with only one available version is selected straight from its card; View Versions appears when there are versions to choose from, and the eye icon shows a job's full history."
               />
             </div>
 
@@ -3748,9 +3765,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               ? 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
                               : `v${job.versionNumber ?? 1} is this job’s only available version — select it to build the assessment against it.`
                       }
-                      aria-disabled={blockedByOtherPick}
+                      aria-disabled={blockedByOtherPick || !latestSelectableStatus}
                       className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
-                        blockedByOtherPick
+                        blockedByOtherPick || !latestSelectableStatus
                           ? 'bg-gray-50 border-gray-200 opacity-60'
                           : lineageSelected
                             ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'

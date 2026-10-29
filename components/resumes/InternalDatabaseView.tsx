@@ -563,8 +563,18 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  // Archived resumes are off-limits for Score / AI Talent Match / Assessment /
+  // AI Interview — same rule My Resumes applies (MyResumesView.tsx's own
+  // isResumeArchived), just without that view's "Archived Resumes" folder
+  // concept, which doesn't exist here.
+  const isResumeArchived = (resume: Resume): boolean => !!(resume.is_archived ?? resume.isArchived);
+
   // Handle Apply to Job for single resume
   const handleApplyToJob = (resume: Resume) => {
+    if (isResumeArchived(resume)) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
     setResumesForApply([resume]);
     fetchJobs();
     setShowApplyToJobModal(true);
@@ -575,6 +585,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
     if (selectedResumesList.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    const archivedCount = selectedResumesList.filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
       return;
     }
     setResumesForApply(selectedResumesList);
@@ -589,6 +604,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error('Please select at least one resume');
       return;
     }
+    const archivedCount = selectedResumesList.filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
+      return;
+    }
     setResumesForApply(selectedResumesList);
     fetchJobs();
     setShowAITalentMatchModal(true);
@@ -597,6 +617,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const handleBulkAIInterview = () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
     openInvite({
@@ -738,6 +765,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const handleBulkAssessment = () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
       return;
     }
     openInvite({
