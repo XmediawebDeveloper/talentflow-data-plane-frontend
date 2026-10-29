@@ -25,7 +25,8 @@ export interface DeviceCapability {
   // ── Derived feature flags (read by the interview UI) ──────────────────────
   /** Silero / neural VAD — only on 'high'. Otherwise amplitude VAD + server EndOfTurn. */
   useNeuralVad: boolean;
-  /** 3D TalkingHead avatar — off on 'low' (falls back to a static image). */
+  /** 3D TalkingHead avatar — off on 'low' (falls back to a static image), and
+   *  off everywhere when NEXT_PUBLIC_BINA_3D_AVATAR=false. */
   use3DAvatar: boolean;
   /** RNNoise WASM noise suppression — off on 'low' (server-side denoise covers it). */
   useNoiseSuppression: boolean;
@@ -55,6 +56,17 @@ const BENCH_NEURAL_VAD_MAX_MS = 35;
 const BENCH_LOW_TIER_MS = 25;
 const BENCH_RUNS = 3;
 const NEURAL_VAD_MIN_CORES = 4;
+
+/**
+ * Global 3D Bina switch (NEXT_PUBLIC_BINA_3D_AVATAR, inlined at BUILD time).
+ *   true / unset → 3D where the device tier allows it (normal behaviour)
+ *   false        → 2D Bina on every device; the 3D model is not even downloaded
+ * Used for load / performance tests, so client GPU/CPU cost is out of the picture.
+ */
+export function isBina3DAvatarEnabled(): boolean {
+  const raw = (process.env.NEXT_PUBLIC_BINA_3D_AVATAR ?? '').trim().toLowerCase();
+  return !['false', '0', 'no', 'off'].includes(raw);
+}
 
 /**
  * Tiny CPU micro-benchmark (~a few ms even on slow machines). Pure arithmetic,
@@ -148,7 +160,7 @@ export function detectDeviceCapability(opts: { runBenchmark?: boolean } = {}): D
     benchmarkMs,
     useNeuralVad,
     // Heavy WebGL/face work scales with tier (these ARE the real CPU hogs).
-    use3DAvatar: tier !== 'low',
+    use3DAvatar: tier !== 'low' && isBina3DAvatarEnabled(),
     useNoiseSuppression: tier !== 'low',
     faceVerifyIntervalMs: tier === 'high' ? 10_000 : tier === 'mid' ? 15_000 : 30_000,
   };

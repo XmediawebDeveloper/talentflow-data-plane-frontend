@@ -30,6 +30,7 @@ import {
   PinOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import chatService, {
   ChatConnectionStatus,
   Channel,
@@ -516,7 +517,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Failed to leave channel');
+      toast.error(friendlyErrorMessage(e, "Couldn't leave channel. Please try again."));
     }
   };
 
@@ -540,7 +541,7 @@ export default function TeamChatPage() {
       setMessages([]);
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || 'Failed to delete channel');
+      toast.error(friendlyErrorMessage(e, "Couldn't delete channel. Please try again."));
     }
   };
 
@@ -736,7 +737,7 @@ export default function TeamChatPage() {
       }
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
-      toast.error(error?.response?.data?.detail || 'Failed to upload image');
+      toast.error(friendlyErrorMessage(error, "Couldn't upload image. Please try again."));
     } finally {
       setIsUploadingAttachment(false);
     }
@@ -822,7 +823,7 @@ export default function TeamChatPage() {
       openChannel(channel);
     } catch (error: any) {
       console.error('Error creating channel:', error);
-      toast.error(error.response?.data?.detail || 'Failed to create channel');
+      toast.error(friendlyErrorMessage(error, "Couldn't create channel. Please try again."));
     } finally {
       setIsCreating(false);
     }
@@ -841,7 +842,7 @@ export default function TeamChatPage() {
       setSelectedChannel(updatedChannel);
     } catch (error: any) {
       console.error('Error adding members:', error);
-      toast.error(error.response?.data?.detail || 'Failed to add members');
+      toast.error(friendlyErrorMessage(error, "Couldn't add members. Please try again."));
     }
   };
 
@@ -890,7 +891,7 @@ export default function TeamChatPage() {
           return;
         }
       }
-      toast.error(error.response?.data?.detail || 'Failed to start conversation');
+      toast.error(friendlyErrorMessage(error, "Couldn't start conversation. Please try again."));
     } finally {
       setIsCreatingDM(false);
     }

@@ -917,11 +917,11 @@ export default function AIInterviewPreview() {
                 <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                   <table className="w-full sm:min-w-[360px] text-sm whitespace-nowrap">
                     <thead>
-                      <tr className="bg-slate-50 text-left">
-                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600">Round</th>
-                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
-                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
-                        <th className="px-2 sm:px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
+                      <tr className="bg-white text-left">
+                        <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-xs">Round</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Questions</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Clusters</th>
+                        <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -1234,14 +1234,14 @@ export default function AIInterviewPreview() {
                 </span>
                 <span className="text-xs text-gray-400">{totalPreviewMinutes} min</span>
               </div>
-              <div>
+              <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100">
-                      <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                      <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                      <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
+                      <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Q</th>
+                      <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
+                      <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
                     </tr>
                   </thead>
                   <tbody>

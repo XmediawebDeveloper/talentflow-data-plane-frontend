@@ -42,6 +42,8 @@ import { PageSkeleton } from '@/components/ui/skeleton';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { clearFreshDraftVersion, isFreshDraftVersion } from '@/lib/utils/jdDraftVersion';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -4004,7 +4006,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     } catch (error) {
       toast.error({
         title: 'Could not add the industry',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: friendlyErrorMessage(error, "Please try again."),
       });
     } finally {
       setIsResolvingIndustryGate(false);
@@ -5480,7 +5482,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         } else if (error instanceof Error && error.message) {
           toast.error({
             title: 'Generation Failed',
-            description: error.message,
+            description: friendlyErrorMessage(error, "Please try again."),
           });
         } else {
           toast.error({
@@ -5607,7 +5609,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (streamErr instanceof Error && isPromptConflictMessage(streamErr.message)) {
         toast.error({
           title: 'Prompt Conflict',
-          description: streamErr.message,
+          description: friendlyErrorMessage(streamErr, "Please try again."),
         });
         setIsGenerating(false);
         return;
@@ -7528,7 +7530,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } catch (error) {
         toast.error({
           title: 'Could not check the industry',
-          description: error instanceof Error ? error.message : 'Please try again.',
+          description: friendlyErrorMessage(error, "Please try again."),
         });
         return;
       } finally {
@@ -8397,10 +8399,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         // Show success toast (but don't block navigation)
         toast.success({
-          title: isEditingPublished ? 'Job description republished!' : 'Job description published!',
+          title: isEditingPublished ? 'Job description republished' : 'Job description published',
           description: isEditingPublished
-            ? `"${jobTitle}" has been updated and a new version has been saved.`
-            : `"${jobTitle}" is now live and accepting applications.`,
+            ? `${formatJobSubject({ job_id: publishedJd.job_id, title: trimmedJobTitle, versionNumber: publishedJd.version_number })} has been updated and a new version has been saved.`
+            : `${formatJobSubject({ job_id: publishedJd.job_id, title: trimmedJobTitle, versionNumber: publishedJd.version_number })} is now live and accepting applications.`,
           action: {
             label: 'View Job',
             onClick: () => {
@@ -8429,8 +8431,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // Use regular toast for non-quota errors
         toast.error({
-          title: 'Failed to publish job description',
-          description: error instanceof Error ? error.message : 'An unexpected error occurred',
+          title: "Couldn't publish job description",
+          description: friendlyErrorMessage(error, "Please try again."),
         });
       }
     }
@@ -8567,7 +8569,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.error('[Leave] Failed to discard changes:', error);
       toast.error({
         title: 'Could not discard changes',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: friendlyErrorMessage(error, "Please try again."),
       });
     } finally {
       setLeaveBusy(null);
@@ -8585,14 +8587,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // Through a working copy, the JD to delete is the draft it belongs to; its
       // copies are removed with it.
       await jdService.delete(editingCopyOf ?? editingId);
-      toast.info(`${leaveJobCode ?? 'The JD'} has been deleted`);
+      toast.success(`${leaveJobCode ?? 'The JD'} has been deleted`);
       finishLeave();
     } catch (error) {
       discardedRef.current = false;
       console.error('[Leave] Failed to delete the JD:', error);
       toast.error({
         title: 'Could not delete this JD',
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: friendlyErrorMessage(error, "Please try again."),
       });
     } finally {
       setLeaveBusy(null);
@@ -8623,7 +8625,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const shouldDelete = editingId && (!isPreExistingDraft || hasUnsavedChanges);
       if (shouldDelete) {
         await jdService.delete(editingId!);
-        toast.info('JD draft has been deleted');
+        toast.success('JD draft has been deleted');
       }
       // Navigate to job openings
       router.push('/recruitment/job-openings');
@@ -8796,12 +8798,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // JD stayed Published, which is exactly the false alarm this replaces.
       const actuallyMovedToDraft = isEditingPublished && savedJd.status !== 'published';
       toast.success({
-        title: actuallyMovedToDraft ? 'Moved to draft' : 'Draft saved!',
+        title: actuallyMovedToDraft ? 'Moved to draft' : 'Draft saved',
         description: actuallyMovedToDraft
-          ? `"${jobTitle}" has been taken off Published and saved as a draft with your changes.`
+          ? `${formatJobSubject({ job_id: savedJd.job_id, title: jobTitle, versionNumber: savedJd.version_number })} has been taken off Published and saved as a draft with your changes.`
           : isEditingPublished
-            ? `"${jobTitle}" stays Published — your changes have been saved to it.`
-            : `"${jobTitle}" has been saved as draft.`,
+            ? `${formatJobSubject({ job_id: savedJd.job_id, title: jobTitle, versionNumber: savedJd.version_number })} stays Published — your changes have been saved to it.`
+            : `${formatJobSubject({ job_id: savedJd.job_id, title: jobTitle, versionNumber: savedJd.version_number })} has been saved as draft.`,
       });
 
       // Navigate to job openings page after saving draft, unless the caller owns navigation
@@ -8813,8 +8815,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
       toast.error({
-        title: 'Failed to save draft',
-        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        title: "Couldn't save draft",
+        description: friendlyErrorMessage(error, "Please try again."),
       });
       // Stay on page even on error - let user retry or fix issues
       return false;

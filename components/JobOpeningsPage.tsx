@@ -379,7 +379,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="bg-white border-b border-gray-200">
                   <tr>
                     <th className="text-left px-3 sm:px-6 py-3 sm:py-4"><Skeleton className="h-3 w-20" /></th>
                     <th className="text-left px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell"><Skeleton className="h-3 w-24" /></th>
@@ -462,16 +462,16 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Title</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Department</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600">Job Title</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden sm:table-cell">Department</th>
                   {/* Location column hidden for now */}
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Experience</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Applicants</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Created</th>
-                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden md:table-cell">Experience</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600">Status</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden lg:table-cell">Applicants</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden lg:table-cell">Created</th>
+                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">

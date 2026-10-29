@@ -24,11 +24,12 @@ import { DateField } from '@/components/ui/date-field';
 import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { useQuota } from '@/contexts/QuotaContext';
+import { useModuleQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
@@ -84,7 +85,8 @@ import AssessmentVersionHistoryPanel, {
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
-import AllInterviewsTable, { VersionPill, JobDisabledBadge, JobArchivedBadge, jobLockBadgeFor, type BulkActionKind, type BulkSkip, type BulkActionsConfig } from '@/components/ai-interview/AllInterviewsTable';
+import { jobLockBadgeFor, jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import AllInterviewsTable, { VersionPill, AIInterviewJobStatusBadge, type BulkActionKind, type BulkSkip, type BulkActionsConfig } from '@/components/ai-interview/AllInterviewsTable';
 import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
@@ -199,7 +201,6 @@ export default function AIInterview() {
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
   const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
-  const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   // "AI Interview Published" success modal (was referenced in JSX but never
@@ -517,10 +518,9 @@ export default function AIInterview() {
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null);
   const versionMenuRef = useRef<HTMLDivElement>(null);
 
-  // Quota
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
-  const [totalUnits, setTotalUnits] = useState<number>(0);
-  const [isUnlimited, setIsUnlimited] = useState(false);
+  // Quota — AIU units from the shared QuotaContext (same fetch as the header;
+  // Assessments uses the same hook for AS units).
+  const { availableUnits, totalUnits, isUnlimited } = useModuleQuota('AIU');
 
   // Settings form
   const [settingsDuration, setSettingsDuration] = useState(30);
@@ -614,34 +614,6 @@ export default function AIInterview() {
       setIsRefreshingTab(false);
     }
   };
-
-  // Sync quota from shared QuotaContext (AIU = AI Interview Units)
-  useEffect(() => {
-    const quotas = quotaData?.quotas;
-    if (!quotas?.AIU) return;
-    const sub = quotas.AIU.subscription;
-    const addon = quotas.AIU.addon;
-    const subLimit = sub?.limit;
-    const used = sub?.used ?? 0;
-    const addonPurchased = typeof addon?.total_purchased === 'number' ? addon.total_purchased : 0;
-    const addonConsumed = typeof addon?.total_consumed === 'number' ? addon.total_consumed : 0;
-    const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
-
-    const unlimited = subLimit === -1 || subLimit === 'unlimited';
-    setIsUnlimited(unlimited);
-    if (unlimited) {
-      setTotalUnits(-1);
-      setAvailableUnits(-1);
-    } else if (typeof subLimit === 'number' && subLimit > 0) {
-      const totalLimit = subLimit + addonPurchased;
-      setTotalUnits(totalLimit);
-      const subRemaining = Math.max(0, subLimit - used);
-      const remaining = typeof quotas.AIU.total_remaining === 'number'
-        ? Math.max(0, quotas.AIU.total_remaining)
-        : Math.max(0, subRemaining + addonRemaining);
-      setAvailableUnits(remaining);
-    }
-  }, [quotaData]);
 
   // Load configs and stats
   const loadAllConfigs = useCallback(async (): Promise<AIInterviewResponse[]> => {
@@ -766,7 +738,7 @@ export default function AIInterview() {
       if (firstLoad) setConfigs([]);
       if (error instanceof Error) {
         console.error('Failed to load AI interview configs:', error);
-        toast.error(error.message || 'AI interview configurations failed to load.');
+        toast.error(friendlyErrorMessage(error, "AI interview configurations failed to load. Please try again."));
       } else {
         console.error('Failed to load AI interview data:', error);
         toast.error('Failed to load data. Please refresh.');
@@ -1514,7 +1486,7 @@ export default function AIInterview() {
       setDeleteTarget(null);
     } catch (error) {
       console.error('Failed to delete:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to delete configuration');
+      toast.error(friendlyErrorMessage(error, "Couldn't delete configuration. Please try again."));
     } finally {
       setDeleteLoading(false);
     }
@@ -1683,7 +1655,7 @@ export default function AIInterview() {
       const detail = await aiInterviewService.get(candidateId);
       setCandidateDetailFromModal(detail);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to load candidate details');
+      toast.error(friendlyErrorMessage(err, "Couldn't load candidate details. Please try again."));
     } finally {
       setCandidateDetailLoading(false);
     }
@@ -1707,7 +1679,7 @@ export default function AIInterview() {
       setRefreshSignal((n) => n + 1);
       setArchiveTarget(null);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to archive');
+      toast.error(friendlyErrorMessage(error, "Couldn't archive AI interview. Please try again."));
     } finally {
       setArchiveLoading(false);
     }
@@ -1725,7 +1697,7 @@ export default function AIInterview() {
           : 'Configuration restored to Active'
       );
     } catch (error: any) {
-      toast.error(error.message || 'Failed to unarchive');
+      toast.error(friendlyErrorMessage(error, "Couldn't unarchive AI interview. Please try again."));
     }
     setOpenMenuId(null);
   };
@@ -1757,7 +1729,7 @@ export default function AIInterview() {
       markUnsavedVersion(result.cloned_id);
       router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
-      toast.error(error.message || 'Failed to duplicate');
+      toast.error(friendlyErrorMessage(error, "Couldn't duplicate AI interview. Please try again."));
     }
   };
 
@@ -2266,7 +2238,7 @@ export default function AIInterview() {
        version NUMBER is not a count, which is what the old fallback got wrong. */
     return 1;
   };
-  /** The main card's Job Disabled / Job Archived badge — the All Interviews
+  /** The main card's job Disabled / Archived / Draft badge — the All Interviews
    *  table's rule (jobLockBadgeFor), judged on every version of the job. */
   const jobLockBadgeForCard = (config: AIInterviewResponse) =>
     jobLockBadgeFor(
@@ -2306,11 +2278,11 @@ export default function AIInterview() {
     jdLineage.ensureVersionCounts(
       paginatedConfigs.map((c) => c.jd_id).filter((id): id is string => !!id),
     );
-    /* Every version's status, for the cards whose job reads Disabled or
-       Archived — that badge is judged on the whole job (jobLockBadgeForCard). */
+    /* Every version's status, for the cards whose job reads Disabled, Archived
+       or Draft — that badge is judged on the whole job (jobLockBadgeForCard). */
     jdLineage.ensureFilterLineages(
       paginatedConfigs
-        .filter((c) => c.jd_id && (isJdDisabled(c.jd_status) || String(c.jd_status || '').toLowerCase() === 'archived'))
+        .filter((c) => c.jd_id && jobStatusBadgeKind(c.jd_status))
         .map((c) => ({ key: c.jd_id!, jobId: c.jd_id! })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3630,8 +3602,7 @@ export default function AIInterview() {
                             </div>
                             {(() => {
                               const lockBadge = jobLockBadgeForCard(config);
-                              return lockBadge === 'disabled' ? <JobDisabledBadge />
-                                : lockBadge === 'archived' ? <JobArchivedBadge /> : null;
+                              return lockBadge ? <AIInterviewJobStatusBadge kind={lockBadge} /> : null;
                             })()}
                           </div>
 
@@ -3985,10 +3956,10 @@ export default function AIInterview() {
                   <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                     <div className="min-h-[320px] overflow-auto">
                       <table className="w-full table-auto">
-                        <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                        <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr>
                             {['Select', 'Candidate', 'Timeline', 'Status', 'Score', 'Invite Source', 'CID', 'JD ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
-                              <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                              <th key={c} className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                             ))}
                           </tr>
                         </thead>
@@ -5498,7 +5469,7 @@ export default function AIInterview() {
             toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
-            toast.error(err?.message || 'Failed to revoke invitation');
+            toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
           } finally {
             setRevokingInviteFor(null);
             setRevokeInviteTarget(null);
@@ -5646,7 +5617,7 @@ export default function AIInterview() {
                     await refreshAfterInviteAction(viewInvitationsConfig?.id);
                     setEditInviteTarget(null);
                   } catch (err: any) {
-                    toast.error(err?.message || 'Failed to update invitation');
+                    toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
                   } finally {
                     setSavingEditInvite(false);
                   }

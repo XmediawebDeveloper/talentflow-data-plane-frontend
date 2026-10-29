@@ -45,6 +45,7 @@ import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -1458,7 +1459,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       await refreshMyResumesBatches();
       startBatchPolling(batchId);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to retry batch items');
+      toast.error(friendlyErrorMessage(err, "Couldn't retry batch items. Please try again."));
     } finally {
       setRetryingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
     }
@@ -1485,7 +1486,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // Refresh upload history to reflect the cancellation
       await refreshMyResumesBatches();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to cancel batch');
+      toast.error(friendlyErrorMessage(err, "Couldn't cancel batch. Please try again."));
     } finally {
       setCancellingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
     }
@@ -1506,7 +1507,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       await refreshMyResumesBatches();
       startBatchPolling(batchId);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to retry file');
+      toast.error(friendlyErrorMessage(err, "Couldn't retry file. Please try again."));
     } finally {
       setRetryingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
     }
@@ -1531,7 +1532,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       );
       await refreshMyResumesBatches();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to cancel file');
+      toast.error(friendlyErrorMessage(err, "Couldn't cancel file. Please try again."));
     } finally {
       setCancellingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
     }
@@ -2796,7 +2797,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       await proceedWithScoring(jobId, resumeIds, selectedJob?.title || duplicateCheck.jd_title);
     } catch (error: any) {
       console.error('Failed to check duplicates or start scoring:', error);
-      toast.error(error.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
     }
   };
 
@@ -2830,7 +2831,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(error.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
     }
   };
 

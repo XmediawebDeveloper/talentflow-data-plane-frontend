@@ -4,6 +4,7 @@ import { Building2, Save, Edit2, Loader2, X, AlertCircle, CheckCircle2, MapPin, 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import authService from '@/lib/services/authService';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -451,7 +452,7 @@ export default function CompanyProfilePage() {
       setValidationErrors((prev) => ({ ...prev, zipCode: undefined }));
       toast.success('Address filled from your current location — please review it.');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not get your current location.');
+      toast.error(friendlyErrorMessage(err, "Couldn't get your current location. Please try again."));
     } finally {
       setIsLocating(false);
     }

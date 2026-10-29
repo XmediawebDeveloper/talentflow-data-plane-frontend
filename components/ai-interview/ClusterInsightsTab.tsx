@@ -170,7 +170,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
   return (
     <div className="overflow-x-auto tf-table-shell">
       <table className="w-full min-w-[640px] text-xs">
-        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-2xs">
+        <thead className="bg-white text-gray-600 text-xs">
           <tr>
             <th className="px-3 py-2 text-left font-semibold w-14">Q #</th>
             <th className="px-3 py-2 text-left font-semibold w-24">Type</th>
