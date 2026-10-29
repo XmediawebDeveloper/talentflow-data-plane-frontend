@@ -11432,15 +11432,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               // `!isClosing` guard dropped the padding and let the goodbye
               // message + loading bubble render BEHIND the banner.
               bannerVisible ? 'pb-52' : 'pb-4'
+            } ${
+              // The app scrollbar, held at its darker hover look while the
+              // candidate is scrolling (globals.css `.tf-scrollbar-active`).
+              chatScrolling ? 'tf-scrollbar-active' : ''
             }`}
-            // The old light-gray thumb was near-invisible on the gray-50 chat;
-            // slate here, darker still while the candidate is scrolling.
-            style={{
-              scrollbarWidth: 'thin',
-              scrollbarColor: chatScrolling
-                ? 'rgba(71, 85, 105, 0.85) transparent'
-                : 'rgba(148, 163, 184, 0.7) transparent',
-            }}
           >
             {/* Hidden while the centred "Preparing your interview…" card is up
                 (turnBanner 'starting') — it peeked out above the card. */}

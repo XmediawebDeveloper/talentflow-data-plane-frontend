@@ -1,17 +1,15 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { CheckCircle, Copy, Loader2, Plus, Trash2 } from 'lucide-react';
+import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import readXlsxFile from 'read-excel-file/browser';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
-import InviteEntryModeTabs, { DEFAULT_INVITE_ENTRY_MODE, type InviteEntryMode } from './InviteEntryModeTabs';
+import { inviteEntryModeTabClass } from './InviteEntryModeTabs';
 
 /** The backend takes at most this many typed-in candidates per send. */
 export const MAX_EXTRA_CANDIDATES = 500;
-
-const SECTION = 'text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500';
 
 const INPUT = 'w-full h-10 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-inset disabled:opacity-60';
 const INPUT_OK = 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent';
@@ -119,9 +117,8 @@ export default function ExtraCandidatesInput({
   onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
 }) {
   const [linking, setLinking] = useState<string | null>(null);
-  // Opens on Manual with one empty card, like every other invite popup.
-  // Upload Excel only opens the file chooser; its rows land in these cards.
-  const mode: InviteEntryMode = DEFAULT_INVITE_ENTRY_MODE;
+  // Opens with one empty card, like every other invite popup. Upload Excel
+  // only opens the file chooser; its rows land in these cards.
   const [rows, setRows] = useState<EntryRow[]>(() => [newRow()]);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -213,39 +210,36 @@ export default function ExtraCandidatesInput({
   const ready = toCandidates(rows).length;
 
   return (
-    <section aria-labelledby="extra-candidates-heading" className="space-y-3">
+    <section aria-label="Add candidates" className="space-y-3">
+      {/* One row: the hint, then Clear all · Add Candidate · Upload Excel. No
+          section heading and no Manual tab — typing into the cards below is
+          the only manual mode there is. */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <h3 id="extra-candidates-heading" className={SECTION}>
-          Add candidates directly{ready > 0 ? ` · ${ready.toLocaleString()} ready` : ''}
-        </h3>
-        <InviteEntryModeTabs
-          mode={mode}
-          onManual={() => {}}
-          onExcel={() => fileRef.current?.click()}
-          disabled={disabled}
-        />
+        <p className="text-sm text-gray-600 dark:text-slate-400">
+          Enter candidate details manually{ready > 0 ? ` · ${ready.toLocaleString()} ready` : ''}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button type="button" onClick={clearAll} disabled={disabled} className="text-xs font-medium text-gray-500 hover:text-gray-900 dark:hover:text-slate-100 disabled:opacity-50">
+            Clear all
+          </button>
+          <button
+            type="button"
+            onClick={addRow}
+            disabled={disabled || rows.length >= MAX_EXTRA_CANDIDATES}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm text-brand-blue hover:text-brand-blue-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Add Candidate
+          </button>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={disabled} className={inviteEntryModeTabClass(false)}>
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            Upload Excel
+          </button>
+        </div>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
       </div>
 
       <>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600 dark:text-slate-400">Enter candidate details manually</p>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={clearAll} disabled={disabled} className="text-xs font-medium text-gray-500 hover:text-gray-900 dark:hover:text-slate-100 disabled:opacity-50">
-                Clear all
-              </button>
-              <button
-                type="button"
-                onClick={addRow}
-                disabled={disabled || rows.length >= MAX_EXTRA_CANDIDATES}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-brand-blue hover:text-brand-blue-2 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4" aria-hidden="true" />
-                Add Candidate
-              </button>
-            </div>
-          </div>
-
           <div className="space-y-3 max-h-80 overflow-y-auto pr-0.5">
             {rows.map((row) => {
               const email = row.email.trim();

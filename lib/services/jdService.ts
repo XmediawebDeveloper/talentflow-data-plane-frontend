@@ -4,6 +4,25 @@
 
 import api, { handleApiError } from './api';
 
+/* A job was enabled, disabled, archived or unarchived. Surfaces that show a
+   job's status without owning that action (the Send Invite popup's job
+   badges) listen for it and re-read at once. Fired on this window and, over a
+   BroadcastChannel, on the app's other tabs — where the change usually happens
+   while a popup is open. `detail.id` is the JD id that changed. */
+export const JD_STATUS_CHANGED_EVENT = 'jd-status-changed';
+export const JD_STATUS_CHANNEL = 'tf-jd-status';
+export function notifyJobStatusChanged(id: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(JD_STATUS_CHANGED_EVENT, { detail: { id } }));
+  try {
+    const channel = new BroadcastChannel(JD_STATUS_CHANNEL);
+    channel.postMessage({ id });
+    channel.close();
+  } catch {
+    // No BroadcastChannel: the listeners' focus re-read still catches it.
+  }
+}
+
 export interface JDLocation {
   city: string;
   state?: string;
@@ -853,6 +872,7 @@ export const jdService = {
   async updateStatus(id: string, status: string): Promise<JDResponse> {
     try {
       const response = await api.put<JDResponse>(`/jd/${id}`, { status });
+      notifyJobStatusChanged(id);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -961,6 +981,7 @@ export const jdService = {
   async archive(id: string): Promise<JDResponse> {
     try {
       const response = await api.post<JDResponse>(`/jd/${id}/archive`);
+      notifyJobStatusChanged(id);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -975,6 +996,7 @@ export const jdService = {
   async disable(id: string): Promise<JDResponse> {
     try {
       const response = await api.post<JDResponse>(`/jd/${id}/disable`);
+      notifyJobStatusChanged(id);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1002,6 +1024,7 @@ export const jdService = {
   async enable(id: string): Promise<JDResponse> {
     try {
       const response = await api.put<JDResponse>(`/jd/${id}`, { status: 'published' });
+      notifyJobStatusChanged(id);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1154,14 +1177,16 @@ export const jdService = {
    * that id. An id the server did not answer for is absent. Throws if a chunk
    * fails, so the caller can fall back to the per-job call.
    */
-  async getLineagesBatch(jdIds: string[]): Promise<Record<string, JDLineageVersion[]>> {
+  async getLineagesBatch(jdIds: string[], opts?: { fresh?: boolean }): Promise<Record<string, JDLineageVersion[]>> {
     const ids = Array.from(new Set(jdIds.filter(Boolean)));
     const out: Record<string, JDLineageVersion[]> = {};
     try {
       for (let i = 0; i < ids.length; i += 200) {
         const response = await api.get<{ lineages: Record<string, JDLineageVersion[]> }>(
           '/jd/lineages',
-          { params: { ids: ids.slice(i, i + 200).join(',') } },
+          // `fresh`: a re-read after a status change, so never the shared
+          // copy of an identical request made within the last second.
+          { params: { ids: ids.slice(i, i + 200).join(',') }, ...(opts?.fresh ? { dedupe: false } : {}) },
         );
         Object.assign(out, response.data?.lineages || {});
       }

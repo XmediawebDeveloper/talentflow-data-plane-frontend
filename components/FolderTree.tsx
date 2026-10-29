@@ -66,6 +66,9 @@ const TREE_TRUNK_COLOR = 'bg-gray-300';
 // a drag can never push it outside what CSS would clamp back anyway.
 const MIN_PANEL_WIDTH = 200;
 const MAX_PANEL_WIDTH = 400;
+/** How much of My Folders the page panel keeps visible before it scrolls
+ *  (≈ six 44px folder rows) — see `treeMinHeight`. */
+const FOLDER_LIST_USABLE_HEIGHT = 264;
 const DEFAULT_PANEL_WIDTH = 240;
 /* The folder list's height is CSS-driven now: it flexes to whatever the row
    leaves it on md+, and falls back to `max-h-[420px]` on the stacked mobile
@@ -329,9 +332,11 @@ export default function FolderTree({
      panel below), so opening a folder with few or no resumes shrank it to
      360px: the pinned System Folders kept their room and My Folders was left
      a sliver too small to use. From md up the panel is therefore held at least
-     as tall as its own tree — fixtures plus every folder row — capped to the
-     visible screen, where the list scrolls as before. A long table still makes
-     it taller. */
+     as tall as the fixtures plus a usable stretch of My Folders (about six
+     rows; the rest scrolls), capped to the visible screen. Not the WHOLE
+     tree: with many folders that made the panel taller than a full page of
+     rows, the table column stretched to match and a gap opened under the
+     last row. A longer table still makes the panel taller. */
   const contentColRef = useRef<HTMLDivElement | null>(null);
   const folderListRef = useRef<HTMLDivElement | null>(null);
   const [treeMinHeight, setTreeMinHeight] = useState<number | null>(null);
@@ -342,7 +347,8 @@ export default function FolderTree({
     const measure = () => {
       // Page panel only: inside a popup (Select Source) the dialog sizes it.
       if (window.innerWidth < 768 || col.closest('.fixed')) { setTreeMinHeight(null); return; }
-      const natural = col.clientHeight - list.clientHeight + list.scrollHeight;
+      const fixtures = col.clientHeight - list.clientHeight;
+      const natural = fixtures + Math.min(list.scrollHeight, FOLDER_LIST_USABLE_HEIGHT);
       const cap = window.innerHeight - 128; // app header + page breathing room
       const next = Math.round(Math.max(360, Math.min(natural, cap)));
       setTreeMinHeight(prev => (prev === next ? prev : next));
