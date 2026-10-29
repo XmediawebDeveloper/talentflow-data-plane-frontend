@@ -3,6 +3,7 @@
 import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, CheckCircle, ClipboardList, Loader2, Mail, Video } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -430,7 +431,7 @@ export default function VersionInviteDialog({
       await confirm.run();
       setConfirm(null);
     } catch (err) {
-      toast.error((err as Error)?.message || 'Something went wrong. Please try again.');
+      toast.error(friendlyErrorMessage(err, `Couldn't ${confirm.confirmText.toLowerCase()}. Please try again.`));
     } finally {
       setConfirmBusy(false);
     }

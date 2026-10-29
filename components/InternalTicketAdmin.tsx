@@ -634,17 +634,17 @@ export default function InternalTicketAdmin() {
               ) : (
                 <div className="overflow-x-auto tf-table-shell">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Ticket #</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Title</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">From</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Category</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Priority</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Assigned</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Updated</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 tf-sticky-col">Actions</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Ticket #</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Title</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">From</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Category</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Priority</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Assigned</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Updated</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">

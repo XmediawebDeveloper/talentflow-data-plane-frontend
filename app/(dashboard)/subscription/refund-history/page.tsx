@@ -569,15 +569,15 @@ export default function RefundHistoryPage() {
             </div>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[800px] tf-premium-table">
-                <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Refund #</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[150px]">Original Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Status</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[140px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Refund #</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Date</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[150px]">Original Invoice</th>
+                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[180px]">Reason</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Status</th>
+                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

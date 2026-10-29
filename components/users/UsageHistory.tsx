@@ -37,6 +37,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -594,14 +595,14 @@ function FeatureWiseTab({
       <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Feature</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Entity</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Units</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Status</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Balance After</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Date & Time</th>
+            <tr className="border-b border-gray-200 bg-white">
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Feature</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">User</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Entity</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Units</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Status</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Balance After</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Date & Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -819,16 +820,16 @@ function UserWiseTab({
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">#</th>
-              <th aria-sort={ariaSort(tableSort, 'userName')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+            <tr className="border-b border-gray-200 bg-white">
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">#</th>
+              <th aria-sort={ariaSort(tableSort, 'userName')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="User" column="userName" sort={tableSort} />
               </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                     <SortableHeader
                       label={
                         <span className="inline-flex items-center gap-1">
@@ -843,13 +844,13 @@ function UserWiseTab({
                   </th>
                 );
               })}
-              <th aria-sort={ariaSort(tableSort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Total" column="total" sort={tableSort} align="right" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'successCount')} className="text-center px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'successCount')} className="text-center px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Success / Failed" column="successCount" sort={tableSort} align="center" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Last Active" column="lastUsed" sort={tableSort} />
               </th>
             </tr>
@@ -1031,16 +1032,16 @@ function TeamWiseTab({
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">#</th>
-              <th aria-sort={ariaSort(tableSort, 'team_name')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+            <tr className="border-b border-gray-200 bg-white">
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">#</th>
+              <th aria-sort={ariaSort(tableSort, 'team_name')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Team" column="team_name" sort={tableSort} />
               </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                     <SortableHeader
                       label={
                         <span className="inline-flex items-center gap-1">
@@ -1055,10 +1056,10 @@ function TeamWiseTab({
                   </th>
                 );
               })}
-              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="JDs Created" column="jds_created" sort={tableSort} align="right" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Assessments" column="assessments_created" sort={tableSort} align="right" />
               </th>
             </tr>
@@ -1278,26 +1279,26 @@ function InlineTeamMembersUsage({
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+            <tr className="border-b border-gray-200 bg-white">
+              <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="User" column="user_name" sort={sort} />
               </th>
-              <th aria-sort={ariaSort(sort, 'RS')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(sort, 'RS')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'AS')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(sort, 'AS')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Assessment" column="AS" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'AIU')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(sort, 'AIU')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="AI Interview" column="AIU" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'RU')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(sort, 'RU')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Resume Storage" column="RU" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(sort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Total" column="total" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'last_activity')} className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">
+              <th aria-sort={ariaSort(sort, 'last_activity')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
                 <SortableHeader label="Last Active" column="last_activity" sort={sort} />
               </th>
             </tr>
@@ -1396,15 +1397,15 @@ function RefundsTab({
       <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Feature</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Units</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">Before</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-500 text-xs">After</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Actor</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Reason</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Date</th>
+            <tr className="border-b border-gray-200 bg-white">
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Type</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Feature</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Units</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Before</th>
+              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">After</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Actor</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Reason</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1582,7 +1583,7 @@ export default function UsageHistory() {
       if (limitsRes) setUserLimits(limitsRes);
     } catch (err: any) {
       if (isStale()) return;
-      toast.error(err.message || 'Failed to load pool data');
+      toast.error(friendlyErrorMessage(err, "Couldn't load pool data. Please try again."));
     } finally {
       if (!isStale()) setIsLoadingPools(false);
     }
@@ -1608,7 +1609,7 @@ export default function UsageHistory() {
       setConsumptionTotal(mode === 'user' ? (res.users?.length ?? res.items.length) : res.total);
     } catch (err: any) {
       if (isStale()) return;
-      toast.error(err.message || 'Failed to load consumption history');
+      toast.error(friendlyErrorMessage(err, "Couldn't load consumption history. Please try again."));
     } finally {
       if (!isStale()) setIsLoadingConsumption(false);
     }
@@ -1621,7 +1622,7 @@ export default function UsageHistory() {
       const res = await teamService.getAllTeamsUsage(startDateInput || undefined, endDateInput || undefined);
       setTeamsData(res);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load team data');
+      toast.error(friendlyErrorMessage(err, "Couldn't load team data. Please try again."));
     } finally {
       setIsLoadingTeams(false);
     }
@@ -1647,7 +1648,7 @@ export default function UsageHistory() {
       if (err?.response?.status === 500 || err?.status === 500 || err?.message?.includes('500')) {
         setAdjustmentsUnavailable(true);
       } else {
-        toast.error(err.message || 'Failed to load adjustments');
+        toast.error(friendlyErrorMessage(err, "Couldn't load adjustments. Please try again."));
       }
     } finally {
       setIsLoadingAdjustments(false);
@@ -1730,7 +1731,7 @@ export default function UsageHistory() {
       toast.success(`Exported as ${format.toUpperCase()}`);
       setShowExportModal(false);
     } catch (err: any) {
-      toast.error(err.message || 'Export failed');
+      toast.error(friendlyErrorMessage(err, "Export failed. Please try again."));
     } finally {
       setIsExporting(false);
     }

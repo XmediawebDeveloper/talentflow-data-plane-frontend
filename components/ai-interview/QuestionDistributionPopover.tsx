@@ -286,10 +286,10 @@ export function QuestionDistributionPopover({
               scroll box would give a second scrollbar and a head that sticks
               to the wrong box. */}
           <div className="sticky top-0 z-10 bg-white">
-            <div className="grid grid-cols-[32px_1fr_96px] sm:grid-cols-[40px_1fr_150px] bg-gray-50 border border-gray-100 rounded-t-md">
-              <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Q#</span>
-              <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Skills/Questions</span>
-              <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Section</span>
+            <div className="grid grid-cols-[32px_1fr_96px] sm:grid-cols-[40px_1fr_150px] bg-white border border-gray-100 rounded-t-md">
+              <span className="px-2 py-1.5 text-xs font-semibold text-gray-600">Q#</span>
+              <span className="px-2 py-1.5 text-xs font-semibold text-gray-600">Skills/Questions</span>
+              <span className="px-2 py-1.5 text-xs font-semibold text-gray-600">Section</span>
             </div>
           </div>
           <div className="border border-t-0 border-gray-100 rounded-b-md">

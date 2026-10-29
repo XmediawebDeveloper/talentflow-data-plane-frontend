@@ -691,30 +691,30 @@ export default function UiReferencePage() {
                   <div className="tf-table-shell">
                     <table className="w-full min-w-[640px] text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:text-slate-400">
-                          <th className="w-10 px-3 py-3">
+                        <tr className="border-b border-gray-200 text-left text-xs font-semibold text-gray-600 dark:border-slate-700 dark:text-slate-300">
+                          <th className="w-10 px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">
                             <Checkbox
                               aria-label="Select this page"
                               checked={pageSelected}
                               onCheckedChange={() => (pageSelected ? deselectPage() : selectPage())}
                             />
                           </th>
-                          <th className="px-3 py-3" aria-sort={ariaSort(sort, 'name')}>
+                          <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'name')}>
                             <SortableHeader label="Component" column="name" sort={sort} />
                           </th>
-                          {columns.path && <th className="px-3 py-3">Path</th>}
+                          {columns.path && <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Path</th>}
                           {columns.category && (
-                            <th className="px-3 py-3" aria-sort={ariaSort(sort, 'category')}>
+                            <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'category')}>
                               <SortableHeader label="Category" column="category" sort={sort} />
                             </th>
                           )}
                           {columns.files && (
-                            <th className="px-3 py-3 text-right" aria-sort={ariaSort(sort, 'files')}>
+                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'files')}>
                               <SortableHeader label="Files" column="files" sort={sort} align="right" />
                             </th>
                           )}
                           {columns.status && (
-                            <th className="px-3 py-3" aria-sort={ariaSort(sort, 'status')}>
+                            <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'status')}>
                               <SortableHeader label="Status" column="status" sort={sort} />
                             </th>
                           )}

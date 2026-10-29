@@ -840,10 +840,10 @@ export default function StyleGuidePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-slate-300">Candidate</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-slate-300">Role</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-slate-300">Score</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-slate-300">Status</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Candidate</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Role</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Score</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Status</th>
                   </tr>
                 </thead>
                 <tbody>

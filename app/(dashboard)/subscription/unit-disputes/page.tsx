@@ -5,6 +5,7 @@ import { ArrowLeft, Shield, Search, Clock, CheckCircle2, XCircle, Loader2, Alert
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
@@ -307,7 +308,7 @@ export default function UnitDisputesPage() {
       fetchDisputes();
     } catch (err) {
       console.error('[UnitDisputes] Submit error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to submit dispute');
+      toast.error(friendlyErrorMessage(err, "Couldn't submit dispute. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -728,15 +729,15 @@ export default function UnitDisputesPage() {
             </div>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[900px]">
-                <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Dispute ID</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[90px]">Unit Type</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[90px]">Units</th>
-                    <th className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Reason</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[140px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px] tf-sticky-col">Actions</th>
+                    <th className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Dispute ID</th>
+                    <th className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Date</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[90px]">Unit Type</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[90px]">Units</th>
+                    <th className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Reason</th>
+                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px]">Status</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
