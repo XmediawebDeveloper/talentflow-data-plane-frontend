@@ -41,8 +41,21 @@ const UNIT_TYPE_CONFIG = {
   RS: { label: 'Resume Scoring', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-600' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-success', textColor: 'text-success' },
   AIU: { label: 'AI Interview', icon: Users, color: 'bg-purple-500', textColor: 'text-purple-600' },
-  RU: { label: 'Resume Storage', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
+  RU: { label: 'Resume Units', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
 };
+
+/** Green "+N returned · net M" under a cell when units were credited back
+ *  (a deleted resume returns its 1 RU). `used` / `returned` are unit totals. */
+function ReturnedLine({ used, returned, net }: { used: number; returned?: number; net?: number }) {
+  if (!returned || returned <= 0) return null;
+  const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+  const netValue = net ?? used - returned;
+  return (
+    <div className="text-[11px] font-medium text-success" title={`${fmt(used)} used, ${fmt(returned)} returned (e.g. deleted resumes). Net ${fmt(netValue)}.`}>
+      +{fmt(returned)} returned · net {fmt(netValue)}
+    </div>
+  );
+}
 
 export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberUsageProps) {
   const [isLoading, setIsLoading] = useState(true);
@@ -240,7 +253,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
           {/* Clear sort — only when moved off the default (Total, highest first) */}
           <ClearSortChip
             sort={sort}
-            labels={{ name: 'Member', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Storage', jds: 'JDs', assessments: 'Assessments', total: 'Total', recent: 'Last Active' }}
+            labels={{ name: 'Member', RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview', RU: 'Resume Units', jds: 'JDs', assessments: 'Assessments', total: 'Total', recent: 'Last Active' }}
             isDefault={sort.sortKey === 'total' && sort.sortDir === 'desc'}
             onClear={() => sort.clearSort?.()}
           />
@@ -295,7 +308,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   <SortableHeader label="AI Interview" column="AIU" sort={sort} align="center" />
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'RU')}>
-                  <SortableHeader label="Resume Storage" column="RU" sort={sort} align="center" />
+                  <SortableHeader label="Resume Units" column="RU" sort={sort} align="center" />
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'jds')}>
                   <SortableHeader label="JDs" column="jds" sort={sort} align="center" />
@@ -336,6 +349,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.RS?.consumption_count || 0} actions
                     </div>
+                    <ReturnedLine used={member.by_type.RS?.total_consumed || 0} returned={member.by_type.RS?.units_returned} net={member.by_type.RS?.net_consumed} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-success tabular-nums">
@@ -344,6 +358,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.AS?.consumption_count || 0} actions
                     </div>
+                    <ReturnedLine used={member.by_type.AS?.total_consumed || 0} returned={member.by_type.AS?.units_returned} net={member.by_type.AS?.net_consumed} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-purple-600 dark:text-purple-400 tabular-nums">
@@ -352,6 +367,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.AIU?.consumption_count || 0} actions
                     </div>
+                    <ReturnedLine used={member.by_type.AIU?.total_consumed || 0} returned={member.by_type.AIU?.units_returned} net={member.by_type.AIU?.net_consumed} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-orange-600 dark:text-orange-400 tabular-nums">
@@ -360,6 +376,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.RU?.consumption_count || 0} actions
                     </div>
+                    <ReturnedLine used={member.by_type.RU?.total_consumed || 0} returned={member.by_type.RU?.units_returned} net={member.by_type.RU?.net_consumed} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
@@ -380,6 +397,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.total_actions} total
                     </div>
+                    <ReturnedLine used={member.total_consumed} returned={member.total_returned} net={member.total_net} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-1 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">

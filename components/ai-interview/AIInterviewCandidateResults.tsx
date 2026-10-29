@@ -276,7 +276,7 @@ export async function prefetchAIResultRows(): Promise<void> {
   if (rows) writeListSnapshot('ai-results:rows', rows);
 }
 
-export default function AIInterviewCandidateResults({ sortOrder = 'newest', toolbarSlot, bulkActionSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
+export default function AIInterviewCandidateResults({ sortOrder = 'newest', toolbarSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, enforced server-side by the
   // audit endpoint too) — greyed with the reason when missing, never hidden.

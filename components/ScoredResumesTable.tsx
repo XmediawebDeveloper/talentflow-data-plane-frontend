@@ -1,6 +1,6 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, UserCheck, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -298,6 +298,12 @@ interface ScoredResumesTableProps {
    *  a row without its own `jobVersion`; the table's Job Version column stays
    *  on the rows' own values. */
   jobVersion?: number | null;
+  /** This single-job host's JD status (e.g. 'Archived', 'Disabled',
+   *  'Published'). Archived/Disabled greys out both invite items with that
+   *  as the reason, for hosts outside Job Details' JobActionLock context
+   *  (e.g. this page's own per-job "Scoring History" view). Unset on the
+   *  global cross-job list, which has no single host job to check. */
+  jobStatus?: string;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -490,6 +496,10 @@ export interface InviteTargetJob {
   jdId: string;
   jdCode?: string;
   jdTitle: string;
+  /** 'Archived' / 'Disabled' blocks both invites outright — see
+   *  `resolveSelectionJobLock`. Left unset where the caller doesn't know it
+   *  (JobActionLock's own context covers Job Details regardless). */
+  status?: string;
 }
 
 /**
@@ -516,6 +526,19 @@ export function resolveInviteTargetState(
   const missing = jobs.filter((j) => configured(j.jdId) === false);
   if (missing.length === 0) return { state: 'ready' };
   return { state: 'missing', job: jobs[0] };
+}
+
+/**
+ * An Archived or Disabled JD anywhere in the selection blocks both invites
+ * outright, same "JD is archived" / "JD is disabled" reason Job Details
+ * shows via JobActionLock — for the pages (Resume Scoring's and AI Talent
+ * Match's own job lists) that have no JobActionLockProvider around them and
+ * so must check each ticked job's status for themselves.
+ */
+export function resolveSelectionJobLock(jobs: InviteTargetJob[]): string | null {
+  if (jobs.some((j) => j.status === 'Archived')) return 'JD is archived';
+  if (jobs.some((j) => j.status === 'Disabled')) return 'JD is disabled';
+  return null;
 }
 
 /**
@@ -656,6 +679,7 @@ export default function ScoredResumesTable({
   jobId = 'jd-1',
   jobCode,
   jobVersion: hostJobVersion,
+  jobStatus,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -1184,6 +1208,22 @@ Best regards`);
   }, [selectedResumes, filteredResumes, isGrouped]);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
+
+  /* The jobs the ticked rows belong to — a row's own JD, or this table's
+     one job on a single-job host. */
+  const selectionJobs = useMemo((): InviteTargetJob[] => {
+    const byId = new Map<string, InviteTargetJob>();
+    for (const r of effectiveSelectedRows) {
+      const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
+      if (!id || byId.has(id)) continue;
+      // A row's own `jdId` only appears in the global cross-job list, whose
+      // rows carry no job-status field; this table's one host job (when
+      // there is one) is the only case `jobStatus` can speak for.
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: r.jdId ? undefined : jobStatus });
+    }
+    return Array.from(byId.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus]);
 
   /** A scored row as THE invite popup lists it. */
   const toInvitee = (r: ScoredResume): InviteCandidate => ({
@@ -2063,40 +2103,54 @@ Best regards`);
   /** Create / Send Assessment | AI Interview for the selection. */
   const renderSelectionInviteItems = () => (
     <>
-      {/* Always offered (permission aside): THE invite popup with the ticked
-          rows — for their one job, or the popup's picker when they span
-          several. Labels: the host popup's "Create / Send …", else the list's
-          "AI Assessment / AI Interview Invite". */}
-      {renderInviteTargetItems({
-        kind: 'assessment',
-        target: { state: 'ready' },
-        label: onOpenInviteDialog ? 'Create / Send Assessment' : undefined,
-        itemClass: scoredResumesMenuItemClass,
-        allowed: canCreateAssessments,
-        deniedReason: assessmentDeniedReason,
-        onInvite: (e) => {
-          if (!canCreateAssessments) {
-            e.preventDefault();
-            return;
-          }
-          openRowsInvite('assessment', effectiveSelectedRows);
-        },
-      })}
-      {renderInviteTargetItems({
-        kind: 'interview',
-        target: { state: 'ready' },
-        label: onOpenInviteDialog ? 'Create / Send AI Interview' : undefined,
-        itemClass: scoredResumesMenuItemClass,
-        allowed: mayInviteAIInterview,
-        deniedReason: aiInterviewDeniedReason,
-        onInvite: (e) => {
-          if (!mayInviteAIInterview) {
-            e.preventDefault();
-            return;
-          }
-          openRowsInvite('interview', effectiveSelectedRows);
-        },
-      })}
+      {(() => {
+        // An Archived/Disabled job in the selection overrides the usual
+        // permission reason with why — same as Job Details' JobActionLock,
+        // for the one host job this table itself knows the status of.
+        const selectionJobLock = resolveSelectionJobLock(selectionJobs);
+        const assessmentAllowed = canCreateAssessments && !selectionJobLock;
+        const assessmentReason = selectionJobLock ?? assessmentDeniedReason;
+        const interviewAllowed = mayInviteAIInterview && !selectionJobLock;
+        const interviewReason = selectionJobLock ?? aiInterviewDeniedReason;
+        return (
+          <>
+            {/* Always offered (permission aside): THE invite popup with the ticked
+                rows — for their one job, or the popup's picker when they span
+                several. Labels: the host popup's "Create / Send …", else the list's
+                "AI Assessment / AI Interview Invite". */}
+            {renderInviteTargetItems({
+              kind: 'assessment',
+              target: { state: 'ready' },
+              label: onOpenInviteDialog ? 'Create / Send Assessment' : undefined,
+              itemClass: scoredResumesMenuItemClass,
+              allowed: assessmentAllowed,
+              deniedReason: assessmentReason,
+              onInvite: (e) => {
+                if (!assessmentAllowed) {
+                  e.preventDefault();
+                  return;
+                }
+                openRowsInvite('assessment', effectiveSelectedRows);
+              },
+            })}
+            {renderInviteTargetItems({
+              kind: 'interview',
+              target: { state: 'ready' },
+              label: onOpenInviteDialog ? 'Create / Send AI Interview' : undefined,
+              itemClass: scoredResumesMenuItemClass,
+              allowed: interviewAllowed,
+              deniedReason: interviewReason,
+              onInvite: (e) => {
+                if (!interviewAllowed) {
+                  e.preventDefault();
+                  return;
+                }
+                openRowsInvite('interview', effectiveSelectedRows);
+              },
+            })}
+          </>
+        );
+      })()}
     </>
   );
 
@@ -2303,7 +2357,7 @@ Best regards`);
             </>
           }
           /* List / Grid pinned to the far right, as on the AI Talent Match tab. */
-          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
+          trailing={embedded ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
           /* 36px control band like the AI Talent Match tab (its More Filters is h-9). */
           compactButtons={!!toolbarPortal}
           /* Score — right beside More Filters in Job Details, where the header's
@@ -2350,7 +2404,7 @@ Best regards`);
             shrink-wrapped box with Select All and wrapped out of line; h-9
             matches the Job Details toolbar band. */}
         {embedded && selectionActions && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
           </div>
         )}
@@ -3428,33 +3482,40 @@ Best regards`);
               </div>
             </div>
 
-            {/* Card Content */}
-            <div className="space-y-2 text-sm mb-3">
+            {/* Card Content — pl-10 lines it up under the name (the 28px
+                checkbox + 12px gap), one 16px icon + gap-2 per line so the
+                text starts on one edge; the email truncates, full on hover. */}
+            <div className="space-y-1.5 text-sm mb-3 pl-10 text-gray-600">
               {resume.email && (
-                <div className="flex items-start gap-2 text-gray-600 min-w-0">
-                  <Mail className="w-4 h-4 mt-0.5 shrink-0" />
-                  <span className="min-w-0 break-all">{resume.email}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Mail className="w-4 h-4 shrink-0 text-gray-400" />
+                  <span className="min-w-0 truncate" title={resume.email}>{resume.email}</span>
                 </div>
               )}
               {/* Same fields as the fixed table columns — phone, experience and
                   education are export-only now (see ScoredResumesExportModal). */}
-              <div className="text-gray-600">
-                <span className="text-gray-500">Scored by:</span> {resume.scoredBy}
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Calendar className="w-3.5 h-3.5" />
-                  <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <UserCheck className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="min-w-0 truncate"><span className="text-gray-500">Scored by:</span> {resume.scoredBy}</span>
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <Calendar className="w-4 h-4 shrink-0 text-gray-400" />
+                <span className="min-w-0 truncate">{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
               </div>
             </div>
 
-            {/* Card Actions */}
-            <div className="space-y-2">
+            {/* Card Actions — Download Scorecard and View Resume share one
+                line (two columns, full card width); Invite / Share keep
+                their own full line. Below 380px "Download" / "View" are cut from
+                the labels ("Scorecard" / "Resume") so both fit on one line at
+                320px; min-w-0 + overflow-hidden keep text inside the button. */}
+            <div className="grid grid-cols-2 gap-2">
               {/* Invite Button - For Exact Match & Partial Match. Opens THE
                   invite popup for this candidate (the popup offers Create
                   when the job has none yet). No permission: greyed, with the
                   reason on hover, and a no-op. No units left: disabled. */}
               {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
-                <div className="relative group">
+                <div className="relative group col-span-2">
                   {/* Create / Send Assessment's shared look (createSendActions). */}
                   <button
                     type="button"
@@ -3505,10 +3566,10 @@ Best regards`);
                 disabled={downloadingId === resume.id}
                 aria-disabled={!canDownloadScorecard}
                 title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${resume.resumeId ? '' : 'col-span-2'} ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
-                {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
+                {downloadingId === resume.id ? 'Downloading...' : <><span className="hidden min-[380px]:inline">Download&nbsp;</span>Scorecard</>}
               </Button>
 
               {resume.resumeId && (
@@ -3520,9 +3581,9 @@ Best regards`);
                     setViewResumeCandidate(resume);
                   }}
                   icon={<FileText className="w-4 h-4" />}
-                  className="w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
+                  className="w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
                 >
-                  View Resume
+                  <span className="hidden min-[380px]:inline">View&nbsp;</span>Resume
                 </Button>
               )}
 
@@ -3540,7 +3601,7 @@ Best regards`);
                   aria-disabled={!canShareResume}
                   title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className={`w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`col-span-2 w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>

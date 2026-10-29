@@ -45,7 +45,7 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
-import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTargetItems, type BulkActionKind } from './ScoredResumesTable';
+import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTargetItems, resolveSelectionJobLock, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoff } from '@/lib/utils/resumeScoringInviteHandoff';
@@ -1890,7 +1890,8 @@ export default function ResumeScoringPage({
         }, 2000);
       } catch (err) {
         console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
-        toast.error('Failed to start scoring. Please try again.');
+        // Show the reason (e.g. not enough Resume Scoring units) when there is one.
+        toast.error(err instanceof Error && err.message ? err.message : 'Failed to start scoring. Please try again.');
         // Mark all queued items as failed so the modal shows the error
         for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
@@ -2914,6 +2915,14 @@ export default function ResumeScoringPage({
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
           jobCode={jdCodeOf(selectedHistoryItem)}
+          /* Archived/Disabled → both invites below grey out with that as
+             the reason, same as the job-list's own Actions menu — this
+             single-job drill-down sits outside Job Details' JobActionLock. */
+          jobStatus={(() => {
+            const record = jobRecordsById.get(selectedHistoryItem.jobId);
+            const raw = record?.status || (selectedHistoryItem.jdStatus === 'active' ? 'published' : selectedHistoryItem.jdStatus) || 'published';
+            return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+          })()}
           initialScoredDate={selectedHistoryItem.scoredDateFilter ?? ''}
           availableUnits={availableASUnits ?? 10}
           /* Nothing published on this JD → nothing to invite to, so the row's
@@ -3858,6 +3867,28 @@ export default function ResumeScoringPage({
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="my-1 bg-gray-100" />
                     {(() => {
+                      /* The ticked jobs, each as the job its invite goes to
+                         (its latest version — the one the row shows). */
+                      // Same status the row's own badge resolves (jobRecordsById,
+                      // falling back to this item's own jdStatus) — Archived /
+                      // Disabled jobs lock both invites below, whatever the
+                      // permission, with that as the reason.
+                      const statusOf = (item: typeof selectableJobs[number]) => {
+                        const record = jobRecordsById.get(item.jobId);
+                        const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                        return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+                      };
+                      const tickedJobs: InviteTargetJob[] = selectableJobs
+                        .filter(item => {
+                          const k = resolveHistoryGroupKey(item);
+                          return selectedHistoryItems.has(k) || isJobPartlySelected(k);
+                        })
+                        .map(item => ({ jdId: item.jobId, jdCode: jdCodeOf(item) || undefined, jdTitle: item.jobTitle, status: statusOf(item) }));
+                      const selectionJobLock = resolveSelectionJobLock(tickedJobs);
+                      const assessmentAllowed = jobActionPerms.canCreateAssessments && !selectionJobLock;
+                      const assessmentReason = selectionJobLock ?? jobActionPerms.assessmentDeniedReason;
+                      const interviewAllowed = jobActionPerms.mayInviteAIInterview && !selectionJobLock;
+                      const interviewReason = selectionJobLock ?? jobActionPerms.aiInterviewDeniedReason;
                       /* THE invite popup with the ticked jobs' candidates:
                          for the one ticked job (its latest version — the one
                          the row shows), or with several on the popup's own
@@ -3874,10 +3905,10 @@ export default function ResumeScoringPage({
                             kind: 'assessment',
                             target: { state: 'ready' },
                             itemClass: itemCls,
-                            allowed: jobActionPerms.canCreateAssessments,
-                            deniedReason: jobActionPerms.assessmentDeniedReason,
+                            allowed: assessmentAllowed,
+                            deniedReason: assessmentReason,
                             onInvite: (e) => {
-                              if (!jobActionPerms.canCreateAssessments) {
+                              if (!assessmentAllowed) {
                                 e.preventDefault();
                                 return;
                               }
@@ -3888,10 +3919,10 @@ export default function ResumeScoringPage({
                             kind: 'interview',
                             target: { state: 'ready' },
                             itemClass: itemCls,
-                            allowed: jobActionPerms.mayInviteAIInterview,
-                            deniedReason: jobActionPerms.aiInterviewDeniedReason,
+                            allowed: interviewAllowed,
+                            deniedReason: interviewReason,
                             onInvite: (e) => {
-                              if (!jobActionPerms.mayInviteAIInterview) {
+                              if (!interviewAllowed) {
                                 e.preventDefault();
                                 return;
                               }
