@@ -260,15 +260,15 @@ function QuestionTable({
       </div>
       <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
-          <thead className="bg-gray-50 text-gray-600">
+          <thead className="bg-white text-gray-600">
             <tr>
-              <th className="px-4 py-2 text-left font-semibold">Q</th>
-              <th className="px-4 py-2 text-left font-semibold">Skill</th>
-              <th className="px-4 py-2 text-right font-semibold">Priority</th>
-              <th className="px-4 py-2 text-right font-semibold">Weight</th>
-              <th className="px-4 py-2 text-right font-semibold">Score</th>
-              <th className="px-4 py-2 text-right font-semibold">Score × Weight</th>
-              <th className="px-4 py-2 text-right font-semibold">Question Score</th>
+              <th className="px-4 py-2 text-left font-semibold text-xs">Q</th>
+              <th className="px-4 py-2 text-left font-semibold text-xs">Skill</th>
+              <th className="px-4 py-2 text-right font-semibold text-xs">Priority</th>
+              <th className="px-4 py-2 text-right font-semibold text-xs">Weight</th>
+              <th className="px-4 py-2 text-right font-semibold text-xs">Score</th>
+              <th className="px-4 py-2 text-right font-semibold text-xs">Score × Weight</th>
+              <th className="px-4 py-2 text-right font-semibold text-xs">Question Score</th>
             </tr>
           </thead>
           <tbody>

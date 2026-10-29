@@ -27,6 +27,7 @@ import {
   Cog
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import { Badge } from '@/components/ui/badge';
@@ -170,7 +171,7 @@ export default function FeaturePermissionManager({
       setExpandedCategories(categories);
     } catch (error: any) {
       console.error('Error loading features:', error);
-      toast.error(error.message || 'Failed to load features');
+      toast.error(friendlyErrorMessage(error, "Couldn't load features. Please try again."));
       setFeatures([]);
     } finally {
       setIsLoading(false);
@@ -286,7 +287,7 @@ export default function FeaturePermissionManager({
       onUpdate?.();
       onClose();
     } catch (error: any) {
-      toast.error(error.message || 'Failed to update features');
+      toast.error(friendlyErrorMessage(error, "Couldn't update features. Please try again."));
     } finally {
       setIsSaving(false);
     }

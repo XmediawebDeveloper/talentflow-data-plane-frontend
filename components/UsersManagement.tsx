@@ -889,24 +889,24 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
         ) : (
           <div className="tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     User
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Role
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Permissions
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Last Login
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">
                     Actions
                   </th>
                 </tr>

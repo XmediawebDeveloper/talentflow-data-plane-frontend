@@ -148,10 +148,10 @@ export function TimelineHistoryDialog({
               {/* Tablet and up: the table. */}
               <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                  <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                     <tr>
                       {['Event', 'Date & Time', 'Status', 'Details'].map((h) => (
-                        <th key={h} className="text-left px-3 py-2.5 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>

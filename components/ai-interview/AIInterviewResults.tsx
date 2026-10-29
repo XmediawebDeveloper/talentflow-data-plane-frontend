@@ -49,6 +49,7 @@ import {
 import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
@@ -624,7 +625,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       });
     } catch (error: any) {
       if (isStale()) return;
-      toast.error(error.message || 'Failed to load candidate sessions');
+      toast.error(friendlyErrorMessage(error, "Couldn't load candidate sessions. Please try again."));
     } finally {
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
@@ -855,7 +856,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       toast.success(`Exported ${rows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
       setShowExportModal(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to export results');
+      toast.error(friendlyErrorMessage(error, "Couldn't export results. Please try again."));
     } finally {
       setIsExporting(false);
     }
@@ -1785,9 +1786,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 {/* Styled to the AI Talent Match reference table: sticky,
                     bg-gray-50 per cell, light uppercase gray-500 labels with
                     wider tracking, dark mode. */}
-                <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="text-left px-4 py-3 w-10 align-middle tf-sticky-col-left">
+                    <th className="text-left px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                       {/* Embedded in Job Details, Select All already lives in
                           the toolbar above (the reference pattern) — this
                           header checkbox would duplicate it, so it's empty
@@ -1803,17 +1804,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         />
                       )}
                     </th>
-                    {col('candidate') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>}
-                    {col('timeline') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>}
-                    {col('status') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>}
-                    {col('score') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Score</th>}
-                    {col('result') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Result</th>}
-                    {col('proctoring') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Proctoring Risk</th>}
-                    {col('inviteSource') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>}
-                    {col('cid') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>}
-                    {col('jobVersion') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>}
-                    {col('interviewVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Interview Version</th>}
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+                    {col('candidate') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>}
+                    {col('timeline') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Timeline</th>}
+                    {col('status') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Status</th>}
+                    {col('score') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Score</th>}
+                    {col('result') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Result</th>}
+                    {col('proctoring') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Proctoring Risk</th>}
+                    {col('inviteSource') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Invite Source</th>}
+                    {col('cid') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">CID</th>}
+                    {col('jobVersion') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Job Version</th>}
+                    {col('interviewVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Interview Version</th>}
+                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

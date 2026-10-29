@@ -178,13 +178,13 @@ export default function LegalCompliancePage() {
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
-                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Version</th>
-                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Title</th>
-                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted By</th>
-                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted On</th>
-                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Status</th>
-                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Document</th>
+                <tr className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
+                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Version</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Title</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Accepted By</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Accepted On</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Status</th>
+                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Document</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

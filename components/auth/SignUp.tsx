@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
 import { AUTH_THEME_CSS } from './authTheme';
@@ -663,7 +664,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         if (checkoutErr?.message?.includes('cancelled')) {
           toast.info('Payment cancelled');
         } else {
-          toast.error(checkoutErr?.message || 'Payment failed');
+          toast.error(friendlyErrorMessage(checkoutErr, "Payment failed. Please try again."));
         }
         return;
       }

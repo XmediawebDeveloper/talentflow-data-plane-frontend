@@ -207,7 +207,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
           and long responses get more room. */}
       <div className="tf-table-shell">
         <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
-          <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-2xs">
+          <thead className="bg-white text-gray-600 text-xs">
             <tr>
               <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
               <th className="px-3 py-2 text-left font-semibold">Question</th>

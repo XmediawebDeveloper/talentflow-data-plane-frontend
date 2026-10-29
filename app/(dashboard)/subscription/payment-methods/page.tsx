@@ -5,6 +5,7 @@ import { Wallet, Plus, CreditCard, Trash2, Building2, X, Loader2, Sparkles, Arro
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -217,7 +218,7 @@ export default function PaymentMethodsPage() {
         resetForm();
       } else {
         const error = await response.json();
-        toast.error(error.detail || 'Failed to add payment method');
+        toast.error(friendlyErrorMessage(error, "Couldn't add payment method. Please try again."));
       }
     } catch (error) {
       console.error('Error adding payment method:', error);

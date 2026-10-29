@@ -540,7 +540,7 @@ export default function JobVersionHistoryPanel({
                        header slides under nothing. Select pins left, Action
                        right; both stay reachable while the table scrolls
                        sideways. */
-                    className={`sticky top-0 py-2.5 px-3 text-xs text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${hideJdDetails ? 'font-medium uppercase tracking-wide' : 'font-bold'} ${minW} ${
+                    className={`sticky top-0 py-2.5 px-3 text-xs text-gray-600 whitespace-nowrap bg-white dark:bg-slate-900 dark:text-slate-300 ${hideJdDetails ? 'font-semibold' : 'font-semibold'} ${minW} ${
                       label === 'Action'
                         ? 'right-0 z-[8] shadow-[inset_0_-1px_0_var(--raw-e5e7eb),-1px_0_0_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155),-1px_0_0_0_var(--raw-334155)]'
                         : label === 'Select' || (label === 'Version' && stickyVersionColumn)

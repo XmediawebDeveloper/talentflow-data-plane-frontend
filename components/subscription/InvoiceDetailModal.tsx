@@ -195,13 +195,13 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
             <Section icon={<FileText className="h-4 w-4" />} title="Invoice Items">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[480px] text-sm">
-                  <thead className="bg-gray-50/60 text-xs text-gray-500 dark:bg-slate-800/30 dark:text-slate-400">
+                  <thead className="bg-white text-xs text-gray-600 dark:bg-slate-900 dark:text-slate-300">
                     <tr>
-                      <th className="w-10 px-4 py-2 text-left font-medium">#</th>
-                      <th className="px-4 py-2 text-left font-medium">Description</th>
-                      <th className="px-4 py-2 text-right font-medium">Quantity</th>
-                      <th className="px-4 py-2 text-right font-medium">Unit Price</th>
-                      <th className="px-4 py-2 text-right font-medium">Amount</th>
+                      <th className="w-10 px-4 py-2 text-left font-semibold">#</th>
+                      <th className="px-4 py-2 text-left font-semibold">Description</th>
+                      <th className="px-4 py-2 text-right font-semibold">Quantity</th>
+                      <th className="px-4 py-2 text-right font-semibold">Unit Price</th>
+                      <th className="px-4 py-2 text-right font-semibold">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
