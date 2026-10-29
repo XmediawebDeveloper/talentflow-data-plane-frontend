@@ -3,13 +3,13 @@
 import { Crown, ChevronRight } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
 import { SortableHeader, ariaSort, type SortDir, type TableSort } from '@/components/ui/sortable-header';
-import { TeamAvatar, MemberStack, TeamActionHandlers, formatTeamDate, AttentionChip, TeamSizeBar } from './TeamCard';
+import { MemberStack, TeamActionHandlers, formatTeamDateTime, AttentionChip, TeamSizeBar, TeamUnitsSummary, formatTeamUnits } from './TeamCard';
 
 /** The page's sort keys ('newest' is the Created column). `sortDir` is the true
  *  direction of the column's values, so newest-first Created is 'desc'. */
-export type TeamListSortKey = 'name' | 'newest' | 'members' | 'jobs' | 'resumes';
+export type TeamListSortKey = 'name' | 'newest' | 'members' | 'units';
 
-interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails' | 'maxMembers'> {
+interface TeamListTableProps extends Pick<TeamActionHandlers, 'onViewDetails' | 'maxMembers' | 'unitsByTeam' | 'onOpenUsage' | 'createdBy'> {
   teams: Team[];
   /** Rendered inside the card under the table — e.g. `<ListPagination attached />`. */
   footer?: React.ReactNode;
@@ -25,7 +25,7 @@ const TH = 'px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500';
  * List-view counterpart of the TeamCard grid: same data, one row per team.
  * Clicking a row opens the Team popup, like clicking a card.
  */
-export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort, maxMembers = 0 }: TeamListTableProps) {
+export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort, maxMembers = 0, unitsByTeam = null, onOpenUsage, createdBy = null }: TeamListTableProps) {
   const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
     <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
@@ -39,7 +39,6 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               onClick={() => onViewDetails(team.id)}
               className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
             >
-              <TeamAvatar team={team} className="h-9 w-9 rounded-lg text-xs" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
                 <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
@@ -54,7 +53,8 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                   {team.member_count === 0 && <AttentionChip>No members</AttentionChip>}
                 </span>
                 <span className="mt-0.5 block truncate text-2xs text-gray-400 dark:text-slate-500">
-                  {team.member_count} members · {team.active_jobs_count.toLocaleString()} jobs · {team.resumes_count.toLocaleString()} resumes
+                  {team.member_count} members
+                  {unitsByTeam?.[team.id] && ` · ${formatTeamUnits(unitsByTeam[team.id].total)} units (30 days)`}
                 </span>
               </span>
               <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-600" />
@@ -73,12 +73,11 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               <th className={TH} aria-sort={ariaSort(sort, 'members')}>
                 <SortableHeader label="Members" column="members" sort={sort} />
               </th>
-              <th className={`${TH} text-right`} aria-sort={ariaSort(sort, 'jobs')}>
-                <SortableHeader label="Active Jobs" column="jobs" sort={sort} align="right" />
-              </th>
-              <th className={`${TH} text-right`} aria-sort={ariaSort(sort, 'resumes')}>
-                <SortableHeader label="Resumes" column="resumes" sort={sort} align="right" />
-              </th>
+              {unitsByTeam && (
+                <th className={TH} aria-sort={ariaSort(sort, 'units')}>
+                  <SortableHeader label="Units (last 30 days)" column="units" sort={sort} />
+                </th>
+              )}
               <th className={TH} aria-sort={ariaSort(sort, 'newest')}>
                 <SortableHeader label="Created" column="newest" sort={sort} />
               </th>
@@ -96,7 +95,6 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               >
                 <td className="py-3 pl-5 pr-4">
                   <div className="flex items-center gap-3">
-                    <TeamAvatar team={team} className="h-9 w-9 rounded-lg text-xs" />
                     <div className="min-w-0 max-w-xs">
                       <button
                         type="button"
@@ -104,13 +102,12 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                           e.stopPropagation();
                           onViewDetails(team.id);
                         }}
+                        // Name only in the row; the description shows on hover and in the Team popup.
+                        title={team.description ? `${team.name} — ${team.description}` : team.name}
                         className="block truncate text-left text-sm max-sm:text-[13px] font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
                       >
                         {team.name}
                       </button>
-                      {team.description && (
-                        <p className="truncate text-xs text-gray-500 dark:text-slate-400">{team.description}</p>
-                      )}
                     </div>
                   </div>
                 </td>
@@ -134,14 +131,21 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                     <AttentionChip>No members</AttentionChip>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">
-                  {team.active_jobs_count.toLocaleString()}
-                </td>
-                <td className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-medium tabular-nums text-gray-900 dark:text-slate-100">
-                  {team.resumes_count.toLocaleString()}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
-                  {formatTeamDate(team.created_at) || '—'}
+                {unitsByTeam && (
+                  <td className="px-4 py-3">
+                    <TeamUnitsSummary
+                      units={unitsByTeam[team.id]}
+                      onOpen={onOpenUsage ? () => onOpenUsage(team.id) : undefined}
+                    />
+                  </td>
+                )}
+                <td className="whitespace-nowrap px-4 py-3">
+                  <p className="text-sm text-gray-600 dark:text-slate-300">{formatTeamDateTime(team.created_at) || '—'}</p>
+                  {createdBy?.[team.id] && (
+                    <p className="max-w-[12rem] truncate text-xs text-gray-400 dark:text-slate-500" title={`Created by ${createdBy[team.id]}`}>
+                      {createdBy[team.id]}
+                    </p>
+                  )}
                 </td>
                 <td className="py-3 pl-4 pr-5 text-right">
                   <ChevronRight

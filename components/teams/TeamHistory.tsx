@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight, History, Loader2, AlertCircle, Search, Download, RefreshCw, X } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, Loader2, AlertCircle, Search, Download, RefreshCw, X, List, Table2 } from 'lucide-react';
 import type { IconComponent } from '@/lib/types/icon';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST, formatISTDate, formatISTTime, parseIST, toISODateIST } from '@/lib/utils/dateUtils';
@@ -12,6 +12,9 @@ import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import ListPagination from '@/components/ListPagination';
+import { toast } from '@/components/ui/enhanced-toast';
+import { useIsMobile } from '@/components/ui/use-mobile';
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -33,12 +36,26 @@ export const EVENT_CONFIG: Record<string, { label: string; icon: IconComponent; 
 };
 
 const FILTERS = ['ALL', 'TEAM_CREATED', 'TEAM_UPDATED', 'TEAM_DELETED', 'MEMBER_ADDED', 'MEMBER_REMOVED'] as const;
+/** Export reads this many pages at once. */
+const EXPORT_PARALLEL = 4;
+type HistoryView = 'timeline' | 'table';
+/** Shown when the backend has no name for the member (e.g. the user was deleted). */
+const UNKNOWN_USER = 'Unknown user';
 
 /** "LEAD_CHANGED" → "Lead Changed" — for event types this screen doesn't know yet. */
 const humanize = (raw: string) =>
   raw.toLowerCase().split(/[_\s]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 export const eventLabel = (type: string) => EVENT_CONFIG[type]?.label ?? humanize(type);
+
+/** Style for an event type, with a neutral fallback for types this screen doesn't know. */
+const eventConfig = (type: string) => EVENT_CONFIG[type] ?? {
+  label: humanize(type),
+  icon: Clock,
+  color: 'text-gray-700 dark:text-slate-300',
+  bg: 'bg-gray-100 dark:bg-slate-800',
+  dot: 'bg-gray-400',
+};
 
 function formatDate(iso: string) {
   return formatIST(iso);
@@ -121,6 +138,17 @@ function readChanges(details: Record<string, unknown> | undefined): Change[] {
     .map((field) => ({ field }));
 }
 
+/** One line on what an entry changed: field changes for updates, initial members for creates. */
+export function describeEntryDetails(e: TeamHistoryEntry) {
+  if (e.event_type === 'TEAM_UPDATED') {
+    return readChanges(e.details)
+      .map((c) => (c.from !== undefined || c.to !== undefined ? `${humanize(c.field)}: ${c.from ?? ''} → ${c.to ?? ''}` : humanize(c.field)))
+      .join('; ');
+  }
+  if (e.event_type === 'TEAM_CREATED' && e.details?.member_count != null) return `${e.details.member_count} initial members`;
+  return '';
+}
+
 function ChangeList({ changes }: { changes: Change[] }) {
   if (changes.length === 0) return null;
   const known = changes.filter((c) => c.from !== undefined || c.to !== undefined);
@@ -152,9 +180,13 @@ interface TeamHistoryProps {
   onOpenTeam?: (teamId: string) => void;
   /** Ids of teams that exist now — a deleted team's name isn't clickable. */
   openableTeamIds?: ReadonlySet<string>;
+  /** Start filtered to this team (the Team popup's "View all"). */
+  initialTeamId?: string | null;
+  /** Called once the initial team filter is applied, so the page can forget it. */
+  onInitialTeamApplied?: () => void;
 }
 
-export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistoryProps = {}) {
+export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId = null, onInitialTeamApplied }: TeamHistoryProps = {}) {
   // Server-paged list (the normal view).
   const [serverItems, setItems] = useState<TeamHistoryEntry[]>([]);
   const [serverTotal, setTotal] = useState(0);
@@ -165,13 +197,17 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
   const [filter, setFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
-  const [goToPage, setGoToPage] = useState('1');
+  // Timeline (cards by day) or Table. Phones always get the timeline.
+  const [view, setView] = useState<HistoryView>('timeline');
+  const isMobile = useIsMobile();
+  const shownView: HistoryView = isMobile ? 'timeline' : view;
   // Entries per filter, for the chip badges (null = not loaded).
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
 
   // Remember the filter, page and page size for the session, like the other tabs.
-  useListStatePersistence('team-history', { filter, page, pageSize }, (saved) => {
+  useListStatePersistence('team-history', { filter, page, pageSize, view }, (saved) => {
     if (typeof saved.filter === 'string' && (FILTERS as readonly string[]).includes(saved.filter)) setFilter(saved.filter);
+    if (saved.view === 'timeline' || saved.view === 'table') setView(saved.view);
     if (typeof saved.page === 'number' && saved.page >= 1) setPage(Math.floor(saved.page));
     if (typeof saved.pageSize === 'number' && PAGE_SIZES.includes(saved.pageSize)) setPageSize(saved.pageSize);
   });
@@ -182,7 +218,12 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
   const [batchLoading, setBatchLoading] = useState(true);
   const [batchError, setBatchError] = useState(false);
   const [search, setSearch] = useState('');
-  const [teamFilter, setTeamFilter] = useState('');
+  const [teamFilter, setTeamFilter] = useState(initialTeamId ?? '');
+  useEffect(() => {
+    if (initialTeamId) onInitialTeamApplied?.();
+    // Mount only: the prop is just the starting filter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [actorFilter, setActorFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -202,6 +243,14 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
     const seen = new Map<string, string>();
     for (const e of batch ?? []) if (e.actor_name && !seen.has(actorKey(e))) seen.set(actorKey(e), e.actor_name);
     return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }, [batch]);
+
+  // Known event types first, then any others seen in the latest activity (e.g. a
+  // new LEAD_CHANGED type) — so they can be filtered too.
+  const chipFilters = useMemo(() => {
+    const extra = new Set<string>();
+    for (const e of batch ?? []) if (!(FILTERS as readonly string[]).includes(e.event_type)) extra.add(e.event_type);
+    return [...FILTERS, ...Array.from(extra).sort()];
   }, [batch]);
 
   /** Batch entries passing the team / person / date / search filters (any event type). */
@@ -225,7 +274,11 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
 
   // What the list shows: server pages normally, the filtered batch when the
   // team / person / date / search filters are on.
-  const items = advancedOn ? batchFiltered.slice((page - 1) * pageSize, page * pageSize) : serverItems;
+  // A page restored from the session (or left from before a filter) can be past the
+  // end of the filtered batch — clamp it, rather than show "no matches".
+  const advancedPage = Math.min(page, Math.max(1, Math.ceil(batchFiltered.length / pageSize)));
+  const shownPage = advancedOn ? advancedPage : page;
+  const items = advancedOn ? batchFiltered.slice((advancedPage - 1) * pageSize, advancedPage * pageSize) : serverItems;
   const total = advancedOn ? batchFiltered.length : serverTotal;
   const loading = advancedOn ? batchLoading : serverLoading;
   const loadedOnce = advancedOn ? batch !== null : serverLoadedOnce;
@@ -236,8 +289,12 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
   const summary = useMemo(() => {
     const byType: Record<string, number> = {};
     const byActor = new Map<string, { name: string; n: number }>();
+    const byTeam = new Map<string, { name: string; n: number }>();
     for (const e of batchMatches) {
       byType[e.event_type] = (byType[e.event_type] ?? 0) + 1;
+      const t = byTeam.get(e.team_id) ?? { name: e.team_name, n: 0 };
+      t.n += 1;
+      byTeam.set(e.team_id, t);
       if (e.actor_name) {
         const cur = byActor.get(actorKey(e)) ?? { name: e.actor_name, n: 0 };
         cur.n += 1;
@@ -245,25 +302,20 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
       }
     }
     const top = Array.from(byActor.values()).sort((a, b) => b.n - a.n)[0] ?? null;
-    return { byType, top, count: batchMatches.length };
+    // Only worth saying when more than one team is in view.
+    const topTeam = byTeam.size > 1 ? Array.from(byTeam.values()).sort((a, b) => b.n - a.n)[0] : null;
+    return { byType, top, topTeam, count: batchMatches.length };
   }, [batchMatches]);
 
-  const totalPages = Math.ceil(total / pageSize);
-  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const to = Math.min(page * pageSize, total);
-
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
+  // Chip counts: server totals normally; with the extra filters on, counts of
+  // the filtered batch, so they match the list underneath.
+  const chipCounts = useMemo<Record<string, number> | null>(() => {
+    if (!advancedOn) return counts;
+    const out: Record<string, number> = { ALL: batchMatches.length };
+    for (const e of batchMatches) out[e.event_type] = (out[e.event_type] ?? 0) + 1;
+    for (const f of chipFilters) out[f] = out[f] ?? 0;
+    return out;
+  }, [advancedOn, counts, batchMatches, chipFilters]);
 
   // Each request gets a number; a response for a filter / page the user has
   // already left is dropped instead of overwriting the newer one.
@@ -298,6 +350,15 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
     void fetchHistory();
   }, [fetchHistory]);
 
+  // Chip counts: one tiny request per filter (limit 1, read `total`) — only when the
+  // history is longer than the batch. Best effort.
+  const fetchCounts = useCallback(async () => {
+    const results = await Promise.allSettled(FILTERS.map((f) => teamService.getTeamsHistory(1, 0, f)));
+    const next: Record<string, number> = {};
+    results.forEach((r, i) => { if (r.status === 'fulfilled') next[FILTERS[i]] = r.value.total; });
+    setCounts(Object.keys(next).length > 0 ? next : null);
+  }, []);
+
   const fetchBatch = useCallback(async () => {
     setBatchLoading(true);
     setBatchError(false);
@@ -305,64 +366,63 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
       const result = await teamService.getTeamsHistory(BATCH_LIMIT, 0, 'ALL');
       setBatch(result.items);
       setBatchTotal(result.total);
+      if (result.total > result.items.length) {
+        void fetchCounts();
+      } else {
+        // Everything is in the batch: count it here instead of six more requests.
+        const next: Record<string, number> = { ALL: result.items.length };
+        for (const k of FILTERS) next[k] = next[k] ?? 0;
+        for (const e of result.items) next[e.event_type] = (next[e.event_type] ?? 0) + 1;
+        setCounts(next);
+      }
     } catch {
       setBatchError(true);
     } finally {
       setBatchLoading(false);
     }
-  }, []);
+  }, [fetchCounts]);
   useEffect(() => {
     void fetchBatch();
   }, [fetchBatch]);
 
+  // The batch also refreshes the chip counts.
   const refreshAll = () => {
     void fetchHistory();
-    void fetchCounts();
     void fetchBatch();
   };
 
   // ── Export: what the list shows, every page (filters applied) ──
-  const describeForExport = (e: TeamHistoryEntry) =>
-    e.event_type === 'TEAM_UPDATED'
-      ? readChanges(e.details)
-          .map((c) => (c.from !== undefined || c.to !== undefined ? `${humanize(c.field)}: ${c.from ?? ''} → ${c.to ?? ''}` : humanize(c.field)))
-          .join('; ')
-      : e.event_type === 'TEAM_CREATED' && e.details?.member_count != null
-        ? `${e.details.member_count} initial members`
-        : '';
+  const describeForExport = describeEntryDetails;
   const runExport = async (format: ExportFileFormat) => {
     let rows: TeamHistoryEntry[];
     if (advancedOn) {
       rows = batchFiltered;
     } else {
       rows = [];
-      for (let offset = 0; offset < Math.min(serverTotal, EXPORT_CAP); offset += EXPORT_PAGE) {
-        const page_ = await teamService.getTeamsHistory(EXPORT_PAGE, offset, filter);
-        rows.push(...page_.items);
-        if (page_.items.length < EXPORT_PAGE) break;
+      const offsets: number[] = [];
+      for (let offset = 0; offset < Math.min(serverTotal, EXPORT_CAP); offset += EXPORT_PAGE) offsets.push(offset);
+      // A few pages at a time (was one by one); results keep their order.
+      for (let i = 0; i < offsets.length; i += EXPORT_PARALLEL) {
+        const pages = await Promise.all(offsets.slice(i, i + EXPORT_PARALLEL).map((o) => teamService.getTeamsHistory(EXPORT_PAGE, o, filter)));
+        for (const p of pages) rows.push(...p.items);
       }
     }
-    const date = new Date().toISOString().split('T')[0];
+    const date = toISODateIST(new Date());
     await exportRows(
       format,
       EXPORT_HEADERS,
-      rows.map((e) => [formatIST(e.event_at), eventLabel(e.event_type), e.team_name, e.target_user_name ?? '', e.actor_name ?? '', describeForExport(e)]),
+      rows.map((e) => [formatIST(e.event_at), eventLabel(e.event_type), e.team_name, e.target_user_name ?? (e.event_type.startsWith('MEMBER_') ? UNKNOWN_USER : ''), e.actor_name ?? '', describeForExport(e)]),
       `teams-history-${date}`,
       { sheetName: 'Teams History' },
     );
     setShowExport(false);
+    if (!advancedOn && serverTotal > EXPORT_CAP) {
+      toast.warning({
+        title: `Exported the latest ${EXPORT_CAP.toLocaleString()} activities`,
+        description: `There are ${serverTotal.toLocaleString()} in all — narrow it with an event type to export older ones.`,
+      });
+    }
   };
-
-  // Chip counts: one tiny request per filter (limit 1, read `total`). Best effort.
-  const fetchCounts = useCallback(async () => {
-    const results = await Promise.allSettled(FILTERS.map((f) => teamService.getTeamsHistory(1, 0, f)));
-    const next: Record<string, number> = {};
-    results.forEach((r, i) => { if (r.status === 'fulfilled') next[FILTERS[i]] = r.value.total; });
-    setCounts(Object.keys(next).length > 0 ? next : null);
-  }, []);
-  useEffect(() => {
-    void fetchCounts();
-  }, [fetchCounts]);
 
   const handleFilterChange = (nextFilter: string) => {
     setFilter(nextFilter);
@@ -370,21 +430,6 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
   };
 
   const filterLabel = filter === 'ALL' ? '' : eventLabel(filter);
-
-  const pageSizeSelect = (
-    <label className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
-      Show
-      <select
-        value={pageSize}
-        onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-        aria-label="Entries per page"
-        className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
-      >
-        {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-      </select>
-      per page
-    </label>
-  );
 
   let body: React.ReactNode;
   if (error) {
@@ -442,6 +487,60 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
       <>
         {/* Later loads keep the current list (dimmed) instead of swapping it for a
             big spinner, so the page doesn't jump on every page change. */}
+        {shownView === 'table' ? (
+          <div className={`relative overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition-opacity dark:border-slate-700/60 dark:bg-slate-900 dark:ring-white/[0.02] ${loading ? 'pointer-events-none opacity-50' : ''}`} aria-busy={loading}>
+            <div className="overflow-x-auto tf-table-shell">
+              <table className="w-full min-w-[900px]">
+                <thead className="border-b border-gray-200 bg-gray-50 dark:border-slate-700 dark:bg-slate-800/50">
+                  <tr>
+                    {['Date & time', 'Event', 'Team', 'Member', 'By', 'Details'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                  {items.map((entry) => {
+                    const config = eventConfig(entry.event_type);
+                    const teamOpenable = !!onOpenTeam && entry.event_type !== 'TEAM_DELETED' && !!openableTeamIds?.has(entry.team_id);
+                    const details = describeForExport(entry);
+                    const memberEvent = entry.event_type.startsWith('MEMBER_');
+                    return (
+                      <tr key={entry.id} className="align-top hover:bg-brand-blue/[0.02]">
+                        <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-gray-500 dark:text-slate-400">{formatDate(entry.event_at)}</td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>{config.label}</span>
+                        </td>
+                        <td className="max-w-[14rem] px-4 py-3 text-sm">
+                          {teamOpenable ? (
+                            <button type="button" onClick={() => onOpenTeam!(entry.team_id)} title="Open team details" className="block max-w-full truncate text-left font-medium text-gray-900 hover:text-brand-blue hover:underline dark:text-slate-50">
+                              {entry.team_name}
+                            </button>
+                          ) : (
+                            <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={entry.team_name}>{entry.team_name}</span>
+                          )}
+                        </td>
+                        <td className="max-w-[12rem] truncate px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                          {entry.target_user_name || (memberEvent ? <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                          {entry.actor_name ? (
+                            <span className="inline-flex items-center gap-2">
+                              <NameAvatar name={entry.actor_name} size="sm" className="h-6 w-6 text-[10px]" />
+                              {entry.actor_name}
+                            </span>
+                          ) : <span className="text-gray-300 dark:text-slate-600">—</span>}
+                        </td>
+                        <td className="max-w-[18rem] px-4 py-3 text-xs text-gray-500 dark:text-slate-400">
+                          {details ? <span className="line-clamp-2" title={details}>{details}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
         <div className={`relative space-y-2 sm:space-y-3 transition-opacity ${loading ? 'pointer-events-none opacity-50' : ''}`} aria-busy={loading}>
           {loading && (
             <div className="absolute inset-x-0 top-6 z-10 flex justify-center">
@@ -455,13 +554,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
             const day = toISODateIST(entry.event_at);
             const newDay = index === 0 || toISODateIST(items[index - 1].event_at) !== day;
             const teamOpenable = !!onOpenTeam && entry.event_type !== 'TEAM_DELETED' && !!openableTeamIds?.has(entry.team_id);
-            const config = EVENT_CONFIG[entry.event_type] ?? {
-              label: humanize(entry.event_type),
-              icon: Clock,
-              color: 'text-gray-700 dark:text-slate-300',
-              bg: 'bg-gray-100 dark:bg-slate-800',
-              dot: 'bg-gray-400',
-            };
+            const config = eventConfig(entry.event_type);
             const Icon = config.icon;
             const isTeamEvent =
               entry.event_type === 'TEAM_CREATED' || entry.event_type === 'TEAM_UPDATED' || entry.event_type === 'TEAM_DELETED';
@@ -512,12 +605,12 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
                   <div className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                     {entry.event_type === 'MEMBER_ADDED' && (
                       <span>
-                        <span className="font-medium">{entry.target_user_name || 'Unknown'}</span> was added{byActor}
+                        {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span>} was added{byActor}
                       </span>
                     )}
                     {entry.event_type === 'MEMBER_REMOVED' && (
                       <span>
-                        <span className="font-medium">{entry.target_user_name || 'Unknown'}</span> was removed{byActor}
+                        {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span>} was removed{byActor}
                       </span>
                     )}
                     {isTeamEvent && (
@@ -560,136 +653,32 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
           })}
         </div>
 
-        {totalPages > 1 && (
-          <div className="mt-4 sm:mt-6 flex flex-col gap-3 sm:gap-4 border-t border-gray-100 dark:border-slate-700/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">
-                Showing <span className="font-medium">{from}-{to}</span> of <span className="font-medium">{total}</span>{' '}
-                {filterLabel ? `${filterLabel} ` : ''}activities
-              </p>
-              {pageSizeSelect}
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3 max-sm:justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={goToPage}
-                  onChange={(e) => setGoToPage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                      commitGoToPage();
-                    }
-                  }}
-                  onBlur={commitGoToPage}
-                  aria-label="Go to page"
-                  className="w-14 h-8 sm:h-9 px-2 text-sm max-sm:text-[13px] text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50"
-                />
-              </div>
-              <button
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page === 1 || loading}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-900 disabled:hover:border-gray-200 dark:disabled:hover:border-slate-700 disabled:hover:text-gray-700 dark:disabled:hover:text-slate-300 transition-colors"
-                aria-label="Previous page" title="Previous page"
-              >
-                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-              <span className="text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
-              </span>
-              <button
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                disabled={page === totalPages || loading}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-900 disabled:hover:border-gray-200 dark:disabled:hover:border-slate-700 disabled:hover:text-gray-700 dark:disabled:hover:text-slate-300 transition-colors"
-                aria-label="Next page" title="Next page"
-              >
-                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </div>
         )}
 
-        {totalPages <= 1 && total > 0 && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 dark:border-slate-700/60 pt-4">
-            <p className="text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
-              Showing all <span className="font-medium">{total}</span> {filterLabel ? `${filterLabel} ` : ''}activities
-            </p>
-            {/* Still offered when a smaller size made everything fit (to switch back). */}
-            {pageSize !== PAGE_SIZES[0] && pageSizeSelect}
-          </div>
-        )}
+        <div className="mt-4">
+          <ListPagination
+            currentPage={shownPage}
+            itemsPerPage={pageSize}
+            totalItems={total}
+            onPageChange={setPage}
+            onItemsPerPageChange={(size) => { setPageSize(size); setPage(1); }}
+            pageSizeOptions={PAGE_SIZES}
+            itemLabel={filterLabel ? `${filterLabel.toLowerCase()} activities` : 'activities'}
+            alwaysShow
+            minimalOnMobile
+          />
+        </div>
       </>
     );
   }
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div className="flex flex-col gap-3 sm:gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
-            <History className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Teams History</h2>
-              <button
-                type="button"
-                onClick={refreshAll}
-                disabled={serverLoading}
-                title="Refresh"
-                aria-label="Refresh history"
-                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-white hover:text-brand-blue disabled:opacity-50 dark:hover:bg-slate-900"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${serverLoading ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowExport(true)}
-                disabled={total === 0}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 transition-colors hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-              >
-                <Download className="h-3.5 w-3.5" /> Export
-              </button>
-            </div>
-            <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
-              {!loadedOnce && loading
-                ? 'Loading activities...'
-                : error
-                  ? 'History unavailable'
-                  : `${total} ${filterLabel ? `${filterLabel} ` : ''}${total === 1 ? 'activity' : 'activities'} recorded`}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 max-sm:-mx-3 max-sm:flex-nowrap max-sm:gap-1.5 max-sm:overflow-x-auto max-sm:px-3 scrollbar-hide tf-hide-native-scrollbar">
-          {FILTERS.map((entryFilter) => (
-            <button
-              key={entryFilter}
-              onClick={() => handleFilterChange(entryFilter)}
-              aria-pressed={filter === entryFilter}
-              className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs font-medium transition-all ${
-                filter === entryFilter
-                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
-                  : 'bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
-              }`}
-            >
-              {entryFilter === 'ALL' ? 'All' : eventLabel(entryFilter)}
-              {counts?.[entryFilter] !== undefined && (
-                <span className={`ml-1.5 tabular-nums ${filter === entryFilter ? 'text-white/80' : 'text-gray-400 dark:text-slate-500'}`}>
-                  {counts[entryFilter].toLocaleString()}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Team / person / date filters + search — over the latest activity batch. */}
-      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
-        <div className="relative w-full lg:w-64">
+      {/* Controls: search + filters on top; event chips, view, Refresh and Export below. */}
+      <div className="flex flex-col gap-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+        {/* Search (wide) + team / person / dates — over the latest activity batch. */}
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <div className="relative w-full min-w-0 lg:flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
           <input
             type="search"
@@ -697,10 +686,25 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search team, member or person…"
             aria-label="Search history"
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-8 pr-2 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+            className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-2 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
           />
         </div>
         <div className="grid grid-cols-2 gap-2 lg:flex">
+          {/* Event type — was a row of chips; the counts moved into the options. */}
+          <select
+            value={filter}
+            onChange={(e) => handleFilterChange(e.target.value)}
+            aria-label="Filter by event"
+            className={`h-9 min-w-0 rounded-lg border bg-white px-2 text-xs sm:text-sm dark:bg-slate-900 lg:w-48 ${
+              filter !== 'ALL' ? 'border-brand-blue/40 text-brand-blue' : 'border-gray-200 text-gray-900 dark:border-slate-700 dark:text-slate-50'
+            }`}
+          >
+            {chipFilters.map((f) => (
+              <option key={f} value={f}>
+                {f === 'ALL' ? 'All events' : eventLabel(f)}{chipCounts?.[f] !== undefined ? ` (${chipCounts[f].toLocaleString()})` : ''}
+              </option>
+            ))}
+          </select>
           <select
             value={teamFilter}
             onChange={(e) => { setTeamFilter(e.target.value); setPage(1); }}
@@ -742,27 +746,85 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds }: TeamHistory
             <X className="h-3.5 w-3.5" /> Clear filters
           </button>
         )}
+        </div>
+        <div className="flex flex-col gap-3 border-t border-gray-200/70 pt-3 dark:border-slate-700/60 lg:flex-row lg:items-center lg:justify-between">
+          {/* What's in view (filters applied, every event type). */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
+            {batch && summary.count > 0 ? (
+              <>
+                <span className="font-semibold text-gray-900 dark:text-slate-50">
+                  {batchIsPartial ? `Latest ${summary.count.toLocaleString()}` : summary.count.toLocaleString()} {summary.count === 1 ? 'activity' : 'activities'}
+                </span>
+                {chipFilters.filter((f) => f !== 'ALL' && summary.byType[f]).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => handleFilterChange(filter === f ? 'ALL' : f)}
+                    aria-pressed={filter === f}
+                    title={filter === f ? 'Show all events' : `Show only ${eventLabel(f).toLowerCase()}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 transition-colors ${filter === f ? 'bg-brand-blue/10 text-brand-blue' : 'hover:text-brand-blue'}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${eventConfig(f).dot}`} />
+                    {summary.byType[f]} {eventLabel(f).toLowerCase()}
+                  </button>
+                ))}
+                {summary.top && (
+                  <span className="text-gray-500 dark:text-slate-400">
+                    · Most active: <span className="font-medium text-gray-800 dark:text-slate-200">{summary.top.name}</span> ({summary.top.n})
+                  </span>
+                )}
+                {summary.topTeam && (
+                  <span className="text-gray-500 dark:text-slate-400">
+                    · Most changed team: <span className="font-medium text-gray-800 dark:text-slate-200">{summary.topTeam.name}</span> ({summary.topTeam.n})
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-gray-400 dark:text-slate-500">{batchLoading ? 'Loading activity…' : 'No activity in view'}</span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
+            {/* Timeline / Table — phones always get the timeline. */}
+            <div role="group" aria-label="History view" className="hidden rounded-lg bg-white p-0.5 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700 sm:inline-flex">
+              {([['timeline', 'Timeline', List], ['table', 'Table', Table2]] as const).map(([id, label, Icon]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setView(id)}
+                  aria-pressed={view === id}
+                  title={`${label} view`}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${
+                    view === id ? 'bg-brand-blue/10 text-brand-blue' : 'text-gray-600 hover:text-brand-blue dark:text-slate-400'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={refreshAll}
+              disabled={serverLoading}
+              title="Refresh"
+              aria-label="Refresh history"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${serverLoading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowExport(true)}
+              disabled={total === 0}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition-colors hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+            >
+              <Download className="h-3.5 w-3.5" /> Export
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Summary of what's in view; and an honest note when it's the latest batch only. */}
-      {batch && summary.count > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-white px-3 py-2 text-xs text-gray-600 ring-1 ring-gray-100 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700/60">
-          <span className="font-semibold text-gray-900 dark:text-slate-50">
-            {batchIsPartial ? `Latest ${summary.count.toLocaleString()}` : summary.count.toLocaleString()} {summary.count === 1 ? 'activity' : 'activities'}:
-          </span>
-          {FILTERS.filter((f) => f !== 'ALL' && summary.byType[f]).map((f) => (
-            <span key={f} className="inline-flex items-center gap-1">
-              <span className={`h-1.5 w-1.5 rounded-full ${EVENT_CONFIG[f].dot}`} />
-              {summary.byType[f]} {eventLabel(f).toLowerCase()}
-            </span>
-          ))}
-          {summary.top && (
-            <span className="ml-auto text-gray-500 dark:text-slate-400">
-              Most active: <span className="font-medium text-gray-800 dark:text-slate-200">{summary.top.name}</span> ({summary.top.n})
-            </span>
-          )}
-        </div>
-      )}
+      {/* An honest note when the summary and filters see the latest batch only. */}
       {(advancedOn || summary.count > 0) && batchIsPartial && (
         <p className="-mt-2 text-2xs text-gray-400 dark:text-slate-500">
           Search, team, person and date filters and this summary cover the latest {(batch?.length ?? 0).toLocaleString()} of {batchTotal.toLocaleString()} activities.
