@@ -235,6 +235,16 @@ export function jdActionLockReason(jdStatus?: string | null): string | null {
   return null;
 }
 
+export const INTERVIEW_ARCHIVED_ACTION_MESSAGE = 'This interview is archived. Invitation actions are disabled.';
+
+/** The interview CONFIG itself is archived (its own `status`, not its JD's) —
+ *  a config can be archived while its job stays Published. Invite Status
+ *  Tracking keeps every row visible, but Copy Link / Revoke on an Invited row,
+ *  Edit on a Revoked row and Resend on an Expired row are all greyed out. */
+export function isInterviewConfigArchived(configStatus?: string | null): boolean {
+  return (configStatus || '').toLowerCase() === 'archived';
+}
+
 /** One thing worth saying about one skill the recruiter is trying to add.
  *
  *  `action` is the field to branch on. `duplicate` is the older boolean and is

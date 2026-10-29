@@ -70,7 +70,7 @@ import type { Resume as ResumeRecord } from '@/lib/types/types';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
-import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
@@ -5086,6 +5086,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           // Revoke / Edit follow the same gate as Invite on this page.
           canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && !jobInactive}
+          jdDisabled={job.status === 'Disabled'}
           /* Footer Invite More — the one Create / Send Assessment popup over
              this tracker. The tracker spans every assessment version of this
              job, so there is no single tracked version to fix: the popup
@@ -5121,6 +5122,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           isOpen={!!trackAIInterviewConfig}
           onClose={() => setTrackAIInterviewConfig(null)}
           configId={trackAIInterviewConfig.id}
+          jdDisabled={job.status === 'Disabled'}
+          configArchived={isInterviewConfigArchived(trackAIInterviewConfig.status)}
           jdTitle={job.title}
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}

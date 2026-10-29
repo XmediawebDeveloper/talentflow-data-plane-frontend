@@ -190,6 +190,14 @@ export interface AssessmentInviteTableProps {
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
 
+  /** This table's assessment is archived (its own status) — Copy Link,
+   *  Resend, Edit and Revoke stay visible but disabled. Mirrors
+   *  `AIInterviewInviteTable`'s `configArchived`. */
+  archived?: boolean;
+  /** This table's JD is disabled — same lock as `archived`. Mirrors
+   *  `AIInterviewInviteTable`'s `jdDisabled`. */
+  jdDisabled?: boolean;
+
   canOpenResult: (inv: any) => boolean;
   onOpenResult: (inv: any) => void;
   onResend: (inv: any) => void;
@@ -220,6 +228,8 @@ export default function AssessmentInviteTable({
   codingEnabled,
   selectedIds,
   onToggleSelect,
+  archived = false,
+  jdDisabled = false,
   canOpenResult,
   onOpenResult,
   onResend,
@@ -345,7 +355,7 @@ export default function AssessmentInviteTable({
                         checkbox; the rest keep a fixed-width slot so the
                         columns stay aligned. */}
                     <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                      {isBulkResendable(invitation) ? (
+                      {isBulkResendable(invitation) && !archived && !jdDisabled ? (
                         <button
                           type="button"
                           role="checkbox"
@@ -554,6 +564,8 @@ export default function AssessmentInviteTable({
                           onViewResult: canOpenResult(invitation) || invitation.status === 'completed' || !!invitation.completed_at
                             ? onOpenResult
                             : undefined,
+                          archived,
+                          jdDisabled,
                         });
                         // Nothing actionable — no trigger rather than an empty menu.
                         if (actions.length === 0) return null;

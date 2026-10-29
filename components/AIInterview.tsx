@@ -26,7 +26,7 @@ import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFi
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useModuleQuota } from '@/contexts/QuotaContext';
-import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -78,6 +78,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
+import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import AssessmentVersionHistoryPanel, {
   ASSESSMENT_VOCABULARY,
   type AssessmentVersionRow,
@@ -499,6 +500,16 @@ export default function AIInterview() {
   const [expandedJobVersionsByJob, setExpandedJobVersionsByJob] = useState<Record<string, number[]>>({});
   const [selectedInterviewVersionByJob, setSelectedInterviewVersionByJob] =
     useState<Record<string, string>>({});
+  /* The job version details popup, same `JDVersionHistoryModal` the
+     Assessments Job List opens from its panel's header eye and per-version
+     eye — wired here so the AI Interview panel gets the same two controls. */
+  const [jobDetailsPopup, setJobDetailsPopup] = useState<{
+    jdId: string;
+    jdTitle: string;
+    versionNumber: number | null;
+  } | null>(null);
+  const openJobDetails = (jdId: string, jdTitle: string, versionNumber: number | null = null) =>
+    setJobDetailsPopup({ jdId, jdTitle, versionNumber });
   /* The job lineage behind that panel — the shared hook the Assessments list,
      Job Openings and Resume Scoring all read, so the version rows here are the
      same rows those pages show, fetched once per job and cached per mount. */
@@ -3738,6 +3749,36 @@ export default function AIInterview() {
                               loading={jdLineage.isLoading(config.jd_id)}
                               currentAssessmentId={config.id}
                               vocabulary={INTERVIEW_VOCABULARY}
+                              /* Same job version details popup the Assessments Job
+                                 List opens from its panel — header eye for the
+                                 version list, per-row eye for one version. */
+                              headerAction={
+                                config.jd_id ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openJobDetails(
+                                        config.jd_id!,
+                                        config.jd_title || config.position || 'Untitled',
+                                      );
+                                    }}
+                                    className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                    aria-label="View job version details"
+                                    title="View job version details"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </button>
+                                ) : undefined
+                              }
+                              onViewJobVersion={(jobVersionId, jobVersion) =>
+                                openJobDetails(
+                                  jobVersionId,
+                                  config.jd_title || config.position || 'Untitled',
+                                  jobVersion,
+                                )
+                              }
+                              viewJobVersionPlacement="trailing"
                               expandedJobVersions={expandedJobVersionsByJob[config.jd_id] ?? []}
                               onToggleJobVersion={(jobVersion) =>
                                 setExpandedJobVersionsByJob((current) => {
@@ -4906,9 +4947,14 @@ export default function AIInterview() {
            view-only, so it has no bulk mode at all. */
         const trackerJdLockReason = jdActionLockReason(viewInvitationsConfig.jd_status);
         const trackerJdLocked = !!trackerJdLockReason;
+        // The interview CONFIG itself archived (its own status) — independent
+        // of trackerJdLocked, which only looks at the job. Same lock, so Copy
+        // Link / Revoke / Edit / Resend stay visible but disabled.
+        const trackerConfigArchived = isInterviewConfigArchived(viewInvitationsConfig.status);
+        const trackerActionsLocked = trackerJdLocked || trackerConfigArchived;
         const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
         const isTrackerBulkActionable = (inv: any) => isRevocableInvite(inv) || isTrackerResendable(inv);
-        const selectableIds = trackerJdLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
+        const selectableIds = trackerActionsLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
         const trackerSelectedRows = invitations.filter((inv) => selectedInviteIds.has(inv.id));
         const allTrackerRevocable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isRevocableInvite);
         const allTrackerResendable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isTrackerResendable);
@@ -5171,6 +5217,8 @@ export default function AIInterview() {
               <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
                 <AIInterviewInviteTable
                   invitations={invitations}
+                  jdDisabled={trackerJdLocked}
+                  configArchived={trackerConfigArchived}
                   /* Only the FIRST load may swap the rows for a spinner, when
                      there are no rows to swap. Re-reading rows that are already
                      on screen leaves them exactly where they are - the table
@@ -5182,12 +5230,17 @@ export default function AIInterview() {
                   jobVersion={trackerShowVersions && !trackerJobScope ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
                   interviewVersion={trackerShowVersions && !trackerJobScope ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
                   showRowVersions={!!trackerJobScope}
-                  selectedIds={trackerJdLocked ? undefined : selectedInviteIds}
-                  onToggleSelect={trackerJdLocked ? undefined : toggleSelectOne}
+                  selectedIds={trackerActionsLocked ? undefined : selectedInviteIds}
+                  onToggleSelect={trackerActionsLocked ? undefined : toggleSelectOne}
                   isSelectable={isTrackerBulkActionable}
-                  /* A disabled job's tracker is view-only: no row actions. */
-                  onResend={trackerJdLocked ? undefined : (inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
-                  onEdit={trackerJdLocked ? undefined : (inv) => {
+                  /* A disabled OR archived job keeps these callbacks wired —
+                     same as an archived CONFIG — so the table greys the
+                     actions out via `jdDisabled`/`configArchived` above
+                     instead of dropping them from the menu entirely (that
+                     used to make Copy Link the only surviving item, since
+                     it isn't gated by these callbacks). */
+                  onResend={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
+                  onEdit={(inv) => {
                     if (blockIfInviteJdDisabled(inv)) return;
                     setEditInviteForm({
                       candidate_name: inv.candidate_name || '',
@@ -5195,7 +5248,7 @@ export default function AIInterview() {
                     });
                     setEditInviteTarget(inv);
                   }}
-                  onRevoke={trackerJdLocked ? undefined : (inv) => { if (blockIfInviteJdDisabled(inv)) return; setRevokeInviteTarget(inv); }}
+                  onRevoke={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setRevokeInviteTarget(inv); }}
                   onViewDetails={(inv) => openCandidateResultRoute(inv, invitations)}
                   resendingId={resendingEmailFor}
                   revokingId={revokingInviteFor}
@@ -5328,6 +5381,19 @@ export default function AIInterview() {
         versionNumber={reviewPreviewTarget?.version}
         onClose={() => setReviewPreviewTarget(null)}
       />
+
+      {/* Job version details popup, opened from the Job Versions panel's
+          header eye and per-version eye — same modal the Assessments Job
+          List opens. */}
+      {jobDetailsPopup && (
+        <JDVersionHistoryModal
+          isOpen
+          onClose={() => setJobDetailsPopup(null)}
+          jdId={jobDetailsPopup.jdId}
+          jdTitle={jobDetailsPopup.jdTitle}
+          initialVersionNumber={jobDetailsPopup.versionNumber ?? undefined}
+        />
+      )}
 
       {/* Bulk Archive / Unarchive / Delete confirmation (Actions menu). */}
       {bulkConfirm && (() => {

@@ -21,7 +21,7 @@ import InviteFilterBar, {
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
-import { assessmentService } from '@/lib/services/assessmentService';
+import { assessmentService, isAssessmentArchived } from '@/lib/services/assessmentService';
 import {
   resolveInviteStatus,
   isInviteExpired,
@@ -67,6 +67,13 @@ interface TrackInvitesModalProps {
   /** Revoke / Edit are offered only when true (permission + live JD). Resend
    *  and Copy Link are unaffected. */
   canModifyInvites?: boolean;
+  /** This JD is disabled — Copy Link / Revoke on an Invited row, Edit on a
+   *  Revoked row and Resend on an Expired row stay visible but disabled, the
+   *  same lock the Assessments page's own Track Invites popup applies.
+   *  Independent of `canModifyInvites`: Resend is offered regardless of that
+   *  flag, so without this a disabled JD's expired invite could still be
+   *  resent from here. */
+  jdDisabled?: boolean;
   /** Called after a revoke / edit changed invitations, once this popup's own
    *  rows are reloaded - so the host's counts refresh at once. */
   onChanged?: () => void | Promise<void>;
@@ -96,7 +103,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, onChanged }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, jdDisabled = false, onChanged }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -183,6 +190,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               ...assessmentInviteSource(inv),
               assessment_technical_enabled: assessment.technical_enabled,
               assessment_coding_enabled: assessment.coding_enabled,
+              assessment_status: assessment.status,
             })));
           }
         } catch (err) {
@@ -579,7 +587,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           )}
                         </div>
                         <InvitationActionButtons
-                          actions={buildInvitationRowActions(invitation, rowActionOptions)}
+                          actions={buildInvitationRowActions(invitation, {
+                            ...rowActionOptions,
+                            archived: isAssessmentArchived(invitation.assessment_status),
+                            jdDisabled,
+                          })}
                         />
                       </div>
                     </div>
@@ -741,6 +753,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               actions={buildInvitationRowActions(invitation, {
                                 ...rowActionOptions,
                                 onViewResult: openResult,
+                                archived: isAssessmentArchived(invitation.assessment_status),
+                                jdDisabled,
                               })}
                             />
                           </td>
