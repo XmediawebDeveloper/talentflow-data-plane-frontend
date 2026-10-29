@@ -4948,6 +4948,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         playedSec = now - ctxStart!;
         progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
+        // On a slow connection chunks arrive slower than real time and the voice
+        // has gaps; `now - start` counts those gaps as speech, so the caption ran
+        // ahead of a halting Bina (staging 2026-10-29). Pace Phase A by what was
+        // actually HEARD: everything received minus what is still scheduled.
+        const heardSec = currentTurnAudioMsRef.current / 1000 - Math.max(0, ctxEnd - now);
+        playedSec = Math.min(playedSec, heardSec);
         if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
       } else if (firstPcmAt !== null) {
         // Fallback: wall-clock math so streaming reveal works even when the
