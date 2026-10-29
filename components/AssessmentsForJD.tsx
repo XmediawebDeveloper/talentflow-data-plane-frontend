@@ -217,10 +217,10 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
         {/* Assessments Table */}
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
           <table className="w-full min-w-[880px]">
-            <thead className="bg-slate-50 border-b border-gray-100">
+            <thead className="bg-white border-b border-gray-100">
               <tr>
                 {['Assessment', 'Status', 'Candidates', 'Pass Rate', 'Avg Score', 'Created', 'Actions'].map((col, i) => (
-                  <th key={col} className={`px-3 sm:px-4 py-2.5 sm:py-3 ${i === 6 ? 'text-right tf-sticky-col' : 'text-left'}`}>
+                  <th key={col} className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 ${i === 6 ? 'text-right tf-sticky-col' : 'text-left'}`}>
                     <Skeleton className={`h-3 w-20 ${i === 6 ? 'ml-auto' : ''}`} />
                   </th>
                 ))}
@@ -353,27 +353,27 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
         <>
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
               <table className="w-full min-w-[880px]">
-                <thead className="bg-slate-50 border-b border-gray-100">
+                <thead className="bg-white border-b border-gray-100">
                   <tr>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
                       Assessment
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
                       Status
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
                       Candidates
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
                       Pass Rate
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
                       Avg Score
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
                       Created
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap tf-sticky-col">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap tf-sticky-col">
                       Actions
                     </th>
                   </tr>

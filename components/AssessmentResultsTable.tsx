@@ -827,8 +827,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           <table className="w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
             {filteredResults.length > 0 && (
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/60">
-                <th className="text-left py-3 px-4 w-12 tf-sticky-col-left">
+              <tr className="border-b border-gray-100 bg-white">
+                <th className="text-left py-3 px-4 w-12 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                   <button onClick={handleSelectAll} className="p-1 hover:bg-brand-blue/5 rounded">
                     {selectedResults.length === filteredResults.length && filteredResults.length > 0 ? (
                       <CheckSquare className="w-4 h-4 text-brand-blue" />
@@ -840,12 +840,12 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 {enabledColumns.map((col) => (
                   <th
                     key={col.id}
-                    className={`text-left py-3 px-4 text-xs text-gray-600 ${col.id === 'cid' ? 'w-24 whitespace-nowrap' : ''}`}
+                    className={`text-left py-3 px-4 text-xs text-gray-600 font-semibold ${col.id === 'cid' ? 'w-24 whitespace-nowrap' : ''}`}
                   >
                     {col.label}
                   </th>
                 ))}
-                <th className="text-left py-3 px-4 text-xs text-gray-600 tf-sticky-col">Actions</th>
+                <th className="text-left py-3 px-4 text-xs text-gray-600 tf-sticky-col font-semibold">Actions</th>
               </tr>
             </thead>
             )}

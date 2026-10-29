@@ -38,6 +38,7 @@ import { ArrowLeft,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
 import rbacService, { formatRoleName } from '@/lib/services/rbacService';
@@ -1630,7 +1631,7 @@ export default function UserManagement() {
       setUsers(mappedUsers);
     } catch (error: any) {
       console.error('Error loading users:', error);
-      toast.error(error.message || 'Failed to load users');
+      toast.error(friendlyErrorMessage(error, "Couldn't load users. Please try again."));
       // A failed background refresh keeps the list on screen.
       if (!silent) setUsers([]); // Show empty state instead of mock data
     } finally {
@@ -1948,7 +1949,7 @@ export default function UserManagement() {
 
         // Handle user limit exceeded error
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
-          toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.');
+          toast.error(friendlyErrorMessage(errorData, "User limit exceeded. Please upgrade your plan."));
           return;
         }
 
@@ -1970,9 +1971,9 @@ export default function UserManagement() {
 
         // Handle other error formats
         if (typeof errorData.detail === 'string') {
-          toast.error(errorData.detail);
+          toast.error(friendlyErrorMessage(errorData, "Couldn't create user. Please try again."));
         } else if (errorData.detail?.message) {
-          toast.error(errorData.detail.message);
+          toast.error(friendlyErrorMessage(errorData, "Couldn't create user. Please try again."));
         } else {
           toast.error('Failed to create user. Please try again.');
         }
@@ -2002,7 +2003,7 @@ export default function UserManagement() {
       setTimeout(() => { loadUsers(); refreshUser(); }, 300);
     } catch (error: any) {
       console.error('Error creating user:', error);
-      toast.error(error.message || 'Failed to create user');
+      toast.error(friendlyErrorMessage(error, "Couldn't create user. Please try again."));
     } finally {
       setIsSaving(false);
     }
@@ -2287,9 +2288,9 @@ export default function UserManagement() {
         const errorData = await response.json().catch(() => ({}));
         // Handle last admin deactivation blocked
         if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
-          toast.error(errorData.detail.message || 'Cannot deactivate the last admin user');
+          toast.error(friendlyErrorMessage(errorData, "Cannot deactivate the last admin user."));
         } else {
-          toast.error(errorData.detail?.message || errorData.detail || 'Failed to deactivate user');
+          toast.error(friendlyErrorMessage(errorData, "Couldn't deactivate user. Please try again."));
         }
         return;
       }
@@ -2300,7 +2301,7 @@ export default function UserManagement() {
       loadUsers();
     } catch (error: any) {
       console.error('Error deactivating user:', error);
-      toast.error(error.message || 'Failed to deactivate user');
+      toast.error(friendlyErrorMessage(error, "Couldn't deactivate user. Please try again."));
     }
   };
 
@@ -2346,11 +2347,11 @@ export default function UserManagement() {
         const errorData = await response.json().catch(() => ({}));
         // Handle specific errors
         if (errorData.detail?.error === 'USER_LIMIT_EXCEEDED') {
-          toast.error(errorData.detail.message || 'User limit exceeded. Please upgrade your plan.', who);
+          toast.error(friendlyErrorMessage(errorData, "User limit exceeded. Please upgrade your plan."), who);
         } else if (errorData.detail?.error === 'LAST_ADMIN_DEACTIVATION_BLOCKED') {
-          toast.error(errorData.detail.message || 'Cannot deactivate the last admin user', who);
+          toast.error(friendlyErrorMessage(errorData, "Cannot deactivate the last admin user."), who);
         } else {
-          toast.error(errorData.detail?.message || errorData.detail || `Failed to update ${userName}'s status`, who);
+          toast.error(friendlyErrorMessage(errorData, `Couldn't update ${userName}'s status. Please try again.`), who);
         }
         return;
       }
@@ -2364,7 +2365,7 @@ export default function UserManagement() {
       revert();
       console.error('Error toggling user status:', error);
       const isNetworkError = error.message === 'Failed to fetch' || error.name === 'TypeError';
-      toast.error(isNetworkError ? `Unable to update ${userName}'s status. Please check your connection and try again.` : (error.message || `Failed to update ${userName}'s status`), who);
+      toast.error(isNetworkError ? `Unable to update ${userName}'s status. Please check your connection and try again.` : friendlyErrorMessage(error, `Couldn't update ${userName}'s status. Please try again.`), who);
     } finally {
       setTogglingUserIds((prev) => {
         const next = new Set(prev);
@@ -2386,14 +2387,14 @@ export default function UserManagement() {
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        toast.error(errorData.detail?.message || errorData.detail || 'Failed to reset password');
+        toast.error(friendlyErrorMessage(errorData, "Couldn't reset password. Please try again."));
         return;
       }
       toast.success(`Temporary password emailed to ${user.email}`);
       closeResetPwModal();
     } catch (error: any) {
       console.error('Error resetting password:', error);
-      toast.error(error.message || 'Failed to reset password');
+      toast.error(friendlyErrorMessage(error, "Couldn't reset password. Please try again."));
     } finally {
       setResetPwSubmitting(false);
     }
@@ -2425,14 +2426,14 @@ export default function UserManagement() {
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        toast.error(errorData.detail?.message || errorData.detail || 'Failed to set password');
+        toast.error(friendlyErrorMessage(errorData, "Couldn't set password. Please try again."));
         return;
       }
       toast.success(`Password updated for ${user.email}`);
       closeResetPwModal();
     } catch (error: any) {
       console.error('Error setting password:', error);
-      toast.error(error.message || 'Failed to set password');
+      toast.error(friendlyErrorMessage(error, "Couldn't set password. Please try again."));
     } finally {
       setResetPwSubmitting(false);
     }
@@ -2457,13 +2458,13 @@ export default function UserManagement() {
       if (response.status === 401) { handleUnauthorized(); return; }
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        toast.error(errorData.detail?.message || errorData.detail || 'Failed to force password change');
+        toast.error(friendlyErrorMessage(errorData, "Couldn't force password change. Please try again."));
         return;
       }
       toast.success('User will be required to change their password on next login');
     } catch (error: any) {
       console.error('Error forcing password change:', error);
-      toast.error(error.message || 'Failed to force password change');
+      toast.error(friendlyErrorMessage(error, "Couldn't force password change. Please try again."));
     }
   };
 
@@ -2779,9 +2780,9 @@ export default function UserManagement() {
         console.error('='.repeat(80));
 
         if (errorData.detail?.error === 'LAST_ADMIN_ROLE_CHANGE_BLOCKED') {
-          toast.error(errorData.detail.message || 'Cannot change role of the last admin user');
+          toast.error(friendlyErrorMessage(errorData, "Cannot change role of the last admin user."));
         } else {
-          toast.error(errorData.detail?.message || errorData.detail || 'Failed to update user');
+          toast.error(friendlyErrorMessage(errorData, "Couldn't update user. Please try again."));
         }
         return;
       }
@@ -2848,7 +2849,7 @@ export default function UserManagement() {
         resetEditModal();
         loadUsers(); // Refresh the list to remove stale data
       } else {
-        toast.error(error.message || 'Failed to update user');
+        toast.error(friendlyErrorMessage(error, "Couldn't update user. Please try again."));
       }
     } finally {
       setIsSaving(false);
@@ -3164,27 +3165,27 @@ export default function UserManagement() {
           {/* Table from lg up — below that the columns get too cramped. */}
           <div className="hidden lg:block tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 hidden 2xl:table-cell whitespace-nowrap" aria-sort={ariaSort(userSort, 'id')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 hidden 2xl:table-cell whitespace-nowrap" aria-sort={ariaSort(userSort, 'id')}>
                     <SortableHeader label="User ID" column="id" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400" aria-sort={ariaSort(userSort, 'user')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(userSort, 'user')}>
                     <SortableHeader label="User" column="user" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400" aria-sort={ariaSort(userSort, 'role')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(userSort, 'role')}>
                     <SortableHeader label="Role" column="role" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
                     <SortableHeader label="Permissions" column="permissions" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400" aria-sort={ariaSort(userSort, 'status')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(userSort, 'status')}>
                     <SortableHeader label="Status" column="status" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-400 hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
                     <SortableHeader label="Created / Last Login" column="created" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-400 tf-sticky-col">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">
                     Actions
                   </th>
                 </tr>

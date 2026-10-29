@@ -11,6 +11,7 @@ import type { AssessmentResponse, JDResponse } from '@/lib/services';
 import type { CombinedAuditActivity } from '@/lib/services/assessmentService';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
@@ -358,7 +359,7 @@ export default function AssessmentDetailsView({
       await onRefresh?.();
     } catch (err) {
       console.error('Failed to archive assessment:', err);
-      toast.error(`Failed to archive assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Couldn't archive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
       setIsArchiving(false);
     }
@@ -375,7 +376,7 @@ export default function AssessmentDetailsView({
       await onRefresh?.();
     } catch (err) {
       console.error('Failed to unarchive assessment:', err);
-      toast.error(`Failed to unarchive assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Couldn't unarchive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
       setIsUnarchiving(false);
     }

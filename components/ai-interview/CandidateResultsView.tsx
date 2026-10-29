@@ -3915,13 +3915,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 <div className="overflow-x-auto rounded-lg ring-1 ring-gray-100">
                                   <table className="min-w-full text-left">
                                     <thead>
-                                      <tr className="bg-gray-50 border-b border-gray-100">
-                                        <th className="px-3 py-2 text-2xs font-semibold text-gray-500 uppercase tracking-wide">What happened</th>
-                                        <th className="px-3 py-2 text-2xs font-semibold text-gray-500 uppercase tracking-wide">What we saw</th>
-                                        <th className="px-3 py-2 text-2xs font-semibold text-gray-500 uppercase tracking-wide">Segment</th>
-                                        <th className="px-3 py-2 text-2xs font-semibold text-gray-500 uppercase tracking-wide">When</th>
-                                        <th className="px-3 py-2 text-2xs font-semibold text-gray-500 uppercase tracking-wide">Frame</th>
-                                        <th className="px-3 py-2 text-2xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
+                                      <tr className="bg-white border-b border-gray-100">
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">What happened</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">What we saw</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">Segment</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">When</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">Frame</th>
+                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">Severity</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -4759,19 +4759,19 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               stay pinned to the top while the rows scroll. */}
                           <div className="overflow-auto max-h-[70vh] rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">
                             <table className="w-full text-sm">
-                              <thead className="bg-brand-sky text-gray-600 text-xs uppercase tracking-wide">
+                              <thead className="bg-white text-gray-600 text-xs">
                                 <tr>
                                   {/* Every header cell sticks to the top. Question ID (left)
                                       and Timestamp (right) also stay pinned sideways, so
                                       they sit above the rest (z-30). The inset shadows
                                       draw the borders, which sticky cells don't keep. */}
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 whitespace-nowrap sticky top-0 left-0 z-30 bg-brand-sky shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-24 sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 z-20 bg-brand-sky shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-brand-sky shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20 whitespace-nowrap sticky top-0 left-0 z-30 bg-white shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-24 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-white shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -5384,14 +5384,14 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     <>
                       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
                         <table className="w-full text-sm">
-                          <thead className="bg-slate-50 border-b border-gray-100">
+                          <thead className="bg-white border-b border-gray-100">
                             <tr>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-10">#</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Event</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Time</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Video Time</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
-                              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Count</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-10">#</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Event</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Time</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Video Time</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Severity</th>
+                              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600">Count</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">

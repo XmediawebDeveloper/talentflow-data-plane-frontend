@@ -15,6 +15,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { askTurnOnWithDependents, askUnlockEntryPoint, usePermissionChangeDialog } from '@/components/roles/PermissionChangeDialog';
 import {
   forgetTurnOff,
@@ -233,7 +234,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     });
 
     if (missingCodes.length > 0) {
-      toast.error(`Warning: ${missingCodes.length} permissions not found in backend: ${missingCodes.join(', ')}`);
+      toast.warning(`${missingCodes.length} selected permission${missingCodes.length === 1 ? ' is' : 's are'} no longer available and ${missingCodes.length === 1 ? 'was' : 'were'} left out. Refresh the page and check the role.`);
     }
 
     return ids;
@@ -412,7 +413,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
       if (onSuccess) { onSuccess(); } else { router.push('/organization/role-management'); }
     } catch (error: unknown) {
       console.error('Failed to update role:', error);
-      toast.error(getErrorDetail(error) || 'Failed to update role');
+      toast.error(friendlyErrorMessage(getErrorDetail(error), "Couldn't update role. Please try again."));
     } finally {
       setIsSaving(false);
     }

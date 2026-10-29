@@ -296,15 +296,15 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="p-6">
               <div className="overflow-x-auto tf-table-shell">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className="bg-white">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
                         Table
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
                         Attempts
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
                         Status
                       </th>
                     </tr>

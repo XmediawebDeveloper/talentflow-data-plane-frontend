@@ -5,10 +5,9 @@ import { ListBulkActions } from '@/components/ui/list-toolbar-slot';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Search, X, Video, MoreVertical, Eye, Pencil,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
+  Search, X, Video, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw, SlidersHorizontal,
   Square, CheckSquare, ChevronDown, FileDown, FileText, FileSpreadsheet,
-  Archive, ArchiveRestore, Trash2,
+  Archive, ArchiveRestore, Trash2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -29,8 +28,7 @@ import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTIO
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { toast } from 'sonner';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
-import type { JDLineageVersion } from '@/lib/services/jdService';
-import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import JobStatusBadge, { jobLockBadgeFor, jobStatusBadgeKind, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
@@ -189,51 +187,16 @@ export function VersionPill({ kind, version }: { kind: 'job' | 'interview'; vers
   );
 }
 
-/* Marks a job whose JD is disabled: its interviews stay listed and viewable,
-   but every action on them is off until the JD is enabled again. */
-export function JobDisabledBadge() {
-  return (
-    <span
-      title={JD_DISABLED_ACTION_MESSAGE}
-      className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 text-gray-600 bg-gray-100 ring-gray-200 dark:text-slate-300 dark:bg-slate-800 dark:ring-slate-700"
-    >
-      Job Disabled
-    </span>
-  );
-}
+/* The job's Disabled / Archived / Draft badge beside its name (shared with
+   the Assessment lists), with this page's own lock messages on hover. */
+const JOB_STATUS_TITLE: Record<JobStatusBadgeKind, string> = {
+  disabled: JD_DISABLED_ACTION_MESSAGE,
+  archived: JD_ARCHIVED_ACTION_MESSAGE,
+  draft: 'This job is in Draft.',
+};
 
-/** Which job badge (if any) to show beside a job name: the JD's own Disabled /
- *  Archived status, unless another version of the same job is still Published
- *  or Republished — one closed version does not speak for a live job.
- *  `versions` undefined (not loaded yet) falls back to the JD's own status. */
-export function jobLockBadgeFor(
-  jdStatus: string | null | undefined,
-  versions: JDLineageVersion[] | undefined,
-): 'disabled' | 'archived' | null {
-  const own = isJdDisabled(jdStatus)
-    ? 'disabled'
-    : String(jdStatus || '').toLowerCase() === 'archived'
-      ? 'archived'
-      : null;
-  if (!own || !versions?.length) return own;
-  const anyLive = versions.some((v) => {
-    const label = jobVersionDisplayStatus(v.status, v.current_version);
-    return label === 'Published' || label === 'Republished';
-  });
-  return anyLive ? null : own;
-}
-
-/* Marks a job whose JD is archived — same shape as JobDisabledBadge, in the
-   Archived status pill's colours. */
-export function JobArchivedBadge() {
-  return (
-    <span
-      title={JD_ARCHIVED_ACTION_MESSAGE}
-      className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap ring-1 bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20"
-    >
-      Job Archived
-    </span>
-  );
+export function AIInterviewJobStatusBadge({ kind }: { kind: JobStatusBadgeKind }) {
+  return <JobStatusBadge kind={kind} title={JOB_STATUS_TITLE[kind]} />;
 }
 
 function CreatedBy({ name }: { name: string }) {
@@ -710,14 +673,14 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  /* Every version's status for the rows on this page whose job reads Disabled
-     or Archived — the job badge is judged on the whole job (jobLockBadgeFor). */
+  /* Every version's status for the rows on this page whose job reads Disabled,
+     Archived or Draft — the job badge is judged on the whole job (jobLockBadgeFor). */
   const jdLineage = useJobVersionLineage();
   const { ensureFilterLineages } = jdLineage;
   useEffect(() => {
     ensureFilterLineages(
       pageRows
-        .filter((row) => row.jdId && (isJdDisabled(row.config.jd_status) || String(row.config.jd_status || '').toLowerCase() === 'archived'))
+        .filter((row) => row.jdId && jobStatusBadgeKind(row.config.jd_status))
         .map((row) => ({ key: row.jdId!, jobId: row.jdId! })),
     );
   }, [pageRows, ensureFilterLineages]);
@@ -1079,8 +1042,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             </span>
             {(() => {
               const lockBadge = jobLockBadgeFor(row.config.jd_status, row.jdId ? jdLineage.filterLineages[row.jdId] : undefined);
-              return lockBadge === 'disabled' ? <JobDisabledBadge />
-                : lockBadge === 'archived' ? <JobArchivedBadge /> : null;
+              return lockBadge ? <AIInterviewJobStatusBadge kind={lockBadge} /> : null;
             })()}
           </div>
         );
@@ -1516,7 +1478,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               <tr className="border-b border-gray-200 dark:border-slate-700">
                 {/* Select All — this page's rows. Not pinned: Job ID is the
                     pinned column, and it covers this one as the table scrolls. */}
-                <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle">
+                <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
                   {/* Loading: the header is skeleton bars too, as in the shared
                       TableSkeleton — no real labels until the rows arrive. */}
                   {isLoading ? (
@@ -1540,13 +1502,12 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                 </th>
                 {shownColumns.map((col) => {
                   const isSorted = sortKey === col.key;
-                  const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
                   return (
                     <th
                       key={col.key}
                       scope="col"
                       aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`px-3 py-2.5 whitespace-nowrap align-middle text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 ${
+                      className={`px-3 py-2.5 whitespace-nowrap align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 ${
                         col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                       } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''} ${col.key === 'jobId' ? 'tf-sticky-col-left' : ''}`}
                     >
@@ -1557,18 +1518,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                         type="button"
                         onClick={() => toggleSort(col.key)}
                         disabled={!!error}
-                        className={`inline-flex items-center gap-1.5 group uppercase transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
-                          col.align === 'right' ? 'flex-row-reverse' : ''
-                        } ${isSorted ? 'text-brand-blue' : ''}`}
+                        className="inline-flex items-center transition-colors hover:text-brand-blue disabled:cursor-not-allowed"
                         title={`Sort by ${col.label}`}
                       >
                         {/* A long title (Invitations Sent, Interview Version…) wraps to two lines past 8rem. */}
                         <span className={`inline-block w-max max-w-[8rem] whitespace-normal leading-tight ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}>{col.label}</span>
-                        <SortIcon
-                          className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
-                            isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'
-                          }`}
-                        />
                       </button>
                       )}
                     </th>
@@ -1576,7 +1530,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                 })}
                 <th
                   scope="col"
-                  className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 tf-sticky-col"
+                  className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"
                 >
                   {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                 </th>

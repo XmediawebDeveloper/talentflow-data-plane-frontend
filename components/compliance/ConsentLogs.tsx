@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import {
   FileCheck,
   RefreshCw,
@@ -146,7 +147,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
         setBaselineTotal(result.total);
       }
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load consent logs');
+      toast.error(friendlyErrorMessage(error, "Couldn't load consent logs. Please try again."));
     } finally {
       setIsLoading(false);
       setHasLoadedOnce(true);
@@ -162,7 +163,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
       setAuditTrail(result.items);
       setShowAuditTrail(true);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load audit trail');
+      toast.error(friendlyErrorMessage(error, "Couldn't load audit trail. Please try again."));
     }
   };
 
@@ -377,17 +378,17 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               page's rows show in full and the pagination below reaches the
               rest. */}
           <table className={`w-full table-auto ${showAssessmentColumns ? 'min-w-[1200px]' : 'min-w-[960px]'}`}>
-            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+            <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">JD ID</th>}
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
-                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>}
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Feature</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Device</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">IP Address</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Date</th>
+                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">JD ID</th>}
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
+                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Assessment Version</th>}
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Feature</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Status</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Device</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">IP Address</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

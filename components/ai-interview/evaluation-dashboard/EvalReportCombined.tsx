@@ -919,12 +919,12 @@ function SkillTable({ title, rows, wide = false }: {
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-slate-50 dark:bg-slate-800/60 text-xs text-gray-500 dark:text-slate-400">
-            <th className="text-left font-medium px-4 py-2">Skill</th>
-            {wide && <th className="text-left font-medium px-2 py-2 hidden md:table-cell">Cluster</th>}
-            <th className="text-center font-medium px-2 py-2 w-16">Weight</th>
-            <th className={`font-medium px-4 py-2 ${wide ? 'text-left w-56' : 'text-right w-16'}`}>Score</th>
-            {wide && <th className="text-left font-medium px-4 py-2 w-40 hidden sm:table-cell">Status</th>}
+          <tr className="bg-white dark:bg-slate-900 text-xs text-gray-600 dark:text-slate-300">
+            <th className="text-left font-semibold px-4 py-2 text-xs text-gray-600 dark:text-slate-300">Skill</th>
+            {wide && <th className="text-left font-semibold px-2 py-2 hidden md:table-cell text-xs text-gray-600 dark:text-slate-300">Cluster</th>}
+            <th className="text-center font-semibold px-2 py-2 w-16 text-xs text-gray-600 dark:text-slate-300">Weight</th>
+            <th className={`font-semibold px-4 py-2 text-xs text-gray-600 dark:text-slate-300 ${wide ? 'text-left w-56' : 'text-right w-16'}`}>Score</th>
+            {wide && <th className="text-left font-semibold px-4 py-2 w-40 hidden sm:table-cell text-xs text-gray-600 dark:text-slate-300">Status</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-slate-700">

@@ -372,11 +372,11 @@ export default function AIInterviewReviewPreviewModal({
                           <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]">
                             <table className="w-full min-w-[360px] text-sm">
                               <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-800 text-left">
-                                  <th className="px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400">Round</th>
-                                  <th className="px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 text-right">Questions</th>
-                                  <th className="px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 text-right">Clusters</th>
-                                  <th className="px-4 py-2.5 font-medium text-gray-600 dark:text-slate-400 text-right">Time</th>
+                                <tr className="bg-white dark:bg-slate-900 text-left">
+                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-xs">Round</th>
+                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-right text-xs">Questions</th>
+                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-right text-xs">Clusters</th>
+                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-right text-xs">Time</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -656,13 +656,14 @@ export default function AIInterviewReviewPreviewModal({
                           <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {totalPreviewQuestions})</span>
                           <span className="text-xs text-gray-400 dark:text-slate-500">{totalPreviewMinutes} min</span>
                         </div>
+                        <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100 dark:border-slate-700/60">
-                              <th className="px-3 py-1.5 text-left font-medium text-gray-400 dark:text-slate-500">Round</th>
-                              <th className="px-3 py-1.5 text-right font-medium text-gray-400 dark:text-slate-500">Q</th>
-                              <th className="px-3 py-1.5 text-right font-medium text-gray-400 dark:text-slate-500">Clusters</th>
-                              <th className="px-3 py-1.5 text-right font-medium text-gray-400 dark:text-slate-500">Time</th>
+                              <th className="px-3 py-1.5 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Round</th>
+                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 dark:text-slate-300 text-xs">Q</th>
+                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 dark:text-slate-300 text-xs">Clusters</th>
+                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 dark:text-slate-300 text-xs">Time</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -682,6 +683,7 @@ export default function AIInterviewReviewPreviewModal({
                             })}
                           </tbody>
                         </table>
+                        </div>
                       </div>
                     )}
 

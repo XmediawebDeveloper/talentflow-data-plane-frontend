@@ -663,21 +663,21 @@ export default function RoleManagement() {
                 <>
                   <div className="hidden xl:block overflow-x-auto tf-table-shell">
                     <table className="w-full min-w-[980px]">
-                      <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                      <thead className="bg-white dark:bg-slate-900">
                         <tr className="text-left">
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(rolesSort, 'name')}>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(rolesSort, 'name')}>
                             <SortableHeader label="Role" column="name" sort={rolesSort} />
                           </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(rolesSort, 'type')}>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(rolesSort, 'type')}>
                             <SortableHeader label="Type" column="type" sort={rolesSort} />
                           </th>
-                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(rolesSort, 'permissions')}>
+                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(rolesSort, 'permissions')}>
                             <SortableHeader label="Permissions" column="permissions" sort={rolesSort} align="center" />
                           </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(rolesSort, 'users')}>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(rolesSort, 'users')}>
                             <SortableHeader label="Users" column="users" sort={rolesSort} />
                           </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500 text-right tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 text-right tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -940,18 +940,18 @@ export default function RoleManagement() {
                   </ul>
                   <div className="hidden overflow-x-auto tf-table-shell md:block">
                     <table className="w-full min-w-[640px]">
-                      <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                      <thead className="bg-white dark:bg-slate-900">
                         <tr className="text-left">
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(assignmentsSort, 'name')}>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(assignmentsSort, 'name')}>
                             <SortableHeader label="Role" column="name" sort={assignmentsSort} />
                           </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(assignmentsSort, 'type')}>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(assignmentsSort, 'type')}>
                             <SortableHeader label="Type" column="type" sort={assignmentsSort} />
                           </th>
-                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(assignmentsSort, 'permissions')}>
+                          <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(assignmentsSort, 'permissions')}>
                             <SortableHeader label="Permissions" column="permissions" sort={assignmentsSort} align="center" />
                           </th>
-                          <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500 text-right" aria-sort={ariaSort(assignmentsSort, 'users')}>
+                          <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 text-right" aria-sort={ariaSort(assignmentsSort, 'users')}>
                             <SortableHeader label="Users" column="users" sort={assignmentsSort} align="right" />
                           </th>
                         </tr>
@@ -1061,13 +1061,13 @@ export default function RoleManagement() {
               <>
                 <div className="hidden lg:block overflow-x-auto tf-table-shell">
                   <table className="w-full min-w-[980px]">
-                    <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+                    <thead className="bg-white dark:bg-slate-900">
                       <tr className="text-left">
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500">Action</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500">Entity</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500">Performed By</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500">Date</th>
-                        <th className="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-slate-500">Changes</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Entity</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Performed By</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Date</th>
+                        <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Changes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

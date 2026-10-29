@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  X, ClipboardList, MoreVertical, Eye, Pencil,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
+  X, ClipboardList, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
-  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet,
+  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { assessmentJobLockMessage, loadJobVersionStatuses, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, ASSESSMENT_JOB_DISABLED_MESSAGE, ASSESSMENT_JOB_ARCHIVED_MESSAGE } from '@/lib/utils/assessmentJobLock';
+import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import type { JDLineageVersion } from '@/lib/services/jdService';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -180,6 +182,18 @@ function StatusBadge({ status }: { status: string }) {
    same roles, as the Assessment Version History panel's chips, so a V3 means
    the same thing and looks the same wherever it is read. Kept as a compact
    mono-width pill so a column of them lines up. */
+/* The job's Disabled / Archived / Draft badge beside its name — the AI
+   Interview one (Job Openings styling), with this page's lock messages. */
+const JOB_STATUS_TITLE: Record<JobStatusBadgeKind, string> = {
+  disabled: ASSESSMENT_JOB_DISABLED_MESSAGE,
+  archived: ASSESSMENT_JOB_ARCHIVED_MESSAGE,
+  draft: 'This job is in Draft.',
+};
+
+export function AssessmentJobStatusBadge({ kind }: { kind: JobStatusBadgeKind }) {
+  return <JobStatusBadge kind={kind} title={JOB_STATUS_TITLE[kind]} />;
+}
+
 export function VersionPill({ kind, version, label }: {
   kind: 'job' | 'assessment';
   version: number;
@@ -427,16 +441,29 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      version every action that changes the assessment is off — the Assessments
      page's rule. One batched read. */
   const [jobVersionStatusById, setJobVersionStatusById] = useState<Record<string, string>>({});
+  /* Every version of each row's job, from the same read — the Job Name badge
+     is judged on the whole job (jobLockBadgeFor), as on AI Interview. */
+  const [jobLineageById, setJobLineageById] = useState<Record<string, JDLineageVersion[]>>({});
   useEffect(() => {
     const missing = Array.from(new Set(rows.map((r) => r.jdId).filter((id) => id && !(id in jobVersionStatusById))));
     if (missing.length === 0) return;
     let cancelled = false;
-    loadJobVersionStatuses(missing)
-      .then((statuses) => { if (!cancelled) setJobVersionStatusById((prev) => ({ ...prev, ...statuses })); })
+    loadJobVersionLineages(missing)
+      .then((lineages) => {
+        if (cancelled) return;
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+        setJobLineageById((prev) => ({ ...prev, ...lineages }));
+      })
       .catch(() => { /* the click-time check still blocks */ });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
+  /** The row's job badge: its linked job version's status, judged on the whole
+   *  job. Nothing until that status has loaded. */
+  const jobBadge = (row: AssessmentRow) => {
+    const kind = row.jdId ? jobLockBadgeFor(jobVersionStatusById[row.jdId], jobLineageById[row.jdId]) : null;
+    return kind ? <AssessmentJobStatusBadge kind={kind} /> : null;
+  };
   const [isLoading, setIsLoading] = useState(initialRows === null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -866,7 +893,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       onMutated?.();
     } catch (err) {
       console.error(`Failed to ${verb} assessment:`, err);
-      toast.error(`Failed to ${verb} assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Couldn't ${verb} assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
       setBusyRowId(null);
     }
@@ -1674,12 +1701,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         selectionActive={selectedIds.size > 0}
                       />
                       <div className="flex items-start justify-between gap-2">
-                        <span
-                          className="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-slate-50"
-                          title={row.jobName}
-                        >
-                          {row.jobName}
-                        </span>
+                        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                          <span
+                            className="min-w-0 truncate font-medium text-gray-900 dark:text-slate-50"
+                            title={row.jobName}
+                          >
+                            {row.jobName}
+                          </span>
+                          {jobBadge(row)}
+                        </div>
                         <div className="shrink-0 -mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
                           {actionsCell(row)}
                         </div>
@@ -1719,10 +1749,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             <div ref={scrollRef} className="tf-table-shell">
               <table className="w-full text-sm border-collapse">
                 {hasBodyRows && (
-                <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {/* Select All — this page's rows. */}
-                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle">
+                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
                       {isLoading ? (
                         <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                       ) : (
@@ -1743,13 +1773,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     </th>
                     {COLUMNS.map((col) => {
                       const isSorted = sortKey === col.key;
-                      const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
                       return (
                         <th
                           key={col.key}
                           scope="col"
                           aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider ${
+                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 ${
                             col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'
                           } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
                         >
@@ -1763,18 +1792,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             type="button"
                             onClick={() => toggleSort(col.key)}
                             disabled={!!error}
-                            className={`inline-flex items-center gap-1.5 group uppercase uppercase tracking-wider transition-colors hover:text-brand-blue disabled:cursor-not-allowed ${
-                              col.align === 'right' ? 'flex-row-reverse' : ''
-                            } ${isSorted ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue disabled:cursor-not-allowed"
                             title={`Sort by ${col.label}`}
                           >
                             {/* A long title (Invitations Sent, Interview Version…) wraps to two lines past 8rem. */}
                             <span className={`inline-block w-max max-w-[8rem] whitespace-normal leading-tight ${col.align === 'center' ? 'text-center' : col.align === 'right' ? 'text-right' : 'text-left'}`}>{col.label}</span>
-                            <SortIcon
-                              className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${
-                                isSorted ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'
-                              }`}
-                            />
                           </button>
                           )}
                         </th>
@@ -1782,7 +1804,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     })}
                     <th
                       scope="col"
-                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"
                     >
                       {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                     </th>
@@ -1875,12 +1897,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           {/* Fixed width on the span (a table cell's own
                               max-width is ignored): same column width on every
                               row, longer names end in "…", full name on hover. */}
-                          <span
-                            className="block w-[10rem] sm:w-[12rem] truncate font-medium text-gray-900 dark:text-slate-50"
-                            title={row.jobName}
-                          >
-                            {row.jobName}
-                          </span>
+                          <div className="flex items-center gap-1.5 w-[10rem] sm:w-[12rem]">
+                            <span
+                              className="block min-w-0 truncate font-medium text-gray-900 dark:text-slate-50"
+                              title={row.jobName}
+                            >
+                              {row.jobName}
+                            </span>
+                            {jobBadge(row)}
+                          </div>
                         </td>
 
                         {/* 3. Job Version — its own column, blue chip. */}

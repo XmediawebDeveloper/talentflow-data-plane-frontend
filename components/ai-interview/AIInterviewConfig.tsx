@@ -28,6 +28,7 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -2776,7 +2777,7 @@ export default function AIInterviewConfig() {
       // Swallowing errors here left callers unable to show anything but a
       // generic "please save first" with no clue why the save itself failed
       // (quota exceeded, validation error, network issue, etc).
-      toast.error(err?.message || 'Failed to save draft');
+      toast.error(friendlyErrorMessage(err, "Couldn't save draft. Please try again."));
       return false;
     } finally {
       setSavingDraft(false);
@@ -4084,14 +4085,14 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
-                    <div>
+                    <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-100">
-                            <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                            <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Q</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
+                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -4164,13 +4165,13 @@ export default function AIInterviewConfig() {
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
-                      <div>
+                      <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100">
-                              <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                              <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                              <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                              <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
+                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
+                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
                             </tr>
                           </thead>
                           <tbody>

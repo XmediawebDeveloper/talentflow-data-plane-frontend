@@ -13,6 +13,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { Button } from '@/components/ui/button';
@@ -353,7 +354,7 @@ export default function Settings() {
       setConfirmPassword('');
       setTimeout(() => logout(), 1500);
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || error.message || 'Failed to change password');
+      toast.error(friendlyErrorMessage(error, "Couldn't change password. Please try again."));
     } finally {
       setIsChangingPassword(false);
     }
