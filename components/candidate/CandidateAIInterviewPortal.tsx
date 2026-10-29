@@ -49,6 +49,7 @@ import {
 import {
   detectDeviceCapability,
   describeCapability,
+  isBina3DAvatarEnabled,
   type DeviceCapability,
 } from '@/lib/utils/deviceCapability';
 
@@ -944,7 +945,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
   // Preload avatar assets when reaching system check
   useEffect(() => {
-    if (step === 'system_check') {
+    // 3D switched off for everyone (NEXT_PUBLIC_BINA_3D_AVATAR=false) → don't download it.
+    if (step === 'system_check' && isBina3DAvatarEnabled()) {
       fetch('/talkinghead/talkinghead.mjs').catch(() => {});
       fetch('/models/rpm-recruiter.glb').catch(() => {});
     }
