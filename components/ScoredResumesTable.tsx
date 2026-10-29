@@ -298,6 +298,12 @@ interface ScoredResumesTableProps {
    *  a row without its own `jobVersion`; the table's Job Version column stays
    *  on the rows' own values. */
   jobVersion?: number | null;
+  /** This single-job host's JD status (e.g. 'Archived', 'Disabled',
+   *  'Published'). Archived/Disabled greys out both invite items with that
+   *  as the reason, for hosts outside Job Details' JobActionLock context
+   *  (e.g. this page's own per-job "Scoring History" view). Unset on the
+   *  global cross-job list, which has no single host job to check. */
+  jobStatus?: string;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -490,6 +496,10 @@ export interface InviteTargetJob {
   jdId: string;
   jdCode?: string;
   jdTitle: string;
+  /** 'Archived' / 'Disabled' blocks both invites outright — see
+   *  `resolveSelectionJobLock`. Left unset where the caller doesn't know it
+   *  (JobActionLock's own context covers Job Details regardless). */
+  status?: string;
 }
 
 /**
@@ -516,6 +526,19 @@ export function resolveInviteTargetState(
   const missing = jobs.filter((j) => configured(j.jdId) === false);
   if (missing.length === 0) return { state: 'ready' };
   return { state: 'missing', job: jobs[0] };
+}
+
+/**
+ * An Archived or Disabled JD anywhere in the selection blocks both invites
+ * outright, same "JD is archived" / "JD is disabled" reason Job Details
+ * shows via JobActionLock — for the pages (Resume Scoring's and AI Talent
+ * Match's own job lists) that have no JobActionLockProvider around them and
+ * so must check each ticked job's status for themselves.
+ */
+export function resolveSelectionJobLock(jobs: InviteTargetJob[]): string | null {
+  if (jobs.some((j) => j.status === 'Archived')) return 'JD is archived';
+  if (jobs.some((j) => j.status === 'Disabled')) return 'JD is disabled';
+  return null;
 }
 
 /**
@@ -656,6 +679,7 @@ export default function ScoredResumesTable({
   jobId = 'jd-1',
   jobCode,
   jobVersion: hostJobVersion,
+  jobStatus,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -1184,6 +1208,22 @@ Best regards`);
   }, [selectedResumes, filteredResumes, isGrouped]);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
+
+  /* The jobs the ticked rows belong to — a row's own JD, or this table's
+     one job on a single-job host. */
+  const selectionJobs = useMemo((): InviteTargetJob[] => {
+    const byId = new Map<string, InviteTargetJob>();
+    for (const r of effectiveSelectedRows) {
+      const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
+      if (!id || byId.has(id)) continue;
+      // A row's own `jdId` only appears in the global cross-job list, whose
+      // rows carry no job-status field; this table's one host job (when
+      // there is one) is the only case `jobStatus` can speak for.
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: r.jdId ? undefined : jobStatus });
+    }
+    return Array.from(byId.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus]);
 
   /** A scored row as THE invite popup lists it. */
   const toInvitee = (r: ScoredResume): InviteCandidate => ({
@@ -2063,40 +2103,54 @@ Best regards`);
   /** Create / Send Assessment | AI Interview for the selection. */
   const renderSelectionInviteItems = () => (
     <>
-      {/* Always offered (permission aside): THE invite popup with the ticked
-          rows — for their one job, or the popup's picker when they span
-          several. Labels: the host popup's "Create / Send …", else the list's
-          "AI Assessment / AI Interview Invite". */}
-      {renderInviteTargetItems({
-        kind: 'assessment',
-        target: { state: 'ready' },
-        label: onOpenInviteDialog ? 'Create / Send Assessment' : undefined,
-        itemClass: scoredResumesMenuItemClass,
-        allowed: canCreateAssessments,
-        deniedReason: assessmentDeniedReason,
-        onInvite: (e) => {
-          if (!canCreateAssessments) {
-            e.preventDefault();
-            return;
-          }
-          openRowsInvite('assessment', effectiveSelectedRows);
-        },
-      })}
-      {renderInviteTargetItems({
-        kind: 'interview',
-        target: { state: 'ready' },
-        label: onOpenInviteDialog ? 'Create / Send AI Interview' : undefined,
-        itemClass: scoredResumesMenuItemClass,
-        allowed: mayInviteAIInterview,
-        deniedReason: aiInterviewDeniedReason,
-        onInvite: (e) => {
-          if (!mayInviteAIInterview) {
-            e.preventDefault();
-            return;
-          }
-          openRowsInvite('interview', effectiveSelectedRows);
-        },
-      })}
+      {(() => {
+        // An Archived/Disabled job in the selection overrides the usual
+        // permission reason with why — same as Job Details' JobActionLock,
+        // for the one host job this table itself knows the status of.
+        const selectionJobLock = resolveSelectionJobLock(selectionJobs);
+        const assessmentAllowed = canCreateAssessments && !selectionJobLock;
+        const assessmentReason = selectionJobLock ?? assessmentDeniedReason;
+        const interviewAllowed = mayInviteAIInterview && !selectionJobLock;
+        const interviewReason = selectionJobLock ?? aiInterviewDeniedReason;
+        return (
+          <>
+            {/* Always offered (permission aside): THE invite popup with the ticked
+                rows — for their one job, or the popup's picker when they span
+                several. Labels: the host popup's "Create / Send …", else the list's
+                "AI Assessment / AI Interview Invite". */}
+            {renderInviteTargetItems({
+              kind: 'assessment',
+              target: { state: 'ready' },
+              label: onOpenInviteDialog ? 'Create / Send Assessment' : undefined,
+              itemClass: scoredResumesMenuItemClass,
+              allowed: assessmentAllowed,
+              deniedReason: assessmentReason,
+              onInvite: (e) => {
+                if (!assessmentAllowed) {
+                  e.preventDefault();
+                  return;
+                }
+                openRowsInvite('assessment', effectiveSelectedRows);
+              },
+            })}
+            {renderInviteTargetItems({
+              kind: 'interview',
+              target: { state: 'ready' },
+              label: onOpenInviteDialog ? 'Create / Send AI Interview' : undefined,
+              itemClass: scoredResumesMenuItemClass,
+              allowed: interviewAllowed,
+              deniedReason: interviewReason,
+              onInvite: (e) => {
+                if (!interviewAllowed) {
+                  e.preventDefault();
+                  return;
+                }
+                openRowsInvite('interview', effectiveSelectedRows);
+              },
+            })}
+          </>
+        );
+      })()}
     </>
   );
 
