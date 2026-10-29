@@ -24,7 +24,7 @@ import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import SearchableSelect from '@/components/ui/searchable-select';
 import FilterSelect from '@/components/ui/filter-select';
-import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, type InviteTargetJob } from './ScoredResumesTable';
+import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, resolveSelectionJobLock, type InviteTargetJob } from './ScoredResumesTable';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
@@ -2332,7 +2332,7 @@ export default function AITalentMatchPage({
   const inviteTargets = useAllJobInviteTargets(viewMode === 'history' || viewMode === 'results');
   const inviteTargetJobOf = (jdId: string, title?: string): InviteTargetJob => {
     const job = jobs.find(j => j.id === jdId);
-    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job' };
+    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status: job?.status };
   };
   /* Create / Send Assessment | AI Interview — Job Details' popup, for ONE job
      per opening (a selection spanning jobs stays greyed: "one job at a time").
@@ -3525,6 +3525,14 @@ export default function AITalentMatchPage({
          not just the assessment one (the shared resolver lets an AI
          Interview span jobs, which this page's invite cannot). */
       const multiJob = targets.length > 1;
+      // An Archived/Disabled job among the targets locks both invites
+      // outright, whatever the permission, with that as the reason — this
+      // list has no JobActionLock provider (Job Details' own) around it.
+      const selectionJobLock = resolveSelectionJobLock(targets);
+      const assessmentAllowed = canInviteAssessmentFromMatch && !selectionJobLock;
+      const assessmentReason = selectionJobLock ?? ASSESSMENT_INVITE_DENIED;
+      const interviewAllowed = canInviteAIInterviewFromMatch && !selectionJobLock;
+      const interviewReason = selectionJobLock ?? AI_INTERVIEW_INVITE_DENIED;
       return (
         <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
           <DropdownMenu>
@@ -3625,10 +3633,10 @@ export default function AITalentMatchPage({
                 target: resolveInviteTargetState('assessment', targets, () => true),
                 label: 'Create / Send Assessment',
                 itemClass: actionsMenuItemClass,
-                allowed: canInviteAssessmentFromMatch,
-                deniedReason: ASSESSMENT_INVITE_DENIED,
+                allowed: assessmentAllowed,
+                deniedReason: assessmentReason,
                 onInvite: (e) => {
-                  if (!canInviteAssessmentFromMatch) {
+                  if (!assessmentAllowed) {
                     e.preventDefault();
                     return;
                   }
@@ -3644,10 +3652,10 @@ export default function AITalentMatchPage({
                   : { state: 'ready' },
                 label: 'Create / Send AI Interview',
                 itemClass: actionsMenuItemClass,
-                allowed: canInviteAIInterviewFromMatch,
-                deniedReason: AI_INTERVIEW_INVITE_DENIED,
+                allowed: interviewAllowed,
+                deniedReason: interviewReason,
                 onInvite: (e) => {
-                  if (!canInviteAIInterviewFromMatch) {
+                  if (!interviewAllowed) {
                     e.preventDefault();
                     return;
                   }
@@ -7801,6 +7809,11 @@ export default function AITalentMatchPage({
                 const rows = matchedCandidates
                   .filter(c => selectedCandidates.includes(c.id))
                   .map(c => toInviteRow(resultsSessionId, selectedJob, c));
+                const target = [inviteTargetJobOf(selectedJob, resultsJobTitle)];
+                // Archived/Disabled → every Create/Send item below goes
+                // disabled with that as the reason, whatever the permission
+                // or the job's existing Assessment/AI Interview setup.
+                const jobLock = resolveSelectionJobLock(target);
                 const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
                 // Whether this job already has an AI Assessment / AI Interview
                 // set up: true → only Send applies, false → only Create applies,
@@ -7863,14 +7876,14 @@ export default function AITalentMatchPage({
                             that doesn't apply to this job (already set up → can't
                             Create; not set up → nothing to Send) is disabled. */}
                         {(() => {
-                          const createDisabled = !canInviteAssessmentFromMatch || asmtConfigured === true;
-                          const sendDisabled = !canInviteAssessmentFromMatch || asmtConfigured === false;
+                          const createDisabled = !canInviteAssessmentFromMatch || asmtConfigured === true || !!jobLock;
+                          const sendDisabled = !canInviteAssessmentFromMatch || asmtConfigured === false || !!jobLock;
                           return (
                             <>
                               <DropdownMenuItem
                                 className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                                 aria-disabled={createDisabled || undefined}
-                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : asmtConfigured === true ? 'This job already has an assessment' : undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === true ? 'This job already has an assessment' : undefined}
                                 onSelect={(e) => {
                                   if (createDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('assessment', selectedJob, rows);
@@ -7882,7 +7895,7 @@ export default function AITalentMatchPage({
                               <DropdownMenuItem
                                 className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                                 aria-disabled={sendDisabled || undefined}
-                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : asmtConfigured === false ? 'No assessment set up for this job yet' : undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === false ? 'No assessment set up for this job yet' : undefined}
                                 onSelect={(e) => {
                                   if (sendDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('assessment', selectedJob, rows);
@@ -7897,14 +7910,14 @@ export default function AITalentMatchPage({
                         <DropdownMenuSeparator className="my-1 bg-gray-100" />
                         {/* AI Interview — Create and Send as separate items, same rule. */}
                         {(() => {
-                          const createDisabled = !canInviteAIInterviewFromMatch || intvConfigured === true;
-                          const sendDisabled = !canInviteAIInterviewFromMatch || intvConfigured === false;
+                          const createDisabled = !canInviteAIInterviewFromMatch || intvConfigured === true || !!jobLock;
+                          const sendDisabled = !canInviteAIInterviewFromMatch || intvConfigured === false || !!jobLock;
                           return (
                             <>
                               <DropdownMenuItem
                                 className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                                 aria-disabled={createDisabled || undefined}
-                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : intvConfigured === true ? 'This job already has an AI interview' : undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === true ? 'This job already has an AI interview' : undefined}
                                 onSelect={(e) => {
                                   if (createDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('interview', selectedJob, rows);
@@ -7916,7 +7929,7 @@ export default function AITalentMatchPage({
                               <DropdownMenuItem
                                 className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                                 aria-disabled={sendDisabled || undefined}
-                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : intvConfigured === false ? 'No AI interview set up for this job yet' : undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === false ? 'No AI interview set up for this job yet' : undefined}
                                 onSelect={(e) => {
                                   if (sendDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('interview', selectedJob, rows);
