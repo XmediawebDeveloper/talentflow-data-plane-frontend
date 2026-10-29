@@ -3271,7 +3271,7 @@ export default function AIInterview() {
         {/* Tabs — below the search row inside the same card, in the Job
             Descriptions page's status-pill row (no "Show:" label). */}
         <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap w-full">
           {(() => {
             // Same counts as the stat cards, so a pill and the card it
             // mirrors cannot disagree.
@@ -3415,7 +3415,7 @@ export default function AIInterview() {
             title="Refresh"
             aria-label="Refresh"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-            className="flex-shrink-0 !h-9"
+            className="flex-shrink-0 !h-9 sm:ml-auto"
           >
             <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>

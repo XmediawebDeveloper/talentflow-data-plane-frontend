@@ -104,9 +104,8 @@ interface AIInterviewResultsProps {
    *  interview details page the user came from. */
   onViewCandidate?: (sessionId: string, navIds: string[]) => void;
   /**
-   * Page-level actions (e.g. Create, Send Invite) rendered at the front of the
-   * search bar's control group, ahead of More Filters. Lets the embedding page
-   * put them in this toolbar instead of a separate strip above it.
+   * Page-level actions (Job Details: the Invite button) placed right after
+   * More Filters, so they stay on the toolbar whatever the list holds.
    */
   toolbarActions?: React.ReactNode;
   /**
@@ -116,6 +115,8 @@ interface AIInterviewResultsProps {
    * only includes it once an interview exists to invite people to.
    */
   emptyStateAction?: React.ReactNode;
+  /** The nobody-has-a-result-yet state's supporting line; unset = default. */
+  emptyStateText?: string;
   /**
    * The linked job's version and this interview config's own ordinal among
    * every config authored against that job (oldest first) — the same two
@@ -303,7 +304,7 @@ const SCORE_INPUT_CLASS = 'w-full min-w-0 h-9 px-3 text-sm text-black dark:text-
 const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
 const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, emptyStateText, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   const scoped = !!jobScope && jobScope.length > 0;
   const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
@@ -425,7 +426,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     // Job Version has no control in Job Details (toolbarPortal), so a
     // restored value is neither counted nor applied there.
     countFilters: (f) =>
-      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, !toolbarPortal && f.jobVersion, f.interviewVersion, f.inviteSource].filter(Boolean).length,
+      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, !toolbarPortal && f.jobVersion, f.interviewVersion, f.inviteSource,
+        /* Embedded, Status sits in More Filters. */
+        !!toolbarPortal && f.status !== DEFAULT_RESULT_STATUS].filter(Boolean).length,
   });
 
   /* Opening a candidate and coming back (breadcrumb or browser Back) remounts
@@ -1095,7 +1098,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // instead of shrinking to an icon.
           fitToContainer
           containerBreakpoint={portaled ? '5xl' : '4xl'}
-          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" /> : undefined}
+          trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -1109,20 +1112,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              Columns → Export. Row 2 (below the panel): Select All → Actions →
              status pills → Sort by → List / Grid. Embedded in Job Details:
              the AI Talent Match row as before. */
+          /* Status is in More Filters when embedded, to make room here. */
+          afterFiltersActions={toolbarActions}
           leadingActions={
             <>
-              {toolbarActions}
-              {portaled && (
-                <ToolbarFilterSelect
-                  value={statusFilter}
-                  onChange={(value) => search.setFilter('status', value)}
-                  ariaLabel="Status"
-                >
-                  {RESULT_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </ToolbarFilterSelect>
-              )}
               {portaled ? (
                 <ToolbarFilterSelect
                   value={resultFilter}
@@ -1191,7 +1184,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             of line; h-9 matches the toolbar band. Holds Customize Columns and
             Export plus the bulk ops — Revoke / Resend / Download PDF Reports. */}
         {portaled && selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -1304,6 +1297,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              inputs; no completion dates. */
           <div className={`mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10${portaled ? ' pb-4' : ''}`}>
           <div className={portaled ? JOB_TAB_FILTER_GRID_CLASS : 'flex flex-wrap gap-x-6 gap-y-4'}>
+            {/* Status — off the toolbar row, to make room for Invite there. */}
+            <div className={JOB_TAB_FILTER_FIELD_CLASS}>
+              <label className={filterLabelClass}>Status</label>
+              <FilterSelect
+                value={statusFilter}
+                onChange={(v) => search.setFilter('status', v)}
+                ariaLabel="Status"
+                className={RESULTS_JOB_TAB_TRIGGER_CLASS}
+                options={RESULT_STATUS_OPTIONS.map((opt) => ({ value: String(opt.value), label: opt.label }))}
+              />
+            </div>
             <div className={portaled ? JOB_TAB_FILTER_FIELD_CLASS : 'flex-1 min-w-0 basis-[240px]'}>
               <label className={filterLabelClass}>Score Range (%)</label>
               <div className="flex items-center gap-2">
@@ -1620,10 +1624,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             // the populated table would show; standalone it stands on its own.
             bordered={embedded}
             icon={Users}
-            title="No AI Interview Results"
-            description={summary.all > 0
+            title={emptyStateText ? 'No AI Interview Results Yet' : 'No AI Interview Results'}
+            description={emptyStateText ?? (summary.all > 0
               ? 'Results appear here once an invited candidate starts their interview.'
-              : 'Invite candidates to this interview to see their sessions here.'}
+              : 'Invite candidates to this interview to see their sessions here.')}
             action={emptyStateAction ?? undefined}
           />
         ) : paginatedSessions.length === 0 ? (

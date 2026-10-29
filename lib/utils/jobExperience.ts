@@ -107,5 +107,13 @@ export const formatJobExperienceBadge = ({
     return trimmedExperienceText || undefined;
   }
 
-  return trimmedExperienceText ? `${standardLabel} (${trimmedExperienceText})` : standardLabel;
+  // Configured (Settings > Masters) labels already bake the range in, e.g.
+  // "Junior Level (2-4 Years)" - appending the computed range again would
+  // duplicate it. Only the bare hardcoded fallback labels (e.g. "Junior")
+  // lack a range and need one appended; those never contain a digit.
+  const standardLabelAlreadyHasRange = /\d/.test(standardLabel);
+
+  return trimmedExperienceText && !standardLabelAlreadyHasRange
+    ? `${standardLabel} (${trimmedExperienceText})`
+    : standardLabel;
 };

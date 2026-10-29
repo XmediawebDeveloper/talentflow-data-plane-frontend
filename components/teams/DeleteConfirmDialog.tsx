@@ -7,9 +7,8 @@ interface DeleteConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   teamName: string;
-  /** Shown as the impact line ("5 members and 2 active jobs"). */
+  /** Shown as the impact line ("This team has 5 members"). */
   memberCount?: number;
-  activeJobsCount?: number;
   onConfirm: () => void;
   isDeleting?: boolean;
 }
@@ -19,7 +18,6 @@ export default function DeleteConfirmDialog({
   onOpenChange,
   teamName,
   memberCount = 0,
-  activeJobsCount = 0,
   onConfirm,
   isDeleting = false,
 }: DeleteConfirmDialogProps) {
@@ -47,13 +45,11 @@ export default function DeleteConfirmDialog({
         Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-slate-50">&quot;{teamName}&quot;</span>?
         This action cannot be undone. All team data will be permanently removed.
       </p>
-      {(memberCount > 0 || activeJobsCount > 0) && (
+      {memberCount > 0 && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-600/15 dark:bg-amber-500/10 dark:text-amber-200 dark:ring-amber-400/20">
           This team has{' '}
-          <span className="font-semibold">{memberCount} {memberCount === 1 ? 'member' : 'members'}</span>
-          {' '}and{' '}
-          <span className="font-semibold">{activeJobsCount} {activeJobsCount === 1 ? 'active job' : 'active jobs'}</span>.
-          {memberCount > 0 && ' Its members will become unassigned.'}
+          <span className="font-semibold">{memberCount} {memberCount === 1 ? 'member' : 'members'}</span>.
+          {' '}They will become unassigned.
         </p>
       )}
     </AppModal>

@@ -842,10 +842,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [assessmentInviteCount, setAssessmentInviteCount] = useState(0);
-  // The Assessments Results tab's badge AND enabled state: candidates who
-  // finished — Completed or Terminated (the API's 'abandoned'). Invited or
-  // in-progress candidates have no result yet.
-  const [assessmentFinishedCount, setAssessmentFinishedCount] = useState(0);
   /* The Assessments Results tab's BADGE: the table's own record count while
      the tab is open (reported by AssessmentResults — every page, its current
      filters), else the rows that table lists with no filter: this job's
@@ -973,11 +969,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // isn't worth doing on every Job Details load for a tab most visits skip.
   const [aiInterviewConfig, setAiInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [aiInterviewCount, setAiInterviewCount] = useState(0);
-  // The Result tab's badge AND its enabled state: candidates who finished —
-  // Completed or Terminated. aiInterviewCount above counts every invitation
-  // (it gates Track and the quick actions); an invited or still-in-progress
-  // candidate has no result yet.
-  const [aiInterviewResultCount, setAiInterviewResultCount] = useState(0);
   /* The AI Interview Result tab's BADGE, the assessment rule: the table's
      record count while the tab is open, else what the table lists with no
      filter — In Progress, Completed and Terminated sessions of the live
@@ -1119,14 +1110,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           .catch(() => null);
         if (isStale()) return;
         setAiInterviewCount(invitations?.total ?? 0);
-        setAiInterviewResultCount((invitations?.completed ?? 0) + (invitations?.terminated ?? 0));
         // The badge: what the results table lists unfiltered (see its state).
         setAiInterviewResultTotal(
           (invitations?.in_progress ?? 0) + (invitations?.completed ?? 0) + (invitations?.terminated ?? 0)
         );
       } else {
         setAiInterviewCount(0);
-        setAiInterviewResultCount(0);
         setAiInterviewResultTotal(0);
       }
     } catch {
@@ -1958,17 +1947,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       setAssessmentInviteCount(Math.max(listedInviteCount, resultInviteCount));
       setAssessmentResultTotal(listedResultCount);
-      setAssessmentFinishedCount(allResults.filter((r: any) => {
-        const st = String(r.status || '').toLowerCase();
-        return !!r.completed_at || st === 'completed' || st === 'terminated' || st === 'abandoned';
-      }).length);
       setAssessmentResults(allResults);
     } catch (error) {
       if (isStale()) return;
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
       setAssessmentResultTotal(0);
-      setAssessmentFinishedCount(0);
       setAssessmentResults([]);
       setJdAssessments([]);
     } finally {
@@ -2817,76 +2801,61 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       : null;
 
   const hasAssessmentInviteSent = assessmentInviteCount > 0;
-  // Result tabs open only once someone has a result to show.
-  const hasAssessmentResults = assessmentFinishedCount > 0;
-  const hasAIInterviewResults = aiInterviewResultCount > 0;
   const hasAIInterviewInviteSent = aiInterviewCount > 0;
 
-  // Single buttons for the AI Interview Result tab's empty state.
-  // Permission-gated: stays visible, greyed out with a tooltip, when the user
-  // lacks the permission (aria-disabled so the tooltip still shows on hover).
-  const aiInterviewCreateAction =
-    hasPlanFeature('ai_interview') ? (
+  /* The results tabs' invite button — on the tab toolbar beside More Filters
+     and on the empty state, so inviting is always one click away there. It
+     opens THE invite popup with nobody preset; with no assessment / AI
+     interview on this job yet, the popup itself offers Create. Greyed out
+     (never hidden) with the reason when it can't be used — the Quick Actions
+     Create / Send tile's gate, so the two never disagree. */
+  const resultsInviteBlockedReason = (kind: InviteKind): string | null => {
+    if (kind === 'assessment') {
+      if (!permissions.canCreateAssessments) return 'You do not have permission to create or send assessments';
+      if (!features.assessment) return 'Assessments not enabled';
+    } else {
+      if (!permissions.canCreateAIInterviews && !permissions.canShareAIInterviews) {
+        return 'You do not have permission to create or send AI interviews';
+      }
+      if (!features.ai_interview) return 'AI Interviews not enabled';
+    }
+    return jobInactive ? jobInactiveReason : null;
+  };
+  const resultsInviteAction = (kind: InviteKind, size: 'toolbar' | 'empty') => {
+    const blocked = resultsInviteBlockedReason(kind);
+    const exists = kind === 'assessment' ? hasAnyAssessment : hasAnyAIInterview;
+    const label = size === 'toolbar'
+      ? 'Invite'
+      : exists
+        ? 'Invite Candidates'
+        : kind === 'assessment' ? 'Create / Send Assessment' : 'Create / Send AI Interview';
+    return (
       <Button
         variant="primary"
-        onClick={() => { if (permissions.canCreateAIInterviews) handleCreateAIInterview(); }}
-        aria-disabled={!permissions.canCreateAIInterviews || undefined}
-        className={!permissions.canCreateAIInterviews ? 'opacity-60 cursor-not-allowed' : undefined}
-        disabled={
-          permissions.canCreateAIInterviews && (
-            !features.ai_interview
-            || jobInactive
-            || resolvingAIInterviewTarget
-            || blockAIInterviewCreate
-          )
-        }
-        title={
-          !permissions.canCreateAIInterviews
-            ? 'You do not have permission to create AI interviews'
-            : aiInterviewCreateBlockedReason ?? undefined
-        }
+        size={size === 'toolbar' ? 'sm' : undefined}
+        onClick={() => { if (!blocked) openCreateSendFromTile(kind); }}
+        aria-disabled={!!blocked || undefined}
+        title={blocked ?? (size === 'toolbar'
+          ? `Invite candidates to this job's ${kind === 'assessment' ? 'assessment' : 'AI interview'}`
+          : undefined)}
+        className={`${size === 'toolbar' ? 'whitespace-nowrap !h-9 !text-sm' : ''} ${blocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+        icon={<UserPlus className="w-4 h-4" />}
       >
-        {resolvingAIInterviewTarget
-          ? <Loader2 className="w-4 h-4 animate-spin" />
-          : <Sparkles className="w-4 h-4" />}
-        Create
+        {label}
       </Button>
-    ) : null;
-
-  const aiInterviewInviteAction =
-    hasPlanFeature('ai_interview') ? (
-      <Button
-        variant="primary"
-        /* Wrapped so the click event isn't passed through as the candidate
-           seed — this entry point opens the form empty. */
-        onClick={() => { if (permissions.canShareAIInterviews) handleInviteAIInterview(); }}
-        aria-disabled={!permissions.canShareAIInterviews || undefined}
-        className={!permissions.canShareAIInterviews ? 'opacity-60 cursor-not-allowed' : undefined}
-        disabled={permissions.canShareAIInterviews && !canInviteToAIInterview}
-        title={
-          !permissions.canShareAIInterviews
-            ? 'You do not have permission to invite candidates to an AI interview'
-            : !features.ai_interview
-            ? 'AI Interviews not enabled'
-            : jobInactive
-              ? jobInactiveReason
-              : !hasAnyAIInterview
-                ? 'Create an AI interview first'
-                : !hasLiveAIInterview
-                  ? 'Publish the AI interview first'
-                  : undefined
-        }
-      >
-        <UserPlus className="w-4 h-4" />
-        Send Invite
-      </Button>
-    ) : null;
-
-  // A JD can only ever have one live AI interview, so once it is published
-  // Create has nothing left to do — the empty state offers Send Invite instead.
-  const aiInterviewEmptyActions = hasLiveAIInterview
-    ? aiInterviewInviteAction
-    : aiInterviewCreateAction;
+    );
+  };
+  /* Empty-state wording for the results tabs, by how far the job has got. */
+  const resultsEmptyText = (kind: InviteKind) => {
+    const noun = kind === 'assessment' ? 'assessment' : 'AI interview';
+    const exists = kind === 'assessment' ? hasAnyAssessment : hasAnyAIInterview;
+    const live = kind === 'assessment' ? hasPublishedAssessment : hasLiveAIInterview;
+    const sent = kind === 'assessment' ? hasAssessmentInviteSent : hasAIInterviewInviteSent;
+    if (!exists) return `No ${noun} for this job yet. Create one and invite candidates in a single step — results show up here as candidates finish.`;
+    if (!live) return `Publish the ${noun} and invite candidates — results show up here as candidates finish.`;
+    if (!sent) return `Nobody has been invited yet. Invite candidates and their results show up here as they finish.`;
+    return `Invited candidates haven't finished yet. Results show up here once a candidate completes or is terminated.`;
+  };
 
   /* AI Talent Match Results tab badge — holds the loading placeholder until
      the server's distinct-candidate total arrives, rather than showing an
@@ -3457,26 +3426,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </button>
           )}
           {(
-            /* Disabled until an assessment is published — the tab would open on
-               an empty table otherwise, which reads as a fault rather than as
-               "there is nothing to report yet". */
+            /* Always opens (plan lock aside), results or not: with none yet
+               the tab says why and offers the invite popup, which can also
+               create the assessment. */
             <button
-              onClick={() => !assessmentPlanLocked && hasAssessmentResults && setActiveTab('assessment-results')}
-              disabled={assessmentPlanLocked || !hasAssessmentResults}
-              title={
-                assessmentPlanLocked
-                  ? PLAN_LOCKED_MESSAGE
-                  : hasAssessmentResults
-                  ? undefined
-                  : !hasAnyAssessment
-                    ? 'Create an assessment first'
-                    : !hasPublishedAssessment
-                      ? 'Publish the assessment to see results'
-                      : !hasAssessmentInviteSent
-                        ? 'Send at least one invite first'
-                        : 'Results appear once a candidate completes or is terminated'
-              }
-              className={detailTabClass(activeTab === 'assessment-results', assessmentPlanLocked || !hasAssessmentResults)}
+              onClick={() => !assessmentPlanLocked && setActiveTab('assessment-results')}
+              disabled={assessmentPlanLocked}
+              title={assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : undefined}
+              className={detailTabClass(activeTab === 'assessment-results', assessmentPlanLocked)}
             >
               <BarChart3 className="w-4 h-4" />
               Assessments Results
@@ -3492,28 +3449,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </button>
           )}
           {(aiInterviewPlanLocked || features.ai_interview) && (
-            /* Same rule as the assessment results tab. Without the view
-               permission the tab stays visible but greyed out (tooltip only). */
+            /* Same rule as the assessment results tab: opens with or without
+               results. Without the view permission the tab stays visible but
+               greyed out (tooltip only). */
             <button
-              onClick={() => !aiInterviewPlanLocked && permissions.canViewAIInterviews && hasAIInterviewResults && handleShowAIInterviewResults()}
-              disabled={aiInterviewPlanLocked || (permissions.canViewAIInterviews && !hasAIInterviewResults)}
-              aria-disabled={aiInterviewPlanLocked || !permissions.canViewAIInterviews || !hasAIInterviewResults || undefined}
+              onClick={() => !aiInterviewPlanLocked && permissions.canViewAIInterviews && handleShowAIInterviewResults()}
+              disabled={aiInterviewPlanLocked}
+              aria-disabled={aiInterviewPlanLocked || !permissions.canViewAIInterviews || undefined}
               title={
                 aiInterviewPlanLocked
                   ? PLAN_LOCKED_MESSAGE
                   : !permissions.canViewAIInterviews
                   ? 'You do not have permission to view AI interview results'
-                  : hasAIInterviewResults
-                  ? undefined
-                  : !hasAnyAIInterview
-                    ? 'Create an AI interview first'
-                    : !hasLiveAIInterview
-                      ? 'Publish the AI interview to see results'
-                      : !hasAIInterviewInviteSent
-                        ? 'Send at least one invite first'
-                        : 'Results appear once a candidate completes or is terminated'
+                  : undefined
               }
-              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !permissions.canViewAIInterviews || !hasAIInterviewResults)}
+              className={detailTabClass(activeTab === 'ai-interview-results', aiInterviewPlanLocked || !permissions.canViewAIInterviews)}
             >
               <MessageSquare className="w-4 h-4" />
               AI Interview Result
@@ -3872,31 +3822,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         }
                       />
 
-                      {/* Results exist only once an assessment is published and
-                          candidates can actually sit it — a draft has nothing
-                          to report, so the tile stays disabled and says why,
-                          matching the Invite tile's own rule. */}
+                      {/* Opens the results tab with or without results — with
+                          none yet, the tab offers the invite popup. */}
                       <QuickActionTile
                         icon={<BarChart className="w-4 h-4" />}
-                        // Opens only once a candidate finished — Completed or
-                        // Terminated — same as the results tab.
                         label="Result"
                         accent="cyan"
                         planLocked={assessmentPlanLocked}
                         onClick={handleAssessmentStatus}
-                        disabled={!permissions.canViewAssessments || !features.assessment || !hasAssessmentResults}
+                        disabled={!permissions.canViewAssessments || !features.assessment}
                         disabledTooltip={
                           !permissions.canViewAssessments
                             ? 'You do not have permission to view assessment results'
-                            : !features.assessment
-                            ? 'Assessments not enabled'
-                            : !hasAnyAssessment
-                              ? 'Create an assessment first'
-                              : !hasPublishedAssessment
-                                ? 'Publish the assessment to see results'
-                                : !hasAssessmentInviteSent
-                                  ? 'Send at least one invite first'
-                                  : 'Results appear once a candidate completes or is terminated'
+                            : 'Assessments not enabled'
                         }
                       />
 
@@ -3978,27 +3916,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         }
                       />
 
-                      {/* Same rule as the assessment Result tile: a draft or
-                          unpublished interview has no sittings to report on. */}
+                      {/* Same rule as the assessment Result tile. */}
                       <QuickActionTile
                         icon={<BarChart className="w-4 h-4" />}
                         label="Result"
                         accent="orange"
                       planLocked={aiInterviewPlanLocked}
                         onClick={handleAIInterviewStatus}
-                        disabled={!permissions.canViewAIInterviews || !features.ai_interview || !hasAIInterviewResults}
+                        disabled={!permissions.canViewAIInterviews || !features.ai_interview}
                         disabledTooltip={
                           !permissions.canViewAIInterviews
                             ? 'You do not have permission to view AI interview results'
-                            : !features.ai_interview
-                            ? 'AI Interviews not enabled'
-                            : !hasAnyAIInterview
-                              ? 'Create an AI interview first'
-                              : !hasLiveAIInterview
-                                ? 'Publish the AI interview to see results'
-                                : !hasAIInterviewInviteSent
-                                  ? 'Send at least one invite first'
-                                  : 'Results appear once a candidate completes or is terminated'
+                            : 'AI Interviews not enabled'
                         }
                       />
 
@@ -4534,34 +4463,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               if (loadingAssessmentResults) {
                 return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>;
               }
-              /* No assessment yet: say so, and offer Create / Send — the
-                 Quick Actions tile's gate, greyed out with its reason (no
-                 permission, switched off, disabled / archived JD). */
-              const createSendBlockedReason = !permissions.canCreateAssessments
-                ? 'You do not have permission to create or send assessments'
-                : !features.assessment
-                  ? 'Assessments not enabled'
-                  : jobInactive
-                    ? jobInactiveReason
-                    : null;
+              /* No assessment yet: say so, and offer the invite popup, which
+                 can create one (greyed out with its reason when it can't). */
               return (
                 <TabEmptyState
                   bordered
                   icon={ClipboardList}
-                  title="No Assessment Results"
-                  description="Create and send an assessment to see candidate results here."
-                  action={(
-                    <Button
-                      variant="primary"
-                      onClick={() => { if (!createSendBlockedReason) openCreateSendFromTile('assessment'); }}
-                      aria-disabled={!!createSendBlockedReason || undefined}
-                      title={createSendBlockedReason ?? undefined}
-                      className={createSendBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined}
-                      icon={<UserPlus className="w-4 h-4" />}
-                    >
-                      Create / Send
-                    </Button>
-                  )}
+                  title="No Assessment Results Yet"
+                  description={resultsEmptyText('assessment')}
+                  action={resultsInviteAction('assessment', 'empty')}
                 />
               );
             }
@@ -4582,6 +4492,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
                 canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
                 formatCandidateName={formatCandidateFirstName}
+                /* Invite — beside More Filters, and on the no-results state. */
+                toolbarActions={resultsInviteAction('assessment', 'toolbar')}
+                emptyStateAction={resultsInviteAction('assessment', 'empty')}
+                emptyStateText={resultsEmptyText('assessment')}
                 /* Actions ▸ Create / Send Assessment | AI Interview: the AI
                    Talent Match tab's version popups, with the ticked candidates. */
                 onOpenInviteDialog={(kind, invitees) => openInviteDialog(kind, invitees, 'assessment-result')}
@@ -4677,7 +4591,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               hideJobVersion
               formatCandidateName={formatCandidateFirstName}
               jdShortId={job.job_id}
-              emptyStateAction={aiInterviewEmptyActions}
+              /* Invite — beside More Filters, and on the no-results state. */
+              toolbarActions={resultsInviteAction('interview', 'toolbar')}
+              emptyStateAction={resultsInviteAction('interview', 'empty')}
+              emptyStateText={resultsEmptyText('interview')}
               readOnly={jobInactive}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
@@ -4696,9 +4613,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <TabEmptyState
               bordered
               icon={Brain}
-              title="No AI Interview Results"
-              description="Create and publish an AI interview to see candidate results here."
-              action={aiInterviewEmptyActions ?? undefined}
+              title="No AI Interview Results Yet"
+              description={resultsEmptyText('interview')}
+              action={resultsInviteAction('interview', 'empty')}
             />
           )}
         </div>
@@ -5765,9 +5682,9 @@ function AIMatchTabContent({
           activeFilterCount={aiMatchActiveFilterCount}
           filtersApplied={aiMatchActiveFilterCount > 0}
           onClearFilters={clearAiMatchFilters}
-          /* sm:h-9 on the List/Grid switch so it matches the 36px toolbar band
-             from sm; phones keep its own 28px (the Job Openings pill height). */
-          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="sm:h-9" />}
+          /* h-9 on the List/Grid switch at every width so it lines up with
+             Select All on phones too (36px, 16px icons), not only from sm. */
+          trailing={<ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" />}
           beforeSearch={
             <>
               {/* Select All — the shared ToolbarSelectAll (this page / all /
@@ -5888,9 +5805,11 @@ function AIMatchTabContent({
            row under the toolbar (Score, Invite to Assessment / AI Interview,
            Export). Rendered outside ListToolbar: its `beforeSearch` slot is
            a shrink-wrapped box beside Select All, so a row inside it
-           wrapped cramped and misaligned. h-9 matches the toolbar band. */
+           wrapped cramped and misaligned. h-9 matches the toolbar band.
+           Below sm both buttons split the row edge to edge, like the
+           stacked toolbar lines above them. */
         const bulkActionsRow = selectedIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="flex flex-wrap items-center gap-2 mb-3 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

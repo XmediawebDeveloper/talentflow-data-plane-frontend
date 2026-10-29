@@ -21,7 +21,7 @@ export default function EmptyState({
       </div>
       <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">No teams yet</h3>
       <p className="mb-6 max-w-md mx-auto text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
-        {isTenantAdmin
+        {isTenantAdmin || canCreateTeams
           ? 'Create your first team to start organizing your recruitment workflow'
           : 'No teams have been created yet. Contact your administrator to create teams.'}
       </p>
