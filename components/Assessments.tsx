@@ -123,6 +123,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
+import { useModuleQuota } from '@/contexts/QuotaContext';
 import Dropdown from '@/components/ui/filter-select';
 import AllAssessmentsTable, { VersionPill, AssessmentJobStatusBadge, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
 import type { AssessmentResponse } from '@/lib/services/assessmentService';
@@ -1468,10 +1469,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     createdFrom: filterCreatedFrom,
     createdTo: filterCreatedTo,
   } = assessmentListSearch.filters;
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
-  const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
-  const [isUnlimited, setIsUnlimited] = useState<boolean>(false); // Track if quota is unlimited
-  const [quotaPercentage, setQuotaPercentage] = useState<number>(0); // Percentage of quota used
+  // AS units from the shared QuotaContext — the same fetch as the header and AI
+  // Interview, kept live by the units-consumed event. (This page used to fetch
+  // /usage/quota-status itself, start at a made-up 10, and invent a 10-unit
+  // limit when the plan reported none.)
+  const {
+    availableUnits,
+    totalUnits,
+    isUnlimited,
+    isActivePlan: isQuotaPlanActive,
+    refresh: refreshQuota,
+  } = useModuleQuota('AS');
+  // Out of assessment units: a real limit, nothing left, plan active.
+  const asUnitsExhausted =
+    isQuotaPlanActive && !isUnlimited && totalUnits > 0 && availableUnits !== null && availableUnits <= 0;
   const [trackingCurrentPage, setTrackingCurrentPage] = useState(1);
   const [trackingTotalItems, setTrackingTotalItems] = useState(0);
   const [trackingTotalPages, setTrackingTotalPages] = useState(1);
@@ -3537,9 +3548,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         // call turns "hangs forever" into "fails after 20s", which the
         // existing per-branch fallbacks below already handle correctly.
         const STATS_TIMEOUT_MS = 20000;
-        const [statsResult, quotaResult, topicsResult] = await Promise.allSettled([
+        const [statsResult, topicsResult] = await Promise.allSettled([
           assessmentService.getStats({ timeout: STATS_TIMEOUT_MS }),
-          api.get('/usage/quota-status', { timeout: STATS_TIMEOUT_MS }),
           api.get('/assessments/settings/topics', { timeout: STATS_TIMEOUT_MS }),
         ]);
 
@@ -3574,70 +3584,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         }
 
-        // Process quota
-        if (quotaResult.status === 'fulfilled') {
-          const apiData = quotaResult.value.data?.data;
-          const quotas = apiData?.quotas;
-          const subscriptionStatus = (apiData?.subscription_status || '').toLowerCase();
-          const isTrial = apiData?.is_trial;
-          const quotaSource = apiData?.quota_source;
-
-          console.log('[TalentFlow] Quota API response:', { subscriptionStatus, isTrial, quotaSource, hasAS: !!quotas?.AS, asData: quotas?.AS });
-
-          // Determine if plan is inactive/expired — don't show "quota exhausted" for these
-          const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
-
-          if (quotas?.AS) {
-            const sub = quotas.AS.subscription || {};
-            const addon = quotas.AS.addon || {};
-            const subLimit = sub.limit;
-            const used = sub.used || 0;
-            // addon.remaining removed from API — derive from total_purchased - total_consumed
-            const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
-            const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
-            const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
-
-            // Check if unlimited
-            const unlimited = subLimit === -1 || subLimit === 'unlimited';
-            setIsUnlimited(unlimited);
-
-            if (unlimited) {
-              setTotalUnits(-1);
-              setAvailableUnits(-1);
-              setQuotaPercentage(0);
-            } else if (typeof subLimit === 'number' && subLimit > 0) {
-              // Valid quota limit from API — totalLimit includes all purchased addon credits
-              const totalLimit = subLimit + addonPurchased;
-              setTotalUnits(totalLimit);
-
-              const subRemaining = Math.max(0, subLimit - used);
-              const remaining = typeof quotas.AS.total_remaining === 'number'
-                ? Math.max(0, quotas.AS.total_remaining)
-                : Math.max(0, subRemaining + addonRemaining);
-              setAvailableUnits(remaining);
-
-              const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
-              setQuotaPercentage(percentage);
-            } else if (isActivePlan) {
-              // Active plan but limit is 0/null — use fallback
-              const totalLimit = 10 + addonPurchased;
-              setTotalUnits(totalLimit);
-              const subRemaining = Math.max(0, 10 - used);
-              const remaining = typeof quotas.AS.total_remaining === 'number'
-                ? Math.max(0, quotas.AS.total_remaining)
-                : Math.max(0, subRemaining + addonRemaining);
-              setAvailableUnits(remaining);
-            } else {
-              // Inactive/expired plan with 0 or null limit — don't set quota values
-              // Leave availableUnits as null so the "exhausted" banner never shows
-              console.log('[TalentFlow] Inactive plan — skipping quota display');
-            }
-
-            console.log('[TalentFlow] Quota loaded: limit=', subLimit, 'used=', used, 'remaining=', quotas.AS.total_remaining, 'unlimited=', unlimited, 'isActivePlan=', isActivePlan);
-          }
-        } else {
-          console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
-        }
+        // Quota (AS units) comes from the shared QuotaContext via useModuleQuota.
 
         // Process topic settings (for assessment creation)
         if (topicsResult.status === 'fulfilled') {
@@ -3886,58 +3833,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     router.push(`/recruitment/assessments/${assessment.id}`);
   };
 
-  // Reload quota from API
+  // Refresh the shared quota (header, this page and AI Interview update together).
   const reloadQuota = async () => {
     try {
-      const quotaResponse = await api.get('/usage/quota-status');
-      const apiData = quotaResponse.data?.data;
-      const quotas = apiData?.quotas;
-      const subscriptionStatus = (apiData?.subscription_status || '').toLowerCase();
-      const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
-
-      if (quotas?.AS) {
-        const sub = quotas.AS.subscription || {};
-        const addon = quotas.AS.addon || {};
-        const subLimit = sub.limit;
-        const used = sub.used || 0;
-        // addon.remaining removed from API — derive from total_purchased - total_consumed
-        const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
-        const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
-        const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
-
-        const unlimited = subLimit === -1 || subLimit === 'unlimited';
-        setIsUnlimited(unlimited);
-
-        if (unlimited) {
-          setTotalUnits(-1);
-          setAvailableUnits(-1);
-          setQuotaPercentage(0);
-        } else if (typeof subLimit === 'number' && subLimit > 0) {
-          const totalLimit = subLimit + addonPurchased;
-          setTotalUnits(totalLimit);
-          const subRemaining = Math.max(0, subLimit - used);
-          const remaining = typeof quotas.AS.total_remaining === 'number'
-            ? Math.max(0, quotas.AS.total_remaining)
-            : Math.max(0, subRemaining + addonRemaining);
-          setAvailableUnits(remaining);
-          const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
-          setQuotaPercentage(percentage);
-        } else if (isActivePlan) {
-          const totalLimit = 10 + addonPurchased;
-          setTotalUnits(totalLimit);
-          const subRemaining = Math.max(0, 10 - used);
-          const remaining = typeof quotas.AS.total_remaining === 'number'
-            ? Math.max(0, quotas.AS.total_remaining)
-            : Math.max(0, subRemaining + addonRemaining);
-          setAvailableUnits(remaining);
-        } else {
-          // Inactive/expired — reset to avoid false "exhausted" banner
-          setAvailableUnits(null);
-          console.log('[TalentFlow] Inactive plan — skipping quota display');
-        }
-      }
-    } catch (error) {
-      console.log('[TalentFlow] Failed to reload quota:', error);
+      await refreshQuota();
+    } catch {
+      /* the shared context keeps its last good data */
     }
   };
 
@@ -6853,9 +6754,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 if (!canCreateAssessment) return;
                 handleOpenCreation();
               }}
-              disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
+              // Same "units left" as the badge and the header (shared quota).
+              disabled={asUnitsExhausted}
               aria-disabled={!canCreateAssessment}
-              title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
+              title={!canCreateAssessment ? 'You do not have permission to create assessments' : (asUnitsExhausted ? 'No assessment units available' : '')}
               icon={<Sparkles className="w-4 h-4" />}
               className={`${!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
@@ -6866,7 +6768,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         </div>
 
         {/* Low Quota Warning Banner */}
-        {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
+        {isQuotaPlanActive && !isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
           <div className="mb-4 sm:mb-6 bg-warning-subtle border border-warning-line rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-warning-subtle flex items-center justify-center flex-shrink-0">
@@ -6886,8 +6788,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         )}
 
-        {/* Quota Exhausted Banner — only show when units were actually consumed */}
-        {!isUnlimited && availableUnits !== null && availableUnits <= 0 && stats.units_consumed > 0 && (
+        {/* Quota Exhausted Banner — active plan with a real limit and nothing left
+            (an expired plan or one that reports no limit never shows it). */}
+        {asUnitsExhausted && (
           <div className="mb-4 sm:mb-6 bg-destructive-subtle border border-destructive-line rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-destructive-subtle flex items-center justify-center flex-shrink-0">

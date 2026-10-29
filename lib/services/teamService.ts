@@ -41,7 +41,7 @@ export interface TeamUsageByType {
   /** Units used (gross). */
   total_consumed: number;
   consumption_count: number;
-  /** Units credited back, e.g. a deleted resume returns 1 RU (member usage only). */
+  /** Units credited back, e.g. a deleted resume returns 1 RU (team and member usage). */
   units_returned?: number;
   return_count?: number;
   /** total_consumed − units_returned. */
