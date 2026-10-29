@@ -1645,12 +1645,16 @@ export const aiInterviewService = {
     candidate_email: string;
     expiry_days?: number;
   }): Promise<{ session_id: string; link: string; expires_at: string | null }> {
-    const response = await api.post(`/ai-interview/${configId}/create-invite-link`, {
-      ...data,
-      base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
-    });
-    dispatchUnitsConsumed();
-    return response.data;
+    try {
+      const response = await api.post(`/ai-interview/${configId}/create-invite-link`, {
+        ...data,
+        base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+      });
+      dispatchUnitsConsumed();
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
   },
 
   /**

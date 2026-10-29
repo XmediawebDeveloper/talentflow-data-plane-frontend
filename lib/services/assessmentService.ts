@@ -1058,11 +1058,15 @@ export const assessmentService = {
     candidate_email: string;
     expiry_days?: number;
   }): Promise<{ invitation_id: string; link: string; expires_at: string | null }> {
-    const response = await api.post(`/assessments/${assessmentId}/create-invite-link`, {
-      ...data,
-      base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
-    });
-    return response.data;
+    try {
+      const response = await api.post(`/assessments/${assessmentId}/create-invite-link`, {
+        ...data,
+        base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
   },
 
   /**
