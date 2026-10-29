@@ -2757,32 +2757,42 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       const r = _nonPendingResults[idx];
       if (r) setViewingAssessmentResult(r);
     };
+    /* Same padded white page card as the main Job Details view and the
+       standalone result route (assessments/[id]/results/details) — without
+       it the header card, violations banner and panels ran to the screen
+       edge with no side gutter. */
     return (
-      <CandidateResultDetails
-        onBack={() => setViewingAssessmentResult(null)}
-        breadcrumbItems={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-          { label: job.title || 'Job Details', onClick: () => setViewingAssessmentResult(null) },
-          { label: viewingAssessmentResult.candidateName || 'Candidate Details' },
-        ]}
-        assessmentId={aId}
-        candidateId={viewingAssessmentResult.id}
-        candidateDisplayId={viewingAssessmentResult.candidateDisplayId}
-        assessmentTitle={viewingAssessmentResult.assessmentName || job.title}
-        jdId={job.id}
-        /* This page IS one job version, so its own title and the version number
-           it already displays are what the result's Job Title row should name:
-           `job.versionNumber`, the same value the header's version selector
-           reads. */
-        jdTitle={job.title}
-        jdVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
-        assessmentVersion={viewingAssessmentResult.assessmentVersion}
-        currentIndex={_arIdx >= 0 ? _arIdx : undefined}
-        totalCount={_nonPendingResults.length}
-        onPrev={_arIdx > 0 ? () => _goToResult(_arIdx - 1) : undefined}
-        onNext={_arIdx >= 0 && _arIdx < _nonPendingResults.length - 1 ? () => _goToResult(_arIdx + 1) : undefined}
-      />
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <CandidateResultDetails
+            onBack={() => setViewingAssessmentResult(null)}
+            breadcrumbItems={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+              { label: job.title || 'Job Details', onClick: () => setViewingAssessmentResult(null) },
+              { label: viewingAssessmentResult.candidateName || 'Candidate Details' },
+            ]}
+            assessmentId={aId}
+            candidateId={viewingAssessmentResult.id}
+            candidateDisplayId={viewingAssessmentResult.candidateDisplayId}
+            assessmentTitle={viewingAssessmentResult.assessmentName || job.title}
+            jdId={job.id}
+            /* This page IS one job version, so its own title and the version number
+               it already displays are what the result's Job Title row should name:
+               `job.versionNumber`, the same value the header's version selector
+               reads. */
+            jdTitle={job.title}
+            jdVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
+            assessmentVersion={viewingAssessmentResult.assessmentVersion}
+            currentIndex={_arIdx >= 0 ? _arIdx : undefined}
+            totalCount={_nonPendingResults.length}
+            onPrev={_arIdx > 0 ? () => _goToResult(_arIdx - 1) : undefined}
+            onNext={_arIdx >= 0 && _arIdx < _nonPendingResults.length - 1 ? () => _goToResult(_arIdx + 1) : undefined}
+          />
+          </div>
+        </div>
+      </main>
     );
   }
 
@@ -6015,7 +6025,9 @@ function AIMatchTabContent({
                         label={candidate.name || 'candidate'}
                         selectionActive={selectedIds.size > 0}
                       />
-                      <div className="flex items-start gap-2.5">
+                      {/* pl-6 keeps the corner select seal off the avatar — it shows on touch, on
+                          hover, and on every card once anything is selected. */}
+                      <div className="flex items-start gap-2.5 pl-6">
                         <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>

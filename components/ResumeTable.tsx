@@ -20,7 +20,7 @@ import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
-import { resumeService } from '@/lib/services/resumeService';
+import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
@@ -1404,7 +1404,7 @@ export default function ResumeTable({
                   } else {
                     // Fallback: call API directly
                     try {
-                      await resumeService.archive(selectedResumeForAction.id, true);
+                      await archiveResumeToArchivedFolder(selectedResumeForAction.id, selectedResumeForAction.folderId);
                       toast.success('Resume archived successfully');
                     } catch (error) {
                       toast.error('Failed to archive resume');

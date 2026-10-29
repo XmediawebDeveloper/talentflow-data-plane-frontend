@@ -1547,30 +1547,33 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
             {/* Creation method: [ All | AI Generated | Manual ] — a single
                 connected segmented toggle (shared tinted track; the active
-                option lifts to a white chip). "All" clears the filter (null). */}
-            <div className="flex items-center gap-2 sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
-              <div className={SEGMENT_TOGGLE}>
+                option lifts to a white chip). "All" clears the filter (null).
+                Phones: the toggle takes the full row, each option sized to its
+                label + count plus an even share of the rest (Manual is widest),
+                no icons, tighter badge gap. From sm: the inline toggle as before. */}
+            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
+              <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
-                  className={segmentBtn(creationMethodFilter === null)}
+                  className={`${segmentBtn(creationMethodFilter === null)} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   All
                   {pillCountBadge(false, methodPillCount(null))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
-                  className={segmentBtn(creationMethodFilter === 'ai')}
+                  className={`${segmentBtn(creationMethodFilter === 'ai')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <Sparkles className="hidden sm:block w-3.5 h-3.5" />
                   <span className="hidden sm:inline">AI Generated</span>
                   <span className="sm:hidden">AI</span>
                   {pillCountBadge(false, methodPillCount('ai'))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
-                  className={segmentBtn(creationMethodFilter === 'manual')}
+                  className={`${segmentBtn(creationMethodFilter === 'manual')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
-                  <Edit className="w-3.5 h-3.5" />
+                  <Edit className="hidden sm:block w-3.5 h-3.5" />
                   Manual
                   {pillCountBadge(false, methodPillCount('manual'))}
                 </button>
