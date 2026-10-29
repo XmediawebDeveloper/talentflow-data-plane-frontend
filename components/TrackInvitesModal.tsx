@@ -7,8 +7,9 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { assessmentInviteSource } from '@/components/AIInterviewInviteTable';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { Badge } from '@/components/ui/badge';
 import api from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -140,20 +141,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   const [historyTarget, setHistoryTarget] = useState<any | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<any | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
-  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
-    if (isOpen && jdId) {
-      loadInvitations();
-      // Auto-refresh every 15s so pixel-fired status updates are reflected automatically
-      refreshIntervalRef.current = setInterval(() => {
-        loadInvitations(true); // silent = don't show spinner
-      }, 15000);
-    }
-    return () => {
-      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
-    };
+    if (isOpen && jdId) loadInvitations();
   }, [isOpen, jdId]);
+  // Auto-refresh so pixel-fired status updates are reflected automatically
+  useTrackerPoll(isOpen && !!jdId, () => loadInvitations(true)); // silent = don't show spinner
 
   const loadInvitations = async (silent = false) => {
     if (!silent) setIsLoading(true);

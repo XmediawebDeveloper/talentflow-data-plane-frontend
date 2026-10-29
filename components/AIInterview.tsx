@@ -13,6 +13,7 @@ import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -24,7 +25,7 @@ import { DateField } from '@/components/ui/date-field';
 import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { useQuota } from '@/contexts/QuotaContext';
+import { useModuleQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
@@ -201,7 +202,6 @@ export default function AIInterview() {
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
   const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
-  const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   // "AI Interview Published" success modal (was referenced in JSX but never
@@ -519,10 +519,9 @@ export default function AIInterview() {
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null);
   const versionMenuRef = useRef<HTMLDivElement>(null);
 
-  // Quota
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
-  const [totalUnits, setTotalUnits] = useState<number>(0);
-  const [isUnlimited, setIsUnlimited] = useState(false);
+  // Quota — AIU units from the shared QuotaContext (same fetch as the header;
+  // Assessments uses the same hook for AS units).
+  const { availableUnits, totalUnits, isUnlimited } = useModuleQuota('AIU');
 
   // Settings form
   const [settingsDuration, setSettingsDuration] = useState(30);
@@ -616,34 +615,6 @@ export default function AIInterview() {
       setIsRefreshingTab(false);
     }
   };
-
-  // Sync quota from shared QuotaContext (AIU = AI Interview Units)
-  useEffect(() => {
-    const quotas = quotaData?.quotas;
-    if (!quotas?.AIU) return;
-    const sub = quotas.AIU.subscription;
-    const addon = quotas.AIU.addon;
-    const subLimit = sub?.limit;
-    const used = sub?.used ?? 0;
-    const addonPurchased = typeof addon?.total_purchased === 'number' ? addon.total_purchased : 0;
-    const addonConsumed = typeof addon?.total_consumed === 'number' ? addon.total_consumed : 0;
-    const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
-
-    const unlimited = subLimit === -1 || subLimit === 'unlimited';
-    setIsUnlimited(unlimited);
-    if (unlimited) {
-      setTotalUnits(-1);
-      setAvailableUnits(-1);
-    } else if (typeof subLimit === 'number' && subLimit > 0) {
-      const totalLimit = subLimit + addonPurchased;
-      setTotalUnits(totalLimit);
-      const subRemaining = Math.max(0, subLimit - used);
-      const remaining = typeof quotas.AIU.total_remaining === 'number'
-        ? Math.max(0, quotas.AIU.total_remaining)
-        : Math.max(0, subRemaining + addonRemaining);
-      setAvailableUnits(remaining);
-    }
-  }, [quotaData]);
 
   // Load configs and stats
   const loadAllConfigs = useCallback(async (): Promise<AIInterviewResponse[]> => {
@@ -1133,18 +1104,12 @@ export default function AIInterview() {
 
   /* Candidates open, start and finish on their own — poll quietly so the tab
      doesn't need a page refresh. Paused while the browser tab is hidden. */
-  useEffect(() => {
-    if (activeTab !== 'invitation-status') return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadAllInviteStatuses(true);
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [activeTab, loadAllInviteStatuses]);
+  useTrackerPoll(activeTab === 'invitation-status', () => loadAllInviteStatuses(true));
 
   /* Also re-fires when the SET of configs changes (one created, deleted or
      archived configs landing) — but not on every loadData refresh that hands
      back the same configs as new objects, which used to restart the whole
-     fan-out (spinner included) after each action. The 15s poll above covers
+     fan-out (spinner included) after each action. The poll above covers
      changes to the invitations themselves. */
   const inviteStatusConfigKey = useMemo(
     () => [...configs, ...archivedConfigs].map((c) => c.id).sort().join('|'),
@@ -1396,13 +1361,11 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-    const timer = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
-      loadInvitationOverview(viewInvitationsConfig.id);
-    }, 15000);
-    return () => clearInterval(timer);
   }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations, loadInvitationOverview]);
+  useTrackerPoll(!!viewInvitationsConfig, () => viewInvitationsConfig && Promise.all([
+    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true),
+    loadInvitationOverview(viewInvitationsConfig.id),
+  ]));
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -4939,9 +4902,10 @@ export default function AIInterview() {
            status-class or the other (see allTrackerRevocable /
            allTrackerResendable below); a mixed Invited+Expired selection
            shows neither — an action valid for one status must never be
-           applied to the other. A disabled job's tracker is view-only, so it
-           has no bulk mode at all. */
-        const trackerJdLocked = isJdDisabled(viewInvitationsConfig.jd_status);
+           applied to the other. A disabled or archived job's tracker is
+           view-only, so it has no bulk mode at all. */
+        const trackerJdLockReason = jdActionLockReason(viewInvitationsConfig.jd_status);
+        const trackerJdLocked = !!trackerJdLockReason;
         const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
         const isTrackerBulkActionable = (inv: any) => isRevocableInvite(inv) || isTrackerResendable(inv);
         const selectableIds = trackerJdLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
@@ -5304,7 +5268,7 @@ export default function AIInterview() {
                     title={
                       !canInviteAIInterviews
                         ? 'You do not have permission to invite candidates'
-                        : trackerJdLocked ? JD_DISABLED_ACTION_MESSAGE : undefined
+                        : trackerJdLockReason ?? undefined
                     }
                     onClick={() => {
                       if (!canInviteAIInterviews) return;

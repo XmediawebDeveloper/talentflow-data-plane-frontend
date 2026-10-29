@@ -21,6 +21,7 @@ import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -212,7 +213,6 @@ export default function AIInterviewTrackInvitesModal({
     revoked: 0,
     expired: 0,
   });
-  const refreshRef = useRef<NodeJS.Timeout | null>(null);
   // Resend flow — confirm first (the old link stops working), then send.
   const [resendTarget, setResendTarget] = useState<any | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
@@ -409,16 +409,13 @@ export default function AIInterviewTrackInvitesModal({
     }
   };
 
-  // Same 15s silent refresh the assessment tracker uses — candidates move through
-  // an interview while the recruiter watches this list.
   useEffect(() => {
     if (!isOpen || !configId) return;
     loadInvitations();
-    refreshRef.current = setInterval(() => loadInvitations(true), 15000);
-    return () => {
-      if (refreshRef.current) clearInterval(refreshRef.current);
-    };
   }, [isOpen, configId, loadInvitations]);
+  // Same silent refresh the assessment tracker uses — candidates move through
+  // an interview while the recruiter watches this list.
+  useTrackerPoll(isOpen && !!configId, () => loadInvitations(true));
 
   useEffect(() => {
     if (!isOpen || !configId || !refreshSignal) return;
