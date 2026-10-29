@@ -24,7 +24,7 @@ import { DateField } from '@/components/ui/date-field';
 import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { useQuota } from '@/contexts/QuotaContext';
+import { useModuleQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
@@ -199,7 +199,6 @@ export default function AIInterview() {
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
   const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
-  const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   // "AI Interview Published" success modal (was referenced in JSX but never
@@ -517,10 +516,9 @@ export default function AIInterview() {
   const [menuAnchor, setMenuAnchor] = useState<{ top: number; bottom: number; right: number } | null>(null);
   const versionMenuRef = useRef<HTMLDivElement>(null);
 
-  // Quota
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
-  const [totalUnits, setTotalUnits] = useState<number>(0);
-  const [isUnlimited, setIsUnlimited] = useState(false);
+  // Quota — AIU units from the shared QuotaContext (same fetch as the header;
+  // Assessments uses the same hook for AS units).
+  const { availableUnits, totalUnits, isUnlimited } = useModuleQuota('AIU');
 
   // Settings form
   const [settingsDuration, setSettingsDuration] = useState(30);
@@ -614,34 +612,6 @@ export default function AIInterview() {
       setIsRefreshingTab(false);
     }
   };
-
-  // Sync quota from shared QuotaContext (AIU = AI Interview Units)
-  useEffect(() => {
-    const quotas = quotaData?.quotas;
-    if (!quotas?.AIU) return;
-    const sub = quotas.AIU.subscription;
-    const addon = quotas.AIU.addon;
-    const subLimit = sub?.limit;
-    const used = sub?.used ?? 0;
-    const addonPurchased = typeof addon?.total_purchased === 'number' ? addon.total_purchased : 0;
-    const addonConsumed = typeof addon?.total_consumed === 'number' ? addon.total_consumed : 0;
-    const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
-
-    const unlimited = subLimit === -1 || subLimit === 'unlimited';
-    setIsUnlimited(unlimited);
-    if (unlimited) {
-      setTotalUnits(-1);
-      setAvailableUnits(-1);
-    } else if (typeof subLimit === 'number' && subLimit > 0) {
-      const totalLimit = subLimit + addonPurchased;
-      setTotalUnits(totalLimit);
-      const subRemaining = Math.max(0, subLimit - used);
-      const remaining = typeof quotas.AIU.total_remaining === 'number'
-        ? Math.max(0, quotas.AIU.total_remaining)
-        : Math.max(0, subRemaining + addonRemaining);
-      setAvailableUnits(remaining);
-    }
-  }, [quotaData]);
 
   // Load configs and stats
   const loadAllConfigs = useCallback(async (): Promise<AIInterviewResponse[]> => {
