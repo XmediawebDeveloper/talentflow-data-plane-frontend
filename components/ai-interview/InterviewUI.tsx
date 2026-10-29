@@ -1976,7 +1976,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Bina's actual audio lives in TalkingHead's AudioWorklet, which keeps
   // playing its whole buffered queue unless streamStop() is called. This
   // mirror gives the pause-arm branch the real "cut her off now" action.
-  const hardStopBinaRef = useRef<() => void>(() => {});
+  const hardStopBinaRef = useRef<(opts?: { noFreeze?: boolean }) => void>(() => {});
+  // Set when End cuts Bina off mid-question: drop that question's late PCM
+  // until the farewell's speaking_started, so its tail can't restart playback.
+  const dropPcmUntilNextTurnRef = useRef(false);
   // Thaws a FROZEN turn (see hardStopBinaPlayback) — resumes Bina's voice and
   // the text reveal from the exact point the disconnect interrupted them.
   const resumeBinaRef = useRef<() => void>(() => {});
@@ -5417,7 +5420,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // streamStop() is the load-bearing call: TalkingHead buffers PCM inside an
   // AudioWorklet, so a pause that only clears queues/flags leaves several
   // seconds of Bina still audible.
-  const hardStopBinaPlayback = useCallback(() => {
+  //
+  // `noFreeze`: always tear down, never suspend. Used by End — the farewell
+  // plays on the same AudioContext, so a suspended one would silence it.
+  const hardStopBinaPlayback = useCallback((opts?: { noFreeze?: boolean }) => {
     // ── FREEZE path ──────────────────────────────────────────────────────
     // If Bina is mid-question AND the backend already delivered the whole
     // turn (audio_end received), every byte she has left to say is sitting in
@@ -5441,6 +5447,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // The turn is therefore complete by the time it thaws, in every case.
     const ctx = playbackTrackerCtxRef.current;
     const canFreeze =
+      !opts?.noFreeze &&
       (isPlayingRef.current || isAiSpeakingRef.current) &&
       !!ctx && ctx.state === 'running';
 
@@ -6276,6 +6283,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
+        dropPcmUntilNextTurnRef.current = false;
         // A NEW turn supersedes anything a disconnect left pending — including
         // a held answer that the backend has since moved past. Clearing this
         // stops a stale flag from preserving speechDetected into an unrelated
@@ -9660,6 +9668,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // playback back, so handing chunks to TalkingHead would have Bina
         // talking out loud behind the blocking overlay.
         if (isMediaPausedRef.current && !binaFrozenRef.current) return;
+        // Tail of the question End cut off (see the End button).
+        if (dropPcmUntilNextTurnRef.current) return;
         // CRITICAL: call our bookkeeping (queueAudio + trackPlaybackChunk)
         // BEFORE streamAudio. TalkingHead's streamAudio transfers/detaches the
         // ArrayBuffer internally (postMessage to an AudioWorklet), so any
@@ -12137,6 +12147,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   setIsClosing(true);
                   isClosingRef.current = true;
                   setStatus("Ending interview…");
+                  // Cut off the question Bina is still speaking. Its audio is
+                  // already buffered in TalkingHead's worklet, which the backend's
+                  // cancel can't reach — it kept playing UNDER the farewell, two
+                  // Binas at once (staging 2026-10-29, End pressed mid-Q4).
+                  if (isAiSpeakingRef.current || isPlayingRef.current || binaFrozenRef.current) {
+                    hardStopBinaRef.current({ noFreeze: true });
+                    dropPcmUntilNextTurnRef.current = true;
+                  }
                   const _speakingAnswer = isRecordingRef.current && speechDetectedRef.current
                     && !hrVoiceBlockedForQidRef.current;
                   const _awaitingTranscript = isCandidateTranscriptProcessingRef.current;
