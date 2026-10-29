@@ -1253,7 +1253,7 @@ export default function AssessmentVersionHistoryPanel({
                     ].map(({ label, minW }) => (
                       <th
                         key={label}
-                        className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${isCountColumn(label) ? 'text-center' : ''} ${minW}`}
+                        className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 ${isCountColumn(label) ? 'text-center' : ''} ${minW}`}
                       >
                         <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                       </th>
@@ -1616,8 +1616,8 @@ export default function AssessmentVersionHistoryPanel({
                          Completed alike, fully readable at some scroll position
                          on every screen. */
                       className={`sticky top-0 ${jdStyle
-                        ? 'py-2.5 px-3 text-xs font-bold text-gray-900 dark:text-slate-100 whitespace-nowrap bg-brand-sky dark:bg-slate-800'
-                        : 'px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800'} ${isCountColumn(label) ? 'text-center' : ''} ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
+                        ? 'py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900'
+                        : 'px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900'} ${isCountColumn(label) ? 'text-center' : ''} ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
                     >
                       <span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{label}</span>
                     </th>

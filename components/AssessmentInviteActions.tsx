@@ -7,6 +7,7 @@ import {
   MoreVertical, Monitor, RefreshCw, X, History, Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
@@ -694,7 +695,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
       await onSaved();
       onClose();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to update invitation');
+      toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -789,7 +790,7 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
           toast.success(`Invitation for ${target.candidate_email} has been revoked`);
           await onRevoked();
         } catch (err: any) {
-          toast.error(err?.message || 'Failed to revoke invitation');
+          toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
         } finally {
           setRevoking(false);
           onClose();

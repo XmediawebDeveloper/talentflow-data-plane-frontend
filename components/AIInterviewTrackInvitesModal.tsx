@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
@@ -755,7 +756,7 @@ export default function AIInterviewTrackInvitesModal({
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
-              toast.error(err?.message || 'Failed to revoke invitation');
+              toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
             } finally {
               setRevokingId(null);
               setRevokeTarget(null);
@@ -873,19 +874,13 @@ export default function AIInterviewTrackInvitesModal({
         await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
         toast.success(`Invitation updated and sent to ${email}`);
       } catch (sendErr: any) {
-        const detail = sendErr?.response?.data?.detail;
-        toast.error(
-          (typeof detail === 'object' && detail?.message) ||
-          (typeof detail === 'string' && detail) ||
-          sendErr?.message ||
-          'Details saved, but the invitation could not be sent — try Edit again.',
-        );
+        toast.error(friendlyErrorMessage(sendErr, 'Details saved, but the invitation could not be sent. Try Edit again.'));
       }
       await loadInvitations(true);
       await onChanged?.();
       setEditTarget(null);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to update invitation');
+      toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
     } finally {
       setSavingEdit(false);
     }

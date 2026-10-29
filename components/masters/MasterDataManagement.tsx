@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, X, Check, Power, PowerOff, Clock, GraduationCap, Factory, Sparkles, ArrowUpRight, Loader2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Check, Power, PowerOff, Clock, GraduationCap, Factory, Sparkles, ArrowUpRight, Loader2, MoreVertical } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ROW_ACTION_BUTTON_CLASS } from '@/components/ResultRowDetails';
 import { toast } from '@/components/ui/enhanced-toast';
 import {
   masterDataService,
@@ -416,10 +423,10 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
         {loading ? (
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50/80">
+              <thead className="bg-white">
                 <tr className="text-left">
                   {config.columns.map((col) => (
-                    <th key={col} className="px-4 py-4">
+                    <th key={col} className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">
                       <Skeleton className="h-3 w-20" />
                     </th>
                   ))}
@@ -456,7 +463,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
         ) : (
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50/80">
+              <thead className="bg-white">
                 <tr className="text-left">
                   {config.columns.map((col, c) => (
                     <th
@@ -464,7 +471,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                       /* Actions pinned right: the table is ~1000px wide, so on
                          a phone or tablet Edit / Delete sat off-screen behind a
                          sideways scroll. */
-                      className={`px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 ${c === config.columns.length - 1 ? 'tf-sticky-col' : ''}`}
+                      className={`px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 ${c === config.columns.length - 1 ? 'tf-sticky-col w-px text-center lg:text-left !px-2 lg:!px-4' : ''}`}
                     >
                       {col}
                     </th>
@@ -495,52 +502,57 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                         {item.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
-                    <td className="px-4 py-4 tf-sticky-col">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => openEditModal(item)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
-                          aria-label="Edit" title="Edit"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleToggleActive(item)}
-                          disabled={togglingId === item.id}
-                          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-[border-color,box-shadow,color,background-color] disabled:cursor-not-allowed disabled:opacity-60 ${
-                            item.is_active
-                              ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-gray-300 hover:bg-gray-50'
-                              : 'border-brand-teal/20 bg-brand-teal/[0.05] text-brand-teal hover:bg-brand-teal/[0.1]'
-                          }`}
-                          aria-label={item.is_active ? 'Deactivate' : 'Activate'}
-                          title={item.is_active ? 'Deactivate' : 'Activate'}
-                        >
-                          {togglingId === item.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : item.is_active ? (
-                            <PowerOff className="h-4 w-4" />
-                          ) : (
-                            <Power className="h-4 w-4" />
-                          )}
-                        </button>
-                        {showDeleteConfirm === item.id ? (
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-destructive text-white shadow-sm shadow-red-600/25 transition-all hover:-translate-y-0.5 hover:bg-destructive"
-                              aria-label="Confirm permanent delete" title="Confirm permanent delete"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => setShowDeleteConfirm(null)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 transition-all hover:bg-gray-50 dark:hover:bg-slate-800"
-                              aria-label="Cancel" title="Cancel"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ) : (
+                    <td className="w-px px-2 lg:px-4 py-4 tf-sticky-col">
+                      {/* Desktop (lg+): the Edit / Activate-Deactivate / Delete
+                          icon buttons. Phones and tablets: one ⋮ menu with the
+                          same three, so the pinned column stays narrow. Delete
+                          asks first either way — it swaps in the ✓ / ✕ pair. */}
+                      {showDeleteConfirm === item.id ? (
+                        <div className="flex items-center justify-center lg:justify-start gap-1">
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-destructive text-white shadow-sm shadow-red-600/25 transition-all hover:-translate-y-0.5 hover:bg-destructive"
+                            aria-label="Confirm permanent delete" title="Confirm permanent delete"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setShowDeleteConfirm(null)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 transition-all hover:bg-gray-50 dark:hover:bg-slate-800"
+                            aria-label="Cancel" title="Cancel"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                        <div className="hidden lg:flex items-center gap-1.5">
+                          <button
+                            onClick={() => openEditModal(item)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                            aria-label="Edit" title="Edit"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleActive(item)}
+                            disabled={togglingId === item.id}
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-[border-color,box-shadow,color,background-color] disabled:cursor-not-allowed disabled:opacity-60 ${
+                              item.is_active
+                                ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-gray-300 hover:bg-gray-50'
+                                : 'border-brand-teal/20 bg-brand-teal/[0.05] text-brand-teal hover:bg-brand-teal/[0.1]'
+                            }`}
+                            aria-label={item.is_active ? 'Deactivate' : 'Activate'}
+                            title={item.is_active ? 'Deactivate' : 'Activate'}
+                          >
+                            {togglingId === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : item.is_active ? (
+                              <PowerOff className="h-4 w-4" />
+                            ) : (
+                              <Power className="h-4 w-4" />
+                            )}
+                          </button>
                           <button
                             onClick={() => setShowDeleteConfirm(item.id)}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1]"
@@ -548,8 +560,36 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        )}
-                      </div>
+                        </div>
+                        <div className="lg:hidden flex justify-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild disabled={togglingId === item.id}>
+                            <button type="button" aria-label="Actions" title="Actions" className={`${ROW_ACTION_BUTTON_CLASS} !p-1.5 sm:!p-2.5`}>
+                              {togglingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
+                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
+                              <Edit2 className="h-4 w-4 text-menu-icon-edit" />
+                              <span>Edit</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleToggleActive(item)}>
+                              {item.is_active ? (
+                                <PowerOff className="h-4 w-4 text-menu-icon-archive" />
+                              ) : (
+                                <Power className="h-4 w-4 text-menu-icon-activate" />
+                              )}
+                              <span>{item.is_active ? 'Deactivate' : 'Activate'}</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-red-600" onSelect={() => setShowDeleteConfirm(item.id)}>
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                              <span>Delete</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

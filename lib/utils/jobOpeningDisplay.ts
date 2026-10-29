@@ -28,6 +28,29 @@ export const formatJobVersionLabel = (job: Pick<Job, 'job_id' | 'title' | 'versi
   return job.versionNumber ? `${label} V${job.versionNumber}` : label;
 };
 
+/**
+ * "JD-294 — Java Developer (Version 1)" — how a toast names ONE JD version.
+ * The version is left out when it is not known (a just-published row whose
+ * lineage number has not come back yet), rather than guessed.
+ */
+export const formatJobSubject = (job: Pick<Job, 'job_id' | 'title' | 'versionNumber'>): string => {
+  const role = job.title || 'Untitled';
+  const subject = job.job_id ? `${job.job_id} — ${role}` : role;
+  return job.versionNumber != null ? `${subject} (Version ${job.versionNumber})` : subject;
+};
+
+/**
+ * "JD-294 — Java Developer (Version 1) deleted successfully." — the
+ * success toast for an action on ONE JD version. Built from the exact row
+ * (or View Versions row) that was acted on, so a multi-version job names
+ * that version, not the lineage's latest. Version defaults to 1, the same
+ * default `mapJDToJob` gives `versionNumber`.
+ */
+export const formatJobActionMessage = (
+  job: Pick<Job, 'job_id' | 'title' | 'versionNumber'>,
+  action: 'deleted' | 'archived' | 'disabled' | 'run' | 'published' | 'republished' | 're-enabled' | 'unarchived and published',
+): string => `${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })} ${action} successfully.`;
+
 /** "full_time" → "Full Time". A dash when there is nothing to format. */
 export const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';

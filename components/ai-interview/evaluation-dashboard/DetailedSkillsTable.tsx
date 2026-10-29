@@ -58,14 +58,14 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
 
       <div className="overflow-x-auto tf-table-shell">
         <table className="w-full">
-          <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
+          <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
-              <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
-              <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
-              <th className="text-center p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
-              <th className="text-center p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Level</th>
-              <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>AI Feedback</th>
+              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
+              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
+              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
+              <th className="text-center p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
+              <th className="text-center p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Level</th>
+              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>AI Feedback</th>
             </tr>
           </thead>
           <tbody>

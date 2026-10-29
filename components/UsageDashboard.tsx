@@ -19,6 +19,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
 
 // Addon interface
@@ -888,7 +889,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
           toast.info('Payment cancelled');
         } else {
           const { toast } = await import('sonner');
-          toast.error(checkoutErr?.message || 'Payment failed');
+          toast.error(friendlyErrorMessage(checkoutErr, "Payment failed. Please try again."));
         }
         return;
       }

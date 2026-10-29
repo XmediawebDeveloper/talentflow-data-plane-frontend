@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import dynamic from 'next/dynamic';
@@ -49,6 +50,7 @@ import {
 import {
   detectDeviceCapability,
   describeCapability,
+  isBina3DAvatarEnabled,
   type DeviceCapability,
 } from '@/lib/utils/deviceCapability';
 
@@ -944,7 +946,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
   // Preload avatar assets when reaching system check
   useEffect(() => {
-    if (step === 'system_check') {
+    // 3D switched off for everyone (NEXT_PUBLIC_BINA_3D_AVATAR=false) → don't download it.
+    if (step === 'system_check' && isBina3DAvatarEnabled()) {
       fetch('/talkinghead/talkinghead.mjs').catch(() => {});
       fetch('/models/rpm-recruiter.glb').catch(() => {});
     }
@@ -1485,7 +1488,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       setInterview(result);
       setStep('identity');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to record consent. Please try again.');
+      toast.error(friendlyErrorMessage(err, "Couldn't record consent. Please try again."));
     } finally {
       setConsentSubmitting(false);
     }
@@ -1520,7 +1523,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // Advance immediately once backend identity verification succeeds.
       setStep('system_check');
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Failed to verify identity. Please try again.');
+      toast.error(friendlyErrorMessage(err, "Couldn't verify identity. Please try again."));
     } finally {
       setIdentitySubmitting(false);
     }

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
 import { clearTokens } from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -239,7 +240,7 @@ export default function SecurityPage() {
       }, 1500);
     } catch (error: any) {
       console.error('Error changing password:', error);
-      toast.error(error.message || 'Failed to change password');
+      toast.error(friendlyErrorMessage(error, "Couldn't change password. Please try again."));
       setIsChangingPassword(false);
     }
   };
@@ -256,7 +257,7 @@ export default function SecurityPage() {
       setShow2FASetup(true);
     } catch (error: any) {
       console.error('Error enabling 2FA:', error);
-      toast.error(error.message || 'Failed to enable 2FA');
+      toast.error(friendlyErrorMessage(error, "Couldn't enable 2FA. Please try again."));
     } finally {
       setIs2FALoading(false);
     }
@@ -277,7 +278,7 @@ export default function SecurityPage() {
       toast.success('Two-factor authentication enabled');
     } catch (error: any) {
       console.error('Error verifying 2FA:', error);
-      toast.error(error.message || 'Invalid verification code');
+      toast.error(friendlyErrorMessage(error, "Invalid verification code. Please try again."));
     } finally {
       setIs2FALoading(false);
     }
@@ -304,7 +305,7 @@ export default function SecurityPage() {
       toast.success('Two-factor authentication disabled');
     } catch (error: any) {
       console.error('Error disabling 2FA:', error);
-      toast.error(error.message || 'Invalid verification code');
+      toast.error(friendlyErrorMessage(error, "Invalid verification code. Please try again."));
     } finally {
       setIs2FALoading(false);
     }

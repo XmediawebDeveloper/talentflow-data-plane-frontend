@@ -103,11 +103,11 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
       <div className="overflow-hidden rounded-lg border border-gray-100 tf-table-shell tf-table-shell--compact">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50">
-              <th className="text-left px-3 py-2 font-medium text-gray-600">Quota</th>
-              <th className="text-center px-3 py-2 font-medium text-gray-600">Current</th>
-              <th className="text-center px-3 py-2 font-medium text-gray-600">New</th>
-              <th className="text-center px-3 py-2 font-medium text-gray-600">Change</th>
+            <tr className="bg-white">
+              <th className="text-left px-3 py-2 font-semibold text-gray-600 text-xs">Quota</th>
+              <th className="text-center px-3 py-2 font-semibold text-gray-600 text-xs">Current</th>
+              <th className="text-center px-3 py-2 font-semibold text-gray-600 text-xs">New</th>
+              <th className="text-center px-3 py-2 font-semibold text-gray-600 text-xs">Change</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

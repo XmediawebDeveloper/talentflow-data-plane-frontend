@@ -45,7 +45,7 @@ export function RowDetailsPanel({ colSpan, fields }: { colSpan: number; fields: 
             <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 {fields.map((f) => (
-                  <th key={f.label} className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">{f.label}</th>
+                  <th key={f.label} className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">{f.label}</th>
                 ))}
               </tr>
             </thead>
