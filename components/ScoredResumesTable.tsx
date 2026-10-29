@@ -2691,8 +2691,9 @@ Best regards`);
                     const titles = Array.from(new Set(groupRows.map((r) => r.jobTitle).filter(Boolean))) as string[];
                     return (
                       <>
-                        {/* pr-7 leaves room for the corner checkbox. */}
-                        <div className="min-w-0 pr-7">
+                        {/* pr-7 leaves room for the corner checkbox; pl-6 keeps the
+                            top-left select seal (touch, hover, any selection) off the name. */}
+                        <div className="min-w-0 pr-7 pl-6">
                           {onViewCandidate ? (
                             <button
                               onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
@@ -2730,8 +2731,10 @@ Best regards`);
                     );
                   })() : (
                   <>
-                  {/* No initials avatar — there is no profile photo behind it. */}
-                  <div className="flex items-start gap-2.5">
+                  {/* No initials avatar — there is no profile photo behind it.
+                      pl-6 keeps the top-left select seal (touch, hover, any
+                      selection) off the name. */}
+                  <div className="flex items-start gap-2.5 pl-6">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
                       <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
@@ -2773,6 +2776,39 @@ Best regards`);
                         Resume
                         <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-gray-50 text-gray-700 border-gray-200">v{resume.version || resume.resumeVersion || 1}</span>
                       </span>
+                    </div>
+                  )}
+
+                  {/* The rest of the list's columns, so the card carries what a
+                      table row does: JD ID + Job Title (unless the global view's
+                      "Applied for" line above already shows them), then Scored
+                      By / Date. Each hides with its column (hiddenColumnIds). */}
+                  {!isGlobalView && (
+                    (!hiddenColumnIds?.includes('jdId') && rowJobCode(resume)) ||
+                    (!hiddenColumnIds?.includes('jobTitle') && resume.jobTitle)
+                  ) && (
+                    <div className="flex items-start gap-1.5 min-w-0 text-xs">
+                      {!hiddenColumnIds?.includes('jdId') && rowJobCode(resume) && (
+                        <span className="shrink-0"><JobIdBadge>{rowJobCode(resume)}</JobIdBadge></span>
+                      )}
+                      {!hiddenColumnIds?.includes('jobTitle') && resume.jobTitle && (
+                        <span className="min-w-0 pt-0.5 text-gray-700 [overflow-wrap:anywhere]">{resume.jobTitle}</span>
+                      )}
+                    </div>
+                  )}
+                  {!hiddenColumnIds?.includes('scoredDate') && (
+                    <div className="space-y-0.5 text-xs text-gray-500 min-w-0">
+                      <p className="[overflow-wrap:anywhere]">
+                        <span className="text-gray-400">Scored by:</span>{' '}
+                        <span className="text-gray-700">{resume.scoredBy || '—'}</span>
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+                        <span>
+                          <span className="text-gray-700">{formatISTDate(resume.scoredDate)}</span>{' '}
+                          <span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span>
+                        </span>
+                      </p>
                     </div>
                   )}
                   </>
@@ -3480,6 +3516,28 @@ Best regards`);
                   </div>
                 </div>
               </div>
+              {/* ⋮ — the table row's menu (renderRowMenuItems), so phones reach
+                  the same per-row actions (Create / Send AI Interview etc.).
+                  Its own click never opens the card. */}
+              <div className="shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      aria-label="Actions"
+                      title="Actions"
+                      className="p-2.5 bg-gray-100 rounded-lg border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 transition-all"
+                    >
+                      <MoreVertical className="w-4 h-4 text-gray-600" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className={`${rowInviteMenuWidthClass} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}
+                  >
+                    {renderRowMenuItems(resume)}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
             {/* Card Content — pl-10 lines it up under the name (the 28px
@@ -3504,11 +3562,9 @@ Best regards`);
               </div>
             </div>
 
-            {/* Card Actions — Download Scorecard and View Resume share one
-                line (two columns, full card width); Invite / Share keep
-                their own full line. Below 380px "Download" / "View" are cut from
-                the labels ("Scorecard" / "Resume") so both fit on one line at
-                320px; min-w-0 + overflow-hidden keep text inside the button. */}
+            {/* Card Actions — Invite / Share on their own full line. Download
+                Scorecard and View Resume live in the card's ⋮ (the table row's
+                menu), so they're not repeated as buttons here. */}
             <div className="grid grid-cols-2 gap-2">
               {/* Invite Button - For Exact Match & Partial Match. Opens THE
                   invite popup for this candidate (the popup offers Create
@@ -3551,40 +3607,6 @@ Best regards`);
                     </div>
                   )}
                 </div>
-              )}
-
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!canDownloadScorecard) {
-                    return;
-                  }
-                  handleDownloadScorecard(resume.id);
-                }}
-                disabled={downloadingId === resume.id}
-                aria-disabled={!canDownloadScorecard}
-                title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
-                className={`w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${resume.resumeId ? '' : 'col-span-2'} ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
-                icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              >
-                {downloadingId === resume.id ? 'Downloading...' : <><span className="hidden min-[380px]:inline">Download&nbsp;</span>Scorecard</>}
-              </Button>
-
-              {resume.resumeId && (
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewResumeCandidate(resume);
-                  }}
-                  icon={<FileText className="w-4 h-4" />}
-                  className="w-full min-w-0 overflow-hidden !px-2 !whitespace-nowrap !h-auto min-h-[2.5rem] py-2 text-center leading-snug"
-                >
-                  <span className="hidden min-[380px]:inline">View&nbsp;</span>Resume
-                </Button>
               )}
 
               {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (

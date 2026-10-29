@@ -1563,6 +1563,62 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return candidate.percentage;
   };
 
+  /* The row ⋮ (View Result, Create / Send, Download PDF Report) — one
+     renderer for the list table, the grid cards and the phone / tablet list
+     cards, so all three offer the same actions. */
+  const renderRowMenu = (candidate: CandidateResult) => (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
+            aria-label={`Actions for ${candidate.name || 'candidate'}`}
+            title="Actions"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
+          <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
+            <Eye className="w-4 h-4 text-menu-icon-view" />
+            <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+          </DropdownMenuItem>
+          {/* Create / Send Assessment | AI Interview — the Scored
+              Resumes row's invite entries, between View Details
+              and Download (that row's order), for this row's
+              candidate. */}
+          {onOpenInviteDialog && (
+            <>
+              <DropdownMenuSeparator className="my-1 bg-gray-100" />
+              <RowInviteItems
+                onInvite={(kind) => onOpenInviteDialog(kind, [{
+                  id: candidate.resumeId || candidate.id,
+                  name: candidate.name,
+                  email: candidate.email,
+                  phone: candidate.phone,
+                  resumeId: candidate.resumeId,
+                }])}
+              />
+              <DropdownMenuSeparator className="my-1 bg-gray-100" />
+            </>
+          )}
+          <DropdownMenuItem
+            className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
+            disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
+            onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+          >
+            {downloadingPDF === candidate.id ? (
+              <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+            ) : (
+              <Download className="w-4 h-4 text-menu-icon-download" />
+            )}
+            <span className={MENU_ITEM_SCALE_CLASS}>Download PDF Report</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+  );
+
+
   // Reset to page 1 when filters change (MUST be before any early returns)
   useEffect(() => {
     setCurrentPage(1);
@@ -2542,7 +2598,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           )}
           {/* Grid view: the Candidate Results card (the shared
               CandidateResultCard), in that tab's grid, at every width. */}
-          <div className={displayMode === 'grid' ? '@container/result-cards p-4 sm:p-5' : 'hidden'}>
+          {/* Grid view. In List view below lg it renders only its empty state
+              (the list cards below need no copy of it). */}
+          <div className={displayMode === 'grid' ? '@container/result-cards p-4 sm:p-5' : paginatedCandidates.length === 0 ? 'lg:hidden p-4 sm:p-5' : 'hidden'}>
             <div className="grid grid-cols-1 @xl/result-cards:grid-cols-2 @4xl/result-cards:grid-cols-3 @7xl/result-cards:grid-cols-4 gap-4 sm:gap-5">
             {paginatedCandidates.length === 0 ? (
               <div className="col-span-full px-6 py-12 text-center">
@@ -2595,31 +2653,90 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     checked: selectedRows.includes(candidate.id),
                     onChange: (checked) => handleSelectRow(candidate.id, checked),
                   }}
-                  actions={
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                      disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
-                      className={`${CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS} disabled:opacity-40 disabled:cursor-not-allowed`}
-                      title="Download PDF Report"
-                      aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
-                    >
-                      {downloadingPDF === candidate.id ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Download className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  }
+                  /* ⋮ — the table row's menu (View Result, Create / Send,
+                     Download PDF); the card's own View Result button is
+                     dropped as the menu has it, and a card click still opens. */
+                  hideViewButton
+                  actions={renderRowMenu(candidate)}
                 />
               ))
             )}
             </div>
           </div>
 
-          {/* List view: the table, at every width (the shell scrolls
-              sideways where it does not fit). */}
-          <div className={displayMode === 'grid' ? 'hidden' : 'tf-table-shell'}>
+          {/* List view below lg (phones / tablets): one compact row-card per
+              candidate, as AI Interview Result and Scored Resumes list them,
+              not the Grid cards. Same data as the table row: status, the
+              rounds this assessment runs, submitted date, and the row's ⋮
+              (View Result, Create / Send, Download PDF). The card opens on tap. */}
+          {displayMode !== 'grid' && paginatedCandidates.length > 0 && (
+            <div className="lg:hidden space-y-3 p-3">
+              {paginatedCandidates.map((candidate) => {
+                const isSelected = selectedRows.includes(candidate.id);
+                const rounds = [
+                  { label: 'Overall', value: getMobileOverallScore(candidate) },
+                  ...(assessmentDetails?.technical_enabled ? [{ label: 'Tech', value: candidate.tech_score }] : []),
+                  ...(assessmentDetails?.coding_enabled ? [{ label: 'Coding', value: candidate.coding_score }] : []),
+                ];
+                return (
+                  <div
+                    key={candidate.id}
+                    onClick={() => viewCandidateDetails(candidate)}
+                    className={`rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
+                      isSelected ? 'border-brand-blue/30 bg-blue-50/60 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Select ${candidate.name || 'candidate'}`}
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 font-medium text-blue-600 dark:text-blue-400 [overflow-wrap:anywhere]">
+                            {showName(candidate.name) || 'Unknown'}
+                          </p>
+                          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
+                              {statusLabel(candidate.status)}
+                            </Badge>
+                            {renderRowMenu(candidate)}
+                          </div>
+                        </div>
+                        {candidate.email && (
+                          <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{candidate.email}</p>
+                        )}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                          {rounds.map(({ label, value }) => (
+                            <span key={label} className="text-gray-500">
+                              {label}{' '}
+                              {typeof value === 'number'
+                                ? <span className={`font-semibold ${value >= passingThreshold ? 'text-success' : 'text-destructive'}`}>{value}%</span>
+                                : <span className="text-gray-400">&mdash;</span>}
+                            </span>
+                          ))}
+                        </div>
+                        {candidate.completedDate && candidate.completedDate !== '-' && (
+                          <p className="mt-2 text-xs text-gray-500 [overflow-wrap:anywhere]">
+                            Submitted {candidate.completedDate}
+                            {candidate.duration && candidate.duration !== '-' ? <> &middot; {candidate.duration}</> : null}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* List view: the table from lg up (below lg the cards above stand
+              in for it). */}
+          <div className={displayMode === 'grid' ? 'hidden' : 'hidden lg:block tf-table-shell'}>
             {/* Width floor = listTableMinWidth, the sum of the RENDERED
                 columns' fixed widths. The table is `table-fixed` over those
                 widths, so the floor has to track the columns: too low and the
@@ -3002,55 +3119,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           actions as its items. */}
                       <td className={`${cellPad} text-right tf-sticky-col`} onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center gap-1.5">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              type="button"
-                              className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
-                              aria-label={`Actions for ${candidate.name || 'candidate'}`}
-                              title="Actions"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
-                            <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} disabled={candidate.status === 'Pending'} onClick={() => viewCandidateDetails(candidate)}>
-                              <Eye className="w-4 h-4 text-menu-icon-view" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-                            </DropdownMenuItem>
-                            {/* Create / Send Assessment | AI Interview — the Scored
-                                Resumes row's invite entries, between View Details
-                                and Download (that row's order), for this row's
-                                candidate. */}
-                            {onOpenInviteDialog && (
-                              <>
-                                <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                <RowInviteItems
-                                  onInvite={(kind) => onOpenInviteDialog(kind, [{
-                                    id: candidate.resumeId || candidate.id,
-                                    name: candidate.name,
-                                    email: candidate.email,
-                                    phone: candidate.phone,
-                                    resumeId: candidate.resumeId,
-                                  }])}
-                                />
-                                <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                              </>
-                            )}
-                            <DropdownMenuItem
-                              className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
-                              disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
-                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
-                            >
-                              {downloadingPDF === candidate.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
-                              ) : (
-                                <Download className="w-4 h-4 text-menu-icon-download" />
-                              )}
-                              <span className={MENU_ITEM_SCALE_CLASS}>Download PDF Report</span>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {renderRowMenu(candidate)}
                         {detailColumnIds.length > 0 && (
                           <RowDetailsToggle expanded={isExpanded} onToggle={() => toggleRowExpanded(candidate.id)} />
                         )}

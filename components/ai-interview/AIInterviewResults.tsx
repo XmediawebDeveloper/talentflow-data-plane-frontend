@@ -375,6 +375,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
   const [showFilters, setShowFilters] = useState(false);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
+  /* Below lg (phones / tablets) List view shows the cards, one per row, as
+     Scored Resumes does — the table only fits from lg. */
+  const [belowLg, setBelowLg] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const sync = () => setBelowLg(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
   /* Sort — the toolbar's Sort by control, matching the AI Talent Match
      reference. Default (date desc = newest first) mirrors the server's own
      order; any other choice is applied client-side over the full fetched set
@@ -438,8 +448,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // Phones open on the cards — the table's dozen columns only scroll
   // sideways there. Before the restore below, which still wins on larger
   // screens; the toggle switches back to the table any time.
+  // Job Details (portaled) opens on List even on phones — below lg List is the
+  // compact list cards there, not the table — and restores a saved choice.
   useEffect(() => {
-    if (isPhoneWidth()) setDisplayMode('grid');
+    if (isPhoneWidth() && !portaled) setDisplayMode('grid');
   }, []);
   useListStatePersistence(
     scoped ? `ai-interview-results:job:${configId}` : `ai-interview-results:${configId}`,
@@ -451,7 +463,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         if (!isResultStatus(restored.status)) restored.status = DEFAULT_RESULT_STATUS;
         search.setFilters(restored);
       }
-      if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setDisplayMode(s.displayMode);
+      if ((s.displayMode === 'list' || s.displayMode === 'grid') && (portaled || !isPhoneWidth())) setDisplayMode(s.displayMode);
       if (typeof s.currentPage === 'number' && s.currentPage >= 1) setCurrentPage(s.currentPage);
     },
   );
@@ -1655,9 +1667,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 const passed = result ? result === 'Pass' : (score ?? 0) >= 60;
                 const isSelected = selected.has(session.id);
                 return (
-                  <button
+                  /* div role="button", not <button>: the card now holds the
+                     Download button, and a button can't nest inside one. */
+                  <div
                     key={session.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleViewDetails(session)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleViewDetails(session); }
+                    }}
                     className={`group relative text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${gridCardSelectedClass(isSelected)}`}
                   >
                     <GridCardSelect
@@ -1666,7 +1686,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       label={session.candidate_name || 'candidate'}
                       selectionActive={selected.size > 0}
                     />
-                    <div className="flex items-start gap-2.5">
+                    {/* pl-6 keeps the corner select seal off the avatar — it shows on
+                        touch, on hover, and on every card once anything is selected. */}
+                    <div className="flex items-start gap-2.5 pl-6">
                       <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
@@ -1765,19 +1787,115 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       startedAt={session.started_at} completedAt={session.completed_at} format={formatIST} duration={formatDuration(session)}
                     />
 
-                    <div
-                      onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
-                      title="View Details"
-                      className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">View Details</span>
+                    {/* View Details + Download Report (the table's button —
+                        same permission / not-evaluated rules). */}
+                    <div className="flex items-center gap-2">
+                      <div
+                        onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
+                        title="View Details"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 px-2.5 sm:px-3 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Details</span>
+                      </div>
+                      <div className="shrink-0">
+                        <ResultRowActions session={session} onView={() => handleViewDetails(session)} hideView />
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </>
+        ) : belowLg ? (
+          /* List view below lg: one compact row-card per candidate, the way
+             Scored Resumes lists them on phones / tablets — not the Grid cards.
+             Same data as the table row. */
+          <div className="space-y-3 p-3">
+            {paginatedSessions.map((session) => {
+              const risk = getProctoringRisk(session);
+              const score = displayInviteScore(session);
+              const result = inviteResult(session, score);
+              const isSelected = selected.has(session.id);
+              return (
+                <div
+                  key={session.id}
+                  onClick={() => handleViewDetails(session)}
+                  className={`rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
+                    isSelected ? 'border-brand-blue/30 bg-blue-50/60 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelected(session)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
+                      className="mt-1 w-4 h-4 rounded border-gray-300 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="min-w-0 font-medium text-blue-600 dark:text-blue-400 [overflow-wrap:anywhere]">
+                          {showName(session.candidate_name) || 'Unknown'}
+                        </p>
+                        <Badge variant={getStatusVariant(session.status)} className="shrink-0">
+                          {getStatusIcon(session.status)}
+                          {getStatusLabel(session.status)}
+                        </Badge>
+                      </div>
+                      {session.candidate_email && (
+                        <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{session.candidate_email}</p>
+                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+                        {col('score') && (
+                          <span className="text-gray-500">
+                            Score{' '}
+                            {score != null
+                              ? <span className={`font-semibold ${score >= 60 ? 'text-success' : 'text-destructive'}`}>{score}%</span>
+                              : <span className="text-gray-400">—</span>}
+                          </span>
+                        )}
+                        {col('result') && result && <ResultBadge result={result} />}
+                        {col('proctoring') && session.status === 'completed' && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
+                        )}
+                        {col('interviewVersion') && rowInterviewVersion(session) != null && (
+                          <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
+                        )}
+                      </div>
+                      {/* Date on its own line, then View Details as a
+                          full-width row — sharing a line, the date was squeezed
+                          into a ~45px column at 320px. Download beside it, as
+                          in the table; Create / Send lives in the toolbar's Actions. */}
+                      {(session.completed_at || session.started_at) && (
+                        <p className="mt-2 text-xs text-gray-500 [overflow-wrap:anywhere]">
+                          {session.completed_at
+                            ? <>Completed {formatIST(session.completed_at)}</>
+                            : <>Started {formatIST(session.started_at!)}</>}
+                        </p>
+                      )}
+                      <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => handleViewDetails(session)}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View Details
+                        </button>
+                        {/* Download Report — the table's own button (same
+                            permission / not-evaluated rules), sized to the row. */}
+                        <div className="shrink-0 [&_button]:!h-9 [&_button]:!w-9">
+                          <ResultRowActions session={session} onView={() => handleViewDetails(session)} hideView />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <>
             <div className="overflow-x-auto tf-table-shell">
@@ -1804,31 +1922,36 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       )}
                     </th>
                     {col('candidate') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>}
-                    {col('timeline') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>}
+                    {col('timeline') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>}
                     {col('status') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Score</th>}
                     {col('result') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Result</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Proctoring Risk</th>}
-                    {col('inviteSource') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>}
-                    {col('cid') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>}
-                    {col('jobVersion') && !portaled && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>}
+                    {col('cid') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>}
+                    {col('jobVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Interview Version</th>}
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+                    {/* Job Details: no ⋮ in the row, so the column only needs
+                        the View / Download pair — w-px + px-3 shrink it to that. */}
+                    <th className={`text-right ${portaled ? 'w-px px-3' : 'px-4'} py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col`}>Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {paginatedSessions.map((session) => {
                     const risk = getProctoringRisk(session);
                     const isExpanded = expandedRowIds.has(session.id);
-                    const detailColumnIds = portaled ? DETAIL_COLUMN_IDS.filter((id) => col(id)) : [];
+                    /* Every column is inline now (the AI Interviews Candidate
+                       Results table's layout), so nothing moves into an
+                       expandable details row. */
+                    const detailColumnIds: ResultColumnId[] = [];
                     return (
                       <Fragment key={session.id}>
                       <tr
                         /* Job Details: the row opens / closes its details, as
                            on the AI Talent Match table; ⋮ › View Details opens it. */
-                        onClick={() => (portaled ? toggleRowExpanded(session.id) : handleViewDetails(session))}
-                        aria-expanded={portaled ? isExpanded : undefined}
-                        title={portaled ? (isExpanded ? 'Hide details' : 'Show details') : undefined}
+                        /* Clicking a row opens the candidate's result, as on the
+                           AI Interviews page's Candidate Results table. */
+                        onClick={() => handleViewDetails(session)}
                         /* Row styled to the AI Talent Match reference table:
                            plain white/dark rows (no zebra), hover:bg-gray-50,
                            selected tint bg-blue-50. */
@@ -1847,17 +1970,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         </td>
                         {col('candidate') && (
                           <td className="px-4 py-3">
-                            {portaled ? (
-                              /* The AI Talent Match table's name over email, no avatar. */
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]" title={showName(session.candidate_name) || 'Unknown'}>
-                                  {showName(session.candidate_name) || 'Unknown'}
-                                </p>
-                                {session.candidate_email && (
-                                  <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]" title={session.candidate_email}>{session.candidate_email}</p>
-                                )}
-                              </div>
-                            ) : (
                             <div className="flex items-center gap-2">
                               <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
@@ -1871,10 +1983,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                 </p>
                               </div>
                             </div>
-                            )}
                           </td>
                         )}
-                        {col('timeline') && !portaled && (
+                        {col('timeline') && (
                           <td className="px-4 py-3 align-top whitespace-nowrap text-gray-600">
                             {/* The Track Invites timeline (Invited, System Check,
                                 Started, Completed) plus this table's Duration. */}
@@ -1955,14 +2066,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             )}
                           </td>
                         )}
-                        {col('inviteSource') && !portaled && (
+                        {col('inviteSource') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                             {inviteSourceLabel(session)
                               ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
                               : <span className="text-gray-400">—</span>}
                           </td>
                         )}
-                        {col('cid') && !portaled && (
+                        {col('cid') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {session.candidate_cid ? (
                               <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
@@ -1973,7 +2084,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             )}
                           </td>
                         )}
-                        {col('jobVersion') && !portaled && (
+                        {col('jobVersion') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             {rowJobVersion(session) != null ? <VersionPill kind="job" version={rowJobVersion(session)!} /> : <span className="text-gray-400">—</span>}
                           </td>
@@ -1983,67 +2094,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             {rowInterviewVersion(session) != null ? <VersionPill kind="interview" version={rowInterviewVersion(session)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
-                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col" onClick={portaled ? (e) => e.stopPropagation() : undefined}>
-                          {portaled ? (
-                            /* The AI Talent Match table's ⋮ + ▾: Create / Send
-                               Assessment | AI Interview, View Details and
-                               Download Report in ⋮. */
-                            <div className="inline-flex items-center gap-1.5">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button type="button" aria-label={`Actions for ${session.candidate_name || 'candidate'}`} title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
-                                    <MoreVertical className="w-4 h-4" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className={ROW_MENU_CONTENT_CLASS}>
-                                  <DropdownMenuItem className={ROW_MENU_ITEM_CLASS} onSelect={() => handleViewDetails(session)}>
-                                    <Eye className="w-4 h-4 text-menu-icon-view" />
-                                    <span>View Details</span>
-                                  </DropdownMenuItem>
-                                  {/* Create / Send — between View Details and
-                                      Download Report, the Scored Resumes row's order. */}
-                                  {onOpenInviteDialog && (
-                                    <>
-                                      <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                      <RowInviteItems
-                                        onInvite={(kind) => onOpenInviteDialog(kind, [{
-                                          id: session.resume_id || session.id,
-                                          name: session.candidate_name || '',
-                                          email: session.candidate_email || '',
-                                          resumeId: session.resume_id,
-                                        }])}
-                                      />
-                                      <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                                    </>
-                                  )}
-                                  <DropdownMenuItem
-                                    className={`${ROW_MENU_ITEM_CLASS}${canDownloadReports ? '' : ' cursor-not-allowed opacity-60 text-gray-400'}`}
-                                    disabled={(canDownloadReports && !canTryReport(session)) || downloadingReportId === session.id}
-                                    aria-disabled={!canDownloadReports || undefined}
-                                    title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : canTryReport(session) ? undefined : 'Report available once the interview is evaluated'}
-                                    onSelect={(e) => {
-                                      if (!canDownloadReports) { e.preventDefault(); return; }
-                                      void handleDownloadReport(session.id);
-                                    }}
-                                  >
-                                    {downloadingReportId === session.id
-                                      ? <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
-                                      : <Download className="w-4 h-4 text-menu-icon-download" />}
-                                    <span>Download Report</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                              {detailColumnIds.length > 0 && (
-                                <RowDetailsToggle expanded={isExpanded} onToggle={() => toggleRowExpanded(session.id)} />
-                              )}
-                            </div>
-                          ) : (
+                        <td className={`${portaled ? 'w-px px-3' : 'px-4'} py-3 text-right whitespace-nowrap tf-sticky-col`} onClick={portaled ? (e) => e.stopPropagation() : undefined}>
                           <>
                           <ResultRowActions session={session} onView={() => handleViewDetails(session)} />
                           {/* ⋮ beside View / Download: Create / Send Assessment |
                               AI Interview — the Scored Resumes row's invite
-                              entries, for this row's candidate. */}
-                          {onOpenInviteDialog && (
+                              entries, for this row's candidate. Not in Job
+                              Details (portaled): there the toolbar's Actions
+                              covers Create / Send for the ticked rows. */}
+                          {onOpenInviteDialog && !portaled && (
                             <span className="inline-flex ml-1.5 align-middle" onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -2071,7 +2130,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                             </span>
                           )}
                           </>
-                          )}
                         </td>
                       </tr>
                       {/* The row's moved columns, in a nested table under it —
