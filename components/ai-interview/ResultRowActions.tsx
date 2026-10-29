@@ -95,7 +95,9 @@ export function DownloadPdfsButton({
  * same PDF the result page's "Download Report (PDF)" saves. Download is
  * disabled (with the reason on hover) until there is a report to download.
  */
-export default function ResultRowActions({ session, onView }: { session: any; onView: () => void }) {
+/** `hideView`: render only the Download button (callers with their own View,
+ *  e.g. the phone / tablet list cards' full-width View Details). */
+export default function ResultRowActions({ session, onView, hideView = false }: { session: any; onView: () => void; hideView?: boolean }) {
   const [downloading, setDownloading] = useState(false);
   const canDownloadReports = useCanDownloadAIReports();
   const hasReport = canTryReport(session);
@@ -124,6 +126,7 @@ export default function ResultRowActions({ session, onView }: { session: any; on
 
   return (
     <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+      {!hideView && (
       <Button
         variant="secondary"
         size="sm"
@@ -134,6 +137,7 @@ export default function ResultRowActions({ session, onView }: { session: any; on
       >
         <Eye className="w-4 h-4" />
       </Button>
+      )}
       {/* Wrapper carries the tooltip — a disabled button shows none. */}
       <span title={downloadBlockedReason} className="inline-flex">
       <Button
