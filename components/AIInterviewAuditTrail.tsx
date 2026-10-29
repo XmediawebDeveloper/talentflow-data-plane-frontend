@@ -407,8 +407,12 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                 <SegmentIcon className={`w-3.5 h-3.5 flex-shrink-0 ${segment.text}`} />
                 <span className="hidden sm:inline">{segment.label}</span>
                 <span className="sm:hidden">{segment.short}</span>
-                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
-                  {isLoading ? '—' : segment.value.toLocaleString()}
+                {/* Keep showing the last-known count while a reload is in
+                    flight — swapping it for "—" shrank the pill down to its
+                    min-width and snapped back once the real number returned,
+                    which read as the whole control shaking on every click. */}
+                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${isLoading ? 'opacity-60' : ''} ${segment.text} ${segment.tint} ${segment.ring}`}>
+                  {segment.value.toLocaleString()}
                 </span>
               </button>
             );
@@ -430,8 +434,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                 )}
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                   <ItemIcon className={`w-3.5 h-3.5 flex-shrink-0 ${item.text}`} />
-                  <span className="font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                    {isLoading ? '—' : item.value.toLocaleString()}
+                  <span className={`font-semibold tabular-nums text-gray-900 dark:text-slate-50 ${isLoading ? 'opacity-60' : ''}`}>
+                    {item.value.toLocaleString()}
                   </span>
                   <span className="text-gray-500 dark:text-slate-400">{item.label}</span>
                 </span>
