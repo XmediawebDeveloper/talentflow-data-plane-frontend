@@ -37,11 +37,11 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
       {/* Desktop table — matches the real thead/tbody */}
       <div className="hidden md:block overflow-hidden">
         <table className="w-full min-w-[1200px] table-auto">
-          <thead className="[&_th]:bg-slate-50 [&_th]:border-b [&_th]:border-gray-200">
+          <thead className="[&_th]:bg-white [&_th]:border-b [&_th]:border-gray-200">
             <tr>
               <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
               {headers.map((h) => (
-                <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+                <th key={h} className="px-4 py-3 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
               ))}
             </tr>
           </thead>
@@ -656,12 +656,12 @@ export default function ResumeTable({
             positioned cell already paints above those at the same z. Anything
             higher there raced this header on the way past and won, hiding the
             select-all box behind the first row's checkbox. */}
-        <thead className="sticky top-0 z-30 [&_th]:bg-slate-50 [&_th]:border-b [&_th]:border-gray-200">
+        <thead className="sticky top-0 z-30 [&_th]:bg-white [&_th]:border-b [&_th]:border-gray-200">
           <tr>
             {/* Drag handle column — pinned too, so it stays beside the ticks.
                 Same hard 40px as the body cell. */}
             {draggable && (
-              <th className="sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] px-2 py-3 align-middle">
+              <th className="sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] px-2 py-3 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
                 <span className="sr-only">Drag</span>
               </th>
             )}
@@ -672,7 +672,7 @@ export default function ResumeTable({
                  and `tabular-nums`, so the column doesn't shift as it grows a
                  digit. Pinned, so the ticks stay in view when the table is
                  scrolled sideways. */
-              <th className={`sticky ${draggable ? 'left-10' : 'left-0'} z-20 w-px whitespace-nowrap px-4 py-3 align-middle border-r border-gray-200`}>
+              <th className={`sticky text-xs font-semibold text-gray-600 dark:text-slate-300 ${draggable ? 'left-10' : 'left-0'} z-20 w-px whitespace-nowrap px-4 py-3 align-middle border-r border-gray-200`}>
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -686,7 +686,7 @@ export default function ResumeTable({
                     title={allSelected ? 'Unselect all resumes on this page' : 'Select all resumes on this page'}
                   />
                   <span
-                    className="inline-block w-8 text-xs font-semibold text-gray-900 tabular-nums"
+                    className="inline-block w-8 text-xs font-semibold text-gray-600 tabular-nums"
                     title={`${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`}
                   >
                     {selectedResumes.length > 0 ? `(${selectedResumes.length})` : ''}
@@ -694,42 +694,42 @@ export default function ResumeTable({
                 </div>
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Candidate Name
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Role
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Email
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Phone
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Skills
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Experience
             </th>
             {getFolderName && (
-              <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+              <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
                 Folder
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Source
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Upload Date
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Uploaded By
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
               Files
             </th>
-            <th className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-3 text-right text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">
+            <th className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap align-middle tf-sticky-col font-semibold">
               Actions
             </th>
           </tr>

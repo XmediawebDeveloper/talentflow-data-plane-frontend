@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewDetailsView from '@/components/ai-interview/AIInterviewDetailsView';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -207,7 +208,7 @@ function AIInterviewDetailsContent() {
       console.error('[TalentFlow] Failed to fetch AI interview config:', err);
       // A failed refresh keeps the page that is already showing.
       if (showSkeleton) setError(err.message || 'Failed to load AI interview config');
-      else toast.error(err.message || 'Failed to refresh AI interview config');
+      else toast.error(friendlyErrorMessage(err, "Couldn't refresh AI interview config. Please try again."));
     } finally {
       if (!isStale()) setIsLoading(false);
     }

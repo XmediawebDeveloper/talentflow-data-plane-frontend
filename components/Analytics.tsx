@@ -334,13 +334,13 @@ export default function Analytics() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Job Title</th>
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Applications</th>
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Interviews</th>
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Offers</th>
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Hired</th>
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Conversion</th>
-                <th className="text-left text-xs font-medium text-gray-600 dark:text-slate-400 uppercase tracking-wider pb-3">Status</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Job Title</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Applications</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Interviews</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Offers</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Hired</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Conversion</th>
+                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Status</th>
               </tr>
             </thead>
             <tbody>

@@ -9,8 +9,11 @@ import { assessmentService, jdService } from '@/lib/services';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import type { AssessmentResponse, JDResponse } from '@/lib/services';
 import type { CombinedAuditActivity } from '@/lib/services/assessmentService';
+import { isAssessmentArchived } from '@/lib/services/assessmentService';
+import { isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
@@ -358,7 +361,7 @@ export default function AssessmentDetailsView({
       await onRefresh?.();
     } catch (err) {
       console.error('Failed to archive assessment:', err);
-      toast.error(`Failed to archive assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Couldn't archive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
       setIsArchiving(false);
     }
@@ -375,7 +378,7 @@ export default function AssessmentDetailsView({
       await onRefresh?.();
     } catch (err) {
       console.error('Failed to unarchive assessment:', err);
-      toast.error(`Failed to unarchive assessment: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Couldn't unarchive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
       setIsUnarchiving(false);
     }
@@ -986,7 +989,9 @@ export default function AssessmentDetailsView({
   const inviteInitialLoading = inviteLoading && inviteRows.length === 0;
   const inviteRefreshVeil = (inviteLoading || inviteRefreshing) && inviteRows.length > 0;
 
-  const inviteSelectableIds = inviteRows.filter(isBulkResendable).map((inv: any) => inv.id);
+  const inviteSelectableIds = (isAssessmentArchived(assessment?.status) || isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status))
+    ? []
+    : inviteRows.filter(isBulkResendable).map((inv: any) => inv.id);
   const allInvitesSelected =
     inviteSelectableIds.length > 0 && inviteSelectableIds.every((id: string) => inviteSelectedIds.has(id));
   const toggleInviteSelectAll = () =>
@@ -2047,7 +2052,7 @@ export default function AssessmentDetailsView({
             className={shareDenied && !disabled ? 'opacity-50 cursor-not-allowed' : ''}
             icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           >
-            Share
+            Invite
           </Button>
           </div>
         );
@@ -3003,6 +3008,8 @@ export default function AssessmentDetailsView({
                 codingEnabled={!!assessment.coding_enabled}
                 selectedIds={inviteSelectedIds}
                 onToggleSelect={toggleInviteSelectOne}
+                archived={isAssessmentArchived(assessment?.status)}
+                jdDisabled={isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status)}
                 canOpenResult={opensTrackedInviteDetails}
                 onOpenResult={openInviteResult}
                 onResend={setResendTarget}

@@ -7,6 +7,7 @@ import { useJobActionLock } from '@/components/jobs/JobActionLock';
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -32,6 +33,10 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
+
+// An archived resume is off-limits for Invite/Score everywhere in the app —
+// see resume-view/[id]/page.tsx's identical ARCHIVED_ACTION_MESSAGE.
+const ARCHIVED_RESUME_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
@@ -251,6 +256,9 @@ export interface ScoredResume {
   // Source and status fields
   source?: 'my-resumes' | 'database' | string;
   status?: 'completed' | 'failed' | 'processing' | 'queued' | string;
+  // The underlying resume was archived after being scored — Invite/Score
+  // must be blocked for it, same rule every other resume action follows.
+  isArchived?: boolean;
   errorReason?: string;
   // Real scoring data from API
   aiSummary?: string;
@@ -889,7 +897,7 @@ Best regards`);
       }
     } catch (error: any) {
       console.error('Failed to share resume:', error);
-      toast.error(error?.message || 'Failed to send email');
+      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
     } finally {
       setIsSendingEmail(false);
     }
@@ -1821,16 +1829,20 @@ Best regards`);
     /* The row's Invite opens THE invite popup just like the selection's
        items, and is gated the same way — permission only: the popup itself
        offers Create when this job has no assessment / AI interview yet, so
-       "none configured" no longer greys it out. */
-    const rowCanInviteAssessment = canCreateAssessments;
-    const rowCanInviteAIInterview = mayInviteAIInterview;
+       "none configured" no longer greys it out. An archived resume is the
+       one thing that overrides all of that — same rule every other resume
+       action (Score, AI Talent Match, resume-view's Invite) follows. */
+    const rowCanInviteAssessment = !resume.isArchived && canCreateAssessments;
+    const rowCanInviteAIInterview = !resume.isArchived && mayInviteAIInterview;
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
       rowInviteDisabled: !rowCanInviteAssessment && !rowCanInviteAIInterview,
       // The trigger stays visible but inert, with a tooltip naming the
       // reason, rather than disappearing outright.
-      rowInviteDisabledTitle: jobLockReason
+      rowInviteDisabledTitle: resume.isArchived
+        ? ARCHIVED_RESUME_MESSAGE
+        : jobLockReason
         ? jobLockReason
         : !(canCreateAssessments || mayInviteAIInterview)
         ? (invitePlanLocked ? PLAN_LOCKED_MESSAGE : 'You do not have permission to invite candidates')
@@ -1849,7 +1861,7 @@ Best regards`);
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!rowCanInviteAssessment ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
           aria-disabled={!rowCanInviteAssessment || undefined}
-          title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
+          title={!rowCanInviteAssessment ? (resume.isArchived ? ARCHIVED_RESUME_MESSAGE : assessmentDeniedReason) : undefined}
           onSelect={(e) => {
             if (!rowCanInviteAssessment) { e.preventDefault(); return; }
             openRowsInvite('assessment', [resume]);
@@ -1861,7 +1873,7 @@ Best regards`);
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!rowCanInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
           aria-disabled={!rowCanInviteAIInterview || undefined}
-          title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
+          title={!rowCanInviteAIInterview ? (resume.isArchived ? ARCHIVED_RESUME_MESSAGE : aiInterviewDeniedReason) : undefined}
           onSelect={(e) => {
             if (!rowCanInviteAIInterview) { e.preventDefault(); return; }
             if (!onOpenInviteDialog && onInviteAIInterview) {
@@ -2108,10 +2120,13 @@ Best regards`);
         // permission reason with why — same as Job Details' JobActionLock,
         // for the one host job this table itself knows the status of.
         const selectionJobLock = resolveSelectionJobLock(selectionJobs);
-        const assessmentAllowed = canCreateAssessments && !selectionJobLock;
-        const assessmentReason = selectionJobLock ?? assessmentDeniedReason;
-        const interviewAllowed = mayInviteAIInterview && !selectionJobLock;
-        const interviewReason = selectionJobLock ?? aiInterviewDeniedReason;
+        // Same rule as a single row's Invite — an archived resume anywhere in
+        // the selection blocks the whole batch rather than silently dropping it.
+        const selectionArchivedCount = effectiveSelectedRows.filter((r) => r.isArchived).length;
+        const assessmentAllowed = canCreateAssessments && !selectionJobLock && selectionArchivedCount === 0;
+        const assessmentReason = selectionArchivedCount > 0 ? ARCHIVED_RESUME_MESSAGE : (selectionJobLock ?? assessmentDeniedReason);
+        const interviewAllowed = mayInviteAIInterview && !selectionJobLock && selectionArchivedCount === 0;
+        const interviewReason = selectionArchivedCount > 0 ? ARCHIVED_RESUME_MESSAGE : (selectionJobLock ?? aiInterviewDeniedReason);
         return (
           <>
             {/* Always offered (permission aside): THE invite popup with the ticked
@@ -2954,18 +2969,18 @@ Best regards`);
                 <col className="w-[12%]" />
                 <col className="w-[8.5rem]" />
               </colgroup>
-              <thead className="bg-gray-50 border-b border-gray-200">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
                   {/* pl-[46px]: the cell's padding plus the checkbox in front of the
                       name, so the heading lines up with the names. */}
-                  <th className="text-left py-3 pr-4 pl-[46px] align-middle text-xs font-medium text-gray-700 uppercase tracking-wide">Candidate</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Job Versions</th>
-                  <th className="text-left py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide">Job Titles</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Exact Match</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Partial Match</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">No Match</th>
-                  <th className="text-left py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide whitespace-nowrap">Latest Updated</th>
-                  <th className="text-left py-3 px-4 align-middle text-xs font-medium text-gray-700 uppercase tracking-wide tf-sticky-col">Actions</th>
+                  <th className="text-left py-3 pr-4 pl-[46px] align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">Candidate</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job Versions</th>
+                  <th className="text-left py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">Job Titles</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Exact Match</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Partial Match</th>
+                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">No Match</th>
+                  <th className="text-left py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Latest Updated</th>
+                  <th className="text-left py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -3092,14 +3107,14 @@ Best regards`);
                                   person — and no forced min width, so it fits. */}
                               <table className="w-full table-auto">
                                 <thead>
-                                  <tr className="border-b border-gray-200">
+                                  <tr className="border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                                     <th className="w-8 py-2 px-4" aria-hidden />
                                     {enabledColumns.filter((col) => col.id !== 'candidateName').map((col) => (
-                                      <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-medium text-gray-600 uppercase tracking-wide whitespace-nowrap`}>
+                                      <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap`}>
                                         {col.label}
                                       </th>
                                     ))}
-                                    <th className="text-left py-2 px-4 text-xs font-medium text-gray-600 uppercase tracking-wide">Actions</th>
+                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -3359,9 +3374,9 @@ Best regards`);
         <table className="w-full table-auto">
           {/* Header styled to the AI Talent Match table: sticky, bg-gray-50 per
               cell, light uppercase gray-500 labels with wider tracking, dark mode. */}
-          <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+          <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
             <tr>
-              <th className="text-left py-3 px-4 w-10 align-middle tf-sticky-col-left" aria-label="Select">
+              <th className="text-left py-3 px-4 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select">
                 {/* Only when there's no toolbar (compact: a job opened inline
                     in View by Job) — otherwise Select all is in the toolbar,
                     before the search box, and a second one here repeats it. */}
@@ -3376,11 +3391,11 @@ Best regards`);
                 )}
               </th>
               {enabledColumns.map((col) => (
-                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle`}>
+                <th key={col.id} className={`${CENTERED_COLUMNS.has(col.id) ? 'text-center' : 'text-left'} px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle`}>
                   {col.label}
                 </th>
               ))}
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
           <tbody>

@@ -914,19 +914,19 @@ export default function BulkScoringProgressModal({
                     <tr>
                       {showJobIdTitleColumns && (
                         <>
-                          <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
-                          <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
+                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
+                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
                         </>
                       )}
-                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
-                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
-                      {showScoreColumn && <th className="text-center py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
-                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
-                      {showJobColumns && <th className="text-center py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
-                      <th className="text-center py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
-                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
-                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
-                      <th className="text-left py-3 px-3 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
+                      {showScoreColumn && <th className="text-center py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
+                      {showJobColumns && <th className="text-center py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
+                      <th className="text-center py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody>

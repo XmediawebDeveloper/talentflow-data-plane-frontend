@@ -190,6 +190,14 @@ export interface AssessmentInviteTableProps {
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
 
+  /** This table's assessment is archived (its own status) — Copy Link,
+   *  Resend, Edit and Revoke stay visible but disabled. Mirrors
+   *  `AIInterviewInviteTable`'s `configArchived`. */
+  archived?: boolean;
+  /** This table's JD is disabled — same lock as `archived`. Mirrors
+   *  `AIInterviewInviteTable`'s `jdDisabled`. */
+  jdDisabled?: boolean;
+
   canOpenResult: (inv: any) => boolean;
   onOpenResult: (inv: any) => void;
   onResend: (inv: any) => void;
@@ -220,6 +228,8 @@ export default function AssessmentInviteTable({
   codingEnabled,
   selectedIds,
   onToggleSelect,
+  archived = false,
+  jdDisabled = false,
   canOpenResult,
   onOpenResult,
   onResend,
@@ -268,27 +278,27 @@ export default function AssessmentInviteTable({
           <table className="w-max min-w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
-                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Candidate</th>
                 {/* hidden md:table-cell mirrors this column's <td>. Without
                     it the header carried one more cell than the body between
                     sm and md, shifting every heading after Timeline off its
                     column. */}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 hidden md:table-cell">Timeline</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Status</th>
                 {/* Tech / Coding Score columns are conditional on the
                     assessment having that round enabled — same rule as
                     the Results page. Showing a "Coding Score" column
                     for a JD without a coding round produced a
                     permanent "—" column that confused recruiters. */}
                 {techEnabled && (
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Tech Score</th>
                 )}
                 {codingEnabled && (
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Coding Score</th>
                 )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 whitespace-nowrap">Invite Source</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">CID</th>
                 {/* Job scope only: with invites from several
                     assessments in one table, the row has to say which
                     job version its assessment belongs to - that is the
@@ -304,12 +314,12 @@ export default function AssessmentInviteTable({
                     relationship they are: this assessment version, on
                     that job version. */}
                 {showVersionColumns && (
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Version</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Job Version</th>
                 )}
                 {showVersionColumns && (
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Assessment Version</th>
                 )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -345,7 +355,7 @@ export default function AssessmentInviteTable({
                         checkbox; the rest keep a fixed-width slot so the
                         columns stay aligned. */}
                     <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                      {isBulkResendable(invitation) ? (
+                      {isBulkResendable(invitation) && !archived && !jdDisabled ? (
                         <button
                           type="button"
                           role="checkbox"
@@ -554,6 +564,8 @@ export default function AssessmentInviteTable({
                           onViewResult: canOpenResult(invitation) || invitation.status === 'completed' || !!invitation.completed_at
                             ? onOpenResult
                             : undefined,
+                          archived,
+                          jdDisabled,
                         });
                         // Nothing actionable — no trigger rather than an empty menu.
                         if (actions.length === 0) return null;

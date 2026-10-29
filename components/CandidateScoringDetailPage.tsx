@@ -17,6 +17,7 @@ import CreateInviteTargetModal from './resume-scoring/CreateInviteTargetModal';
 import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandoff, withResumeInviteMarker, RESUME_INVITE_PARAM, type InviteHandoffKind } from '@/lib/utils/resumeScoringInviteHandoff';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1101,7 +1102,7 @@ Best regards`);
       }
     } catch (error: any) {
       console.error('[CandidateScoringDetailPage] Failed to share resume:', error);
-      toast.error(error?.message || 'Failed to send email');
+      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
     } finally {
       setIsSendingEmail(false);
     }

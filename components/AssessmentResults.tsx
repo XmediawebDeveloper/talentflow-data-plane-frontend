@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, ArrowUp, ArrowDown, MoreVertical, X } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -2757,15 +2757,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               style={paginatedCandidates.length === 0 || portaled ? undefined : { minWidth: listTableMinWidth }}
             >
               {/* The All Assessments header: white, one rule under it,
-                  uppercase semibold labels, each sortable column a button
-                  with its ArrowUpDown / ArrowUp / ArrowDown. The column widths
-                  stay — the table is `table-fixed` over them. */}
+                  plain semibold labels; a sortable column's label is a button
+                  (no sort arrows). The column widths stay — the table is
+                  `table-fixed` over them. */}
               {paginatedCandidates.length > 0 && (
               <thead className={portaled
-                ? 'sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700 [&_th]:align-middle'
-                : 'sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800'}>
+                ? 'sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700 [&_th]:align-middle'
+                : 'sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900'}>
                 <tr className={portaled ? undefined : 'border-b border-gray-200 dark:border-slate-700'}>
-                  <th scope="col" aria-label={portaled ? 'Select' : undefined} className={`${cellPad} w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
+                  <th scope="col" aria-label={portaled ? 'Select' : undefined} className={`text-xs font-semibold text-gray-600 dark:text-slate-300 ${cellPad} w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
                     {/* Embedded in Job Details the toolbar's Select All is the
                         one select-all control (the AI Talent Match reference's
                         empty header cell); standalone keeps this checkbox. */}
@@ -2788,19 +2788,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'name' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-64 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-64 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}
                     >
                       {portaled ? 'Candidate' : (() => {
-                        const SortIcon = sortField !== 'name' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
                             type="button"
                             onClick={() => handleSort('name')}
-                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue ${sortField === 'name' ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue"
                             title="Sort by Candidate"
                           >
                             Candidate
-                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'name' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                           </button>
                         );
                       })()}
@@ -2810,19 +2808,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'date' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-96 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-96 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}
                     >
                       {portaled ? 'Timeline' : (() => {
-                        const SortIcon = sortField !== 'date' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
                             type="button"
                             onClick={() => handleSort('date')}
-                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue ${sortField === 'date' ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue"
                             title="Sort by Timeline"
                           >
                             Timeline
-                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'date' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                           </button>
                         );
                       })()}
@@ -2832,19 +2828,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-28 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}
                     >
                       {portaled ? 'Status' : (() => {
-                        const SortIcon = sortField !== 'status' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
                             type="button"
                             onClick={() => handleSort('status')}
-                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue ${sortField === 'status' ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue"
                             title="Sort by Status"
                           >
                             Status
-                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'status' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                           </button>
                         );
                       })()}
@@ -2854,19 +2848,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-28 text-right ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-28 text-right ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}
                     >
                       {portaled ? 'Tech Score' : (() => {
-                        const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
                             type="button"
                             onClick={() => handleSort('score')}
-                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue flex-row-reverse ${sortField === 'score' ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue"
                             title="Sort by Tech Score"
                           >
                             Tech Score
-                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'score' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                           </button>
                         );
                       })()}
@@ -2876,46 +2868,44 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th
                       scope="col"
                       aria-sort={sortField === 'score' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`w-32 text-right ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}
+                      className={`w-32 text-right ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}
                     >
                       {portaled ? 'Coding Score' : (() => {
-                        const SortIcon = sortField !== 'score' ? ArrowUpDown : sortDirection === 'asc' ? ArrowUp : ArrowDown;
                         return (
                           <button
                             type="button"
                             onClick={() => handleSort('score')}
-                            className={`inline-flex items-center gap-1.5 group transition-colors hover:text-brand-blue flex-row-reverse ${sortField === 'score' ? 'text-brand-blue' : ''}`}
+                            className="inline-flex items-center transition-colors hover:text-brand-blue"
                             title="Sort by Coding Score"
                           >
                             Coding Score
-                            <SortIcon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${sortField === 'score' ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                           </button>
                         );
                       })()}
                     </th>
                   )}
                   {inMain('inviteSource') && (
-                    <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Invite Source</th>
+                    <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {inMain('phone') && (
-                    <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Phone</th>
+                    <th scope="col" className={`w-36 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>Phone</th>
                   )}
                   {inMain('cid') && (
-                    <th scope="col" className={`w-24 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>CID</th>
+                    <th scope="col" className={`w-24 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {inMain('jdId') && (
-                    <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>JD ID</th>
+                    <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>JD ID</th>
                   )}
                   {inMain('jdTitle') && (
-                    <th scope="col" className={`w-56 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Title</th>
+                    <th scope="col" className={`w-56 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>Job Title</th>
                   )}
                   {inMain('jobVersion') && (
-                    <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Job Version</th>
+                    <th scope="col" className={`w-28 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>Job Version</th>
                   )}
                   {isColumnEnabled('assessmentVersion') && (
-                    <th scope="col" className={`w-40 text-left ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 ${stickyHeaderClass}`}>Assessment Version</th>
+                    <th scope="col" className={`w-40 text-left ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 ${stickyHeaderClass}`}>Assessment Version</th>
                   )}
-                  <th scope="col" className={`w-20 text-right ${cellPad} text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
+                  <th scope="col" className={`w-20 text-right ${cellPad} text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               )}

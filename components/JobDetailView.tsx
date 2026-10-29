@@ -70,10 +70,11 @@ import type { Resume as ResumeRecord } from '@/lib/types/types';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
-import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePlanFeature, usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -1150,7 +1151,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     try {
       setViewingAIInterviewCandidate(await aiInterviewService.get(sessionId));
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to load candidate details');
+      toast.error(friendlyErrorMessage(error, "Couldn't load candidate details. Please try again."));
     } finally {
       setLoadingAIInterviewCandidate(false);
     }
@@ -1273,7 +1274,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // A failed clone says why; a failed lookup falls through to the config
       // flow, whose own guard re-checks before anything is created.
       if (error?.message) {
-        toast.error(error.message);
+        toast.error(friendlyErrorMessage(error, "Couldn't create a new AI interview version. Please try again."));
         return;
       }
       // Lookup failed — fall through to the config flow rather than blocking.
@@ -1390,7 +1391,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // A failed clone says why; a failed lookup falls through to the creation
       // flow, whose own guard re-checks before anything is created.
       if (error?.message) {
-        toast.error(error.message);
+        toast.error(friendlyErrorMessage(error, "Couldn't duplicate the assessment. Please try again."));
         return;
       }
     } finally {
@@ -1425,7 +1426,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setDraftAssessment(null);
       fetchAssessmentResults();
     } catch (err: any) {
-      toast.error(err?.message || 'Could not publish the assessment. Please try again.');
+      toast.error(friendlyErrorMessage(err, "Couldn't publish the assessment. Please try again."));
     } finally {
       setPublishingDraft(false);
     }
@@ -1459,7 +1460,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     } catch (err: any) {
       // A draft with no clusters/skills configured can't be published; the API
       // says why, so surface that rather than a generic failure.
-      toast.error(err?.message || 'Could not publish the AI interview. Please try again.');
+      toast.error(friendlyErrorMessage(err, "Couldn't publish the AI interview. Please try again."));
     } finally {
       setPublishingAIDraft(false);
     }
@@ -1676,6 +1677,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           candidateName: item.candidate_name || 'Unknown',
           email: item.candidate_email || '',
           phone: item.phone || '',
+          isArchived: !!item.is_archived,
           matchStatus: matchStatus,
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           overallRating10: item.overall_rating_10,
@@ -2400,7 +2402,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         clearInterval(poll);
       }, 600000);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(err, "Couldn't start scoring. Please try again."));
     }
   };
 
@@ -4354,11 +4356,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full md:min-w-[900px] table-auto">
-                    <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                    <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                       <tr>
                         <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
                         {['Candidate Name', 'Match Status', 'Score', 'Experience', 'Scored By / Date', 'Resume Version'].map((h) => (
-                          <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+                          <th key={h} className="px-4 py-3 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                         ))}
                       </tr>
                     </thead>
@@ -4554,10 +4556,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto tf-table-shell">
                   <table className="w-full md:min-w-[1000px] text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                    <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                       <tr>
                         {['CID', 'Candidate', 'Email', 'Status', 'Score', 'Duration', 'Started At', 'Completed At', 'Proctoring Risk', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                          <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                         ))}
                       </tr>
                     </thead>
@@ -5094,6 +5096,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           // Revoke / Edit follow the same gate as Invite on this page.
           canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && !jobInactive}
+          jdDisabled={job.status === 'Disabled'}
           /* Footer Invite More — the one Create / Send Assessment popup over
              this tracker. The tracker spans every assessment version of this
              job, so there is no single tracked version to fix: the popup
@@ -5129,6 +5132,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           isOpen={!!trackAIInterviewConfig}
           onClose={() => setTrackAIInterviewConfig(null)}
           configId={trackAIInterviewConfig.id}
+          jdDisabled={job.status === 'Disabled'}
+          configArchived={isInterviewConfigArchived(trackAIInterviewConfig.status)}
           jdTitle={job.title}
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
@@ -5595,12 +5600,12 @@ function AIMatchTabContent({
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full md:min-w-[880px] table-auto">
-              <thead className="[&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+              <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
                   {/* Empty select-column header (no Select-All checkbox). */}
-                  <th className="px-3 py-2.5 w-10 align-middle" aria-label="Select" />
+                  <th className="px-3 py-2.5 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
                   {['Rating', 'Candidate', 'Experience', 'Resume Version', 'Scored Status', 'Actions'].map((h) => (
-                    <th key={h} className="px-3 py-2.5 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-3 py-2.5 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -6109,17 +6114,17 @@ function AIMatchTabContent({
               Attachments the old column held. */}
           <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[880px]'}`}>
             {filteredCandidates.length > 0 && (
-            <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+            <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
                 {/* Leading select column — an EMPTY header cell: no Select-All
                     checkbox here (that control lives in the toolbar above). */}
-                <th className="w-10 px-3 py-2.5 align-middle tf-sticky-col-left" aria-label="Select" />
-                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Rating</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Candidate</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Experience</th>
-                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Resume Version</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle">Scored Status</th>
-                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap align-middle tf-sticky-col !bg-gray-50 dark:!bg-slate-800">Actions</th>
+                <th className="w-10 px-3 py-2.5 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Rating</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Experience</th>
+                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Resume Version</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Scored Status</th>
+                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
               </tr>
             </thead>
             )}
@@ -6334,12 +6339,12 @@ function AIMatchTabContent({
                             <table className="w-full min-w-[760px]">
                               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                                 <tr>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Location</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Skills</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Attachments</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Phone</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Location</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Skills</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Uploaded By</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Uploaded Date</th>
+                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Attachments</th>
                                 </tr>
                               </thead>
                               <tbody>

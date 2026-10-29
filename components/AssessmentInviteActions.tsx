@@ -7,11 +7,13 @@ import {
   MoreVertical, Monitor, RefreshCw, X, History, Link2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
-import { assessmentService } from '@/lib/services/assessmentService';
+import { assessmentService, ASSESSMENT_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/assessmentService';
+import { ASSESSMENT_JOB_DISABLED_MESSAGE, isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -488,12 +490,26 @@ export function buildInvitationRowActions(inv: any, opts: {
   onRevoke?: (inv: any) => void;
   revokingId?: string | null;
   onViewResult?: (inv: any) => void;
+  /** This invitation's assessment is archived (its own status, not its JD's)
+   *  — Copy Link, Resend, Edit and Revoke stay visible but disabled; View
+   *  Result is unaffected. Mirrors AI Interview's `configArchived`. */
+  archived?: boolean;
+  /** This invitation's JD is disabled — same lock as `archived`: Copy Link,
+   *  Resend, Edit and Revoke stay visible but disabled; View Result is
+   *  unaffected. A row's own `_jd_status` / `jd_status` is honoured too, for
+   *  lists that span several assessments/JDs. Mirrors AI Interview's
+   *  `jdDisabled`. */
+  jdDisabled?: boolean;
 }): RowAction[] {
   const actions: RowAction[] = [];
   const status = resolveInviteStatus(inv);
+  const jdLocked = !!opts.jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
+  const locked = !!opts.archived || jdLocked;
+  const lockedMessage = opts.archived ? ASSESSMENT_ARCHIVED_ACTION_MESSAGE : ASSESSMENT_JOB_DISABLED_MESSAGE;
+  const lockedProps = locked ? { disabled: true, title: lockedMessage } : {};
 
   if (isCopyLinkAvailable(inv)) {
-    actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInvitationLink(inv), iconClassName: 'text-menu-icon-download' });
+    actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInvitationLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
   }
   // Terminated opens the same page. It carries no scores, so it is labelled
   // "View Details" — what is there is the recording and the Integrity Check
@@ -515,8 +531,9 @@ export function buildInvitationRowActions(inv: any, opts: {
       Icon: Mail,
       run: () => opts.onResend!(inv),
       busy: opts.resendingId === inv.id,
-      disabled: opts.resendingId === inv.id,
+      disabled: opts.resendingId === inv.id || locked,
       iconClassName: 'text-menu-icon-share',
+      ...(locked ? { title: lockedMessage } : {}),
     });
   }
   if (opts.onEditEmail && (status === 'failed' || status === 'bounced')) {
@@ -534,8 +551,9 @@ export function buildInvitationRowActions(inv: any, opts: {
       label: 'Edit',
       Icon: Pencil,
       run: () => opts.onEdit!(inv),
-      title: 'Edit candidate details and send',
+      title: locked ? lockedMessage : 'Edit candidate details and send',
       iconClassName: 'text-menu-icon-edit',
+      disabled: locked,
     });
   }
   if (opts.onRevoke && isRevocableInvitation(inv)) {
@@ -544,9 +562,9 @@ export function buildInvitationRowActions(inv: any, opts: {
       label: 'Revoke',
       Icon: Ban,
       run: () => opts.onRevoke!(inv),
-      disabled: opts.revokingId === inv.id,
+      disabled: opts.revokingId === inv.id || locked,
       busy: opts.revokingId === inv.id,
-      title: "Revoke this invitation — the candidate's link will stop working",
+      title: locked ? lockedMessage : "Revoke this invitation — the candidate's link will stop working",
       destructive: true,
     });
   }
@@ -694,7 +712,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
       await onSaved();
       onClose();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to update invitation');
+      toast.error(friendlyErrorMessage(err, "Couldn't update invitation. Please try again."));
     } finally {
       setSaving(false);
     }
@@ -789,7 +807,7 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
           toast.success(`Invitation for ${target.candidate_email} has been revoked`);
           await onRevoked();
         } catch (err: any) {
-          toast.error(err?.message || 'Failed to revoke invitation');
+          toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
         } finally {
           setRevoking(false);
           onClose();

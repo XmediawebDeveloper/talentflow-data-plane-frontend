@@ -45,7 +45,8 @@ const UNIT_TYPE_CONFIG = {
 };
 
 /** Green "+N returned · net M" under a cell when units were credited back
- *  (a deleted resume returns its 1 RU). `used` / `returned` are unit totals. */
+ *  (a deleted resume returns its 1 RU). `used` / `returned` are unit totals.
+ *  Not used for AI Assessment / AI Interview — those show units deducted only. */
 function ReturnedLine({ used, returned, net }: { used: number; returned?: number; net?: number }) {
   if (!returned || returned <= 0) return null;
   const fmt = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
@@ -290,41 +291,41 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
       {members.length > 0 ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
           <table className="w-full" role="table" aria-label="Team member usage statistics">
-            <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
+            <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 <th
                   aria-sort={ariaSort(sort, 'name')}
-                  className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"
                 >
                   <SortableHeader label="Member" column="name" sort={sort} />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'RS')}>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'RS')}>
                   <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'AS')}>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'AS')}>
                   <SortableHeader label="Assessment" column="AS" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'AIU')}>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'AIU')}>
                   <SortableHeader label="AI Interview" column="AIU" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'RU')}>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'RU')}>
                   <SortableHeader label="Resume Units" column="RU" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'jds')}>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'jds')}>
                   <SortableHeader label="JDs" column="jds" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500" aria-sort={ariaSort(sort, 'assessments')}>
+                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'assessments')}>
                   <SortableHeader label="Assessments" column="assessments" sort={sort} align="center" />
                 </th>
                 <th
                   aria-sort={ariaSort(sort, 'total')}
-                  className="px-6 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300"
                 >
                   <SortableHeader label="Total" column="total" sort={sort} align="center" />
                 </th>
                 <th
                   aria-sort={ariaSort(sort, 'recent')}
-                  className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider"
+                  className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300"
                 >
                   <SortableHeader label="Last Active" column="recent" sort={sort} align="right" />
                 </th>
@@ -358,7 +359,6 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.AS?.consumption_count || 0} actions
                     </div>
-                    <ReturnedLine used={member.by_type.AS?.total_consumed || 0} returned={member.by_type.AS?.units_returned} net={member.by_type.AS?.net_consumed} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-purple-600 dark:text-purple-400 tabular-nums">
@@ -367,7 +367,6 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-xs text-gray-500 dark:text-slate-500">
                       {member.by_type.AIU?.consumption_count || 0} actions
                     </div>
-                    <ReturnedLine used={member.by_type.AIU?.total_consumed || 0} returned={member.by_type.AIU?.units_returned} net={member.by_type.AIU?.net_consumed} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-orange-600 dark:text-orange-400 tabular-nums">

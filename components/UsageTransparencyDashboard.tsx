@@ -273,7 +273,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     {Array.from({ length: 8 }).map((_, i) => (
-                      <th key={i} className="text-left py-3 px-4">
+                      <th key={i} className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">
                         <Skeleton className="h-3 w-20" />
                       </th>
                     ))}
@@ -596,14 +596,14 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             <table className="w-full">
               <thead>
                 <tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Timestamp</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Unit Type</th>
-                  <th className="text-center py-3 px-4 text-sm font-medium text-gray-700">Units</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Category</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">User</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-700">Entity</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-700">Score</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Timestamp</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Unit Type</th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Units</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Category</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">User</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Entity</th>
+                  <th className="text-right py-3 px-4 text-xs font-semibold text-gray-600">Score</th>
                 </tr>
               </thead>
               <tbody>

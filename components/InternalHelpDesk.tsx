@@ -9,6 +9,7 @@ import {
   User, Calendar, Loader2, HelpCircle, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -182,7 +183,7 @@ export default function InternalHelpDesk() {
       fetchStats();
     } catch (error: any) {
       console.error('Error creating ticket:', error);
-      toast.error(error?.response?.data?.detail || 'Failed to create ticket');
+      toast.error(friendlyErrorMessage(error, "Couldn't create ticket. Please try again."));
     } finally {
       setSubmitting(false);
     }
@@ -593,15 +594,15 @@ export default function InternalHelpDesk() {
               ) : (
                 <div className="overflow-x-auto tf-table-shell">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Request #</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Title</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Category</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Priority</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Updated</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 tf-sticky-col">Actions</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Request #</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Title</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Category</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Priority</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Updated</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">

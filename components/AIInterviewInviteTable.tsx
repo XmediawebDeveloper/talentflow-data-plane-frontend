@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
@@ -650,6 +650,12 @@ export interface AIInterviewInviteTableProps {
    *  Resend, Edit and Revoke are shown disabled. A row's own `_jd_status` /
    *  `jd_status` is honoured too, for lists that span several interviews. */
   jdDisabled?: boolean;
+  /** The interview CONFIG itself is archived (its own status, independent of
+   *  its job's) — same effect as `jdDisabled`: Copy Link / Revoke on an
+   *  Invited row, Edit on a Revoked row, and Resend on an Expired row all stay
+   *  visible but disabled. Table-wide, like `jdDisabled`, since every caller
+   *  scopes this table to one config. */
+  configArchived?: boolean;
   /** Desktop table: only PRIMARY_INVITE_COLUMNS in the row; a row click (or
    *  its chevron) expands it to show the rest, instead of opening the
    *  candidate. View Details stays in the row's ⋮ menu. */
@@ -680,6 +686,7 @@ export default function AIInterviewInviteTable({
   resendingId,
   revokingId,
   jdDisabled = false,
+  configArchived = false,
   expandableRows = false,
   displayMode = 'list',
 }: AIInterviewInviteTableProps) {
@@ -693,7 +700,7 @@ export default function AIInterviewInviteTable({
       else next.add(id);
       return next;
     });
-  const rowLocked = (inv: any): boolean => jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
+  const rowLocked = (inv: any): boolean => jdDisabled || configArchived || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
 
   /* Full action-log modal — fetched on demand per row, never eagerly for the
      whole page, so opening the tracker doesn't fire one audit-trail request
@@ -723,7 +730,9 @@ export default function AIInterviewInviteTable({
   const rowActions = (inv: any): RowAction[] => {
     const actions: RowAction[] = [];
     const locked = rowLocked(inv);
-    const lockedProps = locked ? { disabled: true, title: JD_DISABLED_ACTION_MESSAGE } : {};
+    const lockedProps = locked
+      ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
+      : {};
 
     if (isInterviewLinkLive(inv)) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
@@ -1125,7 +1134,7 @@ export default function AIInterviewInviteTable({
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700">
               {selectable && (
-                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select">
+                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select">
                   {onToggleSelectAll && (
                     <button
                       type="button"
@@ -1145,7 +1154,7 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
               {/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
                   carries the invite time), Status, Score, Invite Source, then the job group (Job ID and Job
@@ -1154,24 +1163,24 @@ export default function AIInterviewInviteTable({
               {/* hidden md:table-cell mirrors this column's <td> — without it the
                   header carries one more cell than the body between sm and md and
                   every heading after Timeline shifts off its column. */}
-              {inRow('timeline') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
-              {inRow('status') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
-              {inRow('score') && <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
-              {inRow('inviteSource') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
-              {inRow('cid') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
+              {inRow('timeline') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
+              {inRow('status') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
+              {inRow('score') && <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
+              {inRow('inviteSource') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
+              {inRow('cid') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
               {showJobColumn && (
                 <>
-                  {inRow('jobId') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
-                  {inRow('jobTitle') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
+                  {inRow('jobId') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
+                  {inRow('jobTitle') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
                 </>
               )}
               {(showJobColumn || jobVersion != null || showRowVersions) && inRow('jobVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
               )}
               {(showJobColumn || interviewVersion != null || showRowVersions) && inRow('interviewVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

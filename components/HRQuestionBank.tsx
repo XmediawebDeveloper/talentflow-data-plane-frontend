@@ -10,6 +10,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -302,7 +303,7 @@ export default function HRQuestionBank() {
       setFormData(EMPTY_QUESTION);
       await loadQuestions(); // Reload from API
     } catch (error: any) {
-      toast.error({ title: 'Failed to save question', description: error?.message });
+      toast.error({ title: "Couldn't save question", description: friendlyErrorMessage(error, "Please try again.") });
     } finally {
       setSaving(false);
     }
@@ -335,7 +336,7 @@ export default function HRQuestionBank() {
       toast.success({ title: 'Question deleted' });
       await loadQuestions(); // Reload from API
     } catch (error: any) {
-      toast.error({ title: 'Failed to delete question', description: error?.response?.data?.detail || error?.message });
+      toast.error({ title: "Couldn't delete question", description: friendlyErrorMessage(error, "Please try again.") });
     }
   };
 

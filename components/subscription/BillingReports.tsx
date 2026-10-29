@@ -319,16 +319,16 @@ export default function BillingReports<T extends ReportInvoice>({
         <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full min-w-[900px] tf-premium-table">
-              <thead className="bg-gray-50/80 dark:bg-slate-800/50">
+              <thead className="bg-white dark:bg-slate-900">
                 <tr className="text-left">
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[200px]">Invoice</th>
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Date</th>
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Description</th>
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[140px]">Module</th>
-                  <th className="px-5 py-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[160px]">Payment Method</th>
-                  <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[130px]">Amount</th>
-                  <th className="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px]">Status</th>
-                  <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500 w-[100px] tf-sticky-col">Actions</th>
+                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[200px]">Invoice</th>
+                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Date</th>
+                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px]">Module</th>
+                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Payment Method</th>
+                  <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]">Amount</th>
+                  <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px]">Status</th>
+                  <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px] tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody>

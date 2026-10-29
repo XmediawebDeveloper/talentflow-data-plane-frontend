@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, ChevronDown } from 'lucide-react';
+import { X, Database, FolderOpen, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, ChevronDown } from 'lucide-react';
+import { RESUME_TAB_LABEL } from '@/lib/constants/resumePools';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -32,6 +33,7 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
@@ -166,9 +168,13 @@ export default function SelectSourceModal({
   // distinct capability from browsing, same as My Resumes' own below, so an
   // Owner can disable one source without touching the other (mirrors the
   // per-source AI Talent Match permissions).
+  // The tenant admin owns every source, so it is enabled by default and does
+  // not wait for the per-user permission flags to load (they were still unset
+  // on first open, leaving the tab disabled until a refresh).
   const hasInternalDBAccess =
-    (user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false) &&
-    hasPermissionCode('internal_db:score');
+    isTenantAdmin ||
+    ((user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false) &&
+      hasPermissionCode('internal_db:score'));
 
   // My Resumes tab used to be unconditional; now gated by its own Score
   // Resume sub-action the same way.
@@ -516,7 +522,7 @@ export default function SelectSourceModal({
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
-      toast.error(`Failed to archive resume: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      toast.error(`Couldn't archive resume. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 
@@ -531,7 +537,7 @@ export default function SelectSourceModal({
       await fetchData();
       refreshTabCounts();
     } catch (error: any) {
-      toast.error(`Failed to delete resume: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      toast.error(`Couldn't delete resume. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 
@@ -742,7 +748,7 @@ export default function SelectSourceModal({
 
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(error.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
       setSubmitting(false);
     }
   };
@@ -1037,7 +1043,7 @@ export default function SelectSourceModal({
       setFolders(flattenFolders(folderData || []));
       toast.success('Folder created');
     } catch (error: any) {
-      toast.error(`Failed to create folder: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+      toast.error(`Couldn't create folder. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 
@@ -1087,9 +1093,9 @@ export default function SelectSourceModal({
     // progressItems and the restore callback) but its overlay must not block the
     // page — hide it rather than unmounting, so "expand" can bring it straight back.
     <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] [@media(max-height:820px)]:sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
+        <div className="flex items-start justify-between p-4 sm:p-6 [@media(max-height:820px)]:sm:py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
               <ClipboardList className="w-5 h-5 text-brand-blue" />
@@ -1126,7 +1132,7 @@ export default function SelectSourceModal({
             version, published ones selectable. With a single published version
             there is nothing to choose, so it is simply stated. */}
         {job && (
-          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-2.5 sm:py-3 bg-white dark:bg-slate-900 flex-shrink-0">
+          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-2.5 sm:py-3 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 flex-shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2 min-w-0 text-sm">
                 <span className="text-gray-600 dark:text-slate-400">Score against Job Version</span>
@@ -1189,58 +1195,51 @@ export default function SelectSourceModal({
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
-          <div className="flex gap-1 sm:gap-2">
-            {/* My Resumes tab needs its Score Resume sub-action — without it the
-                tab stays visible but greyed out (hover explains). */}
-            <button
-              onClick={() => { if (!hasMyResumesScoreAccess) return; handleTabChange('my-resumes'); }}
-              aria-disabled={!hasMyResumesScoreAccess}
-              title={!hasMyResumesScoreAccess ? 'You do not have permission to score resumes from My Resumes' : undefined}
-              className={`px-3 sm:px-5 py-2 sm:py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                !hasMyResumesScoreAccess
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
-                  : activeTab === 'my-resumes'
-                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
-                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">My Resumes</span>
-              <span className="sm:hidden">Resumes</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'my-resumes'
-                  ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
-                {tabCounts.myResumes ?? ''}
-              </span>
-            </button>
-            {/* Shared Database tab: visible always, greyed out without access. */}
-            <button
-              onClick={() => { if (!hasInternalDBAccess) return; handleTabChange('internal-db'); }}
-              aria-disabled={!hasInternalDBAccess}
-              title={!hasInternalDBAccess ? 'You do not have permission to score resumes from the Shared Database' : undefined}
-              className={`px-3 sm:px-5 py-2 sm:py-3 text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                !hasInternalDBAccess
-                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
-                  : activeTab === 'internal-db'
-                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
-                    : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
-              }`}
-            >
-              <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Shared Database</span>
-              <span className="sm:hidden">Shared DB</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'internal-db'
-                  ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
-                {tabCounts.internalDb ?? ''}
-              </span>
-            </button>
+        {/* Tabs — the Resume Database page's pool switch (same segmented
+            strip, icons, colours and count badge), centred in the popup. A
+            pool without the Score Resume permission stays visible but greyed
+            out (hover explains). */}
+        <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex-shrink-0 flex justify-center">
+          <div
+            role="tablist"
+            aria-label="Resume pool"
+            className="grid w-full max-w-full grid-cols-2 gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm sm:inline-flex sm:w-auto dark:bg-slate-900 dark:ring-slate-700"
+          >
+            {([
+              { tab: 'my-resumes', Icon: FolderOpen, iconColor: 'text-brand-orange', allowed: hasMyResumesScoreAccess, count: tabCounts.myResumes, lockedTitle: 'You do not have permission to score resumes from My Resumes' },
+              { tab: 'internal-db', Icon: Database, iconColor: 'text-brand-cyan', allowed: hasInternalDBAccess, count: tabCounts.internalDb, lockedTitle: 'You do not have permission to score resumes from the Shared Database' },
+            ] as const).map(({ tab, Icon, iconColor, allowed, count, lockedTitle }) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => { if (!allowed) return; handleTabChange(tab); }}
+                aria-disabled={!allowed}
+                title={!allowed ? lockedTitle : undefined}
+                className={`inline-flex min-h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm transition-colors sm:h-9 sm:gap-2 sm:px-4 sm:whitespace-nowrap ${
+                  !allowed
+                    ? 'font-medium text-gray-400 cursor-not-allowed opacity-60 dark:text-slate-500'
+                    : activeTab === tab
+                      ? 'bg-slate-100 font-semibold text-brand-blue shadow-sm ring-1 ring-brand-blue/30 dark:bg-slate-800'
+                      : 'font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                <Icon className={`h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-400'}`} />
+                {RESUME_TAB_LABEL[tab]}
+                {count !== undefined && count !== null && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
+                      activeTab === tab
+                        ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                        : 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -1299,7 +1298,7 @@ export default function SelectSourceModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />

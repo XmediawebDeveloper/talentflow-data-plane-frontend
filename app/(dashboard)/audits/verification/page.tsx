@@ -394,13 +394,13 @@ export default function LogVerificationPage() {
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
                 <thead>
-                  <tr className="bg-gray-50/80 dark:bg-slate-800/50">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Timestamp</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Action</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Entity Type</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider"></th>
+                  <tr className="bg-white dark:bg-slate-900">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Timestamp</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Entity Type</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">User</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

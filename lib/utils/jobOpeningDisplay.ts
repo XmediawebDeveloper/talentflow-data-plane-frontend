@@ -28,6 +28,29 @@ export const formatJobVersionLabel = (job: Pick<Job, 'job_id' | 'title' | 'versi
   return job.versionNumber ? `${label} V${job.versionNumber}` : label;
 };
 
+/**
+ * "JD-294 — Java Developer (Version 1)" — how a toast names ONE JD version.
+ * The version is left out when it is not known (a just-published row whose
+ * lineage number has not come back yet), rather than guessed.
+ */
+export const formatJobSubject = (job: Pick<Job, 'job_id' | 'title' | 'versionNumber'>): string => {
+  const role = job.title || 'Untitled';
+  const subject = job.job_id ? `${job.job_id} — ${role}` : role;
+  return job.versionNumber != null ? `${subject} (Version ${job.versionNumber})` : subject;
+};
+
+/**
+ * "JD-294 — Java Developer (Version 1) deleted successfully." — the
+ * success toast for an action on ONE JD version. Built from the exact row
+ * (or View Versions row) that was acted on, so a multi-version job names
+ * that version, not the lineage's latest. Version defaults to 1, the same
+ * default `mapJDToJob` gives `versionNumber`.
+ */
+export const formatJobActionMessage = (
+  job: Pick<Job, 'job_id' | 'title' | 'versionNumber'>,
+  action: 'deleted' | 'archived' | 'disabled' | 'run' | 'published' | 'republished' | 're-enabled' | 'unarchived and published',
+): string => `${formatJobSubject({ ...job, versionNumber: job.versionNumber ?? 1 })} ${action} successfully.`;
+
 /** "full_time" → "Full Time". A dash when there is nothing to format. */
 export const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -445,6 +468,24 @@ export const assessmentListRepresentative = (
   hasAssessment: (version: Job) => boolean = () => false,
 ): Job | null =>
   bucket.find(version => isSelectableVersion(version) && !hasAssessment(version)) ?? null;
+
+/**
+ * The newest ARCHIVED version of a lineage, for a caller that wants to keep an
+ * otherwise-dropped job visible — same idea as `JobOpeningPickerList`'s
+ * `excludeDraftsOnly` mode: a job is still shown on its newest non-draft
+ * version even when that version cannot be built against, so it reads as
+ * "archived" rather than vanishing from the list.
+ *
+ * Deliberately narrower than "has no selectable representative": a lineage
+ * whose newest non-draft version is Disabled, or whose every live version is
+ * simply already taken, returns `null` here too — this is only the Archived
+ * case, for callers that keep those other two hidden on purpose and want
+ * Archived added back without touching them.
+ */
+export const archivedAssessmentRepresentative = (bucket: Job[]): Job | null => {
+  const latestNonDraft = bucket.find(version => version.status !== 'Draft');
+  return latestNonDraft && String(latestNonDraft.status) === 'Archived' ? latestNonDraft : null;
+};
 
 /**
  * The Create Assessment job list: one row per job, each on its newest
