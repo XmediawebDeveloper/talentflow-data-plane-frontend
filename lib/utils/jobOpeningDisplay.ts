@@ -470,6 +470,24 @@ export const assessmentListRepresentative = (
   bucket.find(version => isSelectableVersion(version) && !hasAssessment(version)) ?? null;
 
 /**
+ * The newest ARCHIVED version of a lineage, for a caller that wants to keep an
+ * otherwise-dropped job visible — same idea as `JobOpeningPickerList`'s
+ * `excludeDraftsOnly` mode: a job is still shown on its newest non-draft
+ * version even when that version cannot be built against, so it reads as
+ * "archived" rather than vanishing from the list.
+ *
+ * Deliberately narrower than "has no selectable representative": a lineage
+ * whose newest non-draft version is Disabled, or whose every live version is
+ * simply already taken, returns `null` here too — this is only the Archived
+ * case, for callers that keep those other two hidden on purpose and want
+ * Archived added back without touching them.
+ */
+export const archivedAssessmentRepresentative = (bucket: Job[]): Job | null => {
+  const latestNonDraft = bucket.find(version => version.status !== 'Draft');
+  return latestNonDraft && String(latestNonDraft.status) === 'Archived' ? latestNonDraft : null;
+};
+
+/**
  * The Create Assessment job list: one row per job, each on its newest
  * published version that does not already have an assessment, with jobs that
  * have no such version dropped.
