@@ -1677,6 +1677,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           candidateName: item.candidate_name || 'Unknown',
           email: item.candidate_email || '',
           phone: item.phone || '',
+          isArchived: !!item.is_archived,
           matchStatus: matchStatus,
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           overallRating10: item.overall_rating_10,

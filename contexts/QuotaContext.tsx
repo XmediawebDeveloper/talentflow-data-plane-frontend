@@ -220,6 +220,9 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       prevPlanRef.current = { name: newPlanName, tier: newPlanTier };
 
       networkRetriedRef.current = false;
+      // A successful fetch proves access — restore the header's plan/units
+      // widget if an earlier 403 had hidden it.
+      setHasPermission(true);
       setQuotaData(data);
       setLastFetchTime(Date.now());
       // Ahead of the effect that syncs it, so refetch() can hand it back now.
@@ -248,12 +251,25 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (statusCode === 403 || statusCode === 503) {
-        // Permission denied - hide the usage card silently
+      if (statusCode === 403) {
+        // Permission denied - hide the usage card silently (a later
+        // successful fetch shows it again, see above).
         console.log('[QuotaContext] User does not have permission to view quota data');
         setHasPermission(false);
         setError(null); // Clear error to prevent error displays
+      } else if (quotaDataRef.current) {
+        // A background refresh failed (503 "service busy", 5xx, timeout…) but
+        // we already have good data. Keep showing it rather than hiding the
+        // header's plan button or flipping it to "Unable to load" until a
+        // full page reload — 503 used to be treated as "no permission",
+        // which made the widget vanish after one transient blip. Retry once.
+        console.warn('[QuotaContext] Background quota refresh failed; keeping last data:', statusCode);
+        if (!networkRetriedRef.current) {
+          networkRetriedRef.current = true;
+          setTimeout(() => { void fetchQuotaData(true); }, 5000);
+        }
       } else {
+        // First load failed (incl. 503): show "Unable to load", don't hide the button.
         setError('Failed to fetch quota data');
       }
     } finally {
@@ -300,6 +316,56 @@ export function useQuota() {
     throw new Error('useQuota must be used within a QuotaProvider');
   }
   return context;
+}
+
+export interface ModuleQuota {
+  /** Units left; -1 when unlimited; null while loading or when the plan reports no limit. */
+  availableUnits: number | null;
+  /** Subscription limit + purchased add-ons; -1 when unlimited; 0 when unknown (badge stays hidden). */
+  totalUnits: number;
+  isUnlimited: boolean;
+  /** False for expired / cancelled plans — don't show "quota exhausted" for those. */
+  isActivePlan: boolean;
+  /** The shared quota data has arrived. */
+  loaded: boolean;
+  /** Force a fresh fetch (e.g. right after an action that used units). */
+  refresh: () => Promise<unknown>;
+}
+
+/**
+ * One module's quota (AS = assessment units, AIU = AI interview units) from the
+ * shared QuotaContext — the same single fetch as the header's "units left", kept
+ * live by the units-consumed event. AI Interview and Assessment both use this, so
+ * their badges, banners and the header always agree.
+ *
+ * Never invents numbers: before data arrives, or when the plan reports a 0/empty
+ * limit, `totalUnits` is 0 and `availableUnits` is null (badge hidden, no banner).
+ */
+export function useModuleQuota(key: 'AS' | 'AIU' | 'RS' | 'RU'): ModuleQuota {
+  const { quotaData, refetch } = useQuota();
+  return React.useMemo(() => {
+    const status = (quotaData?.subscription_status || '').toLowerCase();
+    // No status from the API → treat as active (only explicit expired/cancelled hide banners).
+    const isActivePlan = !status || status === 'active' || status === 'trial';
+    const base = { isActivePlan, loaded: !!quotaData, refresh: refetch };
+    const q = quotaData?.quotas?.[key];
+    if (!q) return { ...base, availableUnits: null, totalUnits: 0, isUnlimited: false };
+
+    const subLimit = q.subscription?.limit;
+    if (subLimit === -1 || subLimit === 'unlimited') {
+      return { ...base, availableUnits: -1, totalUnits: -1, isUnlimited: true };
+    }
+    if (typeof subLimit !== 'number' || subLimit <= 0) {
+      return { ...base, availableUnits: null, totalUnits: 0, isUnlimited: false };
+    }
+    const used = q.subscription?.used ?? 0;
+    const addonPurchased = typeof q.addon?.total_purchased === 'number' ? q.addon.total_purchased : 0;
+    const addonConsumed = typeof q.addon?.total_consumed === 'number' ? q.addon.total_consumed : 0;
+    const remaining = typeof q.total_remaining === 'number'
+      ? Math.max(0, q.total_remaining)
+      : Math.max(0, subLimit - used) + Math.max(0, addonPurchased - addonConsumed);
+    return { ...base, availableUnits: remaining, totalUnits: subLimit + addonPurchased, isUnlimited: false };
+  }, [quotaData, refetch, key]);
 }
 
 export default QuotaContext;

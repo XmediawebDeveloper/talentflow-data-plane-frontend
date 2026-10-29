@@ -33,6 +33,10 @@ import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
+
+// An archived resume is off-limits for Invite/Score everywhere in the app —
+// see resume-view/[id]/page.tsx's identical ARCHIVED_ACTION_MESSAGE.
+const ARCHIVED_RESUME_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { downloadScorecardsZip as downloadScorecardsZipShared } from '@/lib/utils/scorecardDownload';
@@ -252,6 +256,9 @@ export interface ScoredResume {
   // Source and status fields
   source?: 'my-resumes' | 'database' | string;
   status?: 'completed' | 'failed' | 'processing' | 'queued' | string;
+  // The underlying resume was archived after being scored — Invite/Score
+  // must be blocked for it, same rule every other resume action follows.
+  isArchived?: boolean;
   errorReason?: string;
   // Real scoring data from API
   aiSummary?: string;
@@ -1822,16 +1829,20 @@ Best regards`);
     /* The row's Invite opens THE invite popup just like the selection's
        items, and is gated the same way — permission only: the popup itself
        offers Create when this job has no assessment / AI interview yet, so
-       "none configured" no longer greys it out. */
-    const rowCanInviteAssessment = canCreateAssessments;
-    const rowCanInviteAIInterview = mayInviteAIInterview;
+       "none configured" no longer greys it out. An archived resume is the
+       one thing that overrides all of that — same rule every other resume
+       action (Score, AI Talent Match, resume-view's Invite) follows. */
+    const rowCanInviteAssessment = !resume.isArchived && canCreateAssessments;
+    const rowCanInviteAIInterview = !resume.isArchived && mayInviteAIInterview;
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
       rowInviteDisabled: !rowCanInviteAssessment && !rowCanInviteAIInterview,
       // The trigger stays visible but inert, with a tooltip naming the
       // reason, rather than disappearing outright.
-      rowInviteDisabledTitle: jobLockReason
+      rowInviteDisabledTitle: resume.isArchived
+        ? ARCHIVED_RESUME_MESSAGE
+        : jobLockReason
         ? jobLockReason
         : !(canCreateAssessments || mayInviteAIInterview)
         ? (invitePlanLocked ? PLAN_LOCKED_MESSAGE : 'You do not have permission to invite candidates')
@@ -1850,7 +1861,7 @@ Best regards`);
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!rowCanInviteAssessment ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
           aria-disabled={!rowCanInviteAssessment || undefined}
-          title={!rowCanInviteAssessment ? assessmentDeniedReason : undefined}
+          title={!rowCanInviteAssessment ? (resume.isArchived ? ARCHIVED_RESUME_MESSAGE : assessmentDeniedReason) : undefined}
           onSelect={(e) => {
             if (!rowCanInviteAssessment) { e.preventDefault(); return; }
             openRowsInvite('assessment', [resume]);
@@ -1862,7 +1873,7 @@ Best regards`);
         <DropdownMenuItem
           className={`${scoredResumesMenuItemClass} ${!rowCanInviteAIInterview ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
           aria-disabled={!rowCanInviteAIInterview || undefined}
-          title={!rowCanInviteAIInterview ? aiInterviewDeniedReason : undefined}
+          title={!rowCanInviteAIInterview ? (resume.isArchived ? ARCHIVED_RESUME_MESSAGE : aiInterviewDeniedReason) : undefined}
           onSelect={(e) => {
             if (!rowCanInviteAIInterview) { e.preventDefault(); return; }
             if (!onOpenInviteDialog && onInviteAIInterview) {
@@ -2109,10 +2120,13 @@ Best regards`);
         // permission reason with why — same as Job Details' JobActionLock,
         // for the one host job this table itself knows the status of.
         const selectionJobLock = resolveSelectionJobLock(selectionJobs);
-        const assessmentAllowed = canCreateAssessments && !selectionJobLock;
-        const assessmentReason = selectionJobLock ?? assessmentDeniedReason;
-        const interviewAllowed = mayInviteAIInterview && !selectionJobLock;
-        const interviewReason = selectionJobLock ?? aiInterviewDeniedReason;
+        // Same rule as a single row's Invite — an archived resume anywhere in
+        // the selection blocks the whole batch rather than silently dropping it.
+        const selectionArchivedCount = effectiveSelectedRows.filter((r) => r.isArchived).length;
+        const assessmentAllowed = canCreateAssessments && !selectionJobLock && selectionArchivedCount === 0;
+        const assessmentReason = selectionArchivedCount > 0 ? ARCHIVED_RESUME_MESSAGE : (selectionJobLock ?? assessmentDeniedReason);
+        const interviewAllowed = mayInviteAIInterview && !selectionJobLock && selectionArchivedCount === 0;
+        const interviewReason = selectionArchivedCount > 0 ? ARCHIVED_RESUME_MESSAGE : (selectionJobLock ?? aiInterviewDeniedReason);
         return (
           <>
             {/* Always offered (permission aside): THE invite popup with the ticked
