@@ -7,6 +7,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
@@ -77,6 +78,7 @@ import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/s
 import FilterSelect from '@/components/ui/filter-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
+import { isAssessmentArchived } from '@/lib/services/assessmentService';
 
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
@@ -116,7 +118,7 @@ import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
-import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
+import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import { jobLockBadgeFor } from '@/components/jobs/JobStatusBadge';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -2716,8 +2718,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      status-class or the other — see allTrackingRevocable/allTrackingResendable
      below. A mixed Invited+Expired selection shows neither: an action valid
      for one status must never be applied to the other (Scenario 4). */
+  /* The assessment this row's Track popup is archived for — job scope reads
+     each row's own assessment (several versions, several statuses, stamped by
+     stampJobScopedInvite above); single-assessment scope is the one assessment
+     the popup is open on. Archived keeps every row visible but greys Copy
+     Link / Revoke / Edit / Resend, the same way `configArchived` does for the
+     AI Interview tracker. */
+  const trackingInviteArchived = (inv: any): boolean =>
+    isAssessmentArchived(trackingJob ? inv._assessment_status : selectedAssessmentForTracking?.status);
+  /** The JD behind this row's assessment is disabled — same lock as
+   *  `trackingInviteArchived`, just keyed off the JD rather than the
+   *  assessment. Job scope: each row can belong to a different job VERSION
+   *  (a different JD row), read via the row's own `_jd_id`. Single-assessment
+   *  scope: the one JD the popup is open on. Reads the same
+   *  `jobVersionStatusById` cache Duplicate/Share/Revoke already use for this
+   *  list, rather than a separate lineage fetch. */
+  const trackingInviteJdDisabled = (inv: any): boolean => {
+    const jdId = trackingJob ? inv._jd_id : selectedAssessmentForTracking?.jd_id;
+    return isJdDisabled(jobVersionStatusById[jdId || '']);
+  };
   const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
-  const trackingSelectableIds = trackingInvitations.filter(isBulkActionable).map((inv: any) => inv.id);
+  const trackingSelectableIds = trackingInvitations
+    .filter((inv: any) => isBulkActionable(inv) && !trackingInviteArchived(inv) && !trackingInviteJdDisabled(inv))
+    .map((inv: any) => inv.id);
   const trackingSelectedRows = trackingInvitations.filter((inv: any) => trackingSelectedIds.has(inv.id));
   const allTrackingRevocable = trackingSelectedRows.length > 0 && trackingSelectedRows.every(isBulkRevocable);
   const allTrackingResendable = trackingSelectedRows.length > 0 && trackingSelectedRows.every(isBulkResendable);
@@ -2901,6 +2924,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     _assessment_short_id: scoped.short_id,
     _assessment_title: scoped.title,
     _assessment_version: scoped.version ?? 1,
+    _assessment_status: scoped.status,
+    _jd_id: scoped.jd_id,
     _jd_version: jobVersionOfAssessment(scoped, jobVersionByJdId) ?? 1,
   });
 
@@ -3501,17 +3526,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => {
     if (activeTab !== 'invitation-status') return;
     loadAllInviteStatuses();
-    /* Candidates open, start and finish on their own, so the tab polls quietly
-       instead of waiting for a page refresh. Skipped while the browser tab is
-       hidden. */
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible' && inviteStatusInFlightRef.current === 0) {
-        loadAllInviteStatuses(true);
-      }
-    }, 15000);
-    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+  /* Candidates open, start and finish on their own, so the tab polls quietly
+     instead of waiting for a page refresh. Skipped while the browser tab is
+     hidden. */
+  useTrackerPoll(activeTab === 'invitation-status', () => {
+    if (inviteStatusInFlightRef.current === 0) return loadAllInviteStatuses(true);
+  });
 
   // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
@@ -3641,14 +3663,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
     loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters);
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters, true);
-        loadTrackingInvitationSummary(selectedAssessmentForTracking);
-      }
-    }, 15000);
-    return () => clearInterval(timer);
   }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob, trackingCurrentPage, trackingFilters]);
+  useTrackerPoll(showTrackInvitesModal && !!selectedAssessmentForTracking, () => Promise.all([
+    loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters, true),
+    loadTrackingInvitationSummary(selectedAssessmentForTracking),
+  ]));
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
@@ -8230,12 +8249,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 // that inline editor UI, only Resend. The
                 // new Edit (revoked)/Revoke/Copy Link are
                 // added here alongside it.
+                const jdDisabled = isJdDisabled(jobVersionStatusById[inv._jd_id || '']);
                 const actions = buildInvitationRowActions(inv, {
                   onResend: (target) => setResendTargetInvitation(target),
                   resendingId: isResending ? resendTargetInvitation?.id : null,
                   onEdit: (target) => setEditInviteTarget(target),
                   onRevoke: (target) => setRevokeInviteTarget(target),
                   revokingId: revokeInviteTarget?.id,
+                  jdDisabled,
                 });
                 const extraItems = (
                   <>
@@ -10298,7 +10319,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 checkbox; the rest keep a fixed-width slot so the
                                 columns stay aligned. */}
                             <td className="py-3 pl-4 pr-0 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                              {isBulkActionable(invitation) ? (
+                              {isBulkActionable(invitation) && !trackingInviteArchived(invitation) ? (
                                 <button
                                   type="button"
                                   role="checkbox"
@@ -10503,6 +10524,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     onRevoke: (target) => setRevokeInviteTarget(target),
                                     revokingId: revokeInviteTarget?.id,
                                     onViewResult: openTrackedInviteResult,
+                                    archived: trackingInviteArchived(invitation),
+                                    jdDisabled: trackingInviteJdDisabled(invitation),
                                   })}
                                 />
                               )}

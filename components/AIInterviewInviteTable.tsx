@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
@@ -650,6 +650,12 @@ export interface AIInterviewInviteTableProps {
    *  Resend, Edit and Revoke are shown disabled. A row's own `_jd_status` /
    *  `jd_status` is honoured too, for lists that span several interviews. */
   jdDisabled?: boolean;
+  /** The interview CONFIG itself is archived (its own status, independent of
+   *  its job's) — same effect as `jdDisabled`: Copy Link / Revoke on an
+   *  Invited row, Edit on a Revoked row, and Resend on an Expired row all stay
+   *  visible but disabled. Table-wide, like `jdDisabled`, since every caller
+   *  scopes this table to one config. */
+  configArchived?: boolean;
   /** Desktop table: only PRIMARY_INVITE_COLUMNS in the row; a row click (or
    *  its chevron) expands it to show the rest, instead of opening the
    *  candidate. View Details stays in the row's ⋮ menu. */
@@ -680,6 +686,7 @@ export default function AIInterviewInviteTable({
   resendingId,
   revokingId,
   jdDisabled = false,
+  configArchived = false,
   expandableRows = false,
   displayMode = 'list',
 }: AIInterviewInviteTableProps) {
@@ -693,7 +700,7 @@ export default function AIInterviewInviteTable({
       else next.add(id);
       return next;
     });
-  const rowLocked = (inv: any): boolean => jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
+  const rowLocked = (inv: any): boolean => jdDisabled || configArchived || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
 
   /* Full action-log modal — fetched on demand per row, never eagerly for the
      whole page, so opening the tracker doesn't fire one audit-trail request
@@ -723,7 +730,9 @@ export default function AIInterviewInviteTable({
   const rowActions = (inv: any): RowAction[] => {
     const actions: RowAction[] = [];
     const locked = rowLocked(inv);
-    const lockedProps = locked ? { disabled: true, title: JD_DISABLED_ACTION_MESSAGE } : {};
+    const lockedProps = locked
+      ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
+      : {};
 
     if (isInterviewLinkLive(inv)) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });

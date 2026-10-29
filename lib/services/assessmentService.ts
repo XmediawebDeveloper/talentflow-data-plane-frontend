@@ -124,6 +124,16 @@ export interface AssessmentListResponse {
   total_pages: number;
 }
 
+export const ASSESSMENT_ARCHIVED_ACTION_MESSAGE = 'This assessment is archived. Invitation actions are disabled.';
+
+/** The assessment itself is archived (its own `status`) — Invite Status
+ *  Tracking keeps every row visible, but Copy Link / Revoke on an Invited
+ *  row, Edit on a Revoked row and Resend on an Expired row are all greyed
+ *  out. Mirrors AI Interview's `isInterviewConfigArchived`. */
+export function isAssessmentArchived(status?: string | null): boolean {
+  return (status || '').toLowerCase() === 'archived';
+}
+
 export interface InvitationCreate {
   candidate_name: string;
   candidate_email: string;
