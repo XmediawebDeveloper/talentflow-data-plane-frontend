@@ -76,7 +76,7 @@ variables:
   script:
     - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
         -v "$CI_PROJECT_DIR:/src" -w /src node:22-alpine
-        sh -c "npm ci --no-audit --no-fund --loglevel=error && npx eslint . -f unix -o eslint-report.txt"
+        sh -c "npm ci --no-audit --no-fund --loglevel=error && npx eslint . -o eslint-report.txt"
         || lint_failed=1
     - tail -n 40 eslint-report.txt 2>/dev/null || true
     - test -z "${lint_failed:-}"
