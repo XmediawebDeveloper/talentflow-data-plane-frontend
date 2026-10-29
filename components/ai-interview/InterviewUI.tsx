@@ -550,7 +550,13 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
           {/* pre-line: Bina's opening warm-up carries the AII16 tips as
               newline-separated lines. Questions have no newlines, so this is a
               no-op for every other turn. */}
-          <p className="text-sm leading-relaxed whitespace-pre-line break-words">{text}</p>
+          {/* Blinking typing cursor at the end of the streaming text — same
+              look as the Practice Session bubble (StepSamplePractice). */}
+          <style>{`@keyframes tfLiveCaret {0%,100%{opacity:1}50%{opacity:0.25}}`}</style>
+          <p className="text-sm leading-relaxed whitespace-pre-line break-words">
+            {text}
+            <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 dark:bg-violet-400 align-middle" style={{ animation: 'tfLiveCaret 1.4s ease-in-out infinite' }} aria-hidden="true" />
+          </p>
         </div>
       </div>
     </div>
