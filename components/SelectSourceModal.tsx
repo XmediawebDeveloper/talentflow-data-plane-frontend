@@ -166,9 +166,13 @@ export default function SelectSourceModal({
   // distinct capability from browsing, same as My Resumes' own below, so an
   // Owner can disable one source without touching the other (mirrors the
   // per-source AI Talent Match permissions).
+  // The tenant admin owns every source, so it is enabled by default and does
+  // not wait for the per-user permission flags to load (they were still unset
+  // on first open, leaving the tab disabled until a refresh).
   const hasInternalDBAccess =
-    (user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false) &&
-    hasPermissionCode('internal_db:score');
+    isTenantAdmin ||
+    ((user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false) &&
+      hasPermissionCode('internal_db:score'));
 
   // My Resumes tab used to be unconditional; now gated by its own Score
   // Resume sub-action the same way.
