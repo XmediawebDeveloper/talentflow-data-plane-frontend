@@ -13,6 +13,7 @@ import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -1103,18 +1104,12 @@ export default function AIInterview() {
 
   /* Candidates open, start and finish on their own — poll quietly so the tab
      doesn't need a page refresh. Paused while the browser tab is hidden. */
-  useEffect(() => {
-    if (activeTab !== 'invitation-status') return;
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadAllInviteStatuses(true);
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [activeTab, loadAllInviteStatuses]);
+  useTrackerPoll(activeTab === 'invitation-status', () => loadAllInviteStatuses(true));
 
   /* Also re-fires when the SET of configs changes (one created, deleted or
      archived configs landing) — but not on every loadData refresh that hands
      back the same configs as new objects, which used to restart the whole
-     fan-out (spinner included) after each action. The 15s poll above covers
+     fan-out (spinner included) after each action. The poll above covers
      changes to the invitations themselves. */
   const inviteStatusConfigKey = useMemo(
     () => [...configs, ...archivedConfigs].map((c) => c.id).sort().join('|'),
@@ -1366,13 +1361,11 @@ export default function AIInterview() {
   useEffect(() => {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-    const timer = setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true);
-      loadInvitationOverview(viewInvitationsConfig.id);
-    }, 15000);
-    return () => clearInterval(timer);
   }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations, loadInvitationOverview]);
+  useTrackerPoll(!!viewInvitationsConfig, () => viewInvitationsConfig && Promise.all([
+    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true),
+    loadInvitationOverview(viewInvitationsConfig.id),
+  ]));
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection

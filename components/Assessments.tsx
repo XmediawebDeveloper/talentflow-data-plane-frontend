@@ -7,6 +7,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
@@ -3501,17 +3502,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => {
     if (activeTab !== 'invitation-status') return;
     loadAllInviteStatuses();
-    /* Candidates open, start and finish on their own, so the tab polls quietly
-       instead of waiting for a page refresh. Skipped while the browser tab is
-       hidden. */
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible' && inviteStatusInFlightRef.current === 0) {
-        loadAllInviteStatuses(true);
-      }
-    }, 15000);
-    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+  /* Candidates open, start and finish on their own, so the tab polls quietly
+     instead of waiting for a page refresh. Skipped while the browser tab is
+     hidden. */
+  useTrackerPoll(activeTab === 'invitation-status', () => {
+    if (inviteStatusInFlightRef.current === 0) return loadAllInviteStatuses(true);
+  });
 
   // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
@@ -3641,14 +3639,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
     loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters);
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters, true);
-        loadTrackingInvitationSummary(selectedAssessmentForTracking);
-      }
-    }, 15000);
-    return () => clearInterval(timer);
   }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob, trackingCurrentPage, trackingFilters]);
+  useTrackerPoll(showTrackInvitesModal && !!selectedAssessmentForTracking, () => Promise.all([
+    loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters, true),
+    loadTrackingInvitationSummary(selectedAssessmentForTracking),
+  ]));
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
