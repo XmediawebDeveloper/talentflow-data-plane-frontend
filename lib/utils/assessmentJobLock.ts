@@ -41,10 +41,10 @@ export const assessmentJobLockMessage = (status?: string | null): string | null 
  * Every version of each job these JD ids belong to, keyed by the requested
  * JD id — one batched lineage read. Ids the server does not return are left out.
  */
-export async function loadJobVersionLineages(jdIds: string[]): Promise<Record<string, JDLineageVersion[]>> {
+export async function loadJobVersionLineages(jdIds: string[], opts?: { fresh?: boolean }): Promise<Record<string, JDLineageVersion[]>> {
   const ids = Array.from(new Set(jdIds.filter(Boolean)));
   if (ids.length === 0) return {};
-  return jdService.getLineagesBatch(ids);
+  return jdService.getLineagesBatch(ids, opts);
 }
 
 /** Each job version's live status, keyed by its own JD id, from loaded lineages. */
