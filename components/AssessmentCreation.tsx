@@ -15,6 +15,7 @@ import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
@@ -1426,7 +1427,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       toast.success('Question added to HR Question Bank');
       closeAddHRQuizModal();
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to add HR question');
+      toast.error(friendlyErrorMessage(error, "Couldn't add HR question. Please try again."));
     } finally {
       setIsSavingHRQuestion(false);
     }
@@ -3076,7 +3077,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
       setGeneratingAction(null);
-      toast.error(`Failed to ${isEditMode ? 'update' : 'create'} assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Couldn't ${isEditMode ? 'update' : 'create'} assessment. ${friendlyErrorMessage(error, 'Please try again.')}`);
     }
   };
 

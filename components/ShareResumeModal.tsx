@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Eye, FileText, Loader2, Mail, Paperclip, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
@@ -85,7 +86,7 @@ Best regards`;
       }
     } catch (error: any) {
       console.error('Failed to share resume:', error);
-      toast.error(error?.message || 'Failed to send email');
+      toast.error(friendlyErrorMessage(error, "Couldn't send email. Please try again."));
     } finally {
       setIsSendingEmail(false);
     }

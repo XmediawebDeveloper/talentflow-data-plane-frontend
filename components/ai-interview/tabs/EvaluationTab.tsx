@@ -393,7 +393,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               ) : (
                                 <div className="overflow-x-auto tf-table-shell">
                                   <table className="w-full text-xs">
-                                    <thead className="bg-gray-100 text-gray-500 uppercase text-2xs tracking-wider">
+                                    <thead className="bg-white text-gray-600 text-xs">
                                       <tr>
                                         <th className="px-5 py-2 text-left font-semibold">Skill</th>
                                         <th className="px-3 py-2 text-center font-semibold w-20">Base</th>
@@ -451,7 +451,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                     ) : (
                       <div className="overflow-x-auto tf-table-shell">
                         <table className="w-full text-xs">
-                          <thead className="bg-gray-100 text-gray-500 uppercase text-2xs tracking-wider">
+                          <thead className="bg-white text-gray-600 text-xs">
                             <tr>
                               <th className="px-5 py-2 text-left font-semibold">Skill</th>
                               <th className="px-3 py-2 text-center font-semibold w-20">Base</th>

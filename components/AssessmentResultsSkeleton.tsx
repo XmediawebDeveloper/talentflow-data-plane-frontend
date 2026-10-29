@@ -66,11 +66,11 @@ export default function AssessmentResultsSkeleton() {
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[2040px] table-fixed">
-                <thead className="bg-slate-50 dark:bg-slate-800/40 border-b border-gray-100 dark:border-slate-800">
+                <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
                   <tr>
                     <th className="px-4 py-3 w-10"><Skeleton className="h-4 w-4 rounded" /></th>
                     {['w-24', 'w-48', 'w-64', 'w-56', 'w-36', 'w-36', 'w-28', 'w-28', 'w-28', 'w-96', 'w-32', 'w-28'].map((w, i) => (
-                      <th key={i} className={`${w} text-left px-4 py-3`}><Skeleton className="h-3 w-20" /></th>
+                      <th key={i} className={`text-xs font-semibold text-gray-600 dark:text-slate-300 ${w} text-left px-4 py-3`}><Skeleton className="h-3 w-20" /></th>
                     ))}
                     <th className="w-32 px-4 py-3"><Skeleton className="h-3 w-16 mx-auto" /></th>
                   </tr>

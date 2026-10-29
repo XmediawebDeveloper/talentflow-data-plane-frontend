@@ -317,12 +317,12 @@ export function SQLQuestionView({
                       {queryResult.results && queryResult.results.length > 0 ? (
                         <div className="rounded-lg border border-gray-200 tf-table-shell">
                           <table className="w-full table-fixed divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead className="bg-white">
                               <tr>
                                 {queryResult.columns?.map((column) => (
                                   <th
                                     key={column}
-                                    className="px-3 py-3 text-left text-2xs font-medium uppercase tracking-wider text-gray-500 break-words"
+                                    className="px-3 py-3 text-left text-xs font-semibold text-gray-600 break-words"
                                   >
                                     {column}
                                   </th>

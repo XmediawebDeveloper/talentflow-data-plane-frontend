@@ -202,13 +202,13 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
             </div>
             <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
+                <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                   <tr>
-                    <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">#</th>
-                    <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job description</th>
-                    <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Department</th>
-                    <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Applicants</th>
-                    <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Avg score</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">#</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job description</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Department</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Applicants</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Avg score</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -279,12 +279,12 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
           </div>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
+              <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                 <tr>
-                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
-                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">JD</th>
-                  <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
-                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Candidate</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">JD</th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Score</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700">

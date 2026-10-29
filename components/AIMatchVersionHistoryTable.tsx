@@ -159,7 +159,7 @@ export default function AIMatchVersionHistoryTable({
           <thead>
             <tr className="text-left">
               {['Version', 'Status', 'Experience / Industry', 'Location', 'Work Mode / Type', 'Posted On / By', 'Last Match Date', 'Number of Runs', 'Total Matches', 'Actions'].map((h) => (
-                <th key={h} className="py-2.5 px-3 bg-gray-50 dark:bg-slate-800"><Skeleton className="h-3 w-16" /></th>
+                <th key={h} className="py-2.5 px-3 bg-white dark:bg-slate-900 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-16" /></th>
               ))}
             </tr>
           </thead>
@@ -211,16 +211,16 @@ export default function AIMatchVersionHistoryTable({
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left">
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Version</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Status</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Experience / Industry</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Location</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Work Mode / Type</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Posted On / By</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Last Match Date / By</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Number of Runs</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Total Matches</th>
-            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100 text-right">Actions</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Version</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Status</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Experience / Industry</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Location</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Work Mode / Type</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Posted On / By</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Last Match Date / By</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Number of Runs</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Total Matches</th>
+            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-right text-xs">Actions</th>
           </tr>
         </thead>
         <tbody>

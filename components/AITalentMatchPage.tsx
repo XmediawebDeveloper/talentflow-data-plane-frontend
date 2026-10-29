@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ArrowUp, ArrowDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -57,6 +57,7 @@ import { resumeService } from '@/lib/services/resumeService';
 import { jdService, JDLineageVersion } from '@/lib/services/jdService';
 import RecordPager from '@/components/RecordPager';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentService } from '@/lib/services';
 import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -2314,7 +2315,7 @@ export default function AITalentMatchPage({
       );
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
-      toast.error(error.message || 'Failed to start scoring');
+      toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
     }
   };
 
@@ -2987,11 +2988,10 @@ export default function AITalentMatchPage({
     /** A View by Candidates column header that sorts the table (click again to flip). */
     const candidateSortHeader = (key: CandidateSortKey, label: string, align: 'left' | 'center' = 'left') => {
       const active = candidateSortBy === key;
-      const Icon = !active ? ArrowUpDown : candidateSortOrder === 'asc' ? ArrowUp : ArrowDown;
       return (
         <th
           aria-sort={active ? (candidateSortOrder === 'asc' ? 'ascending' : 'descending') : 'none'}
-          className={`${align === 'center' ? 'text-center' : 'text-left'} py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap`}
+          className={`${align === 'center' ? 'text-center' : 'text-left'} py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap`}
         >
           <button
             type="button"
@@ -3005,10 +3005,9 @@ export default function AITalentMatchPage({
               }
             }}
             title={`Sort by ${label}`}
-            className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+            className="inline-flex items-center transition-colors hover:text-brand-blue"
           >
             {label}
-            <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
           </button>
         </th>
       );
@@ -3221,11 +3220,10 @@ export default function AITalentMatchPage({
     const innerJobSortHeader = (rowKey: string, key: CandJobSortKey, label: string, align: 'left' | 'center', extraClass = '') => {
       const sort = candJobSortByRow[rowKey] ?? DEFAULT_CAND_JOB_SORT;
       const active = sort.key === key;
-      const Icon = !active ? ArrowUpDown : sort.dir === 'asc' ? ArrowUp : ArrowDown;
       return (
         <th
           aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-          className={`${align === 'center' ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap ${extraClass}`}
+          className={`${align === 'center' ? 'text-center' : 'text-left'} py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap ${extraClass}`}
         >
           <button
             type="button"
@@ -3239,10 +3237,9 @@ export default function AITalentMatchPage({
               setCandidateJobsPage(rowKey, 1);
             }}
             title={`Sort by ${label}`}
-            className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+            className="inline-flex items-center transition-colors hover:text-brand-blue"
           >
             {label}
-            <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
           </button>
         </th>
       );
@@ -4200,9 +4197,9 @@ export default function AITalentMatchPage({
                 <div className={`${matchDisplayMode === 'grid' ? 'hidden' : 'hidden md:block'} rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden`}>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px]">
-                      <thead className="bg-gray-50 dark:bg-slate-800/60 border-b border-gray-200 dark:border-slate-700">
+                      <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                         <tr>
-                          <th className="w-10 pl-4 pr-1 py-3">
+                          <th className="w-10 pl-4 pr-1 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">
                             {(() => {
                               const allPage = pageCandKeys.length > 0 && pageCandKeys.every(k => selectedCandKeys.has(k));
                               return (
@@ -4229,7 +4226,7 @@ export default function AITalentMatchPage({
                           {candidateSortHeader('scored', 'Scored', 'center')}
                           {candidateSortHeader('titles', 'Job Titles')}
                           {candidateSortHeader('date', 'Latest Matched')}
-                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Actions</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4359,7 +4356,7 @@ export default function AITalentMatchPage({
                                       {/* The rows scroll inside this box; the header row stays put. */}
                                       <div className="max-h-[360px] overflow-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                                       <table className="w-full min-w-[900px] table-auto">
-                                        <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-slate-800 shadow-[0_1px_0_0_var(--border)]">
+                                        <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900 shadow-[0_1px_0_0_var(--border)]">
                                           <tr>
                                             <th className="w-10 py-2 pl-4 pr-1" />
                                             {innerJobSortHeader(row.key, 'rating', 'Match Rating', 'center', 'tf-sticky-col-left !bg-gray-50 dark:!bg-slate-800')}
@@ -4369,7 +4366,7 @@ export default function AITalentMatchPage({
                                             {innerJobSortHeader(row.key, 'scored', 'Scored Status', 'left')}
                                             {innerJobSortHeader(row.key, 'date', 'Matched By / Date', 'left')}
                                             {innerJobSortHeader(row.key, 'resumeVersion', 'Resume Version', 'center')}
-                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap tf-sticky-col !bg-gray-50 dark:!bg-slate-800">Actions</th>
+                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -5200,7 +5197,7 @@ export default function AITalentMatchPage({
                             on top of the first instead of beside it), so Match
                             Rating gets its own explicit offset equal to this
                             checkbox column's fixed width instead. */}
-                        <th className="w-12 px-3 py-3 align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-0 z-[8]">
+                        <th className="w-12 px-3 py-3 align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-0 z-[8] text-xs font-semibold text-gray-600 dark:text-slate-300">
                           <input
                             type="checkbox"
                             aria-label="Select all"
@@ -5210,18 +5207,18 @@ export default function AITalentMatchPage({
                             }}
                           />
                         </th>
-                        <th className="text-center py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)]">
+                        <th className="text-center py-3 px-4 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)] font-semibold">
                           Match Rating
                         </th>
                         {['Candidate Name', 'Email', 'Phone', 'Location', 'Job ID', 'Job Title', 'Job Version', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
                           <th
                             key={label}
-                            className={`${label === 'Job Version' || label === 'Resume Version' ? 'text-center' : 'text-left'} py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700`}
+                            className={`font-semibold ${label === 'Job Version' || label === 'Resume Version' ? 'text-center' : 'text-left'} py-3 px-4 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700`}
                           >
                             {label}
                           </th>
                         ))}
-                        <th className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-sticky-col">
+                        <th className="text-left py-3 px-4 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-sticky-col font-semibold">
                           Actions
                         </th>
                       </tr>
@@ -5796,11 +5793,10 @@ export default function AITalentMatchPage({
                 });
               const candSortHeader = (key: JobCandSortKey, label: string, align: 'left' | 'center') => {
                 const active = candSort.key === key;
-                const Icon = !active ? ArrowUpDown : candSort.dir === 'asc' ? ArrowUp : ArrowDown;
                 return (
                   <th
                     aria-sort={active ? (candSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    className={`${align === 'center' ? 'text-center' : 'text-left'} py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap`}
+                    className={`${align === 'center' ? 'text-center' : 'text-left'} py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap`}
                   >
                     <button
                       type="button"
@@ -5814,10 +5810,9 @@ export default function AITalentMatchPage({
                         setCandidateJobsPage(pagingKey, 1);
                       }}
                       title={`Sort by ${label}`}
-                      className={`group inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors hover:text-brand-blue ${active ? 'text-brand-blue' : ''}`}
+                      className="inline-flex items-center transition-colors hover:text-brand-blue"
                     >
                       {label}
-                      <Icon className={`w-3.5 h-3.5 flex-shrink-0 transition-opacity ${active ? 'opacity-100' : 'opacity-40 group-hover:opacity-100'}`} />
                     </button>
                   </th>
                 );
@@ -6059,9 +6054,9 @@ export default function AITalentMatchPage({
                         {/* The rows scroll inside this box; the header row stays put. */}
                         <div className="max-h-[360px] overflow-auto">
                           <table className="w-full min-w-[760px]">
-                            <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-slate-800 shadow-[0_1px_0_0_var(--border)]">
+                            <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900 shadow-[0_1px_0_0_var(--border)]">
                               <tr>
-                                <th className="w-10 px-3 py-2.5">
+                                <th className="w-10 px-3 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -6081,9 +6076,9 @@ export default function AITalentMatchPage({
                                 {candSortHeader('rating', 'Rating', 'center')}
                                 {candSortHeader('candidate', 'Candidate', 'left')}
                                 {candSortHeader('experience', 'Experience', 'left')}
-                                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Resume Version</th>
+                                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Resume Version</th>
                                 {candSortHeader('scored', 'Scored Status', 'left')}
-                                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide tf-sticky-col !bg-gray-50 dark:!bg-slate-800">Actions</th>
+                                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -6606,16 +6601,16 @@ export default function AITalentMatchPage({
               ) : (
                 <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
                   <table className="w-full">
-                    <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
+                    <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">Job</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Job Title</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matched By</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matched</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Matches</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">Rating</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">Actions</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matched By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matched</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matches</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Rating</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -7032,19 +7027,19 @@ export default function AITalentMatchPage({
                         <div className="hidden md:block overflow-auto h-[266px] rounded-lg border border-gray-200 dark:border-slate-700">
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 z-10">
-                              <tr className="text-left bg-brand-sky dark:bg-slate-800">
-                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Version</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Matched By</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Date</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Candidates</th>
-                                <th colSpan={3} className="py-1.5 px-3 font-bold text-gray-900 dark:text-slate-100 text-center border-b border-gray-200 dark:border-slate-700">Rating Breakdown</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Status</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom text-right">Action</th>
+                              <tr className="text-left bg-white dark:bg-slate-900">
+                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Version</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Matched By</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Date</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Candidates</th>
+                                <th colSpan={3} className="py-1.5 px-3 font-semibold text-gray-600 dark:text-slate-300 text-center border-b border-gray-200 dark:border-slate-700 text-xs">Rating Breakdown</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Status</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-right text-xs">Action</th>
                               </tr>
-                              <tr className="text-left bg-brand-sky dark:bg-slate-800">
-                                <th className="py-1.5 px-3 font-semibold text-success">10</th>
-                                <th className="py-1.5 px-3 font-semibold text-brand-orange-deep">9 – 7</th>
-                                <th className="py-1.5 px-3 font-semibold text-destructive">Below 7</th>
+                              <tr className="text-left bg-white dark:bg-slate-900">
+                                <th className="py-1.5 px-3 font-semibold text-success text-xs">10</th>
+                                <th className="py-1.5 px-3 font-semibold text-brand-orange-deep text-xs">9 – 7</th>
+                                <th className="py-1.5 px-3 font-semibold text-destructive text-xs">Below 7</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -8009,9 +8004,9 @@ export default function AITalentMatchPage({
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
             <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden md:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
             <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
-              <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+              <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
-                  <th className="w-12 px-4 py-3 tf-sticky-col-left">
+                  <th className="w-12 px-4 py-3 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     <input
                       type="checkbox"
                       checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
@@ -8025,73 +8020,73 @@ export default function AITalentMatchPage({
                       className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Matched Rating
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Candidate Name
                   </th>
                   {isResultColumnVisible('email') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Email
                   </th>
                   )}
                   {isResultColumnVisible('phone') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Phone
                   </th>
                   )}
                   {isResultColumnVisible('location') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Location
                   </th>
                   )}
                   {isResultColumnVisible('jobTitle') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Job Title
                   </th>
                   )}
                   {isResultColumnVisible('jobVersion') && (
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Job Version
                   </th>
                   )}
                   {isResultColumnVisible('skills') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Skills
                   </th>
                   )}
                   {isResultColumnVisible('experience') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Experience
                   </th>
                   )}
                   {isResultColumnVisible('uploadedBy') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Uploaded By
                   </th>
                   )}
                   {isResultColumnVisible('uploadDate') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Uploaded Date
                   </th>
                   )}
                   {isResultColumnVisible('resumeVersion') && (
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Resume Version
                   </th>
                   )}
                   {isResultColumnVisible('attachments') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Attachments
                   </th>
                   )}
                   {isResultColumnVisible('scoredStatus') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
                     Scored Status
                   </th>
                   )}
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -8641,7 +8636,7 @@ export default function AITalentMatchPage({
               router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
             } catch (error: any) {
               console.error('Failed to start scoring:', error);
-              toast.error(error.message || 'Failed to start scoring');
+              toast.error(friendlyErrorMessage(error, "Couldn't start scoring. Please try again."));
             }
 
             setShowVersionSelectForScoring(false);

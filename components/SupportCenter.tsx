@@ -1460,14 +1460,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-slate-800/60 dark:text-slate-400">
-                          <th className="rounded-l-lg px-4 py-2.5">Ticket ID</th>
-                          <th className="px-4 py-2.5">Subject</th>
-                          <th className="px-4 py-2.5">Category</th>
-                          <th className="px-4 py-2.5">Priority</th>
-                          <th className="px-4 py-2.5">Created On</th>
-                          <th className="px-4 py-2.5">Status</th>
-                          <th className="rounded-r-lg px-4 py-2.5 text-right">Actions</th>
+                        <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
+                          <th className="rounded-l-lg px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket ID</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Created On</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
+                          <th className="rounded-r-lg px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -2164,15 +2164,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Desktop Table */}
                   <div className="hidden md:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
-                      <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
+                      <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Title</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Category</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 dark:text-slate-400 tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket #</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Title</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Updated</th>
+                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -3100,14 +3100,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="hidden overflow-x-auto md:block">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-slate-800/60 dark:text-slate-400">
-                          <th className="rounded-l-lg px-4 py-2.5">Ticket ID</th>
-                          <th className="px-4 py-2.5">Subject</th>
-                          <th className="px-4 py-2.5">Category</th>
-                          <th className="px-4 py-2.5">Priority</th>
-                          <th className="px-4 py-2.5">Created</th>
-                          <th className="px-4 py-2.5">Status</th>
-                          <th className="rounded-r-lg px-4 py-2.5 text-right">Actions</th>
+                        <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
+                          <th className="rounded-l-lg px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket ID</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Created</th>
+                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
+                          <th className="rounded-r-lg px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -3351,16 +3351,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="hidden overflow-x-auto md:block tf-table-shell">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-gray-50 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-slate-800/60 dark:text-slate-400">
-                          <th className="px-4 py-3">Ticket #</th>
-                          <th className="px-4 py-3">Subject</th>
-                          <th className="px-4 py-3">From</th>
-                          <th className="px-4 py-3">Category</th>
-                          <th className="px-4 py-3">Priority</th>
-                          <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3">Assigned</th>
-                          <th className="px-4 py-3">Updated</th>
-                          <th className="px-4 py-3 text-right tf-sticky-col">Actions</th>
+                        <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket #</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">From</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Assigned</th>
+                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Updated</th>
+                          <th className="px-4 py-3 text-right tf-sticky-col text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">

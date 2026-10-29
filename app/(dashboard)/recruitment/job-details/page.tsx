@@ -11,8 +11,9 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
+import { formatJobVersionLabel, formatJobActionMessage } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -620,7 +621,7 @@ function JobDetailsContent() {
   const handleRepublish = async (republishJob: Job) => {
     try {
       await jdService.publish(republishJob.id);
-      toast.success(`"${republishJob.title}" has been republished`);
+      toast.success(formatJobActionMessage(republishJob, 'republished'));
       fetchJobDetails();
     } catch (error) {
       toast.error('Failed to republish job');
@@ -639,7 +640,7 @@ function JobDetailsContent() {
 
     try {
       await jdService.disable(jobToDisable.id);
-      toast.info(`"${jobToDisable.title}" has been disabled`);
+      toast.success(formatJobActionMessage(jobToDisable, 'disabled'));
       setShowDisableModal(false);
       setJobToDisable(null);
       fetchJobDetails();
@@ -656,7 +657,7 @@ function JobDetailsContent() {
   const handleEnable = async (enableJob: Job) => {
     try {
       await jdService.enable(enableJob.id);
-      toast.success(`"${enableJob.title}" has been re-enabled`);
+      toast.success(formatJobActionMessage(enableJob, 're-enabled'));
       fetchJobDetails();
     } catch (error: any) {
       if (error.message?.includes('403') || error.message?.includes('Owner')) {
@@ -687,7 +688,7 @@ function JobDetailsContent() {
     setArchiveDialog(prev => ({ ...prev, busy: true }));
     try {
       await jdService.updateStatus(job.id, 'archived');
-      toast.success(`"${job.title}" has been archived`);
+      toast.success(formatJobActionMessage(job, 'archived'));
       setArchiveDialog({ open: false, job: null, busy: false });
       fetchJobDetails();
     } catch (error) {
@@ -700,7 +701,7 @@ function JobDetailsContent() {
   const handleUnarchive = async (job: Job) => {
     try {
       await jdService.updateStatus(job.id, 'published');
-      toast.success(`"${job.title}" has been unarchived and published`);
+      toast.success(formatJobActionMessage(job, 'unarchived and published'));
       fetchJobDetails();
     } catch (error) {
       toast.error('Failed to unarchive job');
@@ -710,10 +711,10 @@ function JobDetailsContent() {
   const handleDelete = async (job: Job) => {
     try {
       await jdService.delete(job.id);
-      toast.success(`"${job.title}" has been deleted successfully`);
+      toast.success(formatJobActionMessage(job, 'deleted'));
       router.push('/recruitment/job-openings');
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete job description');
+      toast.error(friendlyErrorMessage(error, "Couldn't delete job description. Please try again."));
     }
   };
 

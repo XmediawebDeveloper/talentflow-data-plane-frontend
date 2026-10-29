@@ -67,7 +67,7 @@ const ROUND_CHIPS: { key: 'hr' | 'technical' | 'coding'; short: string; label: s
 
 /* The Ungrouped table's header cell — the AI Talent Match results table's,
    class for class (its background and rule come from the <thead>). */
-const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle';
+const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle';
 
 /* Grouped: the shared version panel's tables, brought onto the same results
    table's cells from here rather than in the panel (the Assessments page
@@ -394,9 +394,9 @@ export default function AssessmentPicker({
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
             <div className="tf-table-shell tf-table-shell--compact">
               <table className="w-full table-auto text-sm">
-                <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left" aria-label="Select" />
+                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
                     <th className={PICKER_TH}>JD ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>

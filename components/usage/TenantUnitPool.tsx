@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -159,7 +160,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
         // Permission denied - this is expected for standard users
         console.log('Role-based access restriction applied');
       } else {
-        toast.error(error.message || 'Failed to load unit pool data');
+        toast.error(friendlyErrorMessage(error, "Couldn't load unit pool data. Please try again."));
       }
     } finally {
       setIsLoading(false);
@@ -186,7 +187,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       setShowHistoryPanel(true);
       setSelectedType(unitType || null);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to load consumption history');
+      toast.error(friendlyErrorMessage(error, "Couldn't load consumption history. Please try again."));
     }
   };
 
@@ -228,7 +229,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       toast.success(`Export completed: ${filename}`);
       setShowExportModal(false);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to export data');
+      toast.error(friendlyErrorMessage(error, "Couldn't export data. Please try again."));
     } finally {
       setIsExporting(false);
     }

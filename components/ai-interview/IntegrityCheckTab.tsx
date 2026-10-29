@@ -581,14 +581,14 @@ export default function IntegrityCheckTab({
               across it put the message off-screen behind a scrollbar. */}
           <table className={`w-full text-sm ${shownGroups.length === 0 ? '' : 'min-w-[720px]'}`}>
             {(logView === 'type' ? shownGroups.length > 0 : chronoRows.length > 0) && (
-            <thead className="bg-brand-sky border-b border-gray-100">
+            <thead className="bg-white border-b border-gray-100">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-8"></th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">What happened</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">What we saw</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">When</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">{logView === 'type' ? 'Times' : ''}</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-8"></th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">What happened</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">What we saw</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">When</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Severity</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600">{logView === 'type' ? 'Times' : ''}</th>
               </tr>
             </thead>
             )}
