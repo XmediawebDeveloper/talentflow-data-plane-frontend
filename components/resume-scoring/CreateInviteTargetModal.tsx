@@ -59,13 +59,13 @@ export default function CreateInviteTargetModal({
         aria-modal="true"
         aria-labelledby="create-invite-target-title"
       >
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
-          <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-full bg-amber-50 ring-1 ring-amber-100 flex items-center justify-center flex-shrink-0">
+        <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-6 border-b border-gray-200 shrink-0">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="hidden sm:flex w-11 h-11 rounded-full bg-amber-50 ring-1 ring-amber-100 items-center justify-center flex-shrink-0">
               <Icon className="w-5 h-5 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <h3 id="create-invite-target-title" className="text-lg font-bold text-gray-900">
+              <h3 id="create-invite-target-title" className="text-base sm:text-lg font-bold text-gray-900 break-words">
                 No {what} for this job yet
               </h3>
               <p className="text-sm text-gray-500 mt-1 break-words">
@@ -78,7 +78,7 @@ export default function CreateInviteTargetModal({
           </Button>
         </div>
 
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+        <div className="p-4 sm:p-6 min-h-0 overflow-y-auto flex-1 space-y-4">
           <p className="text-sm text-gray-700">
             To invite candidates to an {what}, the job needs a published one first. Here is how it goes:
           </p>
@@ -117,7 +117,7 @@ export default function CreateInviteTargetModal({
           </p>
         </div>
 
-        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 p-5 border-t border-gray-200 shrink-0">
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 px-4 py-4 sm:px-6 border-t border-gray-200 shrink-0">
           <Button variant="secondary" onClick={onCancel}>Cancel</Button>
           <Button variant="primary" onClick={onStart} icon={<ArrowRight className="w-4 h-4" />}>
             Create {what}

@@ -2716,21 +2716,21 @@ export default function ResumeScoringPage({
         {/* Job header — the Prev/Next that used to sit beside Score New Resumes
             moved into the breadcrumb. */}
         <div className="mb-5">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
                 {/* Icon tile from sm only (as on the other page headers): on a
                     phone it held a 52px column and squeezed the long title. */}
-                <div className="hidden sm:flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
+                <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
                   <ClipboardList className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     {/* JD ID before the title — the same badge the job rows use. */}
                     {jdCodeOf(selectedHistoryItem) && (
-                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
+                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0 max-w-[9rem] sm:max-w-none truncate" title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
                     )}
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">{selectedHistoryItem.jobTitle}</h1>
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
                     {detailsVersionNumber && detailsVersionNumber >= 1 && (
                       detailsVersionRows.length > 1 ? (
                         <DropdownMenu>
@@ -2739,7 +2739,7 @@ export default function ResumeScoringPage({
                               type="button"
                               aria-label="Switch version"
                               title="Switch version"
-                              className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue transition-colors flex-shrink-0"
+                              className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue transition-colors flex-shrink-0 whitespace-nowrap"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
                               v{detailsVersionNumber}
@@ -2760,7 +2760,7 @@ export default function ResumeScoringPage({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
-                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex-shrink-0">
+                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
                           <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
                           v{detailsVersionNumber}
                         </span>
@@ -2785,7 +2785,7 @@ export default function ResumeScoringPage({
                             ? setAllVersionsJobId(null)
                             : showAllVersionsFor(selectedHistoryItem)
                         }
-                        className={`inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 ${
+                        className={`inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 whitespace-nowrap ${
                           showingAllVersions
                             ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/15'
                             : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
@@ -2814,13 +2814,13 @@ export default function ResumeScoringPage({
                       type="button"
                       onClick={() => setShowJobDetailModal(true)}
                       title="View this job description"
-                      className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
+                      className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 whitespace-nowrap bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
                     >
                       <Eye className="w-3 h-3" />
                       View Job Detail
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatIST(selectedHistoryItem.scoredAt)}
@@ -2835,7 +2835,7 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end self-end lg:self-auto lg:ml-6 lg:flex-shrink-0">
                 {/* Go to JD lives inside the View Job Detail popup now
                     (JDVersionHistoryModal's `showGoToJd`). */}
                 {/* Prev/Next — placed before the Score New Resumes action */}
@@ -3299,7 +3299,7 @@ export default function ResumeScoringPage({
           title="Resume Scoring"
           description="View and manage previously scored resumes"
           actions={
-            <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+            <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
               {onBack && (
                 <Button
                   variant="secondary"
@@ -3333,7 +3333,7 @@ export default function ResumeScoringPage({
                   requestJobPickerScroll();
                 }}
                 aria-disabled={!canRunScoring}
-                className={!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}
+                className={`w-full sm:w-auto ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
                 icon={<ClipboardList className="w-4 h-4" />}
               >
@@ -3464,12 +3464,12 @@ export default function ResumeScoringPage({
 
           {/* "View by" once, then a sliding tile toggle: two equal halves on
               one track, and a white tile that slides under the active one. */}
-          <div className="flex items-center gap-2">
+          <div className="flex w-full sm:w-auto items-center gap-2">
             <span className="text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
             <div
               role="radiogroup"
               aria-label="View by"
-              className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+              className="relative grid grid-cols-2 flex-1 sm:flex-none h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
             >
               <span
                 aria-hidden
@@ -3487,11 +3487,11 @@ export default function ResumeScoringPage({
                   role="radio"
                   aria-checked={view.active}
                   onClick={view.open}
-                  className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+                  className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
                     view.active ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
-                  <view.icon className="w-4 h-4" />
+                  <view.icon className="hidden sm:block w-4 h-4" />
                   {view.label}
                 </button>
               ))}
@@ -3516,7 +3516,7 @@ export default function ResumeScoringPage({
             ) : globalScoredResumes.length === 0 ? (
               <>
               <div className="mb-3">{viewPills}</div>
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                   <Search className="w-5 h-5 text-brand-blue" />
                 </div>
@@ -3666,8 +3666,8 @@ export default function ResumeScoringPage({
               return (
                 /* Same boxed panel, and the same gap under the toolbar, as
                    View by Candidates' More Filters (ScoredResumesTable). */
-                <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 [&>div]:min-w-0">
                     <div>
                       <label className={labelCls}>Created By</label>
                       <FilterSelect
@@ -3795,7 +3795,7 @@ export default function ResumeScoringPage({
         {/* Row 3 — only while jobs are ticked: Actions and Clear, on a line
             of their own under Select All. */}
         {selectedJobCount > 0 && (
-          <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
           {/* Actions — the same menu as View by Candidates', on the ticked
                 jobs' candidates. Fades in with a blinking dot. */}
             {(
@@ -4181,7 +4181,7 @@ export default function ResumeScoringPage({
                        a translating card under the pointer reads as jumpy. */
                     className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all duration-150 cursor-pointer ${
                       isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
-                    } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                    } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'col-span-full' : ''}`}
                     // The row opens its candidates in place; the job title (and
                     // the View Details button) still go to the job's own page.
                     onClick={() => toggleJobExpanded(jobKey)}
@@ -4292,7 +4292,7 @@ export default function ResumeScoringPage({
                           {item.scoredResumes?.[0]?.scoredBy && (
                             <span className="flex items-center gap-1">
                               <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
-                              <span className="font-normal text-gray-500 dark:text-slate-400">{item.scoredResumes[0].scoredBy}</span>
+                              <span className="font-normal text-gray-500 dark:text-slate-400 min-w-0 [overflow-wrap:anywhere]">{item.scoredResumes[0].scoredBy}</span>
                             </span>
                           )}
                           <span className="flex items-center gap-1">
@@ -4361,10 +4361,10 @@ export default function ResumeScoringPage({
                             only that one. Until the scores load, a placeholder
                             (see `scoredCountValue`). */}
                         {jobListDisplayMode !== 'grid' && (
-                          <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
+                          <div className="flex flex-row flex-wrap gap-1 sm:flex-col sm:items-stretch sm:gap-1.5 flex-shrink-0">
                             {!globalLoaded ? (
-                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
-                                <FileText className="w-4 h-4" />
+                              <span className="flex items-center gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
+                                <FileText className="w-4 h-4 max-[359px]:hidden" />
                                 {scoredCountValue(item.totalScored, verdictTally)} Scored
                               </span>
                             ) : ([
@@ -4381,11 +4381,11 @@ export default function ResumeScoringPage({
                                 return (
                                   <span
                                     key={id}
-                                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${
+                                    className={`flex items-center gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${
                                       muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls
                                     }`}
                                   >
-                                    <Icon className="w-4 h-4" />
+                                    <Icon className="w-4 h-4 max-[359px]:hidden" />
                                     <span className="tabular-nums">{count}</span> {id}
                                   </span>
                                 );
@@ -4397,8 +4397,8 @@ export default function ResumeScoringPage({
                             stack — so the button sits up by the badges instead
                             of below the whole stack. Grid: `contents`, i.e. no
                             box at all, keeping the footer row as it was. */}
-                        <div className={jobListDisplayMode === 'grid' ? 'contents' : 'flex flex-col items-stretch gap-2'}>
-                        <div className={`flex items-center gap-1.5 ${jobListDisplayMode === 'grid' ? 'flex-shrink-0' : 'self-end'}`}>
+                        <div className={jobListDisplayMode === 'grid' ? 'contents' : 'flex flex-row-reverse items-center gap-2 sm:flex-col sm:items-stretch'}>
+                        <div className={`flex items-center gap-1.5 ${jobListDisplayMode === 'grid' ? 'flex-shrink-0' : 'sm:self-end'}`}>
                           <Button
                             variant="secondary"
                             size="sm"
@@ -4447,7 +4447,7 @@ export default function ResumeScoringPage({
                              beside it — a column of blue buttons down the list
                              drowned out the jobs themselves. Darker when open. */
                           className={`h-9 px-3 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center whitespace-nowrap border ${
-                            jobListDisplayMode === 'grid' ? 'flex-1 min-w-0' : 'w-full'
+                            jobListDisplayMode === 'grid' ? 'flex-1 min-w-0' : 'flex-1 sm:w-full'
                           } ${
                             isJobExpanded
                               ? 'bg-gray-200 text-gray-900 border-gray-300 dark:bg-slate-700 dark:text-slate-50 dark:border-slate-600'
@@ -5062,20 +5062,20 @@ export default function ResumeScoringPage({
         const historyLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/50">
             <div
               /* Width comes from the breakpoint ladder and no state touches
                  it; height is what moved, so only height is pinned, and only
                  while a refresh is in flight. */
               {...historyModalHeightLock.dialogProps}
-              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] sm:max-w-6xl max-h-[94dvh] flex flex-col tf-round-edges">
-              <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
+              <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="hidden sm:flex w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl items-center justify-center flex-shrink-0">
                     <History className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
+                    <h3 className="text-base sm:text-lg truncate font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
                     <p className="text-sm text-gray-500 dark:text-slate-500 truncate">
                       {historyModalItem.jobTitle}
                       {jdCodeOf(historyModalItem) && ` (${jdCodeOf(historyModalItem)})`}
@@ -5121,8 +5121,8 @@ export default function ResumeScoringPage({
                   short to fit the rest, instead of silently cutting it. */}
               <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="px-4 sm:px-6 pt-5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3">
+                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
                     <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
@@ -5131,7 +5131,7 @@ export default function ResumeScoringPage({
                       <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
                     <div className="w-10 h-10 rounded-full bg-success-subtle flex items-center justify-center flex-shrink-0">
                       <CheckCircle className="w-4 h-4 text-success" />
                     </div>
@@ -5140,7 +5140,7 @@ export default function ResumeScoringPage({
                       <div className="text-xl font-bold text-success">{summary.exact}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                       <PieChart className="w-4 h-4 text-orange-500" />
                     </div>
@@ -5149,7 +5149,7 @@ export default function ResumeScoringPage({
                       <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
                     <div className="w-10 h-10 rounded-full bg-destructive-subtle flex items-center justify-center flex-shrink-0">
                       <XCircle className="w-4 h-4 text-destructive" />
                     </div>
@@ -5170,12 +5170,10 @@ export default function ResumeScoringPage({
                   field is actually narrowing the table. */}
               <div className="px-4 sm:px-6 pt-4">
                 <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
-                  {/* Mobile: a 2×2 grid so the four filters are all visible
-                      without sideways scrolling. From sm up: the original single
-                      horizontally-scrolling row (py-1 -my-1 keeps focus rings
-                      from clipping at the scroll edge). */}
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:items-end sm:overflow-x-auto py-1 -my-1">
-                    <div className="min-w-0 sm:flex-1 sm:min-w-[11rem]">
+                  {/* Phone: one filter per row; sm: a 2×2 grid; lg: the single
+                      row (py-1 -my-1 keeps focus rings from clipping). */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:items-end gap-3 sm:gap-4 py-1 -my-1 [&>div]:min-w-0">
+                    <div className="min-w-0 lg:flex-1 lg:min-w-[11rem]">
                       <label className={historyLabelClass}>Search</label>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
@@ -5188,7 +5186,7 @@ export default function ResumeScoringPage({
                         />
                       </div>
                     </div>
-                    <div className="min-w-0 sm:flex-1 sm:min-w-[10rem]">
+                    <div className="min-w-0 lg:flex-1 lg:min-w-[10rem]">
                       <label className={historyLabelClass}>Scored By</label>
                       <FilterSelect
                         value={historyModalFilter.scoredBy}
@@ -5201,7 +5199,7 @@ export default function ResumeScoringPage({
                         ]}
                       />
                     </div>
-                    <div className="min-w-0 sm:flex-1 sm:min-w-[7rem]">
+                    <div className="min-w-0 lg:flex-1 lg:min-w-[7rem]">
                       <label className={historyLabelClass}>Version</label>
                       <FilterSelect
                         value={historyModalFilter.version}
@@ -5214,7 +5212,7 @@ export default function ResumeScoringPage({
                         ]}
                       />
                     </div>
-                    <div className="min-w-0 sm:flex-1 sm:min-w-[9rem]">
+                    <div className="min-w-0 lg:flex-1 lg:min-w-[9rem]">
                       <label className={historyLabelClass}>Status</label>
                       <FilterSelect
                         value={historyModalFilter.status}
@@ -5230,13 +5228,13 @@ export default function ResumeScoringPage({
                       />
                     </div>
                     {isHistoryModalFilterActive && (
-                      <div className="col-span-2 sm:flex-shrink-0">
+                      <div className="sm:col-span-2 lg:flex-shrink-0">
                         <Button
                           type="button"
                           variant="secondary"
                           onClick={resetHistoryModalFilters}
                           icon={<XCircle className="w-4 h-4" />}
-                          className="w-full sm:w-auto whitespace-nowrap"
+                          className="w-full lg:w-auto whitespace-nowrap"
                         >
                           Reset
                         </Button>
@@ -5269,7 +5267,54 @@ export default function ResumeScoringPage({
                        group header instead of three badges crammed into one
                        cell. Fixed height ≈ the 2-row sticky header (~64px)
                        plus 3 data rows (~50px each). */
-                    <div className="overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
+                    <>
+                    {/* Phone: one card per session (same groups, same View
+                        action); the 9-column table takes over from sm. */}
+                    <div className="sm:hidden rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800 max-h-[320px] overflow-y-auto overscroll-contain">
+                      {groups.map((g) => (
+                        <div key={`${g.version}||${g.scoredBy}||${g.date}`} className="p-3 text-xs">
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="font-semibold text-gray-900 dark:text-slate-100 truncate" title={g.scoredBy}>{g.scoredBy}</div>
+                              {g.scoredByEmail && (
+                                <div className="text-gray-400 dark:text-slate-600 truncate" title={g.scoredByEmail}>{g.scoredByEmail}</div>
+                              )}
+                            </div>
+                            <span className="px-2 py-0.5 rounded-md font-semibold whitespace-nowrap flex-shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                              v{g.version}
+                            </span>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => goToHistoryResume(g.resumes[0])}
+                              className="px-2 flex-shrink-0"
+                              aria-label="View job scores"
+                              title="View job scores"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1">
+                            <dt className="text-gray-500 dark:text-slate-500">Date</dt>
+                            <dd className="min-w-0 text-gray-600 dark:text-slate-400 inline-flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+                              {g.date}
+                            </dd>
+                            <dt className="text-gray-500 dark:text-slate-500">Resumes Scored</dt>
+                            <dd className="font-semibold text-gray-900 dark:text-slate-100">{g.count}</dd>
+                            <dt className="text-gray-500 dark:text-slate-500">Status</dt>
+                            <dd className="flex flex-wrap items-center gap-1">
+                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-success bg-success-subtle/60">Exact {g.exactCount}</span>
+                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">Partial {g.partialCount}</span>
+                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-destructive bg-destructive-subtle/60">No Match {g.noMatchCount}</span>
+                            </dd>
+                            <dt className="text-gray-500 dark:text-slate-500">Average Score</dt>
+                            <dd className={`${SCORE_CELL_TEXT} text-brand-blue`}>{Math.round(g.totalScore / g.count)}</dd>
+                          </dl>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="max-sm:hidden overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 z-10 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr className="text-left bg-white dark:bg-slate-900">
@@ -5341,6 +5386,7 @@ export default function ResumeScoringPage({
                         </tbody>
                       </table>
                     </div>
+                    </>
                   )}
                 </div>
 
@@ -5459,7 +5505,7 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              <div className="px-6 pb-4">
+              <div className="px-4 sm:px-6 pb-4">
                 <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-gray-600 dark:text-slate-400">
@@ -5513,7 +5559,7 @@ export default function ResumeScoringPage({
           JobOpeningPickerList), just rendered inline instead of behind a
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-5">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-5">
         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
           Select Job Description
         </label>
@@ -5544,6 +5590,8 @@ export default function ResumeScoringPage({
           /* Coloured like the Job Openings badges. */
           coloredCountBadges
           applicantsLabel="Scored"
+          /* No ✓ badge on the picked card — the radio + highlight mark it. */
+          hideSelectedTick
         />
 
       </div>
