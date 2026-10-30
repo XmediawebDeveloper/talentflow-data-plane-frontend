@@ -6,7 +6,8 @@ import { useState, useEffect } from 'react';
 import { DateField } from '@/components/ui/date-field';
 import { exportRowsToCSV } from '@/lib/utils/exportUtils';
 import api from '@/lib/services/api';
-import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
+import { billToFromAuth, generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
@@ -127,6 +128,7 @@ const toISTDateKey = (iso: string) =>
   new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 export default function BillingHistoryPage() {
+  const { user, tenant } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
@@ -412,7 +414,7 @@ export default function BillingHistoryPage() {
   const handleDownloadInvoice = async (inv: BillingInvoice) => {
     setDownloadingId(inv.id);
     try {
-      await generateBillingInvoicePDF(inv);
+      await generateBillingInvoicePDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast.error('Failed to generate PDF. Please try again.');

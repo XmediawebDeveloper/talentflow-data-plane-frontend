@@ -50,8 +50,11 @@ export function exportToCSV<T extends Record<string, any>>(
   downloadFile(csv, `${filename}.csv`, 'text/csv;charset=utf-8;');
 }
 
-/** The two formats every Export offers (see `ExportFormatModal`). */
-export type ExportFileFormat = 'csv' | 'xlsx';
+/**
+ * Formats an Export can offer (see `ExportFormatModal`). Every Export offers
+ * csv / xlsx; 'pdf' and 'txt' are opt-in and written by the caller.
+ */
+export type ExportFileFormat = 'csv' | 'xlsx' | 'pdf' | 'txt';
 
 /**
  * Export a header row + value rows as a real .xlsx workbook (ExcelJS, loaded
@@ -115,7 +118,12 @@ export function exportRowsToCSV(headers: string[], rows: unknown[][], filename: 
   downloadFile('﻿' + csv, `${stripExtension(filename)}.csv`, 'text/csv;charset=utf-8;');
 }
 
-/** One call for either format — what an `ExportFormatModal`'s onExport usually does. */
+/** Plain-text download (UTF-8, so any script the transcript holds survives). */
+export function exportTextFile(text: string, filename: string): void {
+  downloadFile(text, `${stripExtension(filename)}.txt`, 'text/plain;charset=utf-8;');
+}
+
+/** One call for either table format — what an `ExportFormatModal`'s onExport usually does. */
 export async function exportRows(
   format: ExportFileFormat,
   headers: string[],
@@ -124,7 +132,8 @@ export async function exportRows(
   options: { sheetName?: string; title?: string } = {},
 ): Promise<void> {
   if (format === 'xlsx') await exportRowsToExcel(headers, rows, filename, options);
-  else exportRowsToCSV(headers, rows, filename);
+  else if (format === 'csv') exportRowsToCSV(headers, rows, filename);
+  else throw new Error(`exportRows does not write ${format} files`);
 }
 
 /** `exportToCSV`'s column-config shape, in either format. */

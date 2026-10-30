@@ -949,7 +949,7 @@ export default function AIInterviewTrackInvitesModal({
             variant="primary"
             size="md"
             onClick={handleSaveEdit}
-            disabled={savingEdit || !!editEmailError || !!editNameError}
+            disabled={savingEdit || !isValidCandidateName(editForm.candidate_name) || !isValidEmailFormat(editEmailTrimmed)}
             icon={savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
           >
             Save & Send
