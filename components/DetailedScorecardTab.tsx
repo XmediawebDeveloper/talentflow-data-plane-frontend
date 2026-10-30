@@ -659,7 +659,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         </span>
         {resume.essentialRating10 != null && (
           <>
-            <span className="text-gray-400">|</span>
+            <span className="hidden sm:inline text-gray-400">|</span>
             <span className="text-gray-700 flex items-center gap-1">
               Must-Have Avg: <span className="font-semibold text-gray-900">{resume.essentialRating10.toFixed(1)}</span>
               <span className="text-gray-500">/10</span>
@@ -685,7 +685,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             sub-8.0 value that could round up to a misleading "8.0"). */}
         {resume.combinedAverage10 != null && (
           <>
-            <span className="text-gray-400">|</span>
+            <span className="hidden sm:inline text-gray-400">|</span>
             <span className="text-gray-700 flex items-center gap-1">
               Combined Average: <span className="font-semibold text-gray-900">{resume.combinedAverage10.toFixed(1)}</span>
               <span className="text-gray-500">/10</span>
@@ -698,7 +698,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             client's request, not removed: summaryData/essentialAverageValue
             below are left computed and still feed nothing visible on purpose,
             in case a future surface needs the weighted-% breakdown again. */}
-        <span className="text-gray-400">|</span>
+        <span className="hidden sm:inline text-gray-400">|</span>
         <span className="text-gray-600">
           {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
             ? formatIST(resume.scoredDate)
@@ -731,7 +731,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       {/* Detailed Scoring Table - Only show if real API data exists */}
       {criteriaScores.length > 0 && (
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+          <div className="bg-gray-50 border-b border-gray-200 px-4 sm:px-6 py-3">
             <h4 className="text-gray-900 flex items-center gap-2">
               <CheckSquare className="w-5 h-5 text-gray-800" />
               Scoring Rubric & Evaluation
@@ -1004,15 +1004,18 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             {stats.map(({ label, count, icon: Icon, tile, value, bar }) => (
               <div
                 key={label}
-                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm shadow-brand-blue/5 flex flex-col gap-3"
+                className="min-w-0 bg-white border border-gray-200 rounded-xl p-3 sm:p-4 shadow-sm shadow-brand-blue/5 flex flex-col gap-3"
               >
-                <div className="flex items-center gap-3">
+                {/* Narrow cards stack the icon over the label so long labels
+                    don't overflow; mt-auto below keeps every count and bar on
+                    the same baseline however many lines the label takes. */}
+                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
                   <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${tile}`}>
                     <Icon className="w-[18px] h-[18px]" />
                   </span>
-                  <span className="text-sm font-medium text-gray-700 leading-tight">{label}</span>
+                  <span className="min-w-0 break-words text-sm font-medium text-gray-700 leading-tight">{label}</span>
                 </div>
-                <div className="flex items-baseline gap-1.5">
+                <div className="mt-auto flex items-baseline gap-1.5">
                   <span className={`text-2xl font-bold leading-none ${value}`}>{count}</span>
                   <span className="text-xs text-gray-500">of {total}</span>
                 </div>
