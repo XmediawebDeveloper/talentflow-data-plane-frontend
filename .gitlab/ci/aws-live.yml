@@ -19,14 +19,13 @@
 #   AWS_SERVER_HOST         EC2 public IP / hostname
 #   AWS_SERVER_USER         SSH user, e.g. ubuntu
 #   AWS_SSH_KEY             EC2 private key (.pem) — type "File"
-#   FRONTEND_ENV            type "File", environment "aws_live" — a .env with
-#                           all NEXT_PUBLIC_* values (baked in at build time).
-#                           Or set each NEXT_PUBLIC_* as its own variable.
 #
 # EC2 one-time setup:
 #   - Docker + compose plugin installed, SSH user in the `docker` group
 #   - sudo mkdir -p /opt/talentflow/frontend && sudo chown $USER /opt/talentflow/frontend
-#   - /opt/talentflow/frontend/.env (runtime server-side vars; may be empty)
+#   - /opt/talentflow/frontend/.env with all NEXT_PUBLIC_* values. Build reads
+#     them from here over SSH and bakes them in, so after editing it run a new
+#     pipeline. The running container also gets the file (env_file).
 #
 # NOTE: the build needs ~8GB RAM on the runner (NODE_OPTIONS in the Dockerfile).
 # =============================================================================
@@ -89,13 +88,21 @@ variables:
 "Build":
   extends: .aws-live
   stage: build
-  environment:
-    name: aws_live
-    action: prepare   # pulls in the aws_live-scoped NEXT_PUBLIC_* values
+  before_script: *ssh
+  after_script:
+    - rm -f "$AWS_SSH_KEY.pem" next-public.env
   script:
-    # All NEXT_PUBLIC_* in one File variable FRONTEND_ENV (scoped to aws_live).
-    # Optional — individual NEXT_PUBLIC_* variables still work without it.
-    - if [ -n "${FRONTEND_ENV:-}" ]; then set -a; eval "$(tr -d '\r' < "$FRONTEND_ENV")"; set +a; fi
+    # NEXT_PUBLIC_* come from the server's .env — the single place to edit them.
+    # Next.js bakes them into the JS at build time, so a change there needs a
+    # new pipeline (a container restart is not enough).
+    - ssh $SSH_OPTS "$SSH_TARGET" "grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' $AWS_DEPLOY_DIR/.env || true"
+        | tr -d '\r' > next-public.env
+    - if ! grep -q '^NEXT_PUBLIC_API_URL=.' next-public.env; then
+        echo "NEXT_PUBLIC_API_URL is missing in $AWS_DEPLOY_DIR/.env on the server — nothing was built.";
+        exit 1;
+      fi
+    - echo "Building with these keys from the server .env:" && cut -d= -f1 next-public.env
+    - set -a; . ./next-public.env; set +a
     - docker build --pull
         --build-arg NEXT_PUBLIC_ENVIRONMENT="$NEXT_PUBLIC_ENVIRONMENT"
         --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL"
