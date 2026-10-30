@@ -43,7 +43,7 @@ import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
-import { downloadChatTranscriptPdf } from './chatTranscriptPdf';
+import { downloadChatTranscriptPdf, type ChatPdfMessage } from './chatTranscriptPdf';
 import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
@@ -4310,22 +4310,48 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   </button>
                 );
 
+                // What each chat bubble shows — shared by the Chat view and the
+                // chat download so the file says exactly what the screen says.
+                const chatItems = labeled.map(({ msg, qtype }, idx) => {
+                  const isAssistant = msg.role === 'assistant';
+                  const ts = formatTs(msg.timestamp);
+                  const content = msg.content as string;
+                  // Prefer the VERBATIM Original ASR (untouched STT output —
+                  // keeps fillers + any non-English the engine produced). Fall
+                  // back to the salvaged raw, then content, for older records.
+                  const rawContent: string | undefined = !isAssistant ? (msg.original_asr || msg.raw_content) : undefined;
+                  const language: string | undefined = !isAssistant ? msg.language : undefined;
+                  // Non-English discard: candidate responded but there was no
+                  // scorable English → Original ASR shows verbatim, Corrected empty.
+                  const noScorableEnglish = !isAssistant && !!msg.discarded_non_english && !(content || '').trim() && !!(rawContent || '').trim();
+                  const hasCorrection = !isAssistant && !noScorableEnglish && rawContent && rawContent !== content;
+                  const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
+                  // For a Bina question that was skipped, show WHY. A
+                  // question is "answered" when the NEXT chat message is a
+                  // real candidate reply; otherwise it was skipped and
+                  // _skipReason explains how. Only on assistant question
+                  // bubbles (never closing / clarification rephrases).
+                  // Skip past interstitial nudges to find the real next turn,
+                  // so a question answered only after "Are you there?" still
+                  // reads as answered (not skipped).
+                  let _niIdx = idx + 1;
+                  while (_niIdx < labeled.length && labeled[_niIdx]?.qtype === 'interstitial') _niIdx++;
+                  const _nextMsg = labeled[_niIdx]?.msg;
+                  // A non-English discard turn IS a response (just not scorable),
+                  // so the question shows the Original ASR below it, not "No response".
+                  const _answered = !!_nextMsg && _nextMsg.role === 'user' && (
+                    !!(_nextMsg.content || '').trim()
+                    || (_nextMsg.discarded_non_english && !!(_nextMsg.original_asr || _nextMsg.raw_content || '').trim())
+                  );
+                  const skipNote = isAssistant && qtype !== 'closing' && qtype !== 'interstitial' && !isClarificationMsg(msg)
+                    ? _skipReason(content, _answered)
+                    : null;
+                  return { isAssistant, ts, content, rawContent, language, noScorableEnglish, hasCorrection, diff, skipNote };
+                });
+
                 // Full chat download (PDF / TXT) — every message in order (Bina +
                 // candidate), independent of the Table view's grouped Q/A export.
                 const downloadChat = async (format: ExportFileFormat) => {
-                  const rows = labeled.map(({ msg, label }, i) => {
-                    const isUser = msg.role === 'user';
-                    const raw = isUser ? (msg.original_asr || msg.raw_content || '') : '';
-                    return [
-                      String(i + 1),
-                      label,
-                      isUser ? candidateName : 'Bina (AI Interviewer)',
-                      msg.content || '',
-                      raw && raw !== msg.content ? raw : '',
-                      isUser ? (msg.language || 'English') : '',
-                      formatTs(msg.timestamp),
-                    ];
-                  });
                   // Candidate details — same sources as the header card above.
                   const details: [label: string, value: string][] = [];
                   const addDetail = (label: string, value: unknown) => {
@@ -4369,8 +4395,26 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   addDetail('Messages', String(labeled.length));
 
                   const fileName = `chat_transcript_${candidateName}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
+                  // Each bubble exactly as the Chat view renders it.
+                  const messages: ChatPdfMessage[] = labeled.map(({ label, isFollowUp, qtype }, idx) => {
+                    const it = chatItems[idx];
+                    const kind = qtype === 'deepdive' ? 'deepdive' as const : isFollowUp ? 'followup' as const : 'main' as const;
+                    if (it.isAssistant) {
+                      return {
+                        speaker: 'bina' as const, label, kind, text: it.content || '', time: it.ts,
+                        skipNote: it.skipNote ? { text: it.skipNote.text, amber: it.skipNote.tone === 'amber' } : undefined,
+                      };
+                    }
+                    return {
+                      speaker: 'candidate' as const, label, kind, language: it.language, time: it.ts,
+                      original: it.rawContent || it.content || '',
+                      corrected: it.content || '',
+                      noScorableEnglish: it.noScorableEnglish,
+                      fullSentenceRewrite: !!(it.hasCorrection && it.diff && it.diff.mode === 'sentence'),
+                    };
+                  });
+
                   if (format === 'pdf') {
-                    // PDF mirrors the Chat view — header card + bubbles.
                     const detail = (label: string) => details.find(([l]) => l === label)?.[1] || '';
                     await downloadChatTranscriptPdf({
                       candidateName,
@@ -4383,14 +4427,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         detail('Duration') && `Duration: ${detail('Duration')}`,
                       ],
                       result,
-                      messages: rows.map(([, label, speaker, text, original, language, time]) => ({
-                        speaker: speaker === candidateName ? 'candidate' as const : 'bina' as const,
-                        label, text, original, language, time,
-                      })),
+                      messages,
                     }, fileName);
                     return;
                   }
-                  // TXT — details block, then one entry per message.
+
+                  // TXT — details block, then each bubble in order.
                   const width = Math.max(...details.map(([l]) => l.length));
                   const rule = '='.repeat(60);
                   const text = [
@@ -4399,13 +4441,19 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     ...details.map(([l, v]) => `${l.padEnd(width)} : ${v}`),
                     rule,
                     '',
-                    ...rows.flatMap(([, label, speaker, message, original, language, time]) => [
-                      [`[${[label, time].filter(Boolean).join(' · ')}]`, speaker, language && language !== 'English' ? `(${language})` : '']
-                        .filter(s => s && s !== '[]').join(' '),
-                      message,
-                      ...(original ? [`  Original: ${original}`] : []),
-                      '',
-                    ]),
+                    ...messages.flatMap(m => {
+                      const who = m.speaker === 'bina' ? 'Bina (AI Interviewer)' : candidateName;
+                      const head = [m.label && `[${m.label}]`, who, m.speaker === 'candidate' && m.language && `(${m.language})`, m.time && `— ${m.time}`]
+                        .filter(Boolean).join(' ');
+                      const lines = m.speaker === 'bina'
+                        ? [m.text, ...(m.skipNote ? [`>> ${m.skipNote.text}`] : [])]
+                        : [
+                            `Original (ASR): ${m.original}`,
+                            `Corrected: ${m.noScorableEnglish ? '— no scorable English (not scored)' : m.corrected}`,
+                            ...(m.fullSentenceRewrite ? ['(full-sentence rewrite)'] : []),
+                          ];
+                      return [head, ...lines, ''];
+                    }),
                   ].join('\r\n');
                   exportTextFile(text, fileName);
                 };
@@ -4439,15 +4487,17 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {toggleBtn('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />)}
                           {toggleBtn('table', 'Table', <Layers className="w-3.5 h-3.5" />)}
                         </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setChatDownloadOpen(true)}
-                          title="Download full chat transcript"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          Download
-                        </Button>
+                        {transcriptView === 'chat' && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setChatDownloadOpen(true)}
+                            title="Download full chat transcript"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download
+                          </Button>
+                        )}
                         <ExportFormatModal
                           open={chatDownloadOpen}
                           onClose={() => setChatDownloadOpen(false)}
@@ -4463,39 +4513,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     {transcriptView === 'chat' && (
                       <div className="space-y-4 w-full animate-in fade-in duration-300 motion-reduce:animate-none">
                         {labeled.map(({ msg, label, isFollowUp, qtype }, idx) => {
-                          const isAssistant = msg.role === 'assistant';
-                          const ts = formatTs(msg.timestamp);
-                          const content = msg.content as string;
-                          // Prefer the VERBATIM Original ASR (untouched STT output —
-                          // keeps fillers + any non-English the engine produced). Fall
-                          // back to the salvaged raw, then content, for older records.
-                          const rawContent: string | undefined = !isAssistant ? (msg.original_asr || msg.raw_content) : undefined;
-                          const language: string | undefined = !isAssistant ? msg.language : undefined;
-                          // Non-English discard: candidate responded but there was no
-                          // scorable English → Original ASR shows verbatim, Corrected empty.
-                          const noScorableEnglish = !isAssistant && !!msg.discarded_non_english && !(content || '').trim() && !!(rawContent || '').trim();
-                          const hasCorrection = !isAssistant && !noScorableEnglish && rawContent && rawContent !== content;
-                          const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
-                          // For a Bina question that was skipped, show WHY. A
-                          // question is "answered" when the NEXT chat message is a
-                          // real candidate reply; otherwise it was skipped and
-                          // _skipReason explains how. Only on assistant question
-                          // bubbles (never closing / clarification rephrases).
-                          // Skip past interstitial nudges to find the real next turn,
-                          // so a question answered only after "Are you there?" still
-                          // reads as answered (not skipped).
-                          let _niIdx = idx + 1;
-                          while (_niIdx < labeled.length && labeled[_niIdx]?.qtype === 'interstitial') _niIdx++;
-                          const _nextMsg = labeled[_niIdx]?.msg;
-                          // A non-English discard turn IS a response (just not scorable),
-                          // so the question shows the Original ASR below it, not "No response".
-                          const _answered = !!_nextMsg && _nextMsg.role === 'user' && (
-                            !!(_nextMsg.content || '').trim()
-                            || (_nextMsg.discarded_non_english && !!(_nextMsg.original_asr || _nextMsg.raw_content || '').trim())
-                          );
-                          const skipNote = isAssistant && qtype !== 'closing' && qtype !== 'interstitial' && !isClarificationMsg(msg)
-                            ? _skipReason(content, _answered)
-                            : null;
+                          const { isAssistant, ts, content, rawContent, language, noScorableEnglish, hasCorrection, diff, skipNote } = chatItems[idx];
 
                           return (
                             <div
