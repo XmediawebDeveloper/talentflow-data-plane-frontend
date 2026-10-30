@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type RefObject } from 'react';
+import { useEffect, useMemo, useState, type RefObject } from 'react';
 import { Briefcase, CheckCircle, ChevronDown, ClipboardCheck, Eye, Info, Layers, Search, Send } from 'lucide-react';
 import ListPagination from '@/components/ListPagination';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
@@ -11,7 +11,9 @@ import AssessmentVersionHistoryPanel, {
   ASSESSMENT_VOCABULARY,
   type AssessmentVersionRow,
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
-import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import { VersionPill, AssessmentJobStatusBadge } from '@/components/assessments/AllAssessmentsTable';
+import { useJobLockBadges } from '@/lib/hooks/useJobLockBadges';
+import { assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -58,6 +60,10 @@ interface AssessmentPickerProps {
   searchPlaceholder?: string;
 }
 
+/* Rows (Ungrouped) or job cards (Grouped) a page — few enough that a page fits
+   the Send Invite dialog without a scrollbar. */
+const PAGE_SIZE = 5;
+
 /* The rounds an assessment runs, as the Round Weightage column names them. */
 const ROUND_CHIPS: { key: 'hr' | 'technical' | 'coding'; short: string; label: string }[] = [
   { key: 'hr', short: 'HR', label: 'HR Round' },
@@ -97,9 +103,22 @@ export default function AssessmentPicker({
   const [viewMode, setViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  /* Five a page, fixed: the list has to fit the dialog without a scrollbar. */
+  const pageSize = PAGE_SIZE;
   const [previewAssessment, setPreviewAssessment] = useState<PickerAssessment | null>(null);
   const jdLineage = useJobVersionLineage();
+  /* Each job's Disabled / Archived / Draft badge beside its name — the
+     Assessments page's, so a disabled job reads the same in the picker. Kept
+     live while the dialog is open (see useJobLockBadges). */
+  const { badgeFor: jobBadgeFor } = useJobLockBadges(assessments.map((a: PickerAssessment) => a.jd_id));
+  const jobBadge = (a: PickerAssessment) => {
+    const kind = jobBadgeFor(a.jd_id);
+    return kind ? <AssessmentJobStatusBadge kind={kind} /> : null;
+  };
+  /* A Disabled or Archived job takes no invites: its assessments are greyed
+     and cannot be picked, with the Assessments page's lock message as the
+     reason. Re-enable / unarchive the job and they come back at once. */
+  const lockReasonOf = (a: PickerAssessment): string | null => assessmentJobLockMessage(jobBadgeFor(a.jd_id));
 
   const cleanTitleOf = (a: PickerAssessment) => parseAssessmentTitle(a.title || '').cleanTitle;
   /* The version the API states, else the one in the title's "- Version N". */
@@ -240,6 +259,7 @@ export default function AssessmentPicker({
   const pickedCount = pickedIds.length;
   const pickedAssessments = () => assessments.filter((x) => isPicked(x.id));
   const toggle = (a: PickerAssessment) => {
+    if (lockReasonOf(a) && !isPicked(a.id)) return;
     if (multiple) {
       const picked = pickedAssessments();
       onSelectionChange?.(isPicked(a.id) ? picked.filter((x) => x.id !== a.id) : [...picked, a]);
@@ -247,12 +267,25 @@ export default function AssessmentPicker({
       onSelect?.(isPicked(a.id) ? null : a);
     }
   };
+  /* A pick whose job is disabled / archived while the dialog is open is let go
+     — it can no longer be sent. */
+  const lockedPickIds = pickedIds.filter((id) => {
+    const a = assessments.find((x) => x.id === id);
+    return !!a && !!lockReasonOf(a);
+  }).join(',');
+  useEffect(() => {
+    if (!lockedPickIds) return;
+    const locked = new Set(lockedPickIds.split(','));
+    if (multiple) onSelectionChange?.(pickedAssessments().filter((x) => !locked.has(x.id)));
+    else onSelect?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedPickIds]);
   /* The toolbar's Select All, over the assessments the search leaves listed. */
   const listedPickedCount = pickerRows.filter((a) => isPicked(a.id)).length;
   const allListedPicked = pickerRows.length > 0 && listedPickedCount === pickerRows.length;
   /* Adds rows to the pick, keeping what is already picked. */
   const addToPick = (rows: PickerAssessment[]) =>
-    onSelectionChange?.([...pickedAssessments(), ...rows.filter((a) => !isPicked(a.id))]);
+    onSelectionChange?.([...pickedAssessments(), ...rows.filter((a) => !isPicked(a.id) && !lockReasonOf(a))]);
   /* Clear unticks just the listed assessments, so picks the search is hiding
      stay picked (with no search, that is every pick). */
   const clearListed = () => {
@@ -416,21 +449,27 @@ export default function AssessmentPicker({
                     const version = versionOf(a);
                     const rounds = ROUND_CHIPS.filter((r) => a[`${r.key}_enabled`]);
                     const pick = () => toggle(a);
+                    const lockReason = lockReasonOf(a);
                     return (
                       <tr
                         key={a.id}
                         onClick={pick}
                         aria-selected={isSelected}
+                        aria-disabled={lockReason ? true : undefined}
+                        title={lockReason ?? undefined}
                         data-row-selected={isSelected ? 'true' : undefined}
-                        className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${
-                          isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''
-                        }`}
+                        className={`transition-colors ${
+                          lockReason
+                            ? 'cursor-not-allowed [&>td:not(.tf-sticky-col)]:opacity-50'
+                            : 'hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer'
+                        } ${isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}
                       >
                         <td className="px-4 py-3 align-middle tf-sticky-col-left">
                           <input
                             type={multiple ? 'checkbox' : 'radio'}
                             name="assessment-invite-picker-selection"
                             checked={isSelected}
+                            disabled={!!lockReason}
                             onChange={pick}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`Select ${jobNameOf(a)}`}
@@ -443,9 +482,12 @@ export default function AssessmentPicker({
                         <td className="px-4 py-3 align-middle max-w-[16rem]">
                           {/* The job's name; the assessment's own title (version
                               suffix stripped) on hover. */}
-                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={cleanTitleOf(a) || jobNameOf(a)}>
-                            {jobNameOf(a)}
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="block truncate min-w-0 font-medium text-gray-900 dark:text-slate-50" title={cleanTitleOf(a) || jobNameOf(a)}>
+                              {jobNameOf(a)}
+                            </span>
+                            {jobBadge(a)}
+                          </div>
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
                           {a.jd_version ? <VersionPill kind="job" version={a.jd_version} /> : <span className="text-xs text-gray-400">—</span>}
@@ -516,7 +558,9 @@ export default function AssessmentPicker({
           <p className="text-sm">{q ? 'Try different search terms' : 'Create and publish an assessment first to send invitations'}</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        /* Tighter than the AI picker's cards (gap 2, p-3) so a page of five
+           fits the dialog without a scrollbar from sm up. */
+        <div className="space-y-2">
           {pagedJobRows.map((a) => {
             const jobKey = lineageKeyOf(a);
             const jdId: string | undefined = a.jd_id;
@@ -524,7 +568,10 @@ export default function AssessmentPicker({
             /* Other jobs fade only in single-select, where a pick elsewhere
                would replace this one; multi-select can hold picks in many. */
             const dimmed = !multiple && pickedCount > 0 && !ownsSelection;
-            const expanded = expandedKey === jobKey;
+            /* A Disabled / Archived job: greyed, and its versions stay shut so
+               nothing under it can be picked. */
+            const lockReason = lockReasonOf(a);
+            const expanded = expandedKey === jobKey && !lockReason;
             const totals = jobTotals.get(jobKey) ?? { assessments: 0, invitations: 0, completed: 0, maxJobVersion: 1 };
             /* The job card's four figures, in the AI picker's order and colours. */
             const rowMetrics = [
@@ -534,7 +581,7 @@ export default function AssessmentPicker({
               { key: 'completed', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.completed, label: 'Completed' },
             ];
             const toggleExpanded = () => {
-              if (!jdId) return;
+              if (!jdId || lockReason) return;
               const opening = !expanded;
               setExpandedKey(opening ? jobKey : null);
               if (opening) jdLineage.ensureLoaded(jdId, jdId);
@@ -544,10 +591,14 @@ export default function AssessmentPicker({
                 key={jobKey}
                 /* Clicking the card opens its versions. */
                 onClick={toggleExpanded}
-                className={`@container/ai-row relative p-3 sm:p-4 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
-                  jdId ? 'cursor-pointer' : 'cursor-default'
+                aria-disabled={lockReason ? true : undefined}
+                title={lockReason ?? undefined}
+                className={`@container/ai-row relative p-3 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+                  lockReason ? 'cursor-not-allowed' : jdId ? 'cursor-pointer' : 'cursor-default'
                 } ${
-                  ownsSelection
+                  lockReason
+                    ? 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 opacity-50'
+                    : ownsSelection
                     ? 'border-brand-blue/50 bg-brand-blue/[0.03] shadow-md shadow-brand-blue/10'
                     : `border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 ${dimmed ? 'opacity-60' : ''}`
                 }`}
@@ -562,6 +613,7 @@ export default function AssessmentPicker({
                     <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0" title={jobNameOf(a)}>
                       {jobNameOf(a)}
                     </h3>
+                    {jobBadge(a)}
                   </div>
 
                   {/* Status */}
@@ -594,7 +646,8 @@ export default function AssessmentPicker({
                       <button
                         type="button"
                         onClick={toggleExpanded}
-                        title={expanded ? 'Hide version history' : 'View version history'}
+                        disabled={!!lockReason}
+                        title={lockReason ?? (expanded ? 'Hide version history' : 'View version history')}
                         aria-expanded={expanded}
                         className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                           expanded
@@ -610,6 +663,7 @@ export default function AssessmentPicker({
                       <button
                         type="button"
                         onClick={() => toggle(a)}
+                        disabled={!!lockReason}
                         className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                           ownsSelection
                             ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
@@ -661,18 +715,27 @@ export default function AssessmentPicker({
         </div>
       )}
 
+      {/* Pinned to the foot of the dialog body (the host wraps this picker in a
+          full-height column): the two views' lists differ in height, so a bar
+          that followed the list jumped every time the view was switched. At the
+          foot it stays put, and `-mb-2` cancels the bar's own p-2 so the gap
+          under it matches the body's top padding. */}
       {total > 0 && (
+        <div className="mt-auto pt-3 -mb-2">
         <ListPagination
           currentPage={safePage}
           itemsPerPage={pageSize}
           totalItems={total}
           onPageChange={setPage}
-          onItemsPerPageChange={(size) => { setPageSize(size); setPage(1); }}
+          onItemsPerPageChange={() => setPage(1)}
+          pageSizeOptions={[PAGE_SIZE]}
+          minimalOnMobile
           itemLabel={viewMode === 'ungrouped' ? 'assessments' : 'jobs'}
           scrollContainerRef={scrollContainerRef}
           compact
           alwaysShow
         />
+        </div>
       )}
 
       {previewAssessment && (

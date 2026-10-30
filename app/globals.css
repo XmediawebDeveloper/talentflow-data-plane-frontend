@@ -37,39 +37,64 @@
 /* ── Configure dark mode to use .dark class (matches next-themes) ─────── */
 @variant dark (&:where(.dark, .dark *));
 
-/* ── Global thin scrollbars across the whole app (applies to every scrollable element) ──
-   `scrollbar-width`/`scrollbar-color` are the standard properties and are what
-   every current target browser actually uses: Firefox 64+, Chrome/Edge 121+,
-   Safari 18.2+.
+/* ── App scrollbar: "grow on hover" (one style everywhere) ─────────────────
+   A 4px pill inside a 12px grab area, widening to 8px on hover; no track.
+   The track stops 8px short of each end so the pill clears rounded corners.
 
-   The `::-webkit-scrollbar` rules below are NOT a second opinion on the same
-   thing — they are unreachable in any browser that supports the standard
-   property, because specifying `scrollbar-width` makes WebKit/Blink ignore the
-   legacy pseudo-elements on that element. They only ever render in WebKit
-   builds older than Safari 18.2, which is why their metrics are sized to match
-   what `thin` produces (~10px) rather than the 5px they used to carry: at 5px
-   the same app had noticeably slimmer bars in older Safari than in Chrome and
-   Firefox, which is exactly the cross-engine drift they were meant to prevent. */
-*, html, body { scrollbar-width: thin !important; scrollbar-color: rgba(156, 163, 175, 0.5) transparent !important; }
-*::-webkit-scrollbar, html::-webkit-scrollbar, body::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
-*::-webkit-scrollbar-track, html::-webkit-scrollbar-track, body::-webkit-scrollbar-track { background: transparent !important; }
-*::-webkit-scrollbar-thumb, html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5) !important; border-radius: 999px !important; }
-*::-webkit-scrollbar-thumb:hover, html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.7) !important; }
+   Chromium (Chrome, Edge, Brave, Opera, Vivaldi, Arc, Samsung) and Safari draw
+   these `::-webkit-scrollbar` rules exactly. They IGNORE them on any element
+   that also has `scrollbar-width` or `scrollbar-color` (Chrome 121+, Safari
+   18.2+) — and `scrollbar-color` is inherited — so the standard properties are
+   set for Firefox only, the one engine without `::-webkit-scrollbar`, where
+   they give the closest match: a thin bar in the same colour.
 
-/* ── Always-visible scrollbar — for modals/tables that need an obvious scroll affordance.
-   Overrides the global thin (5px) scrollbar, so it must also use !important. ── */
-.scrollbar-visible { scrollbar-width: auto !important; scrollbar-color: rgba(100, 116, 139, 0.75) rgba(148, 163, 184, 0.18) !important; }
-/* Sized to `scrollbar-width: auto`, for the same pre-18.2-WebKit-only reason
-   as the global block above. */
-.scrollbar-visible::-webkit-scrollbar { width: 15px !important; height: 15px !important; }
-.scrollbar-visible::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.18) !important; border-radius: 999px !important; }
-.scrollbar-visible::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.75) !important; border-radius: 999px !important; border: 2px solid transparent !important; background-clip: padding-box !important; }
-.scrollbar-visible::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 0.95) !important; background-clip: padding-box !important; }
-.scrollbar-visible::-webkit-scrollbar-corner { background: transparent !important; }
-.dark .scrollbar-visible { scrollbar-color: rgba(148, 163, 184, 0.6) rgba(51, 65, 85, 0.45) !important; }
-.dark .scrollbar-visible::-webkit-scrollbar-track { background: rgba(51, 65, 85, 0.45) !important; }
-.dark .scrollbar-visible::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.6) !important; }
-.dark .scrollbar-visible::-webkit-scrollbar-thumb:hover { background: rgba(203, 213, 225, 0.8) !important; }
+   Tables draw their own bars in the same style (TableScrollbars.tsx). */
+:root {
+  --sb-area: 12px;
+  --sb-pill: 4px;
+  --sb-pill-hover: 8px;
+  --sb-inset: 8px;
+  --sb-thumb: rgba(100, 116, 139, 0.45);
+  --sb-thumb-hover: rgba(71, 85, 105, 0.8);
+}
+.dark {
+  --sb-thumb: rgba(148, 163, 184, 0.4);
+  --sb-thumb-hover: rgba(203, 213, 225, 0.75);
+}
+/* Touch screens have no hover to grow the pill, so it rests a little wider. */
+@media (pointer: coarse) { :root { --sb-pill: 6px; } }
+
+*::-webkit-scrollbar { width: var(--sb-area) !important; height: var(--sb-area) !important; }
+*::-webkit-scrollbar-track { background: transparent !important; }
+*::-webkit-scrollbar-track:vertical { margin: var(--sb-inset) 0 !important; }
+*::-webkit-scrollbar-track:horizontal { margin: 0 var(--sb-inset) !important; }
+*::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb) !important;
+  border-radius: 999px !important;
+  border: calc((var(--sb-area) - var(--sb-pill)) / 2) solid transparent !important;
+  background-clip: padding-box !important;
+}
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background: var(--sb-thumb-hover) !important;
+  border-width: calc((var(--sb-area) - var(--sb-pill-hover)) / 2) !important;
+  background-clip: padding-box !important;
+}
+*::-webkit-scrollbar-corner { background: transparent !important; }
+@supports not selector(::-webkit-scrollbar) {
+  *, html, body { scrollbar-width: thin !important; scrollbar-color: var(--sb-thumb) transparent !important; }
+}
+/* `.scrollbar-visible` (the folder tree) used to carry a wider bar with a
+   track; it now takes the app style above, like every other scroll area. */
+/* Hold the hover look while a scroll is in progress (set from script). */
+.tf-scrollbar-active::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb-hover) !important;
+  border-width: calc((var(--sb-area) - var(--sb-pill-hover)) / 2) !important;
+  background-clip: padding-box !important;
+}
+@supports not selector(::-webkit-scrollbar) {
+  .tf-scrollbar-active { scrollbar-color: var(--sb-thumb-hover) transparent !important; }
+}
 
 /* ── Bina speaking mouth animation ─────────────────────────────────── */
 @keyframes linda-talk {
@@ -183,48 +208,25 @@ html.tf-app-shell body {
   height: 0 !important;
 }
 
-/* Auto-hiding scrollbar: thumb hidden by default, visible on hover/scroll.
-   Width stays stable (no layout shift). Only thumb color toggles. */
-.scrollbar-auto-hide {
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.scrollbar-auto-hide:hover,
-.scrollbar-auto-hide:active {
-  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
-}
-/* Webkit (Chrome, Safari, Edge) */
-.scrollbar-auto-hide::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-.scrollbar-auto-hide::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scrollbar-auto-hide::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
-}
+/* Auto-hiding scrollbar: the app style, hidden until the area is hovered.
+   Width stays stable (no layout shift); only the thumb colour toggles. The
+   standard properties are Firefox-only for the reason given at the top of
+   this file. `!important` + the class beats the global thumb rule. */
+.scrollbar-auto-hide { scrollbar-gutter: stable; }
+.scrollbar-auto-hide::-webkit-scrollbar-thumb { background: transparent !important; }
 .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb,
 .scrollbar-auto-hide:active::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.5);
+  background: var(--sb-thumb) !important;
+  background-clip: padding-box !important;
 }
 .scrollbar-auto-hide::-webkit-scrollbar-thumb:hover {
-  background: rgba(107, 114, 128, 0.7);
+  background: var(--sb-thumb-hover) !important;
+  background-clip: padding-box !important;
 }
-
-/* Dark mode scrollbar colors */
-.dark .scrollbar-auto-hide:hover,
-.dark .scrollbar-auto-hide:active {
-  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
-}
-.dark .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb,
-.dark .scrollbar-auto-hide:active::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.3);
-}
-.dark .scrollbar-auto-hide::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
+@supports not selector(::-webkit-scrollbar) {
+  .scrollbar-auto-hide { scrollbar-width: thin !important; scrollbar-color: transparent transparent !important; }
+  .scrollbar-auto-hide:hover,
+  .scrollbar-auto-hide:active { scrollbar-color: var(--sb-thumb) transparent !important; }
 }
 
 /* Apply auto-hide scrollbar to ALL scrollable descendants inside main content area.
@@ -2213,7 +2215,6 @@ button:has(.menu-item-label):focus-visible {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
   border-radius: 0.5rem;
 }
 .table-responsive > table {
@@ -2634,6 +2635,48 @@ html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gra
   white-space: normal;
 }
 
+/* ── No sideways scroll for a table that fits ───────────────────────────
+   A shell scrolled sideways on wide screens even with every column in view,
+   and not because of the data. Measured on AI Assessments at 1366px: the
+   columns' content needed ~870px, but 24px of padding on each side of every
+   cell (`px-6` / `lg:px-6`) added 456px, so the table came to 1323px inside a
+   1288px card — a 35px scroll that hid nothing. Fixed `min-w-[…]` floors did
+   the same on other tables (My Resumes 1200px, AI Talent Match 1600px), forcing
+   a scroll however little the columns held.
+
+   Inside a shell every cell is `nowrap`, so the content itself is already the
+   floor that stops columns squeezing: a table only needs to scroll once its
+   text is wider than the card. So, inside `.tf-table-shell` only:
+
+   - Cell side padding tops out at 1rem — at exactly the breakpoint where a
+     cell's own px-5/px-6 would have applied, so a cell's smaller mobile
+     padding is untouched. On a wide screen nothing looks tighter: the table
+     is `w-full`, and the spare width spreads across the columns.
+   - A hard `min-w-[…]` floor on the table is dropped. `table-fixed` tables
+     keep theirs (fixed layout ignores content, so the floor IS their sizing),
+     as does any table marked `tf-keep-min-w`.
+
+   Unlayered, like the rules above, so it beats the utilities on these cells. */
+.tf-table-shell :is(th, td):is(.px-5, .px-6) {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .tf-table-shell :is(th, td):is(.sm\:px-5, .sm\:px-6) { padding-left: 1rem; padding-right: 1rem; }
+}
+@media (min-width: 768px) {
+  .tf-table-shell :is(th, td):is(.md\:px-5, .md\:px-6) { padding-left: 1rem; padding-right: 1rem; }
+}
+@media (min-width: 1024px) {
+  .tf-table-shell :is(th, td):is(.lg\:px-5, .lg\:px-6) { padding-left: 1rem; padding-right: 1rem; }
+}
+@media (min-width: 1280px) {
+  .tf-table-shell :is(th, td):is(.xl\:px-5, .xl\:px-6) { padding-left: 1rem; padding-right: 1rem; }
+}
+.tf-table-shell table[class*="min-w-["]:not(.table-fixed, .tf-keep-min-w) {
+  min-width: 0;
+}
+
 /* ── Empty-state panel for a data table ───────────────────────────────
    Lives in TypeScript, not here: `TABLE_EMPTY_PANEL_CLASS` in
    lib/constants/tableEmptyPanel.ts. Tailwind compiles utilities from the JSX
@@ -2915,48 +2958,52 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   pointer-events: auto;
   touch-action: none;
 }
+/* The app scrollbar style (see the top of this file): a pill of --sb-pill
+   painted in the middle of the bar's grab area, widening to --sb-pill-hover on
+   hover or drag. The transparent-border + `background-clip: padding-box` trick
+   paints only that middle band; the borders are derived from the grab-area
+   sizes the component publishes (--tf-bar-size, --tf-x-gutter), so changing
+   either keeps the pill centred. Colours come from --sb-thumb(-hover), which
+   already switch for dark mode. */
 .tf-vscroll-thumb {
   position: absolute;
   top: 0;
   left: 0;
   border-radius: 999px;
-  background-color: rgba(148, 163, 184, 0.65);
+  background-color: var(--sb-thumb);
+  background-clip: padding-box;
   pointer-events: auto;
   cursor: default;
   touch-action: none;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, border-width 0.15s ease;
 }
 .tf-vscroll-bar--y .tf-vscroll-thumb {
   width: 100%;
+  border-left: calc((var(--tf-bar-size, 12px) - var(--sb-pill)) / 2) solid transparent;
+  border-right: calc((var(--tf-bar-size, 12px) - var(--sb-pill)) / 2) solid transparent;
 }
-/* Fills the whole track but paints only the middle band, so the horizontal pill
-   is exactly as thick as the vertical one while the grabbable area is twice as
-   tall. The transparent-border + `background-clip: padding-box` trick is the one
-   `.scrollbar-visible`'s thumb already uses further up this file.
-
-   The border is DERIVED from the two thicknesses rather than written as the 4px
-   it currently works out to, because that 4px is the difference between two
-   numbers that live in `TableScrollbars.tsx` — the track's height and the bar's
-   visible thickness — and a hardcoded half-difference silently stops being half
-   the difference the moment either changes. The component sets both custom
-   properties on the overlay root; the fallbacks are today's values, so the rule
-   still paints the right thickness on its own. */
 .tf-vscroll-bar--x .tf-vscroll-thumb {
   height: 100%;
-  border-top: calc((var(--tf-x-gutter, 16px) - var(--tf-bar-size, 8px)) / 2) solid transparent;
-  border-bottom: calc((var(--tf-x-gutter, 16px) - var(--tf-bar-size, 8px)) / 2) solid transparent;
-  background-clip: padding-box;
+  border-top: calc((var(--tf-x-gutter, 16px) - var(--sb-pill)) / 2) solid transparent;
+  border-bottom: calc((var(--tf-x-gutter, 16px) - var(--sb-pill)) / 2) solid transparent;
 }
 .tf-vscroll-thumb:hover,
-.tf-vscroll-thumb.is-dragging {
-  background-color: rgba(100, 116, 139, 0.9);
+.tf-vscroll-thumb.is-dragging,
+.tf-vscroll-bar--x:hover .tf-vscroll-thumb {
+  background-color: var(--sb-thumb-hover);
 }
-.dark .tf-vscroll-thumb {
-  background-color: rgba(148, 163, 184, 0.45);
+.tf-vscroll-bar--y .tf-vscroll-thumb:hover,
+.tf-vscroll-bar--y .tf-vscroll-thumb.is-dragging {
+  border-left-width: calc((var(--tf-bar-size, 12px) - var(--sb-pill-hover)) / 2);
+  border-right-width: calc((var(--tf-bar-size, 12px) - var(--sb-pill-hover)) / 2);
 }
-.dark .tf-vscroll-thumb:hover,
-.dark .tf-vscroll-thumb.is-dragging {
-  background-color: rgba(203, 213, 225, 0.75);
+.tf-vscroll-bar--x:hover .tf-vscroll-thumb,
+.tf-vscroll-bar--x .tf-vscroll-thumb.is-dragging {
+  border-top-width: calc((var(--tf-x-gutter, 16px) - var(--sb-pill-hover)) / 2);
+  border-bottom-width: calc((var(--tf-x-gutter, 16px) - var(--sb-pill-hover)) / 2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-vscroll-thumb { transition: none; }
 }
 
 /* Guard rail for the one-scroll-container rule: a wrapper immediately around a
