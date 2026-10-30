@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Database, FolderOpen, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, ChevronDown } from 'lucide-react';
+import { X, Database, FolderOpen, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, ChevronDown } from 'lucide-react';
 import { RESUME_TAB_LABEL } from '@/lib/constants/resumePools';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -11,23 +11,15 @@ import { useState, useEffect, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
+import { resumeService, folderService, archiveResumeToArchivedFolder, Resume, Folder as FolderType } from '@/lib/services/resumeService';
 import type { Folder as TableFolder } from '@/lib/types/types';
 import ResumeTable from './ResumeTable';
+import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ApplyToJobModal from './ApplyToJobModal';
 import type { Job as SharedJob, Resume as SharedResume } from '@/lib/types/types';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
@@ -516,7 +508,9 @@ export default function SelectSourceModal({
 
   const handleArchiveResume = async (resumeId: string) => {
     try {
-      await resumeService.archive(resumeId, true);
+      // Same destination as My Resumes: flagged AND filed into the one
+      // Archived Resumes folder, not left in its folder with just the flag.
+      await archiveResumeToArchivedFolder(resumeId, resumes.find(r => r.id === resumeId)?.folder_id);
       setSelectedResumes(prev => prev.filter(id => id !== resumeId));
       toast.success('Resume archived');
       await fetchData();
@@ -1093,9 +1087,9 @@ export default function SelectSourceModal({
     // progressItems and the restore callback) but its overlay must not block the
     // page — hide it rather than unmounting, so "expand" can bring it straight back.
     <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] [@media(max-height:820px)]:sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
+        <div className="flex items-start justify-between p-4 sm:p-6 [@media(max-height:820px)]:sm:py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
               <ClipboardList className="w-5 h-5 text-brand-blue" />
@@ -1132,7 +1126,7 @@ export default function SelectSourceModal({
             version, published ones selectable. With a single published version
             there is nothing to choose, so it is simply stated. */}
         {job && (
-          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-2.5 sm:py-3 bg-white dark:bg-slate-900 flex-shrink-0">
+          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 py-2.5 sm:py-3 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 flex-shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2 min-w-0 text-sm">
                 <span className="text-gray-600 dark:text-slate-400">Score against Job Version</span>
@@ -1298,7 +1292,7 @@ export default function SelectSourceModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -1644,89 +1638,14 @@ export default function SelectSourceModal({
 
       {/* Delete confirmation for the table's ⋮ menu. The table fires
           `onDelete` immediately (unlike Archive, which it confirms itself),
-          so the guard has to live here. Same design as My Resumes' own
-          delete-resume dialog, just scoped to always exactly one resume. */}
-      <AlertDialog
+          so the guard has to live here. Shared with My Resumes (DeleteResumeDialog),
+          just scoped to always exactly one resume. */}
+      <DeleteResumeDialog
         open={!!deleteResumeTarget}
-        onOpenChange={(open) => { if (!open) setDeleteResumeTarget(null); }}
-      >
-        <AlertDialogContent className="sm:max-w-lg">
-          <button
-            type="button"
-            onClick={() => setDeleteResumeTarget(null)}
-            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4 pr-8">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-2xl font-bold text-gray-900">Delete Resume</AlertDialogTitle>
-                <p className="mt-1 text-sm text-gray-500">This action is permanent and cannot be undone.</p>
-              </div>
-            </div>
-            <AlertDialogDescription asChild>
-              <div className="mt-2 space-y-4">
-                <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/60 p-4">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                      <ShieldAlert className="h-4 w-4" />
-                    </span>
-                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                    <p className="text-sm text-gray-800">
-                      This action is <span className="font-semibold text-red-600">permanent</span> and{' '}
-                      <span className="font-semibold text-red-600">cannot be undone</span>.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                      <Lock className="h-4 w-4" />
-                    </span>
-                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                    <p className="text-sm text-gray-800">
-                      Deleted resume <span className="font-semibold text-red-600">cannot be recovered</span>.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
-                      <AlertCircle className="h-4 w-4" />
-                    </span>
-                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                    <p className="text-sm text-gray-800">
-                      All associated data will be <span className="font-semibold text-red-600">permanently removed</span>.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
-                  <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-orange text-brand-orange">
-                    <HelpCircle className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      Are you sure you want to delete{' '}
-                      <span className="font-semibold text-gray-900">&ldquo;{deleteResumeTarget?.name ?? ''}&rdquo;</span>?
-                    </p>
-                    <p className="mt-0.5 text-sm text-gray-500">This action cannot be reversed.</p>
-                  </div>
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogAction
-              onClick={handleConfirmDeleteResume}
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete Resume
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        names={deleteResumeTarget ? [deleteResumeTarget.name] : []}
+        onCancel={() => setDeleteResumeTarget(null)}
+        onConfirm={handleConfirmDeleteResume}
+      />
 
       {/* Review before scoring — Candidates Selected with this job fixed, the
           same dialog every other Score Resume flow shows first. */}

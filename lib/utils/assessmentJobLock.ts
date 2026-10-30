@@ -16,6 +16,12 @@ export const isJobVersionLocked = (status?: string | null): boolean => {
   return s === 'archived' || s === 'disabled';
 };
 
+/** Disabled only — not Archived. Mirrors AI Interview's `isJdDisabled`: used
+ *  to grey Copy Link / Revoke on an Invited invitation, Edit on a Revoked
+ *  one, and Resend on an Expired one, while leaving an Archived JD's
+ *  invitations to whatever archived-assessment lock already applies. */
+export const isJdDisabled = (status?: string | null): boolean => (status || '').toLowerCase() === 'disabled';
+
 /* The ⋮ menu's lock messages, one per status — the AI Interview split
    (`JD_DISABLED_ACTION_MESSAGE` / `JD_ARCHIVED_ACTION_MESSAGE`). The combined
    message above stays for the Create flow, where the fix is to pick another
@@ -41,10 +47,10 @@ export const assessmentJobLockMessage = (status?: string | null): string | null 
  * Every version of each job these JD ids belong to, keyed by the requested
  * JD id — one batched lineage read. Ids the server does not return are left out.
  */
-export async function loadJobVersionLineages(jdIds: string[]): Promise<Record<string, JDLineageVersion[]>> {
+export async function loadJobVersionLineages(jdIds: string[], opts?: { fresh?: boolean }): Promise<Record<string, JDLineageVersion[]>> {
   const ids = Array.from(new Set(jdIds.filter(Boolean)));
   if (ids.length === 0) return {};
-  return jdService.getLineagesBatch(ids);
+  return jdService.getLineagesBatch(ids, opts);
 }
 
 /** Each job version's live status, keyed by its own JD id, from loaded lineages. */

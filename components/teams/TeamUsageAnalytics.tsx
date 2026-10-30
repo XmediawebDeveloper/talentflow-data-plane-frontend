@@ -66,8 +66,18 @@ function getMCount(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
   return m.by_type[key]?.consumption_count ?? 0;
 }
 
+/** Net units (used − returned, e.g. a deleted resume gives its 1 RU back) —
+ *  what actually left the quota. Team values use the same rule, so a team's
+ *  total is the sum of its members and matches the organisation's quota. */
 function getMUnits(m: TeamMemberUsage, key: 'RS' | 'AS' | 'AIU' | 'RU') {
-  return m.by_type[key]?.total_consumed ?? 0;
+  const t = m.by_type[key];
+  if (!SHOWS_RETURNS(key)) return t?.total_consumed ?? 0;
+  return t?.net_consumed ?? t?.total_consumed ?? 0;
+}
+
+/** AI Assessment and AI Interview show units deducted only — never returned or net. */
+function SHOWS_RETURNS(key: 'RS' | 'AS' | 'AIU' | 'RU') {
+  return key !== 'AS' && key !== 'AIU';
 }
 
 
@@ -80,7 +90,7 @@ function formatUnits(units: number) {
  *  (a deleted resume returns its 1 RU). Hidden when nothing was returned. */
 function ReturnedNote({ member, k }: { member: TeamMemberUsage; k: 'RS' | 'AS' | 'AIU' | 'RU' }) {
   const t = member.by_type[k];
-  const returned = t?.units_returned ?? 0;
+  const returned = SHOWS_RETURNS(k) ? t?.units_returned ?? 0 : 0;
   if (returned <= 0) return null;
   const used = t?.total_consumed ?? 0;
   const net = t?.net_consumed ?? used - returned;
@@ -90,7 +100,8 @@ function ReturnedNote({ member, k }: { member: TeamMemberUsage; k: 'RS' | 'AS' |
       className="text-[11px] font-medium text-success whitespace-nowrap"
       title={`${formatUnits(used)} used, ${formatUnits(returned)} returned${why}. Net ${formatUnits(net)}.`}
     >
-      +{formatUnits(returned)} returned · net {formatUnits(net)}
+      {/* The cell's number is already net (in Units mode), so show what was used. */}
+      +{formatUnits(returned)} returned · {formatUnits(used)} used
     </p>
   );
 }
@@ -106,7 +117,25 @@ const UNIT_KEYS: readonly UnitKey[] = ['RU', 'RS', 'AS', 'AIU'];
 const MeasureContext = createContext<Measure>('units');
 
 function teamValue(t: TeamUsageSummary, k: UnitKey, m: Measure) {
-  return m === 'units' ? t.by_type[k]?.total_consumed ?? 0 : getCount(t, k);
+  const u = t.by_type[k];
+  if (m !== 'units') return getCount(t, k);
+  return SHOWS_RETURNS(k) ? u?.net_consumed ?? u?.total_consumed ?? 0 : u?.total_consumed ?? 0;
+}
+
+/** Green "+N returned" under a team's unit cell (units credited back this period). */
+function TeamReturnedNote({ team, k }: { team: TeamUsageSummary; k: UnitKey }) {
+  const u = team.by_type[k];
+  const returned = SHOWS_RETURNS(k) ? u?.units_returned ?? 0 : 0;
+  if (returned <= 0) return null;
+  const used = u?.total_consumed ?? 0;
+  return (
+    <p
+      className="mt-0.5 text-[11px] font-medium text-success"
+      title={`${formatUnits(used)} used, ${formatUnits(returned)} returned. Net ${formatUnits(used - returned)}.`}
+    >
+      +{formatUnits(returned)} returned
+    </p>
+  );
 }
 function teamTotalBy(t: TeamUsageSummary, m: Measure) {
   return UNIT_KEYS.reduce((sum, k) => sum + teamValue(t, k, m), 0);
@@ -563,8 +592,38 @@ function MemberBadges({ member, isTop }: { member: TeamMemberUsage; isTop: boole
 
 // ─── Single member row ────────────────────────────────────────────────────────
 
+type MemberLogView = 'activity' | 'history';
+
+/** Switch between the two logs of an expanded member (only one shows at a time). */
+function MemberLogTabs({ value, onChange }: { value: MemberLogView; onChange: (v: MemberLogView) => void }) {
+  const tabs: { id: MemberLogView; label: string; hint: string }[] = [
+    { id: 'activity', label: 'Unit activity', hint: 'Units deducted and returned (e.g. a deleted resume gives its unit back)' },
+    { id: 'history', label: 'Consumption history', hint: 'Every metered action with its status, including failed ones' },
+  ];
+  return (
+    <div role="tablist" aria-label="Member log" className="mb-3 inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          type="button"
+          role="tab"
+          aria-selected={value === t.id}
+          title={t.hint}
+          onClick={(e) => { e.stopPropagation(); onChange(t.id); }}
+          className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+            value === t.id ? 'bg-brand-blue text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; teamId: string; fromDate: string; toDate: string; isTop?: boolean }) {
   const { expanded, toggle, entries, loading, total, loadMore, loadingMore } = useMemberLog(member, fromDate, toDate);
+  const [logView, setLogView] = useState<MemberLogView>('activity');
   const measure = useContext(MeasureContext);
 
   // The badge follows the Actions / Units toggle; the line under it shows the other one.
@@ -646,23 +705,28 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         </td>
       </tr>
 
-      {/* Unit activity — units deducted and returned (e.g. deleted resume → +1 RU) */}
+      {/* One log at a time: Unit activity (deducted + returned, default) or the
+          older Consumption history — showing both stacked read as two
+          disagreeing records of the same usage. */}
       {expanded && (
         <tr>
-          <td colSpan={6} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
-            <UnitActivityLog
-              teamId={teamId}
-              userId={member.user_id}
-              memberName={member.user_name || member.user_email}
-              fromDate={fromDate}
-              toDate={toDate}
-            />
+          <td colSpan={6} className={`bg-gray-50 dark:bg-slate-800/50 px-4 ${logView === 'activity' ? 'py-4 border-b border-gray-100 dark:border-slate-700/60' : 'pt-4 pb-0'}`}>
+            <MemberLogTabs value={logView} onChange={setLogView} />
+            {logView === 'activity' && (
+              <UnitActivityLog
+                teamId={teamId}
+                userId={member.user_id}
+                memberName={member.user_name || member.user_email}
+                fromDate={fromDate}
+                toDate={toDate}
+              />
+            )}
           </td>
         </tr>
       )}
 
       {/* Loading — mirrors MemberLogEntries: label + entry rows */}
-      {expanded && loading && (
+      {expanded && logView === 'history' && loading && (
         <tr>
           <td colSpan={6} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
             <Skeleton className="h-3 w-56 mb-3" />
@@ -688,12 +752,12 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
       )}
 
       {/* Log entries */}
-      {expanded && !loading && entries !== null && entries.length > 0 && (
+      {expanded && logView === 'history' && !loading && entries !== null && entries.length > 0 && (
         <MemberLogEntries entries={entries} total={total} onLoadMore={loadMore} loadingMore={loadingMore} memberName={member.user_name || member.user_email} fromDate={fromDate} toDate={toDate} />
       )}
 
       {/* Empty */}
-      {expanded && !loading && entries !== null && entries.length === 0 && (
+      {expanded && logView === 'history' && !loading && entries !== null && entries.length === 0 && (
         <tr>
           <td colSpan={6} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
             No consumption entries for this member in the selected period.
@@ -780,8 +844,9 @@ function TeamRow({
         {([['RU', ru], ['RS', rs], ['AS', as_], ['AIU', aiu]] as ['RS' | 'AS' | 'AIU' | 'RU', number][]).map(([key, val]) => (
           <td key={key} className="px-4 py-4 whitespace-nowrap">
             {val > 0
-              ? <span title={`${UNIT_FULL_NAME[key]}: ${formatMeasure(val, measure)} ${measure}`} className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{formatMeasure(val, measure)}</span>
+              ? <span title={`${UNIT_FULL_NAME[key]}: ${formatMeasure(val, measure)} ${measure === 'units' ? 'net units' : measure}`} className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{formatMeasure(val, measure)}</span>
               : <span className="text-gray-300 dark:text-slate-500 text-sm max-sm:text-[13px]">—</span>}
+            <TeamReturnedNote team={team} k={key} />
           </td>
         ))}
         <td className="px-4 py-4 whitespace-nowrap">
@@ -927,6 +992,7 @@ function MobileLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
 
 function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: { member: TeamMemberUsage; teamId: string; fromDate: string; toDate: string; isTop?: boolean }) {
   const { expanded, toggle, entries, loading, total, loadMore, loadingMore } = useMemberLog(member, fromDate, toDate);
+  const [logView, setLogView] = useState<MemberLogView>('activity');
   const measure = useContext(MeasureContext);
   const stats: [string, string | number, boolean][] = [
     ...UNIT_KEYS.map((k): [string, string, boolean] => [k, formatMeasure(memberValue(member, k, measure), measure), memberValue(member, k, measure) > 0]),
@@ -967,28 +1033,33 @@ function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: {
         Last active: {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
       </p>
       {expanded && (
-        <div className="border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
-          <UnitActivityLog
-            teamId={teamId}
-            userId={member.user_id}
-            memberName={member.user_name || member.user_email}
-            fromDate={fromDate}
-            toDate={toDate}
-            compact
-          />
+        <div className="border-t border-gray-100 px-2.5 pt-2.5 dark:border-slate-700/60">
+          <MemberLogTabs value={logView} onChange={setLogView} />
+          {logView === 'activity' && (
+            <div className="pb-2.5">
+              <UnitActivityLog
+                teamId={teamId}
+                userId={member.user_id}
+                memberName={member.user_name || member.user_email}
+                fromDate={fromDate}
+                toDate={toDate}
+                compact
+              />
+            </div>
+          )}
         </div>
       )}
-      {expanded && loading && (
+      {expanded && logView === 'history' && loading && (
         <div className="space-y-1.5 border-t border-gray-100 px-2.5 py-2.5 dark:border-slate-700/60">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-11 w-full rounded-md" />
           ))}
         </div>
       )}
-      {expanded && !loading && entries !== null && entries.length > 0 && (
+      {expanded && logView === 'history' && !loading && entries !== null && entries.length > 0 && (
         <MobileLogEntries entries={entries} total={total} onLoadMore={loadMore} loadingMore={loadingMore} memberName={member.user_name || member.user_email} fromDate={fromDate} toDate={toDate} />
       )}
-      {expanded && !loading && entries !== null && entries.length === 0 && (
+      {expanded && logView === 'history' && !loading && entries !== null && entries.length === 0 && (
         <p className="border-t border-gray-100 px-2.5 py-2.5 text-xs italic text-gray-400 dark:border-slate-700/60 dark:text-slate-500">
           No consumption entries in the selected period.
         </p>
@@ -1053,6 +1124,11 @@ function MobileTeamCard({
               className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-2xs font-semibold ${val > 0 ? UNIT_COLORS[k] : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500'}`}
             >
               {UNIT_FULL_NAME[k]} <span className="tabular-nums">{formatMeasure(val, measure)}</span>
+              {SHOWS_RETURNS(k) && (team.by_type[k]?.units_returned ?? 0) > 0 && (
+                <span className="font-medium text-success" title="Units credited back this period (e.g. deleted resumes)">
+                  +{formatUnits(team.by_type[k]?.units_returned ?? 0)} returned
+                </span>
+              )}
             </span>
           );
         })}

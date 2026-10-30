@@ -1821,7 +1821,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           {descEmojiOpen && !showDescriptionPreview && (
                             <>
                               <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setDescEmojiOpen(false)} />
-                              <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                              <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                 {EMOJI_GROUPS.map(group => (
                                   <div key={group.group} className="mb-1.5 last:mb-0">
                                     <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
@@ -2591,7 +2591,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               {templateMenuOpen && (
                                 <>
                                   <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTemplateMenuOpen(false)} />
-                                  <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                  <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                     {replyTemplates.map(group => (
                                       <div key={group.group} className="py-1">
                                         <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
@@ -2679,7 +2679,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 {emojiMenuOpen && (
                                   <>
                                     <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setEmojiMenuOpen(false)} />
-                                    <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                    <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                       {EMOJI_GROUPS.map(group => (
                                         <div key={group.group} className="mb-1.5 last:mb-0">
                                           <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
@@ -3751,7 +3751,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             {templateMenuOpen && (
                               <>
                                 <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setTemplateMenuOpen(false)} />
-                                <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                   {adminTemplates.map(group => (
                                     <div key={group.group} className="py-1">
                                       <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
@@ -3799,7 +3799,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               {emojiMenuOpen && (
                                 <>
                                   <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-10 cursor-default" onClick={() => setEmojiMenuOpen(false)} />
-                                  <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg [scrollbar-width:thin] dark:border-slate-700 dark:bg-slate-900">
+                                  <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                     {EMOJI_GROUPS.map(group => (
                                       <div key={group.group} className="mb-1.5 last:mb-0">
                                         <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>

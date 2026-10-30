@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Archive, ArchiveRestore, Trash2, Calendar, ChevronDown, Clock, Copy, Eye, Layers, ListChecks, Loader2, Mail, MoreVertical, Pencil, Plus, RefreshCw, Send, Star, Timer, User } from 'lucide-react';
+import { Archive, ArchiveRestore, Trash2, Calendar, ChevronDown, Clock, Copy, Eye, Layers, ListChecks, Loader2, Mail, MoreVertical, Pencil, Plus, RefreshCw, Send, Timer, User } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import {
@@ -47,6 +48,43 @@ const ACTION_ICON: Record<VersionAction, { Icon: typeof Eye; tone: string }> = {
   unarchive: { Icon: ArchiveRestore, tone: 'text-menu-icon-archive' },
   delete: { Icon: Trash2, tone: 'text-destructive' },
 };
+
+/**
+ * A version's title, as the version cards and the picked-version strip both
+ * show it. An assessment names its job, then the version of each — "JD-245
+ * Junior Software Test Engineer V2 - Assessment V1" — with the JD ID chip and
+ * the job / assessment version pills in their usual colours. Anything else
+ * (an AI interview, an assessment with no job) keeps its own name. Pieces are
+ * returned bare, to sit in the caller's wrapping flex row. `compact` is the
+ * strip's smaller type.
+ */
+export function VersionTitle({ version: v, spansJobVersions = false, compact = false }: {
+  version: InviteVersion;
+  spansJobVersions?: boolean;
+  compact?: boolean;
+}) {
+  const tone = `${compact ? 'text-sm font-medium' : 'text-sm sm:text-base font-semibold'} ${
+    v.sendable ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-400'
+  }`;
+  if (v.kind === 'assessment' && v.raw?.jd_title) {
+    return (
+      <>
+        {v.raw.jd_short_id && <JobIdBadge className="flex-shrink-0">{v.raw.jd_short_id}</JobIdBadge>}
+        <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.raw.jd_title}</span>
+        {v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} /> : null}
+        <span className={`whitespace-nowrap ${tone}`}>- Assessment</span>
+        <VersionPill kind="assessment" version={v.version} />
+      </>
+    );
+  }
+  return (
+    <>
+      <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.name}</span>
+      {spansJobVersions && v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} label="Job" /> : null}
+      <VersionPill kind="assessment" version={v.version} />
+    </>
+  );
+}
 
 /** Assessment versions listed before "+N more versions". */
 const INITIAL_VISIBLE = 3;
@@ -96,6 +134,7 @@ export default function VersionList({
   busyId,
   onAction,
   hideDuplicate = false,
+  spansJobVersions = false,
 }: {
   kind: InviteKind;
   /** The cards to list. */
@@ -118,12 +157,19 @@ export default function VersionList({
   onAction: (version: InviteVersion, item: VersionActionItem) => void;
   /** Leave Duplicate out of the ⋯ menu (Job Details' Create / Send AI Interview). */
   hideDuplicate?: boolean;
+  /** The cards span several job versions of one job (the Send Invite
+   *  picker's Change version): each card names its job version, its ⋯ rules
+   *  read its own job version's versions, and Latest is the newest overall.
+   *  `allVersions` stays the picked job version's — usage, cap, New version. */
+  spansJobVersions?: boolean;
 }) {
   const label = KIND_LABEL[kind];
   const every = allVersions ?? versions;
   const used = every.length;
   const atCap = used >= MAX_VERSIONS[kind];
-  const latestId = every[0]?.id;
+  const latestId = (spansJobVersions ? versions : every)[0]?.id;
+  /** The versions a card's ⋯ rules are judged against: its own job version's. */
+  const poolFor = (v: InviteVersion) => (spansJobVersions ? versions.filter((x) => x.jdId === v.jdId) : every);
   /* The New version / Create button (and its cap and Draft-gate notes): v1 is
      configured in a popup, later versions are a draft copy of the latest
      opened there. An AI interview is one per job version: v1 is its only
@@ -181,7 +227,7 @@ export default function VersionList({
                   ? JD_DISABLED_ACTION_MESSAGE
                 : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
             const pick = () => { if (v.sendable) onSelect(selected ? null : v.id); };
-            const actions = versionActions(v, every, perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));
+            const actions = versionActions(v, poolFor(v), perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));
             return (
               <div
                 key={v.id}
@@ -218,13 +264,12 @@ export default function VersionList({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2 flex-wrap min-h-6">
-                      <span className={`min-w-0 text-sm sm:text-base font-semibold [overflow-wrap:anywhere] ${v.sendable ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-400'}`}>
-                        {v.name}
-                      </span>
-                      <VersionPill kind="assessment" version={v.version} />
+                      <VersionTitle version={v} spansJobVersions={spansJobVersions} />
                       {v.id === latestId && (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue">
-                          <Star className="w-3 h-3 fill-current" /> Latest
+                        /* The Job Openings version history's Latest chip
+                           (JobVersionHistoryPanel), class for class. */
+                        <span className="shrink-0 px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                          Latest
                         </span>
                       )}
                     </span>

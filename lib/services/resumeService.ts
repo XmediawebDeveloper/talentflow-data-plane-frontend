@@ -928,4 +928,79 @@ export const folderService = {
   },
 };
 
+/* ── The one Archived Resumes folder ─────────────────────────────────────
+   Every archive — My Resumes (row, card, bulk), Search Resume, the table's
+   own fallback — files the resume into this single top-level folder.
+
+   It used to be created by whichever My Resumes fetch first noticed it
+   missing; a browser refresh runs two of those fetches at once, both saw no
+   folder, and both created one — the duplicate "Archived Resumes" under
+   System Folders. `ensureArchivedFolder` is single-flight (concurrent callers
+   share one request) and also heals a tenant that already has duplicates:
+   the folder holding the most resumes (oldest on a tie) is kept, and each
+   extra one is deleted with its resumes moved into it, so no archived resume
+   is left behind in a folder the tree no longer shows. */
+export const ARCHIVED_FOLDER_NAME = 'Archived Resumes';
+const ARCHIVED_PREV_FOLDER_KEY = 'archivedResumePrevFolder';
+
+export const isArchivedFolder = (f: { name: string; parent_id?: string | null; parentId?: string | null }) =>
+  f.name === ARCHIVED_FOLDER_NAME && !f.parent_id && !f.parentId;
+
+let ensureArchivedFolderInFlight: Promise<Folder> | null = null;
+
+export function ensureArchivedFolder(): Promise<Folder> {
+  if (!ensureArchivedFolderInFlight) {
+    ensureArchivedFolderInFlight = (async () => {
+      const all = await folderService.list();
+      const archived = all.filter(isArchivedFolder);
+      if (archived.length === 0) return folderService.create(ARCHIVED_FOLDER_NAME);
+      const [keep, ...extras] = [...archived].sort(
+        (a, b) =>
+          (b.resume_count || 0) - (a.resume_count || 0) ||
+          String(a.created_at).localeCompare(String(b.created_at)),
+      );
+      for (const extra of extras) {
+        try {
+          await folderService.delete(extra.id, keep.id);
+        } catch (error) {
+          console.error('[folderService] Failed to merge duplicate Archived Resumes folder:', error);
+        }
+      }
+      if (extras.length) dispatchResumesChanged();
+      return keep;
+    })().finally(() => {
+      ensureArchivedFolderInFlight = null;
+    });
+  }
+  return ensureArchivedFolderInFlight;
+}
+
+/**
+ * Archive a resume the same way from anywhere: flag it, file it into the
+ * shared Archived Resumes folder, and remember where it came from so
+ * Unarchive (My Resumes) can put it back. `fromFolderId` is the folder it sits
+ * in now, when the caller knows it.
+ */
+export async function archiveResumeToArchivedFolder(
+  resumeId: string,
+  fromFolderId?: string | null,
+  archivedFolderId?: string,
+): Promise<string> {
+  const folderId = archivedFolderId ?? (await ensureArchivedFolder()).id;
+  if (fromFolderId && fromFolderId !== folderId) {
+    try {
+      const stash = JSON.parse(localStorage.getItem(ARCHIVED_PREV_FOLDER_KEY) || '{}');
+      stash[resumeId] = fromFolderId;
+      localStorage.setItem(ARCHIVED_PREV_FOLDER_KEY, JSON.stringify(stash));
+    } catch {
+      // localStorage unavailable / quota — unarchive will default to Root.
+    }
+  }
+  // skipAudit on the move: the archive endpoint logs "Resume archived"
+  // itself; this filing move is a side effect, not a folder move.
+  await resumeService.archive(resumeId, true);
+  await resumeService.move(resumeId, folderId, true);
+  return folderId;
+}
+
 export default resumeService;

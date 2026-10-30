@@ -7,11 +7,12 @@ import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
+import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
-import Pagination from '@/components/Pagination';
+import ListPagination from '@/components/ListPagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,7 +38,7 @@ import type { InviteCandidate } from '@/components/talent-match-invite/inviteVer
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
-import { resumeService, folderService, RESUMES_CHANGED_EVENT } from '@/lib/services/resumeService';
+import { resumeService, folderService, RESUMES_CHANGED_EVENT, ensureArchivedFolder } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { formatCandidateExperience } from '@/lib/utils/resumeExperience';
@@ -76,6 +77,8 @@ const RESUME_DRAG_TYPE = 'RESUME';
  *  Tailwind only ships classes spelled out in the source, so a `max-h-[${...}]`
  *  built from this constant would never be generated. */
 const SUBFOLDER_PEEK_MAX_HEIGHT = 180;
+/** This list's page sizes — the ones its pager has always offered. */
+const RESUME_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 /** Width of the third-level flyout that opens beside the subfolder list. */
 const SUBFOLDER_PEEK_PANEL_WIDTH = 224;
 /** Approximate folder action menu height; used to decide whether to open upward. */
@@ -1866,20 +1869,22 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         }
       }
 
-      // Ensure "Archived Resumes" folder always exists
-      const hasArchivedFolder = apiFolders.some(f => f.name === 'Archived Resumes' && !f.parentId);
-      if (!hasArchivedFolder) {
+      /* Exactly one "Archived Resumes" folder. Creating it here directly is
+         what produced two: a refresh overlaps two of these fetches and both
+         created one. ensureArchivedFolder is single-flight and merges any
+         existing duplicates into one, after which the tree is re-read so it
+         shows the surviving folder with its real count. */
+      if (apiFolders.filter(f => f.name === 'Archived Resumes' && !f.parentId).length !== 1) {
         try {
-          const newArchivedFolder = await folderService.create('Archived Resumes');
-          const archivedFolderConverted: FolderType = {
-            id: newArchivedFolder.id,
-            name: newArchivedFolder.name,
-            count: 0,
-            parentId: newArchivedFolder.parent_id,
-          };
-          apiFolders = [...apiFolders, archivedFolderConverted];
+          await ensureArchivedFolder();
+          const healed = await folderService.list(
+            searchParams.uploaded_by_name ? { uploaded_by_name: searchParams.uploaded_by_name } : undefined,
+          );
+          const hasRoot = apiFolders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
+          apiFolders = (Array.isArray(healed) ? healed : []).map(convertApiFolderToTree);
+          if (hasRoot && !apiFolders.some(f => f.id === hasRoot.id)) apiFolders = [hasRoot, ...apiFolders];
         } catch (error) {
-          console.error('Failed to create Archived Resumes folder:', error);
+          console.error('Failed to ensure Archived Resumes folder:', error);
         }
       }
 
@@ -2315,11 +2320,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const handleArchiveResumes = async (resumeIds: string[]) => {
     try {
       // Find the "Archived Resumes" folder
-      const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
-      if (!archivedFolder) {
-        toast.error('Archived Resumes folder not found');
-        return;
-      }
+      const known = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+      const archivedFolder = known ?? { id: (await ensureArchivedFolder()).id };
 
       // Get old folder IDs for count update
       const oldFolderIds = resumeIds.map(id => {
@@ -2616,6 +2618,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error('Please select at least one resume');
       return;
     }
+    // An archived resume can't be assessed, same rule Score and AI Interview apply.
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isResumeArchived(r)).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
+      return;
+    }
     openInvite({
       kind: 'assessment',
       candidates: selectedInviteCandidates(),
@@ -2648,6 +2658,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const handleAITalentMatch = async () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    // An archived resume can't be matched against a job, same rule Score,
+    // Assessment and AI Interview apply.
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isResumeArchived(r)).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
       return;
     }
     /* The dialog loads the job list itself now, so this no longer gates the
@@ -3253,30 +3272,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     } catch (error: any) {
       console.error('Failed to create root folder:', error);
       throw error;
-    }
-  };
-
-  // Helper function to find or create "Archived Resumes" folder
-  const getOrCreateArchivedFolder = async (existingFolders: FolderType[]): Promise<FolderType | null> => {
-    // Check if "Archived Resumes" folder already exists
-    const existingArchived = existingFolders.find(f => f.name === 'Archived Resumes' && !f.parentId);
-    if (existingArchived) {
-      return existingArchived;
-    }
-
-    // Create "Archived Resumes" folder
-    try {
-      const newFolder = await folderService.create('Archived Resumes');
-      const converted: FolderType = {
-        id: newFolder.id,
-        name: newFolder.name,
-        count: 0,
-        parentId: newFolder.parent_id,
-      };
-      return converted;
-    } catch (error: any) {
-      console.error('Failed to create Archived Resumes folder:', error);
-      return null;
     }
   };
 
@@ -4192,6 +4187,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
         {viewMode === 'list' ? (
           // List View with Folder Tree
+          <>
           <div className="flex flex-col md:flex-row">
             <FolderTree
               folders={folders}
@@ -4307,28 +4303,22 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   }
                 />
               </div>
-              {totalPages > 0 && (
-                /* Beside the folder panel this column is far narrower than the
-                   viewport the pager's sm: breakpoint assumes (≈460px on a
-                   768px tablet), so its one row crushed the summary onto four
-                   lines and pushed Next past the card. Let it wrap instead;
-                   from xl the column is wide enough for the single row.
-                   mt-auto: the column stretches to the folder panel's
-                   height, so with only a few rows (or none) the pager is
-                   pushed to the bottom instead of sitting under the last row. */
-                <div className="mt-auto [&>div]:flex-wrap [&>div]:justify-center xl:[&>div]:flex-nowrap xl:[&>div]:justify-between">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    totalItems={totalItems}
-                    itemsPerPage={itemsPerPage}
-                    onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
-                    onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
-                  />
-                </div>
-              )}
             </div>
           </div>
+          {/* The Job Descriptions pager: its own card under the folder +
+              table row (not pinned to the bottom of the table column, which
+              stretched to the folder panel's height and left a gap under the
+              last row). Page sizes stay this list's 10 / 25 / 50 / 100. */}
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={totalItems}
+            onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+            itemLabel="resumes"
+            pageSizeOptions={RESUME_PAGE_SIZE_OPTIONS}
+          />
+          </>
         ) : (
           // Card View - Folders as Cards with Breadcrumb Navigation
           <div className="py-4 md:py-6" data-folder-card-boundary>
@@ -4884,16 +4874,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       )}
 
                       {totalPages > 0 && folderResumes.length > 0 && (
-                        <div className="mt-4">
-                          <Pagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            totalItems={totalItems}
-                            itemsPerPage={itemsPerPage}
-                            onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
-                            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
-                          />
-                        </div>
+                        <ListPagination
+                          currentPage={currentPage}
+                          itemsPerPage={itemsPerPage}
+                          totalItems={totalItems}
+                          onPageChange={(page) => { setCurrentPage(page); setIsPaginating(true); }}
+                          onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); setIsPaginating(true); }}
+                          itemLabel="resumes"
+                          pageSizeOptions={RESUME_PAGE_SIZE_OPTIONS}
+                        />
                       )}
                     </>
                   )}
@@ -6345,47 +6334,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       </AlertDialog>
 
       {/* Delete Resume Confirmation Dialog */}
-      <AlertDialog
+      <DeleteResumeDialog
         open={deleteResumeConfirm.isOpen}
-        onOpenChange={(open) => {
-          if (!open) setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
-        }}
-      >
-        <AlertDialogContent className="sm:max-w-lg" hideClose>
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
-                  Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
-                </AlertDialogTitle>
-              </div>
-            </div>
-            <AlertDialogDescription asChild>
-              <p className="mt-2 text-sm text-gray-700">
-                {deleteResumeConfirm.ids.length === 1
-                  ? 'Are you sure you want to delete this resume? Once deleted, the resume will be permanently removed and cannot be recovered.'
-                  : <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>? Once deleted, they will be permanently removed and cannot be recovered.</>
-                }
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel onClick={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={confirmDeleteResumes}
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : 'Resumes'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        names={deleteResumeConfirm.names}
+        onCancel={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}
+        onConfirm={confirmDeleteResumes}
+      />
 
       {/* Delete Folder Confirmation Dialog */}
       <AlertDialog

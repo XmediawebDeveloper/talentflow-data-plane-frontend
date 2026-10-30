@@ -61,15 +61,15 @@ const OPEN_POPOVER_SELECTOR =
 const NATIVE_HIDDEN_ATTR = 'data-tf-native-bars';
 const NATIVE_HIDDEN_VALUE = 'hidden';
 
-const BAR_SIZE = 8;    // visible thumb thickness in px
-const BAR_INSET = 2;   // gap between thumb and the shell's edge
+const BAR_SIZE = 12;   // vertical bar's grab area in px; the pill painted in it is --sb-pill (globals.css)
+const BAR_INSET = 0;   // the grab area sits flush with the shell's edge — the pill is centred inside it
 const TRACK_PAD = 2;   // breathing room at both ends of a track
 const MIN_THUMB = 28;  // keeps the thumb grabbable on very long tables
 /** Height of the horizontal bar's reserved strip: its trough, its hit area, and
  *  the `padding-bottom` the shell gets from `[data-tf-xbar]` in globals.css.
  *  The three must agree, so they are one number. 16px is a native bar's
- *  thickness and twice the visible 8px, which is what makes the bar draggable
- *  by finger rather than by pixel-perfect mouse. */
+ *  thickness and several times the visible pill, which is what makes the bar
+ *  draggable by finger rather than by pixel-perfect mouse. */
 const X_GUTTER = 16;
 /** Marks a shell that overflows sideways, so globals.css can reserve the strip
  *  above. Set for the same reason as `data-tf-native-bars`: a data attribute is
@@ -248,11 +248,10 @@ export default function TableScrollbars() {
 
     const root = document.createElement('div');
     root.className = 'tf-vscroll-root';
-    /* Publish both thicknesses to the stylesheet, which needs their difference
-       to leave the horizontal thumb painting exactly BAR_SIZE — the vertical
-       bar's thickness — inside its taller track. Set here rather than restated
-       in CSS so the two axes cannot end up different widths: this file is the
-       one place either number is written. */
+    /* Publish both grab-area sizes to the stylesheet, which centres the visible
+       pill (--sb-pill) inside each of them. Set here rather than restated in
+       CSS so the bars and their pills cannot drift apart: this file is the one
+       place either number is written. */
     root.style.setProperty('--tf-bar-size', `${BAR_SIZE}px`);
     root.style.setProperty('--tf-x-gutter', `${X_GUTTER}px`);
     document.body.appendChild(root);

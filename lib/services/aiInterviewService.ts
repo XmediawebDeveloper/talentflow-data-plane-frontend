@@ -207,7 +207,7 @@ export interface PublishedJD {
   version_number?: number;   // job version (v1, v2, ...)
   created_by_name?: string;
   has_published_config?: boolean;
-  status?: 'published' | 'disabled';  // disabled JDs are listed read-only
+  status?: 'published' | 'disabled' | 'archived';  // disabled/archived JDs are listed read-only
 }
 
 export const JD_DISABLED_ACTION_MESSAGE = 'This job is disabled. Enable the job to make changes or run interviews.';
@@ -220,6 +220,12 @@ export function isJdDisabled(jdStatus?: string | null): boolean {
 
 export const JD_ARCHIVED_ACTION_MESSAGE = 'This job is archived. Archived jobs cannot be changed or run interviews.';
 
+/** An archived JD stays visible in AI Interview too, same as Disabled — read
+ *  only, until the job is restored. */
+export function isJdArchived(jdStatus?: string | null): boolean {
+  return (jdStatus || '').toLowerCase() === 'archived';
+}
+
 /** Why an AI interview's actions are locked by its JD, or null when they are
  *  not: an Archived JD takes the Disabled JD's lock — views stay, every action
  *  that changes the interview is greyed. */
@@ -227,6 +233,16 @@ export function jdActionLockReason(jdStatus?: string | null): string | null {
   if (isJdDisabled(jdStatus)) return JD_DISABLED_ACTION_MESSAGE;
   if ((jdStatus || '').toLowerCase() === 'archived') return JD_ARCHIVED_ACTION_MESSAGE;
   return null;
+}
+
+export const INTERVIEW_ARCHIVED_ACTION_MESSAGE = 'This interview is archived. Invitation actions are disabled.';
+
+/** The interview CONFIG itself is archived (its own `status`, not its JD's) —
+ *  a config can be archived while its job stays Published. Invite Status
+ *  Tracking keeps every row visible, but Copy Link / Revoke on an Invited row,
+ *  Edit on a Revoked row and Resend on an Expired row are all greyed out. */
+export function isInterviewConfigArchived(configStatus?: string | null): boolean {
+  return (configStatus || '').toLowerCase() === 'archived';
 }
 
 /** One thing worth saying about one skill the recruiter is trying to add.
@@ -1629,12 +1645,16 @@ export const aiInterviewService = {
     candidate_email: string;
     expiry_days?: number;
   }): Promise<{ session_id: string; link: string; expires_at: string | null }> {
-    const response = await api.post(`/ai-interview/${configId}/create-invite-link`, {
-      ...data,
-      base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
-    });
-    dispatchUnitsConsumed();
-    return response.data;
+    try {
+      const response = await api.post(`/ai-interview/${configId}/create-invite-link`, {
+        ...data,
+        base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+      });
+      dispatchUnitsConsumed();
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
   },
 
   /**
