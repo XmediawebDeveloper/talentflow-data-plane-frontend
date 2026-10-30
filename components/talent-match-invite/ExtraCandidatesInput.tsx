@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
@@ -13,7 +13,11 @@ import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 /** The backend takes at most this many typed-in candidates per send. */
 export const MAX_EXTRA_CANDIDATES = 500;
 
+const PAGE_SIZE = 10;
 const INPUT = 'h-10 w-full min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
+const CHIP = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium border whitespace-nowrap max-w-full';
+const CHIP_ON = 'border-brand-blue bg-brand-blue/10 text-brand-blue';
+const CHIP_OFF = 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800';
 
 const EMAIL_HEADER = /^(email|e.?mail|candidate.?email|email.?address)$/i;
 const NAME_HEADER = /^(name|full.?name|candidate.?name|first.?name)$/i;
@@ -27,6 +31,12 @@ interface EntryRow {
   /** Copy Link already invited this row by link — it is not emailed. */
   linked?: boolean;
 }
+
+/** A sheet row that was not added, as the upload summary lists it. */
+interface InvalidRow { row: number; email: string; problem: string }
+
+/** The last sheet uploaded: what came of it. */
+interface UploadSummary { file: string; added: number; repeated: number; over: number; invalid: InvalidRow[]; open: boolean }
 
 const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -59,24 +69,27 @@ const nameFromEmail = (email: string) => email.split('@')[0].replace(/[^A-Za-z]+
 
 /* Rows of one sheet (header row first) → candidates. Needs an Email column;
    Name is optional. Rows with a missing or malformed email, or a name that is
-   not letters and spaces, are counted as invalid and left out. */
-const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: string }[]; invalid: number; hasEmailColumn: boolean } => {
-  if (rows.length < 2) return { found: [], invalid: 0, hasEmailColumn: false };
+   not letters and spaces, are listed as invalid (with their sheet row number)
+   and left out. */
+const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: string }[]; invalid: InvalidRow[]; hasEmailColumn: boolean } => {
+  if (rows.length < 2) return { found: [], invalid: [], hasEmailColumn: false };
   const headers = rows[0].map((h) => String(h ?? '').trim());
   const emailIdx = headers.findIndex((h) => EMAIL_HEADER.test(h));
-  if (emailIdx === -1) return { found: [], invalid: 0, hasEmailColumn: false };
+  if (emailIdx === -1) return { found: [], invalid: [], hasEmailColumn: false };
   const nameIdx = headers.findIndex((h) => NAME_HEADER.test(h));
   const found: { name: string; email: string }[] = [];
-  let invalid = 0;
-  for (const row of rows.slice(1)) {
-    const cell = (i: number) => (i === -1 ? '' : String(row[i] ?? '').trim());
-    if (row.every((v) => !String(v ?? '').trim())) continue;
+  const invalid: InvalidRow[] = [];
+  rows.slice(1).forEach((row, i) => {
+    const cell = (c: number) => (c === -1 ? '' : String(row[c] ?? '').trim());
+    if (row.every((v) => !String(v ?? '').trim())) return;
+    const sheetRow = i + 2; // the header is row 1
     const email = cell(emailIdx).toLowerCase();
-    if (!email || !isValidEmailFormat(email)) { invalid += 1; continue; }
+    if (!email) { invalid.push({ row: sheetRow, email: '', problem: 'Missing email' }); return; }
+    if (!isValidEmailFormat(email)) { invalid.push({ row: sheetRow, email, problem: 'Invalid email' }); return; }
     const name = cell(nameIdx) || nameFromEmail(email);
-    if (!isValidCandidateName(name)) { invalid += 1; continue; }
+    if (!isValidCandidateName(name)) { invalid.push({ row: sheetRow, email, problem: 'Invalid name' }); return; }
     found.push({ name: name.replace(/\s+/g, ' '), email });
-  }
+  });
   return { found, invalid, hasEmailColumn: true };
 };
 
@@ -84,20 +97,28 @@ const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: 
 const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] =>
   rows.filter((r) => !r.linked).map((r) => ({ name: r.name, email: r.email }));
 
+/** How the rows added here split, for the popup's summary. */
+export interface ExtraCounts { manual: number; excel: number }
+
 /**
- * Candidates added by email: one quick-add row (Enter adds), Upload Excel,
- * then a compact table of everyone added this way — search, Manual / sheet
- * tags, a per-row Copy Link (invites by link, no email) and remove. The rows
- * not invited by link are handed up as `extra_candidates`; the backend
- * applies the same skips as every other row.
+ * Candidates added directly: one quick-add row (name, email, Add Candidate;
+ * Enter adds) and Upload Excel, then a compact table of everyone added this
+ * way — search, All / Manual / per-sheet chips (a sheet's chip can remove
+ * every row it brought), a per-row Copy Link (invites by link, no email) and
+ * remove, 10 a page. Each upload leaves a summary — added, invalid (row by
+ * row), repeated. The rows not invited by link are handed up as
+ * `extra_candidates`; the backend applies the same skips as every other row.
  */
 export default function ExtraCandidatesInput({
   onChange,
+  onCounts,
   disabled = false,
   onCopyLink,
   takenEmail,
 }: {
   onChange: (next: BulkExtraCandidate[]) => void;
+  /** Manual vs sheet rows that will be emailed, for the summary. */
+  onCounts?: (counts: ExtraCounts) => void;
   disabled?: boolean;
   /** Per-row Copy Link: creates this candidate's invitation without an email
    *  and resolves to the link; the row is then left out of the email send. */
@@ -110,28 +131,35 @@ export default function ExtraCandidatesInput({
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [origin, setOrigin] = useState<string>('all');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
   const [linking, setLinking] = useState<string | null>(null);
+  const [upload, setUpload] = useState<UploadSummary | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
   const commit = (next: EntryRow[]) => {
     setRows(next);
+    const emailed = next.filter((r) => !r.linked);
     onChange(toCandidates(next));
+    onCounts?.({
+      manual: emailed.filter((r) => r.origin === 'Manual').length,
+      excel: emailed.filter((r) => r.origin !== 'Manual').length,
+    });
   };
 
   const add = () => {
     const n = name.trim();
     const e = email.trim().toLowerCase();
-    if (!n || !e) { setError('Enter a name and an email address.'); return; }
+    if (!n || !e) { setError('Enter a full name and an email address.'); return; }
     // The invite flows' own rules: letters and spaces only; a valid email.
     if (!isValidCandidateName(n)) { setError(NAME_FORMAT_ERROR); return; }
     if (!isValidEmailFormat(e)) { setError(EMAIL_FORMAT_ERROR); return; }
-    if (rows.some((r) => r.email === e)) { setError(`${e} is already added.`); return; }
-    if (rows.length >= MAX_EXTRA_CANDIDATES) { setError(`At most ${MAX_EXTRA_CANDIDATES} candidates can be added by email.`); return; }
+    const same = rows.find((r) => r.email === e);
+    if (same) { setError(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
+    if (rows.length >= MAX_EXTRA_CANDIDATES) { setError(`At most ${MAX_EXTRA_CANDIDATES} candidates can be added directly.`); return; }
     const elsewhere = takenEmail?.(e);
-    if (elsewhere) { setError(`${e} is already picked from ${elsewhere}.`); return; }
+    if (elsewhere) { setError(`${e} is already added from ${elsewhere}.`); return; }
     commit([{ id: newId(), name: n.replace(/\s+/g, ' '), email: e, origin: 'Manual' }, ...rows]);
     setName('');
     setEmail('');
@@ -141,6 +169,18 @@ export default function ExtraCandidatesInput({
   };
 
   const remove = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const removeFile = (file: string) => {
+    commit(rows.filter((r) => r.origin !== file));
+    if (upload?.file === file) setUpload(null);
+    setOrigin('all');
+    setPage(1);
+  };
+  const clearAll = () => {
+    commit([]);
+    setUpload(null);
+    setOrigin('all');
+    setPage(1);
+  };
   const copyLink = async (row: EntryRow) => {
     if (!onCopyLink) return;
     setLinking(row.id);
@@ -161,12 +201,13 @@ export default function ExtraCandidatesInput({
     if (fileRef.current) fileRef.current.value = '';
     if (!file) return;
     try {
-      let found: { name: string; email: string }[] = [];
-      let invalid = 0;
+      const found: { name: string; email: string }[] = [];
+      const invalid: InvalidRow[] = [];
       let anyEmailColumn = false;
       if (file.name.toLowerCase().endsWith('.csv')) {
         const r = candidatesFromRows(parseCsvRows(await file.text()));
-        ({ found, invalid } = r);
+        found.push(...r.found);
+        invalid.push(...r.invalid);
         anyEmailColumn = r.hasEmailColumn;
       } else {
         // Either [{ sheet, data: Row[][] }] (every sheet) or Row[][] (one sheet).
@@ -178,7 +219,7 @@ export default function ExtraCandidatesInput({
           const r = candidatesFromRows(data ?? []);
           anyEmailColumn = anyEmailColumn || r.hasEmailColumn;
           found.push(...r.found);
-          invalid += r.invalid;
+          invalid.push(...r.invalid);
         }
       }
       if (!anyEmailColumn) {
@@ -195,33 +236,58 @@ export default function ExtraCandidatesInput({
       }
       const kept = fresh.slice(0, Math.max(0, MAX_EXTRA_CANDIDATES - rows.length));
       const over = fresh.length - kept.length;
-      const notes = [
-        repeated ? `${repeated} already added` : '',
-        invalid ? `${invalid} with an invalid name or email` : '',
-        over ? `${over} over the ${MAX_EXTRA_CANDIDATES} limit` : '',
-      ].filter(Boolean).join(' · ');
-      if (kept.length === 0) {
-        toast.error(`Nothing added from ${file.name}${notes ? ` · ${notes}` : ''}`);
-        return;
-      }
+      setUpload({ file: file.name, added: kept.length, repeated, over, invalid, open: false });
+      if (kept.length === 0) return;
       commit([...rows, ...kept]);
+      setOrigin('all');
       setPage(1);
-      toast.success(`Added ${kept.length} from ${file.name}`, notes ? { description: notes } : undefined);
     } catch {
       toast.error('Could not read that file. Use an .xlsx, .xls or .csv with Name and Email columns.');
     }
   };
 
+  const files = useMemo(() => [...new Set(rows.filter((r) => r.origin !== 'Manual').map((r) => r.origin))], [rows]);
+  const manualCount = rows.filter((r) => r.origin === 'Manual').length;
   const q = query.trim().toLowerCase();
   const shown = useMemo(
-    () => (q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.email.includes(q)) : rows),
-    [rows, q],
+    () => rows.filter((r) => (origin === 'all' || r.origin === origin)
+      && (!q || r.name.toLowerCase().includes(q) || r.email.includes(q))),
+    [rows, origin, q],
   );
-  const pageRows = shown.slice((page - 1) * pageSize, page * pageSize);
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const curPage = Math.min(page, pages);
+  const pageRows = shown.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const chips: { key: string; label: string; n: number }[] = [
+    { key: 'all', label: 'All', n: rows.length },
+    ...(manualCount ? [{ key: 'Manual', label: 'Manual', n: manualCount }] : []),
+    ...files.map((f) => ({ key: f, label: f, n: rows.filter((r) => r.origin === f).length })),
+  ];
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto_auto] gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <p className="text-sm text-gray-600 dark:text-slate-400">Add people directly: type them in, or upload a sheet with Name and Email columns.</p>
+        <div className="flex items-center gap-2 shrink-0">
+          {rows.length > 0 && (
+            <button type="button" onClick={clearAll} disabled={disabled} className="h-9 px-3 rounded-lg text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
+              Clear all
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={disabled}
+            className="h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="An .xlsx, .xls or .csv with Name and Email columns"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+            Upload Excel
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] gap-2">
         <input
           ref={nameRef}
           type="text"
@@ -248,66 +314,114 @@ export default function ExtraCandidatesInput({
           type="button"
           onClick={add}
           disabled={disabled}
-          className="h-10 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="h-10 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
         >
           <Plus className="w-4 h-4" aria-hidden="true" />
-          Add
+          Add Candidate
         </button>
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={disabled}
-          className="h-10 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="An .xlsx, .xls or .csv with Name and Email columns"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-          Upload Excel
-        </button>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
       </div>
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+
+      {upload && (
+        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+            <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+              <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <b className="truncate font-semibold text-gray-900 dark:text-slate-50">{upload.file}</b>
+            </span>
+            <span className="font-medium text-success-strong tabular-nums">{upload.added.toLocaleString()} added</span>
+            {upload.invalid.length > 0 && <span className="font-medium text-destructive tabular-nums">{upload.invalid.length.toLocaleString()} invalid</span>}
+            {upload.repeated > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.repeated.toLocaleString()} repeated (already in the list)</span>}
+            {upload.over > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} over the {MAX_EXTRA_CANDIDATES} limit</span>}
+            {upload.invalid.length > 0 && (
+              <button type="button" onClick={() => setUpload({ ...upload, open: !upload.open })} className="text-xs font-medium text-brand-blue hover:underline underline-offset-2">
+                {upload.open ? 'Hide' : 'View'} invalid rows
+              </button>
+            )}
+            <button type="button" onClick={() => setUpload(null)} aria-label="Dismiss" className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          {upload.open && upload.invalid.length > 0 && (
+            <div className="mt-2.5 max-h-48 overflow-y-auto">
+              <table className="w-full table-fixed text-xs">
+                <thead className="text-left text-gray-600 dark:text-slate-400">
+                  <tr><th className="w-16 px-2 py-1.5 font-semibold">Row</th><th className="px-2 py-1.5 font-semibold">Email in the sheet</th><th className="w-28 px-2 py-1.5 font-semibold">Problem</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 border-t border-gray-100 dark:border-slate-700/60">
+                  {upload.invalid.map((r) => (
+                    <tr key={`${r.row}-${r.email}`}>
+                      <td className="px-2 py-1.5 tabular-nums">{r.row}</td>
+                      <td className="px-2 py-1.5"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
+                      <td className="px-2 py-1.5">{r.problem}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {rows.length > 0 && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-medium text-gray-600 dark:text-slate-400 tabular-nums">{rows.length.toLocaleString()} added</span>
-            <div className="flex items-center gap-3">
-              {rows.length > 10 && (
-                <label className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
-                  <input
-                    type="search"
-                    value={query}
-                    onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                    placeholder="Search"
-                    aria-label="Search added candidates"
-                    className="h-8 w-44 pl-8 pr-2 text-xs border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                  />
-                </label>
-              )}
-              <button type="button" onClick={() => commit([])} disabled={disabled} className="text-xs font-medium text-gray-500 hover:text-gray-900 dark:hover:text-slate-100 disabled:opacity-50">
-                Clear all
-              </button>
-            </div>
+            <b className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">{rows.length.toLocaleString()} added directly</b>
+            <label className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                placeholder="Search name or email"
+                aria-label="Search added candidates"
+                className="h-8 w-full pl-8 pr-2 text-xs border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+              />
+            </label>
           </div>
+          {chips.length > 2 && (
+            <div role="group" aria-label="Added from" className="flex flex-wrap items-center gap-1.5">
+              {chips.map((c) => (
+                <button key={c.key} type="button" aria-pressed={origin === c.key} onClick={() => { setOrigin(c.key); setPage(1); }} className={`${CHIP} ${origin === c.key ? CHIP_ON : CHIP_OFF}`}>
+                  {c.key !== 'all' && c.key !== 'Manual' && <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
+                  <span className="truncate">{c.label}</span>
+                  <span className="tabular-nums text-gray-400">{c.n.toLocaleString()}</span>
+                </button>
+              ))}
+              {origin !== 'all' && origin !== 'Manual' && (
+                <button type="button" onClick={() => removeFile(origin)} disabled={disabled} className="text-xs font-medium text-destructive hover:underline underline-offset-2 disabled:opacity-50">
+                  Remove all from this file
+                </button>
+              )}
+            </div>
+          )}
           <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700">
             <table className="w-full table-fixed text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs text-gray-500 dark:text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Name</th>
+                  <th className="hidden sm:table-cell px-3 py-2 text-left font-semibold">Email</th>
+                  <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>
+                  {onCopyLink && <th className="w-[6.75rem] px-2 py-2 text-center font-semibold">Link</th>}
+                  <th className="w-11 px-2 py-2"><span className="sr-only">Remove</span></th>
+                </tr>
+              </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {pageRows.map((r) => (
                   <tr key={r.id} className="bg-white dark:bg-slate-900">
-                    <td className="px-3 py-2 w-[34%]">
+                    <td className="px-3 py-2">
                       <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
                       <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
                     </td>
                     <td className="hidden sm:table-cell px-3 py-2 text-gray-600 dark:text-slate-400"><span className="block truncate" title={r.email}>{r.email}</span></td>
-                    <td className="hidden md:table-cell px-3 py-2 w-36">
+                    <td className="hidden md:table-cell px-3 py-2">
                       <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.origin}>
                         {r.origin !== 'Manual' && <FileSpreadsheet className="w-3 h-3 shrink-0 text-emerald-600" aria-hidden="true" />}
                         <span className="truncate">{r.origin}</span>
                       </span>
                     </td>
-                    <td className="px-2 py-2 w-[8.5rem] text-right whitespace-nowrap">
-                      {onCopyLink && (
+                    {onCopyLink && (
+                      <td className="px-2 py-2 text-center whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => { if (!r.linked) void copyLink(r); }}
@@ -323,14 +437,16 @@ export default function ExtraCandidatesInput({
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
                         </button>
-                      )}
+                      </td>
+                    )}
+                    <td className="px-2 py-2 text-center">
                       <button
                         type="button"
                         onClick={() => remove(r.id)}
                         disabled={disabled}
                         aria-label={`Remove ${r.name}`}
                         title="Remove"
-                        className="ml-1 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
@@ -338,23 +454,24 @@ export default function ExtraCandidatesInput({
                   </tr>
                 ))}
                 {pageRows.length === 0 && (
-                  <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
+                  <tr><td colSpan={5} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          {shown.length > 10 && (
+          {shown.length > 0 && (
             <ListPagination
-              currentPage={page}
-              itemsPerPage={pageSize}
+              currentPage={curPage}
+              itemsPerPage={PAGE_SIZE}
               totalItems={shown.length}
               onPageChange={setPage}
-              onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
-              pageSizeOptions={[10, 25, 50]}
+              onItemsPerPageChange={() => setPage(1)}
+              pageSizeOptions={[PAGE_SIZE]}
               itemLabel="candidates"
               compact
               attached
               minimalOnMobile
+              alwaysShow
             />
           )}
         </div>

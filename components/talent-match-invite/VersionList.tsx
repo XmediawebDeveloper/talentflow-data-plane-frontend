@@ -29,7 +29,7 @@ import {
 } from './inviteVersions';
 
 /* The version cards' status pill (JobAssessmentVersionPicker / JobInterviewVersionPicker). */
-const STATUS_PILL: Record<VersionStatus, string> = {
+export const STATUS_PILL: Record<VersionStatus, string> = {
   active: 'bg-success-subtle text-success-strong ring-success-line',
   draft: 'bg-warning-subtle text-warning-strong ring-warning-line',
   completed: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20',
