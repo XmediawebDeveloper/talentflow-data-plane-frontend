@@ -63,7 +63,7 @@ const C = {
 };
 
 const pill = (text: string, bg: string, fg: string, line: string) =>
-  `<span style="display:inline-block;font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;background:${bg};color:${fg};border:1px solid ${line};line-height:1.2">${esc(text)}</span>`;
+  `<span style="display:inline-block;vertical-align:middle;height:16px;line-height:14px;padding:0 6px;box-sizing:border-box;font-size:9px;font-weight:600;border-radius:4px;background:${bg};color:${fg};border:1px solid ${line};white-space:nowrap">${esc(text)}</span>`;
 
 const labelPill = (label: string, kind: ChatPdfMessage['kind']) =>
   kind === 'deepdive' ? pill(label, C.tealTint, C.teal, C.tealLine)
@@ -71,8 +71,8 @@ const labelPill = (label: string, kind: ChatPdfMessage['kind']) =>
       : pill(label, C.brandTint, C.brand, C.brandLine);
 
 const avatar = (letter: string, filled: boolean) =>
-  `<div style="flex:none;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;${
-    filled ? `background:${C.brand};color:#fff` : `background:${C.brandTint};color:${C.brand};border:1px solid ${C.brandLine}`
+  `<div style="flex:none;display:inline-block;vertical-align:middle;width:24px;height:24px;line-height:24px;text-align:center;box-sizing:border-box;border-radius:50%;font-size:10px;font-weight:700;${
+    filled ? `background:${C.brand};color:#fff` : `background:${C.brandTint};color:${C.brand};border:1px solid ${C.brandLine};line-height:22px`
   }">${esc(letter)}</div>`;
 
 function messageHtml(m: ChatPdfMessage, initial: string): string {
@@ -85,7 +85,7 @@ function messageHtml(m: ChatPdfMessage, initial: string): string {
     !isBina && m.language ? pill(m.language, C.slateBg, C.slateText, C.slateLine) : '',
   ].filter(Boolean);
   const meta = metaPills.length
-    ? `<div style="display:flex;gap:5px;margin-bottom:4px;${isBina ? '' : 'flex-direction:row-reverse'}">${metaPills.join('')}</div>`
+    ? `<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;${isBina ? '' : 'flex-direction:row-reverse'}">${metaPills.join('')}</div>`
     : '';
   const bubble = (bg: string, fg: string, inner: string, extra = '') =>
     `<div style="padding:8px 12px;border-radius:14px;font-size:11.5px;line-height:1.55;background:${bg};color:${fg};white-space:pre-line;word-break:break-word;${extra}">${inner}</div>`;
@@ -97,7 +97,7 @@ function messageHtml(m: ChatPdfMessage, initial: string): string {
     body = bubble(C.binaBubble, C.binaText, esc(m.text), 'border-top-left-radius:4px');
     if (m.skipNote) {
       const [bg, fg, line] = m.skipNote.amber ? [C.amberBg, C.amberText, C.amberLine] : [C.slateBg, C.slateText, C.slateLine];
-      body += `<div style="margin-top:6px;display:inline-block;padding:3px 9px;border-radius:8px;font-size:9.5px;font-weight:500;background:${bg};color:${fg};border:1px solid ${line}">&#9197; ${esc(m.skipNote.text)}</div>`;
+      body += `<div style="margin-top:6px;display:inline-block;height:20px;line-height:18px;padding:0 9px;box-sizing:border-box;border-radius:8px;font-size:9.5px;font-weight:500;background:${bg};color:${fg};border:1px solid ${line}">&#9197; ${esc(m.skipNote.text)}</div>`;
     }
   } else {
     body = bubble(C.skyBubble, C.skyText, caption('Original (ASR)', C.skyLabel) + esc(m.original), 'border-top-right-radius:4px');
@@ -116,7 +116,7 @@ function messageHtml(m: ChatPdfMessage, initial: string): string {
     ? `<div style="font-size:9px;color:${C.faint};margin-top:3px;${isBina ? 'padding-left:4px' : 'padding-right:4px;text-align:right'}">${esc(m.time)}</div>`
     : '';
 
-  return `<div class="chat-msg" style="display:flex;gap:9px;margin-bottom:14px;${isBina ? '' : 'flex-direction:row-reverse;'}${indent}">
+  return `<div class="chat-msg" style="display:flex;gap:9px;padding-top:8px;margin-bottom:6px;${isBina ? '' : 'flex-direction:row-reverse;'}${indent}">
     ${avatar(isBina ? 'B' : initial, isBina)}
     <div style="max-width:75%;${isBina ? '' : 'display:flex;flex-direction:column;align-items:flex-end'}">${meta}${body}${time}</div>
   </div>`;
@@ -146,7 +146,7 @@ export async function downloadChatTranscriptPdf(data: ChatPdfData, filename: str
     <div style="border:1px solid ${C.brandLine};background:${C.brandTint};border-radius:10px;padding:12px 14px;margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:16px;font-weight:700">${esc(name)}</span> ${statusPills}
+          <span style="font-size:16px;font-weight:700;line-height:20px">${esc(name)}</span> ${statusPills}
         </div>
         ${resultPill}
       </div>
