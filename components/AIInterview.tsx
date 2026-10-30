@@ -26,7 +26,7 @@ import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFi
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useModuleQuota } from '@/contexts/QuotaContext';
-import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -5317,15 +5317,19 @@ export default function AIInterview() {
                   <Button
                     variant="primary"
                     size="sm"
-                    disabled={trackerJdLocked}
+                    disabled={trackerActionsLocked}
                     title={
                       !canInviteAIInterviews
                         ? 'You do not have permission to invite candidates'
-                        : trackerJdLockReason ?? undefined
+                        : trackerJdLockReason ?? (trackerConfigArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : undefined)
                     }
                     onClick={() => {
                       if (!canInviteAIInterviews) return;
                       if (blockIfJdDisabled(viewInvitationsConfig)) return;
+                      if (trackerConfigArchived) {
+                        toast.error(INTERVIEW_ARCHIVED_ACTION_MESSAGE);
+                        return;
+                      }
                       // The popup reopens this tracker when it closes.
                       const cfg = viewInvitationsConfig;
                       setViewInvitationsConfig(null);

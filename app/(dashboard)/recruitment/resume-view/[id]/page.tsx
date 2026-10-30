@@ -735,6 +735,7 @@ export default function ResumeViewPage() {
 
   const convertApiResume = (r: ApiResume, versionsData: any[] = []): Resume => ({
     id: r.id,
+    is_archived: r.is_archived,
     name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
     email: r.email || 'No email',
     phone: r.phone || 'No phone',
