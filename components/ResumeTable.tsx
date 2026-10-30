@@ -961,6 +961,12 @@ export default function ResumeTable({
                         {openActionMenu === resume.id && typeof document !== 'undefined' && createPortal(
                           <div
                             ref={actionMenuRef}
+                            /* Tells TableScrollbars a popover is open so it
+                               hides the table's custom bars. Without it, the
+                               bar's occlusion probe hits this menu, reads its
+                               top as the table's visible bottom, and drags the
+                               horizontal bar + trough up over the rows. */
+                            data-tf-popover
                             /* `fixed` + portal: outside `.tf-table-shell`'s
                                `overflow-auto` box, so the menu is never clipped
                                regardless of z-index — overflow clipping isn't
