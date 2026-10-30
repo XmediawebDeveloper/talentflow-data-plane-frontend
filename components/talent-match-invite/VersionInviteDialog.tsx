@@ -386,7 +386,7 @@ export default function VersionInviteDialog({
             try {
               setEditing(await loadAssessmentForPopup(draft, 'edit'));
             } catch (err) {
-              toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
+              toast.error(friendlyErrorMessage(err, 'Could not load the assessment. Please try again.'));
             }
           } else if (draft) {
             setWizardHref(await versionHref(draft, 'edit', job.jdTitle, returnUrl));
@@ -405,7 +405,7 @@ export default function VersionInviteDialog({
       setBusyId(v.id);
       void loadAssessmentForPopup(v, item.action)
         .then(open, (err: unknown) => {
-          toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
+          toast.error(friendlyErrorMessage(err, 'Could not load the assessment. Please try again.'));
           if (item.action === 'edit') void reload();
         })
         .finally(() => setBusyId(null));
