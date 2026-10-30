@@ -10,6 +10,7 @@ import {
   Share2, ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import { Button } from '@/components/ui/button';
 import type {
@@ -551,7 +552,7 @@ export default function AIInterviewPreview() {
       try {
         message = await keepWizardChanges(id, interview?.status);
       } catch (err) {
-        toast.error((err as Error)?.message || 'Failed to save draft');
+        toast.error(friendlyErrorMessage(err, 'Failed to save draft'));
         return;
       }
     }

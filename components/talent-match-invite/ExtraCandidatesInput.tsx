@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
@@ -142,7 +143,7 @@ export default function ExtraCandidatesInput({
       commit(rows.map((r) => (r.id === row.id ? { ...r, linked: true } : r)));
       toast.success(`Invitation link for ${row.name.trim()} copied`, { description: link });
     } catch (err) {
-      toast.error((err as Error)?.message || 'Could not create the link. Please try again.');
+      toast.error(friendlyErrorMessage(err, 'Could not create the link. Please try again.'));
     } finally {
       setLinking(null);
     }
