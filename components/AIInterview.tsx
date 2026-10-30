@@ -3044,11 +3044,12 @@ export default function AIInterview() {
             },
             {
               label: 'Total Interviewed',
-              // One per candidate email; the session count (what the Results
-              // tab lists) rides beside it as the pill.
-              value: stats?.candidates_interviewed ?? interviewedCount ?? stats?.completed ?? 0,
+              // Session count — matches the Results tab's pill, like the other
+              // cards match theirs; unique candidates (one per email) ride
+              // beside it as the pill.
+              value: stats?.interview_sessions ?? interviewedCount ?? stats?.completed ?? 0,
               versions: undefined as number | undefined,
-              attempts: (stats?.interview_sessions ?? interviewedCount ?? undefined) as number | undefined,
+              candidates: (stats?.candidates_interviewed ?? undefined) as number | undefined,
               icon: Users,
               tab: 'candidate-results' as TabKey,
               cardKey: 'interviewed' as OverviewCardKey,
@@ -3056,7 +3057,7 @@ export default function AIInterview() {
           ];
           return (
             <StatsCardGrid className="mb-5 sm:mb-8" columns={4}>
-              {cards.map(({ label, value, versions, attempts, icon: Icon, tab, cardKey }) => (
+              {cards.map(({ label, value, versions, candidates, icon: Icon, tab, cardKey }) => (
                 <StatsCard
                   key={label}
                   tone="neutral"
@@ -3073,9 +3074,9 @@ export default function AIInterview() {
                       {versions} {versions === 1 ? 'version' : 'versions'}
                     </span>
                   )}
-                  {attempts !== undefined && (
+                  {candidates !== undefined && (
                     <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
-                      {attempts} {attempts === 1 ? 'interview' : 'interviews'}
+                      {candidates} {candidates === 1 ? 'candidate' : 'candidates'}
                     </span>
                   )}
                 </StatsCard>
