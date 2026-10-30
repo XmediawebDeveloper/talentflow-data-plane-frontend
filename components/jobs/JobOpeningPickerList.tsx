@@ -127,6 +127,9 @@ export interface JobOpeningPickerListProps {
   /** Colour the applicants / assessed / interviewed chips like the Job
    *  Openings badges (Resume Scoring). Off by default. */
   coloredCountBadges?: boolean;
+  /** Hide the ✓ badge a picked card shows beside its version / status
+   *  pills (Resume Scoring — the radio and highlight already mark it). */
+  hideSelectedTick?: boolean;
   /** The applicant count's label on the cards and the version table
    *  ("Scored" on Resume Scoring). Omitted = "applicants" / "Applicants". */
   applicantsLabel?: string;
@@ -156,6 +159,7 @@ export default function JobOpeningPickerList({
   listAnchorRef,
   showCandidateCounts = false,
   coloredCountBadges = false,
+  hideSelectedTick = false,
   applicantsLabel,
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -390,15 +394,18 @@ export default function JobOpeningPickerList({
 
       {/* Job Selection */}
       <div className="mb-4">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <label className="text-sm font-medium text-gray-700 dark:text-slate-300">
+        {/* flex-wrap: on a phone the heading keeps its width and the
+            "1 selected · Clear Selection" pair drops to the next line,
+            instead of squeezing the heading into a word-per-line column. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-3">
+          <label className="min-w-0 text-sm font-medium text-gray-700 dark:text-slate-300">
             Select a Job Opening
             {/* The published-job count — the Job Openings page's own
                 derivation, via getPublishedJobs. No total beside it and
                 nothing hardcoded. It follows the search, so it always
                 describes exactly what is listed. */}
             {sortedJobs.length > 0 && (
-              <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+              <span className="ml-2 font-normal text-gray-500 dark:text-slate-400 whitespace-nowrap">
                 &mdash; {sortedJobs.length} {excludeDraftsOnly ? `job${sortedJobs.length === 1 ? '' : 's'}` : 'available'}
               </span>
             )}
@@ -415,12 +422,12 @@ export default function JobOpeningPickerList({
                   shown as a count for the same reason every other selection
                   UI in the app states it as a number rather than just "a job
                   is selected". */}
-              <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full">
+              <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full whitespace-nowrap">
                 1 selected
               </span>
               <button
                 onClick={() => onSelectionChange(null)}
-                className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+                className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium whitespace-nowrap"
               >
                 Clear Selection
               </button>
@@ -516,6 +523,29 @@ export default function JobOpeningPickerList({
                 ? needsVersionPicker(job, lineageSiblings, () => false)
                 : visibleVersionCount > 1;
 
+              /* Rendered in two places: beside the eye on phones (one row,
+                 instead of a lone button on a row of its own under it), and
+                 in the card's bottom-right corner from sm up. */
+              const viewVersionsButton = hasVersionHistory ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    versionLineage.toggle(versionKey, job.id);
+                  }}
+                  aria-expanded={versionsExpanded}
+                  className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                    versionsExpanded
+                      ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
+                      : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                  }`}
+                  title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                >
+                  {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                </button>
+              ) : null;
+
               return (
                 <div
                   key={job.id}
@@ -601,7 +631,7 @@ export default function JobOpeningPickerList({
                                the right, so the tick just reads as one more
                                badge alongside v1/Published/AI instead of
                                chasing an element it no longer shares a row with. */
-                            lineageSelected ? (
+                            lineageSelected && !hideSelectedTick ? (
                               <CheckCircle className="w-5 h-5 text-brand-blue flex-shrink-0" />
                             ) : null
                           }
@@ -623,8 +653,11 @@ export default function JobOpeningPickerList({
                     {/* Right side: once this job is the pick, the next-step
                         button sits right before the eye icon, both on one
                         row — so it fires from right where the pick was just
-                        made instead of a summary further down the page. */}
-                    <div className="flex items-center gap-2 flex-shrink-0 basis-full sm:basis-auto">
+                        made instead of a summary further down the page.
+                        Phones: three controls don't fit one row, so once the
+                        job is picked the next-step button + eye share the row
+                        and View Versions drops to its own line below. */}
+                    <div className="flex flex-wrap items-center gap-2 flex-shrink-0 basis-full sm:flex-nowrap sm:basis-auto">
                       {lineageSelected && onProceed && (
                         <button
                           type="button"
@@ -638,7 +671,7 @@ export default function JobOpeningPickerList({
                              permission tooltip still shows on hover. */
                           aria-disabled={proceedDisabled || undefined}
                           title={proceedDisabled ? 'You do not have permission to proceed' : undefined}
-                          className={`h-7 px-2.5 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap ${
+                          className={`h-7 px-2.5 max-sm:flex-1 max-sm:h-9 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap ${
                             proceedDisabled
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500'
                               : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30'
@@ -666,6 +699,9 @@ export default function JobOpeningPickerList({
                       >
                         <Eye className="w-4 h-4" />
                       </button>
+                      {viewVersionsButton && (
+                        <div className={`sm:hidden ${lineageSelected && onProceed ? 'basis-full [&>button]:w-full [&>button]:justify-center [&>button]:h-9' : 'ml-auto'}`}>{viewVersionsButton}</div>
+                      )}
                     </div>
                   </div>
 
@@ -673,24 +709,8 @@ export default function JobOpeningPickerList({
                       own single horizontal row so it clears the details
                       above it whatever they wrap to. */}
                   {hasVersionHistory && (
-                    <div className="mt-3 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          versionLineage.toggle(versionKey, job.id);
-                        }}
-                        aria-expanded={versionsExpanded}
-                        className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                          versionsExpanded
-                            ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
-                            : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                        }`}
-                        title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                      >
-                        {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                      </button>
+                    <div className="mt-3 hidden sm:flex items-center justify-end gap-2">
+                      {viewVersionsButton}
                     </div>
                   )}
 
