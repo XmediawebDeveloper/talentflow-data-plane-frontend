@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search, Trash2, Download, FileArchive, Users, Info } from 'lucide-react';
+import { Plus, Clock, Loader2, Search, Trash2, Download, FileArchive, Users, Info } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
+import ListPagination from '@/components/ListPagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import BulkActionsBar from '@/components/BulkActionsBar';
@@ -564,8 +565,18 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  // Archived resumes are off-limits for Score / AI Talent Match / Assessment /
+  // AI Interview — same rule My Resumes applies (MyResumesView.tsx's own
+  // isResumeArchived), just without that view's "Archived Resumes" folder
+  // concept, which doesn't exist here.
+  const isResumeArchived = (resume: Resume): boolean => !!(resume.is_archived ?? resume.isArchived);
+
   // Handle Apply to Job for single resume
   const handleApplyToJob = (resume: Resume) => {
+    if (isResumeArchived(resume)) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
     setResumesForApply([resume]);
     fetchJobs();
     setShowApplyToJobModal(true);
@@ -576,6 +587,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
     if (selectedResumesList.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    const archivedCount = selectedResumesList.filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
       return;
     }
     setResumesForApply(selectedResumesList);
@@ -590,6 +606,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error('Please select at least one resume');
       return;
     }
+    const archivedCount = selectedResumesList.filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
+      return;
+    }
     setResumesForApply(selectedResumesList);
     fetchJobs();
     setShowAITalentMatchModal(true);
@@ -598,6 +619,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const handleBulkAIInterview = () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
     openInvite({
@@ -739,6 +767,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const handleBulkAssessment = () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
+      return;
+    }
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(isResumeArchived).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
       return;
     }
     openInvite({
@@ -929,21 +964,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     if (page >= 1 && page <= calculatedTotalPages) {
       setCurrentPage(page);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  // "Go to page" input — local text so a partial edit isn't clobbered by the
-  // currentPage state until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState(String(currentPage));
-  useEffect(() => {
-    setGoToPage(String(currentPage));
-  }, [currentPage]);
-  const commitGoToPage = () => {
-    const page = Math.round(Number(goToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= calculatedTotalPages) {
-      handlePageChange(page);
-    } else {
-      setGoToPage(String(currentPage));
     }
   };
 
@@ -1161,57 +1181,17 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           highlightQuery={appliedSearchQuery}
         />
 
-        {/* Pagination */}
-        {calculatedTotalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-3 py-3 border-t border-gray-100 dark:border-slate-700">
-            <div className="text-sm text-gray-600 dark:text-slate-400">
-              Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={calculatedTotalPages}
-                  value={goToPage}
-                  onChange={(e) => setGoToPage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                      commitGoToPage();
-                    }
-                  }}
-                  onBlur={commitGoToPage}
-                  aria-label="Go to page"
-                  className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
-                />
-              </div>
-
-              <button
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                aria-label="Previous page" title="Previous page"
-              >
-                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-
-              <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                <span className="text-brand-blue font-semibold">{currentPage}</span> / {calculatedTotalPages}
-              </span>
-
-              <button
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === calculatedTotalPages}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                aria-label="Next page" title="Next page"
-              >
-                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-            </div>
-          </div>
-        )}
+        {/* The Job Descriptions pager (shared ListPagination). This list
+            pages a fixed 10 at a time, so 10 is its only size. */}
+        <ListPagination
+          currentPage={currentPage}
+          itemsPerPage={pageSize}
+          totalItems={filteredAndSortedResumes.length}
+          onPageChange={handlePageChange}
+          onItemsPerPageChange={() => {}}
+          itemLabel="resumes"
+          pageSizeOptions={[pageSize]}
+        />
       </div>
 
       {isUploadModalOpen && (

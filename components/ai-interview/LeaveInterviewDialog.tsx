@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { AlertTriangle, RotateCcw, Save, Trash2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import AppModal from '@/components/ui/app-modal';
 import { deleteWizardConfig, discardWizardChanges, keepWizardChanges } from '@/lib/utils/aiInterviewWizardExit';
 import { LEAVE_BACK } from './useInterviewLeaveGuard';
@@ -216,7 +217,7 @@ export function WizardLeavePrompt({
       toast.success(await keepWizardChanges(configId, status));
       onLeave(target);
     } catch (err) {
-      toast.error((err as Error)?.message || 'Failed to save draft');
+      toast.error(friendlyErrorMessage(err, 'Failed to save draft'));
     } finally {
       setBusy(null);
     }
@@ -239,7 +240,7 @@ export function WizardLeavePrompt({
       toast.success('AI interview deleted');
       onLeave(target === LEAVE_BACK ? afterDeleteHref : target);
     } catch (err) {
-      toast.error((err as Error)?.message || 'Failed to delete AI interview');
+      toast.error(friendlyErrorMessage(err, 'Failed to delete AI interview'));
     } finally {
       setBusy(null);
     }

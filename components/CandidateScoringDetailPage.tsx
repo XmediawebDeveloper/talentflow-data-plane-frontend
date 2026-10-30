@@ -2598,8 +2598,8 @@ Best regards`);
               {/* Version History — tick two uploads to diff them, same flow as
                   resume-view. */}
               {resumeVersions.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6 flex-wrap">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6 max-sm:p-4">
+                  <div className="flex items-center gap-2 mb-6 max-sm:mb-4 flex-wrap">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <History className="w-4 h-4 text-brand-blue" />
                     </div>
@@ -2611,7 +2611,7 @@ Best regards`);
                       <button
                         onClick={() => setShowCompareModal(true)}
                         disabled={compareChecked.length !== 2}
-                        className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        className={`ml-auto max-sm:ml-0 max-sm:basis-full max-sm:mt-1 max-sm:py-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                           compareChecked.length === 2
                             ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                             : 'bg-slate-100 text-gray-400 cursor-not-allowed'
@@ -2643,7 +2643,11 @@ Best regards`);
                                 : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02]'
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-3">
+                            {/* Below lg the action cluster (size, View Changes,
+                                view, download) drops under the details as its
+                                own line — beside them it left the file name /
+                                date / uploader a ~40px strip at 320px. */}
+                            <div className="flex items-start justify-between gap-3 max-lg:flex-col max-lg:items-stretch">
                               <div className="flex items-start gap-3 min-w-0">
                                 {/* Compare tick */}
                                 {resumeVersions.length > 1 && (
@@ -2661,7 +2665,7 @@ Best regards`);
                                 }`}>
                                   <FileText className={`w-4 h-4 ${isLatest ? 'text-brand-blue' : 'text-gray-500'}`} />
                                 </div>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <span className="font-medium text-gray-900">Version {version.version}</span>
                                     {isLatest && (
@@ -2671,17 +2675,17 @@ Best regards`);
                                     )}
                                   </div>
                                   {version.fileName && (
-                                    <div className="text-sm text-gray-700 truncate">{version.fileName}</div>
+                                    <div className="text-sm text-gray-700 truncate max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]" title={version.fileName}>{version.fileName}</div>
                                   )}
-                                  <div className="flex items-center gap-4 text-xs text-gray-600 mt-1 flex-wrap">
+                                  <div className="flex items-center gap-x-4 gap-y-1 text-xs text-gray-600 mt-1 flex-wrap">
                                     {version.uploadDate && (
                                       <span className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />
                                         {formatIST(version.uploadDate)}
                                       </span>
                                     )}
-                                    <span className="flex items-center gap-1">
-                                      <User className="w-3 h-3" />
+                                    <span className="flex items-center gap-1 min-w-0 [overflow-wrap:anywhere]">
+                                      <User className="w-3 h-3 shrink-0" />
                                       {version.uploadedBy}
                                     </span>
                                   </div>
@@ -2690,8 +2694,8 @@ Best regards`);
                               {/* Size sits with the row actions, matching
                                   resume-view's View Changes / view / download
                                   cluster. */}
-                              <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
-                                <span className="text-xs text-gray-600 whitespace-nowrap">{version.size}</span>
+                              <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0 max-lg:justify-between max-lg:pt-3 max-lg:border-t max-lg:border-gray-200/70">
+                                <span className="text-xs text-gray-600 whitespace-nowrap max-lg:mr-auto">{version.size}</span>
                                 {previousVersion ? (
                                   <button
                                     onClick={() => handleViewVersionChanges(previousVersion.id, version.id)}
@@ -3382,7 +3386,9 @@ Best regards`);
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    {/* Phones: the view switch, legend and close wrap as one
+                        row instead of running together. */}
+                    <div className="flex items-center gap-3 max-sm:w-full max-sm:flex-wrap max-sm:gap-2">
                       <div className="flex bg-slate-100 rounded-lg p-0.5">
                         <button
                           onClick={() => setCompareViewMode('side-by-side')}
@@ -3442,9 +3448,12 @@ Best regards`);
                         <p className="text-sm mt-1">Content is identical between these versions.</p>
                       </div>
                     ) : compareViewMode === 'side-by-side' ? (
-                      <div className="flex h-full gap-0">
+                      <div className="flex h-full gap-0 max-md:flex-col">
+                        {/* Side by side from md; below it the two versions stack
+                            (older above newer), each scrolling on its own — two
+                            ~140px columns at 320px left the text a thin strip. */}
                         {/* Older */}
-                        <div className="flex-1 flex flex-col border-r border-gray-300 min-w-0">
+                        <div className="flex-1 flex flex-col border-r border-gray-300 min-w-0 min-h-0 max-md:border-r-0 max-md:border-b">
                           <div className="px-4 py-2.5 bg-destructive-subtle border-b border-gray-200 flex-shrink-0">
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 bg-destructive rounded-full"></span>
@@ -3453,14 +3462,14 @@ Best regards`);
                             </div>
                             <p className="text-xs text-destructive mt-0.5 truncate">{older.fileName}</p>
                           </div>
-                          <div className="flex-1 overflow-y-auto p-4">
-                            <div className="bg-white rounded-lg border border-gray-200 p-5">
+                          <div className="flex-1 overflow-y-auto p-4 max-sm:p-2">
+                            <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
                               {sidePairs.map((pair, idx) => renderLine(pair.left, idx, 'left'))}
                             </div>
                           </div>
                         </div>
                         {/* Newer */}
-                        <div className="flex-1 flex flex-col min-w-0">
+                        <div className="flex-1 flex flex-col min-w-0 min-h-0">
                           <div className="px-4 py-2.5 bg-success-subtle border-b border-gray-200 flex-shrink-0">
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 bg-success rounded-full"></span>
@@ -3469,8 +3478,8 @@ Best regards`);
                             </div>
                             <p className="text-xs text-success mt-0.5 truncate">{newer.fileName}</p>
                           </div>
-                          <div className="flex-1 overflow-y-auto p-4">
-                            <div className="bg-white rounded-lg border border-gray-200 p-5">
+                          <div className="flex-1 overflow-y-auto p-4 max-sm:p-2">
+                            <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
                               {sidePairs.map((pair, idx) => renderLine(pair.right, idx, 'right'))}
                             </div>
                           </div>
@@ -3479,7 +3488,7 @@ Best regards`);
                     ) : (
                       /* Unified */
                       <div className="h-full overflow-y-auto p-4 sm:p-6">
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-3xl mx-auto">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-sm:p-4 sm:p-8 max-w-3xl mx-auto">
                           {diff.lines.map((line, idx) => {
                             const trimmed = line.text.trim();
                             if (!trimmed) return <div key={idx} className="h-3" />;

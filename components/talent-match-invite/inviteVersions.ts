@@ -20,6 +20,7 @@ import { assessmentService, type AssessmentResponse } from '@/lib/services/asses
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
 import { getLocallyRevokedAssessmentIds, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
+import { loadJobVersionLineages } from '@/lib/utils/assessmentJobLock';
 import {
   interviewDuplicateBlockedReason,
   interviewVersionOrdinal,
@@ -94,6 +95,8 @@ export interface InviteVersion {
    *  `findLiveConfigForJd` maps it to (see `loadInterviewVersions`). */
   mapped?: boolean;
   jdId: string;
+  /** Assessments: the job version (V1, V2…) of `jdId`, as the API states it. */
+  jobVersion?: number;
   /** Only Active versions can take an invite. */
   sendable: boolean;
   /** Assessments: its invites were revoked — sealed against new ones, as the
@@ -173,6 +176,7 @@ export async function loadAssessmentVersions(jdId: string): Promise<InviteVersio
         createdBy: a.created_by_name,
         raw: a,
         jdId: a.jd_id,
+        jobVersion: typeof a.jd_version === 'number' ? a.jd_version : undefined,
         sendable: status === 'active' && !revoked,
         revoked,
       };
@@ -234,6 +238,24 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
  *  `sendable`; the mapped one stays marked and is still the first pick. */
 export function listedVersions(_kind: InviteKind, versions: InviteVersion[]): InviteVersion[] {
   return versions;
+}
+
+/**
+ * Every assessment version of the whole JOB this JD row belongs to — each of
+ * its job versions' assessments, newest job version first, then newest
+ * assessment version. The Send Invite picker's "Change version" lists these, so
+ * a recruiter who picked one assessment can switch to any version of that job.
+ * Falls back to the one JD row when its lineage cannot be read.
+ */
+export async function loadJobAssessmentVersions(jdId: string): Promise<InviteVersion[]> {
+  const lineage = (await loadJobVersionLineages([jdId]).catch(() => ({} as Awaited<ReturnType<typeof loadJobVersionLineages>>)))[jdId];
+  const ids = lineage?.length ? Array.from(new Set(lineage.map((v) => v.id).concat(jdId))) : [jdId];
+  const numberById = new Map((lineage ?? []).map((v) => [v.id, v.version_number] as const));
+  const perJobVersion = await Promise.all(ids.map((id) => loadAssessmentVersions(id)));
+  return perJobVersion
+    .flat()
+    .map((v) => ({ ...v, jobVersion: v.jobVersion ?? numberById.get(v.jdId) }))
+    .sort((a, b) => (b.jobVersion ?? 0) - (a.jobVersion ?? 0) || byVersionDesc(a, b));
 }
 
 export const loadVersions = (kind: InviteKind, jdId: string) =>

@@ -43,6 +43,9 @@ export interface CandidateResultCardProps {
   selection?: { checked: boolean; onChange: (checked: boolean) => void };
   /** Further action buttons, beside View Result. */
   actions?: ReactNode;
+  /** Drop the View Result button (the card itself still opens the result on
+   *  click) — for hosts whose `actions` is a row menu that already has it. */
+  hideViewButton?: boolean;
 }
 
 export default function CandidateResultCard({
@@ -65,6 +68,7 @@ export default function CandidateResultCard({
   onOpen,
   selection,
   actions,
+  hideViewButton = false,
 }: CandidateResultCardProps) {
   return (
     <div
@@ -201,7 +205,8 @@ export default function CandidateResultCard({
           </span>
         </div>
 
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className={`flex items-center gap-2${hideViewButton ? ' justify-end' : ''}`} onClick={(e) => e.stopPropagation()}>
+          {!hideViewButton && (
           <button
             type="button"
             onClick={onOpen}
@@ -211,6 +216,7 @@ export default function CandidateResultCard({
             <Eye className="w-3.5 h-3.5 shrink-0" />
             View Result
           </button>
+          )}
           {actions}
         </div>
       </div>

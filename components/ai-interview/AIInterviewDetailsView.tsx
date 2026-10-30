@@ -17,7 +17,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import {
   interviewVersionOrdinal as storedInterviewVersionOrdinal,
   interviewDuplicateBlockedReason,
@@ -2397,6 +2397,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               configId={config.id}
               jdTitle={config.jd_title || config.position || 'Untitled'}
               jdShortId={config.jd_short_id}
+              jdDisabled={jdDisabled}
+              configArchived={isInterviewConfigArchived(config.status)}
               hideVersionDetails
               // Resend / revoke / edit here also change the activity list and
               // the header's invite counts — refresh both at once.

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
-import VersionList, { VersionUsage } from './VersionList';
+import VersionList, { VersionTitle, VersionUsage } from './VersionList';
 import SendToPanel from './SendToPanel';
 import ServerCandidatePicker, { EMPTY_SELECTION, describeFilters, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
 import ExtraCandidatesInput from './ExtraCandidatesInput';
@@ -27,6 +27,9 @@ import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components
 import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
 import AIInterviewWizardDialog from '@/components/ai-interview/AIInterviewWizardDialog';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { AssessmentJobStatusBadge } from '@/components/assessments/AllAssessmentsTable';
+import { useJobLockBadges } from '@/lib/hooks/useJobLockBadges';
+import { assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
 import {
   KIND_LABEL,
   createBlockedReason,
@@ -38,6 +41,7 @@ import {
   loadBrowseAssessments,
   listedVersions,
   loadVersions,
+  loadJobAssessmentVersions,
   nextVersionNumber,
   runVersionAction,
   versionHref,
@@ -169,8 +173,22 @@ export default function VersionInviteDialog({
   const [jobPickList, setJobPickList] = useState<AssessmentResponse[] | AIInterviewResponse[] | null>(null);
   const [aiPick, setAiPick] = useState<AIInterviewPickerSelection | null>(null);
   const [asPick, setAsPick] = useState<AssessmentResponse | null>(null);
+  /* The job's Disabled / Archived / Draft badge beside its name in the header
+     — the Assessments page's — kept live while the popup is open. Assessment
+     invites only. A Disabled / Archived job takes no invites: Send is held,
+     with the Assessments page's lock message, until the job is re-enabled /
+     unarchived, which this picks up without reopening. */
+  const { badgeFor: jobBadgeFor } = useJobLockBadges(kind === 'assessment' ? [job?.jdId] : []);
+  const headerJobBadge = kind === 'assessment' ? jobBadgeFor(job?.jdId) : null;
+  const jobLock = assessmentJobLockMessage(headerJobBadge);
 
   const [versions, setVersions] = useState<InviteVersion[]>([]);
+  /* Picked from the list (no job given): the version cards span every job
+     version of the picked JOB, not just the one job version picked — Change
+     version can switch to any of them. `versions` stays that job version's own
+     (usage, cap, New version); null when the cards are not job-wide. */
+  const spansJob = kind === 'assessment' && !jdId;
+  const [jobWideVersions, setJobWideVersions] = useState<InviteVersion[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(!off && !!job);
   const [error, setError] = useState<string | null>(null);
@@ -204,9 +222,12 @@ export default function VersionInviteDialog({
   const preselected = useRef(false);
   const lastLoadedAt = useRef(0);
 
-  const applyVersions = (next: InviteVersion[]) => {
+  const applyVersions = (next: InviteVersion[], wide?: InviteVersion[] | null) => {
     lastLoadedAt.current = Date.now();
     setVersions(next);
+    if (wide !== undefined) setJobWideVersions(wide);
+    // A pick may be any card listed, so it stays valid against the job-wide set.
+    const pool = wide ?? next;
     setLoaded(true);
     setLoading(false);
     setError(null);
@@ -214,7 +235,7 @@ export default function VersionInviteDialog({
     preselected.current = true;
     const listed = listedVersions(kind, next);
     setVersionId((cur) => {
-      if (cur && next.some((v) => v.id === cur && v.sendable)) return cur;
+      if (cur && pool.some((v) => v.id === cur && v.sendable)) return cur;
       if (firstLoad) {
         // The button's own version first; else the newest sendable one.
         if (pickedVersionId && next.some((v) => v.id === pickedVersionId)) return pickedVersionId;
@@ -230,8 +251,12 @@ export default function VersionInviteDialog({
     setError((err as Error)?.message || `Could not load ${label.singular.toLowerCase()} versions.`);
     return null;
   };
-  const fetchVersions = (): Promise<InviteVersion[] | null> =>
-    job ? loadVersions(kind, job.jdId).then(applyVersions, applyLoadError) : Promise.resolve(null);
+  const fetchVersions = (): Promise<InviteVersion[] | null> => {
+    if (!job) return Promise.resolve(null);
+    if (!spansJob) return loadVersions(kind, job.jdId).then((own) => applyVersions(own), applyLoadError);
+    return Promise.all([loadVersions(kind, job.jdId), loadJobAssessmentVersions(job.jdId).catch(() => null)])
+      .then(([own, wide]) => applyVersions(own, wide), applyLoadError);
+  };
   const reload = () => {
     setLoading(true);
     setError(null);
@@ -251,7 +276,7 @@ export default function VersionInviteDialog({
 
   /* The template message, filled once the job is known (and again when it
      changes) unless the recruiter has typed in it. */
-  const selected = versions.find((v) => v.id === versionId) ?? null;
+  const selected = (jobWideVersions ?? versions).find((v) => v.id === versionId) ?? null;
   useEffect(() => {
     if (!job || messageTouched.current) return;
     setMessage(defaultInviteMessage(kind, {
@@ -319,6 +344,7 @@ export default function VersionInviteDialog({
     setJob(null);
     setPickedVersionId(undefined);
     setVersions([]);
+    setJobWideVersions(null);
     setVersionId(null);
     setLoaded(false);
     setServerSelection(EMPTY_SELECTION);
@@ -360,7 +386,7 @@ export default function VersionInviteDialog({
             try {
               setEditing(await loadAssessmentForPopup(draft, 'edit'));
             } catch (err) {
-              toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
+              toast.error(friendlyErrorMessage(err, 'Could not load the assessment. Please try again.'));
             }
           } else if (draft) {
             setWizardHref(await versionHref(draft, 'edit', job.jdTitle, returnUrl));
@@ -379,7 +405,7 @@ export default function VersionInviteDialog({
       setBusyId(v.id);
       void loadAssessmentForPopup(v, item.action)
         .then(open, (err: unknown) => {
-          toast.error((err as Error)?.message || 'Could not load the assessment. Please try again.');
+          toast.error(friendlyErrorMessage(err, 'Could not load the assessment. Please try again.'));
           if (item.action === 'edit') void reload();
         })
         .finally(() => setBusyId(null));
@@ -461,7 +487,9 @@ export default function VersionInviteDialog({
       invite_source: c.inviteSource || (c.source ? INVITE_SOURCE_BY_TAB[c.source] : undefined),
     }));
     const allExtras = [...ticked, ...extras];
-    const started = await bulkInviteService.start(job.jdId, {
+    // The selected version's own job version — a job-wide pick may sit on
+    // another job version than the one first picked.
+    const started = await bulkInviteService.start(selected.jdId || job.jdId, {
       kind,
       version_id: selected.id,
       selection: toRequestSelection(serverSelection),
@@ -491,7 +519,7 @@ export default function VersionInviteDialog({
   };
 
   const askSend = () => {
-    if (!selected?.sendable || recipientCount === 0) return;
+    if (!selected?.sendable || recipientCount === 0 || jobLock) return;
     const scope = serverSelection.mode === 'filter'
       ? ` (everyone matching ${describeFilters(serverSelection.filters) || 'the current tab'})` : '';
     setConfirm({
@@ -502,7 +530,7 @@ export default function VersionInviteDialog({
     });
   };
 
-  const canSend = !!selected?.sendable && recipientCount > 0 && perms.canInvite && !off && !quotaShort;
+  const canSend = !!selected?.sendable && recipientCount > 0 && perms.canInvite && !off && !quotaShort && !jobLock;
   const pickingOff = !selected?.sendable || !perms.canInvite || !!off;
 
   const footerText = off
@@ -511,6 +539,8 @@ export default function VersionInviteDialog({
       ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} to continue`
       : bulkJob
         ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
+        : jobLock
+          ? jobLock
         : !selected
           ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
           : recipientCount === 0
@@ -548,7 +578,8 @@ export default function VersionInviteDialog({
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-slate-500 min-w-0">
                     {job.jdCode && <JobIdBadge>{job.jdCode}</JobIdBadge>}
                     <span className="min-w-0 truncate">{job.jdTitle}</span>
-                    {job.jobVersionNumber ? <VersionChip kind="job" version={job.jobVersionNumber} /> : null}
+                    {headerJobBadge && <AssessmentJobStatusBadge kind={headerJobBadge} />}
+                    {(selected?.jobVersion ?? job.jobVersionNumber) ? <VersionChip kind="job" version={(selected?.jobVersion ?? job.jobVersionNumber)!} /> : null}
                     {selected && (
                       <span className="inline-flex items-center gap-1">
                         <span>{label.singular} Version</span>
@@ -580,12 +611,16 @@ export default function VersionInviteDialog({
                   scrollContainerRef={bodyRef}
                 />
               ) : (
-                <AssessmentPicker
-                  assessments={jobPickList as AssessmentResponse[]}
-                  selectedId={asPick?.id ?? null}
-                  onSelect={(a) => setAsPick(a as AssessmentResponse | null)}
-                  scrollContainerRef={bodyRef}
-                />
+                /* A full-height column, so the picker's pagination can sit at
+                   the foot of the body whichever view (and list height) is on. */
+                <div className="flex flex-col min-h-full">
+                  <AssessmentPicker
+                    assessments={jobPickList as AssessmentResponse[]}
+                    selectedId={asPick?.id ?? null}
+                    onSelect={(a) => setAsPick(a as AssessmentResponse | null)}
+                    scrollContainerRef={bodyRef}
+                  />
+                </div>
               )
             ) : bulkJob ? (
               /* The send's live counts and per-candidate rows; the floating
@@ -605,9 +640,9 @@ export default function VersionInviteDialog({
                 )}
                 {versionFixed ? (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-2.5">
-                    <span className="text-sm text-gray-800 dark:text-slate-200 min-w-0 truncate">
-                      <span className="font-medium">{selected?.name}</span>
-                      <span className="text-gray-500 dark:text-slate-400"> · V{selected?.version}</span>
+                    {/* The version cards' title: JD ID, job, versions. */}
+                    <span className="min-w-0 flex flex-wrap items-center gap-2">
+                      {selected && <VersionTitle version={selected} compact />}
                     </span>
                     <button
                       type="button"
@@ -627,8 +662,9 @@ export default function VersionInviteDialog({
                     </div>
                     <VersionList
                       kind={kind}
-                      versions={listedVersions(kind, versions)}
+                      versions={jobWideVersions ?? listedVersions(kind, versions)}
                       allVersions={versions}
+                      spansJobVersions={!!jobWideVersions}
                       loading={loading && !loaded}
                       error={error}
                       onRetry={() => void reload()}
