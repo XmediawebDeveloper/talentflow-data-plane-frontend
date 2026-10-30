@@ -129,10 +129,10 @@ interface ScoredResume {
  *  Scorecard), copied from the Previous / Next pager in the breadcrumb bar:
  *  white, brand-blue outline + text, filling solid brand-blue on hover. */
 const HEADER_ACTION_BTN =
-  'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-brand-blue/60 bg-white text-brand-blue shadow-sm cursor-pointer transition-colors hover:bg-brand-blue hover:text-white hover:border-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-blue disabled:hover:border-brand-blue/60';
+  'inline-flex items-center justify-center gap-2 h-9 px-2.5 sm:h-10 sm:px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-brand-blue/60 bg-white text-brand-blue shadow-sm cursor-pointer transition-colors hover:bg-brand-blue hover:text-white hover:border-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brand-blue disabled:hover:border-brand-blue/60';
 /** HEADER_ACTION_BTN when the user lacks the permission: shown, greyed, no hover colour. */
 const HEADER_ACTION_BTN_LOCKED =
-  'inline-flex items-center justify-center gap-2 h-10 px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-400 shadow-sm cursor-not-allowed opacity-60';
+  'inline-flex items-center justify-center gap-2 h-9 px-2.5 sm:h-10 sm:px-4 text-sm font-semibold whitespace-nowrap rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-400 shadow-sm cursor-not-allowed opacity-60';
 /** Create / Send / candidate action button when the user lacks the permission. */
 const CREATE_SEND_BUTTON_LOCKED_CLASS =
   'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
@@ -380,6 +380,26 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // The tabs + panels block, so opening the JD from the job title can bring the
   // tab strip to the top rather than jumping the whole page back to its header.
   const tabsSectionRef = useRef<HTMLDivElement>(null);
+
+  /* On a phone the tab strip scrolls sideways; a mouse wheel only scrolls
+     vertically, so turn it into a sideways scroll while the row can still
+     move (at either end the page scrolls as usual). State-held element
+     (callback ref) because the strip only mounts once the scores load. */
+  const [tabListEl, setTabListEl] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = tabListEl;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const atStart = el.scrollLeft <= 0 && e.deltaY < 0;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 1 && e.deltaY > 0;
+      if (atStart || atEnd) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [tabListEl]);
 
   /**
    * Job title → the full job description.
@@ -1348,7 +1368,7 @@ Best regards`);
   // replaces it rather than being a generic block.
   if (!isDataReady) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="flex-1 min-w-0 overflow-x-clip bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             {/* Breadcrumb */}
@@ -1361,7 +1381,7 @@ Best regards`);
             </div>
 
             {/* Header card — identity, contact badges, score display bar */}
-            <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
+            <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="min-w-0 space-y-2">
                   <Skeleton className="h-7 w-56" />
@@ -1381,7 +1401,7 @@ Best regards`);
                 </div>
               </div>
               {/* Score display bar */}
-              <div className="flex items-center justify-between gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                   <Skeleton className="h-8 w-16" />
                   <Skeleton className="h-6 w-28 rounded-md" />
@@ -1420,7 +1440,7 @@ Best regards`);
   }
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 min-w-0 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* The resume is a modal now, so the trail always names the candidate —
@@ -1466,13 +1486,13 @@ Best regards`);
         {/* Entity hero card — neutral card chrome + leading icon disc, matching
             the Job Openings master header and the Job Details hero so the detail
             pages read as siblings (was a heavier border-2/shadow-lg card). */}
-        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
-            {/* pl-2.5 = the contact badges' own inset, so the name, the years
-                and the email / phone icons below start on one vertical line. */}
-            <div className="min-w-0 pl-2.5">
+            {/* No inset: the name, years and version badge start on the same
+                left edge as the contact badges and action buttons below. */}
+            <div className="min-w-0">
               <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
@@ -1480,14 +1500,14 @@ Best regards`);
                   flatHeaderActions ? (
                     /* Flat: View Resume as a small eye joined to the version
                        badge — the resume it opens is that version. */
-                    <span className="inline-flex items-stretch rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
+                    <span className="inline-flex items-stretch shrink-0 whitespace-nowrap rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 overflow-hidden">
                       <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1">
                         Version {resume.resumeVersion}
                       </span>
                       {renderViewResumeEye(true)}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center shrink-0 whitespace-nowrap px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                       Version {resume.resumeVersion}
                     </span>
                   )
@@ -1495,11 +1515,11 @@ Best regards`);
                   /* Version dropdown — Job Details' JD version picker, for the
                      resume: a version scored for this job opens that score; one
                      never scored here opens its preview. */
-                  <div className="relative" ref={versionMenuRef}>
+                  <div className="relative shrink-0" ref={versionMenuRef}>
                     <button
                       type="button"
                       onClick={() => setShowVersionMenu((v) => !v)}
-                      className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 whitespace-nowrap px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
                       aria-label={`Select resume version, currently Version ${resume.resumeVersion}`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
@@ -1512,7 +1532,7 @@ Best regards`);
                       <div
                         role="menu"
                         aria-label="Resume versions"
-                        className="absolute left-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] max-h-72 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                        className="absolute left-0 top-full mt-2 w-52 sm:w-64 max-w-[calc(100vw-2rem)] max-h-72 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
                       >
                         {[...resumeVersions].sort(byNewestVersion).map((version, index) => {
                           const versionNumber = version.version || 1;
@@ -1612,6 +1632,7 @@ Best regards`);
                   type="button"
                   onClick={() => { if (!canShareResume) return; openShareModal(); }}
                   aria-disabled={!canShareResume}
+                  aria-label="Share resume"
                   title={canShareResume ? 'Share resume' : 'You do not have permission to share resumes'}
                   className={
                     !canShareResume
@@ -1620,7 +1641,8 @@ Best regards`);
                   }
                 >
                   <Share2 className="w-4 h-4 flex-shrink-0" />
-                  Share
+                  {/* Icon-only on phones in this header, like Invite / View Resume. */}
+                  <span className={flatHeaderActions ? undefined : 'hidden sm:inline'}>Share</span>
                 </button>
               )}
 
@@ -1670,14 +1692,16 @@ Best regards`);
                           : invitePlanLocked
                             ? PLAN_LOCKED_MESSAGE
                             : 'No published assessment or AI interview for this job yet')
-                      : undefined
+                      : 'Invite'
                   }
+                  aria-label="Invite"
                   aria-haspopup="menu"
                   aria-expanded={showInviteMenu}
                   className={canInvite ? HEADER_ACTION_BTN : HEADER_ACTION_BTN_LOCKED}
                 >
                   <UserPlus className="w-4 h-4 flex-shrink-0" />
-                  Invite
+                  {/* Icon-only on phones; aria-label keeps the name. */}
+                  <span className="hidden sm:inline">Invite</span>
                   <ChevronDown className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
                 </button>
 
@@ -1685,11 +1709,10 @@ Best regards`);
                   <div
                     ref={inviteDropdownRef}
                     role="menu"
-                    // Anchor left on mobile (the action row wraps and the button
-                    // sits near the left edge, so right-0 pushed a 256px menu off
-                    // the left of the viewport); keep the original right-0 from sm
-                    // up, where the actions are right-aligned on one line.
-                    className={`absolute left-0 right-auto sm:left-auto sm:right-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30`}
+                    // Right-anchored at every width: the action group is
+                    // ml-auto (right-aligned) and the max-w clamp keeps the
+                    // menu inside the viewport on phones.
+                    className={`absolute right-0 ${inviteMenuUp ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30`}
                   >
                     {/* Each entry stays visible for anyone permitted to use
                         it and goes disabled when this JD has nothing to
@@ -1747,12 +1770,14 @@ Best regards`);
                   type="button"
                   onClick={handleViewResume}
                   disabled={loadingResumeDetail}
+                  aria-label="View Resume"
+                  title="View Resume"
                   className={HEADER_ACTION_BTN}
                 >
                   {loadingResumeDetail
                     ? <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
                     : <Eye className="w-4 h-4 flex-shrink-0" />}
-                  View Resume
+                  <span className="hidden sm:inline">View Resume</span>
                 </button>
               )}
 
@@ -1760,6 +1785,7 @@ Best regards`);
                 type="button"
                 onClick={() => { if (!canExport) return; handleDownloadScorecard(); }}
                 aria-disabled={!canExport}
+                aria-label="Download scorecard"
                 title={canExport ? 'Download scorecard PDF' : 'You do not have permission to download the scorecard'}
                 className={
                   !canExport
@@ -1771,7 +1797,7 @@ Best regards`);
                 {flatHeaderActions ? 'Scorecard' : (
                   <>
                     <span className="hidden lg:inline">Download Scorecard</span>
-                    <span className="lg:hidden">Scorecard</span>
+                    <span className="hidden sm:inline lg:hidden">Scorecard</span>
                   </>
                 )}
               </button>
@@ -1864,10 +1890,18 @@ Best regards`);
               paints beneath the tabs, so the active tab's white face covers it
               and runs straight into the white panel below — the tab reads as
               part of the page it opens. A real border-bottom + -mb-px would be
-              clipped here, since overflow-x-auto also clips the y axis. */}
+              clipped here, since overflow-x-auto also clips the y axis.
+              w-0 + min-w-full: the row fills its card but contributes no width
+              of its own, so on a phone the tabs overflow THIS row (and it
+              scrolls sideways) instead of stretching the page wider than the
+              screen, where the extra tabs were just clipped off.
+              scrollbar-auto-hide (not scrollbar-hide, which removes the bar
+              outright in Chrome): the app's thin bar shows on hover so a mouse
+              can drag it, and the wheel is mapped sideways below. */}
           <div
+            ref={setTabListEl}
             role="tablist"
-            className="flex items-end gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide shadow-[inset_0_-1px_0_var(--color-gray-200)]"
+            className="flex items-end gap-1 w-0 min-w-full px-3 sm:px-6 pt-2 overflow-x-auto overscroll-x-contain scrollbar-auto-hide scrollbar-light shadow-[inset_0_-1px_0_var(--color-gray-200)]"
           >
             {[
               { id: 'overview', label: 'Overview' },
@@ -1882,7 +1916,7 @@ Best regards`);
                 onClick={() => setActiveTab(tab.id as DetailTab)}
                 // Both states carry the same borders (transparent when idle)
                 // so switching tabs never shifts the row by a pixel.
-                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
+                className={`shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
                   activeTab === tab.id
                     ? 'font-semibold text-brand-blue bg-white border-x-gray-200 border-t-brand-blue'
                     : 'font-medium text-gray-600 border-transparent hover:text-gray-900 hover:bg-white/70'
@@ -1997,26 +2031,26 @@ Best regards`);
           )} */}
 
           {activeTab === 'overview' && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-5">
               {/* AI Analysis Summary — leads the tab: it's the verdict the rest
                   of the sections break down. */}
               {aiReasoning && (
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <MessageSquare className="w-5 h-5 text-gray-700" />
-                    <h3 className="text-lg font-semibold text-gray-900">AI Analysis</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">AI Analysis</h3>
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed">{aiReasoning}</p>
                 </div>
               )}
 
               {/* Strengths & Weaknesses */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Strengths */}
-                <div className="bg-success-subtle border border-success-line rounded-xl p-6">
+                <div className="bg-success-subtle border border-success-line rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ThumbsUp className="w-5 h-5 text-success" />
-                    <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Strengths</h3>
                   </div>
                   {keyStrengths.length > 0 ? (
                     <ul className="space-y-3">
@@ -2033,10 +2067,10 @@ Best regards`);
                 </div>
 
                 {/* Weaknesses */}
-                <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6">
+                <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ThumbsDown className="w-5 h-5 text-destructive" />
-                    <h3 className="text-lg font-semibold text-gray-900">Weaknesses</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Weaknesses</h3>
                   </div>
                   {(improvementAreas.length > 0 || missingSkills.length > 0) ? (
                     <ul className="space-y-3">
@@ -2128,12 +2162,12 @@ Best regards`);
 
               {/* Professional Summary - Only show actual resume summary, NOT AI scoring summary */}
               {fullResumeData.professionalSummary && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
                     {fullResumeData.professionalSummary}
@@ -2142,12 +2176,12 @@ Best regards`);
               )}
 
               {/* Work Experience */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Briefcase className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
                 </div>
                 {fullResumeData.experienceDetails && fullResumeData.experienceDetails.length > 0 ? (
                   <div className="space-y-6">
@@ -2162,7 +2196,7 @@ Best regards`);
                                 <Building2 className="w-4 h-4" />
                                 <span>{exp.company || 'Company'}</span>
                               </div>
-                              <div className="flex items-center gap-4 text-sm text-gray-600">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-600">
                                 {exp.location && (
                                   <span className="flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
@@ -2220,12 +2254,12 @@ Best regards`);
               </div>
 
               {/* Education */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
                 </div>
                 {fullResumeData.educationDetails && fullResumeData.educationDetails.length > 0 ? (
                   <div className="space-y-4">
@@ -2293,12 +2327,12 @@ Best regards`);
                 ].filter((g) => g.items.length > 0);
                 if (groups.length === 0) return null;
                 return (
-                  <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                    <div className="flex items-center gap-2 mb-6">
+                  <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                    <div className="flex items-center gap-2 mb-4 sm:mb-6">
                       <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Code className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
                     </div>
                     <div className="space-y-5">
                       {groups.map((group) => (
@@ -2318,12 +2352,12 @@ Best regards`);
 
               {/* Certifications */}
               {fullResumeData.certifications && fullResumeData.certifications.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                       <Award className="w-4 h-4 text-brand-orange" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.certifications.map((cert, index) => {
@@ -2334,21 +2368,21 @@ Best regards`);
                       const certCredentialId = typeof cert === 'object' ? cert.credential_id : null;
                       return (
                         <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                          <div className="flex items-start justify-between">
-                            <div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
                               <h4 className="font-semibold text-gray-900 mb-1">{certName}</h4>
                               {certIssuer && <div className="text-sm text-gray-700 mb-1">{certIssuer}</div>}
-                              <div className="flex items-center gap-4 text-xs text-gray-600">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
                                 {certDate && (
                                   <span className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" />
                                     Issued {certDate}
                                   </span>
                                 )}
-                                {certCredentialId && <span>ID: {certCredentialId}</span>}
+                                {certCredentialId && <span className="[overflow-wrap:anywhere]">ID: {certCredentialId}</span>}
                               </div>
                             </div>
-                            <Award className="w-6 h-6 text-brand-orange" />
+                            <Award className="w-6 h-6 text-brand-orange flex-shrink-0" />
                           </div>
                         </div>
                       );
@@ -2359,20 +2393,20 @@ Best regards`);
 
               {/* Languages */}
               {fullResumeData.languages && fullResumeData.languages.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Languages className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                     {fullResumeData.languages.map((language: any, index: number) => {
                       // Handle both string and object formats
                       const langName = typeof language === 'string' ? language : (language.name || language.language || 'Unknown');
                       const proficiency = typeof language === 'object' ? (language.proficiency || language.level || 'Fluent') : 'Fluent';
                       return (
-                        <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center">
+                        <div key={index} className="p-3 sm:p-4 min-w-0 [overflow-wrap:anywhere] bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center">
                           <div className="font-medium text-gray-900 mb-1">{langName}</div>
                           <div className="text-sm text-gray-600">{proficiency}</div>
                         </div>
@@ -2384,18 +2418,18 @@ Best regards`);
 
               {/* Projects */}
               {fullResumeData.projects && fullResumeData.projects.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Code className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.projects.map((project: any, index: number) => (
                       <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-semibold text-gray-900">{project.name}</h4>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="font-semibold text-gray-900 min-w-0 [overflow-wrap:anywhere]">{project.name}</h4>
                           {project.url && (
                             <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                               <FileText className="w-4 h-4" />
@@ -2426,18 +2460,18 @@ Best regards`);
 
               {/* Awards */}
               {fullResumeData.awards && fullResumeData.awards.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                       <Award className="w-4 h-4 text-brand-orange" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Awards &amp; Honors</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Awards &amp; Honors</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.awards.map((award: any, index: number) => (
                       <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                        <div className="flex items-start justify-between">
-                          <div>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
                             <h4 className="font-semibold text-gray-900 mb-1">{award.name}</h4>
                             {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
                             {award.date && (
@@ -2450,7 +2484,7 @@ Best regards`);
                               <p className="text-sm text-gray-600 mt-2">{award.description}</p>
                             )}
                           </div>
-                          <Award className="w-6 h-6 text-brand-orange" />
+                          <Award className="w-6 h-6 text-brand-orange flex-shrink-0" />
                         </div>
                       </div>
                     ))}
@@ -2460,12 +2494,12 @@ Best regards`);
 
               {/* Achievements */}
               {fullResumeData.achievements && fullResumeData.achievements.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
                   </div>
                   <div className="space-y-2">
                     {fullResumeData.achievements.map((achievement: any, index: number) => (
@@ -2480,12 +2514,12 @@ Best regards`);
 
               {/* Hobbies & Interests */}
               {fullResumeData.hobbies && fullResumeData.hobbies.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Hobbies &amp; Interests</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Hobbies &amp; Interests</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {fullResumeData.hobbies.map((hobby: any, index: number) => (
@@ -2499,12 +2533,12 @@ Best regards`);
 
               {/* Social Links */}
               {(fullResumeData.linkedinUrl || fullResumeData.githubUrl || fullResumeData.portfolioUrl) && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     {fullResumeData.linkedinUrl && (
@@ -2531,12 +2565,12 @@ Best regards`);
 
               {/* Notice Period */}
               {fullResumeData.noticePeriod && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Clock className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Notice Period</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Notice Period</h3>
                   </div>
                   <p className="text-gray-700">{fullResumeData.noticePeriod}</p>
                 </div>
@@ -2544,12 +2578,12 @@ Best regards`);
 
               {/* Volunteer Experience */}
               {fullResumeData.volunteerExperience && fullResumeData.volunteerExperience.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                  <div className="flex items-center gap-2 mb-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.volunteerExperience.map((vol: any, index: number) => (
@@ -2571,12 +2605,12 @@ Best regards`);
 
               {/* Objective */}
               {fullResumeData.objective && fullResumeData.objective !== fullResumeData.professionalSummary && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed">{fullResumeData.objective}</p>
                 </div>
@@ -2584,12 +2618,12 @@ Best regards`);
 
               {/* Additional Information */}
               {fullResumeData.additionalInfo && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{fullResumeData.additionalInfo}</p>
                 </div>
@@ -2598,12 +2632,12 @@ Best regards`);
               {/* Version History — tick two uploads to diff them, same flow as
                   resume-view. */}
               {resumeVersions.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6 max-sm:p-4">
-                  <div className="flex items-center gap-2 mb-6 max-sm:mb-4 flex-wrap">
+                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="flex items-center gap-2 mb-4 sm:mb-6 flex-wrap">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <History className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Version History</h3>
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Version History</h3>
                     <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
                       {resumeVersions.length} version{resumeVersions.length !== 1 ? 's' : ''}
                     </span>
@@ -2637,7 +2671,7 @@ Best regards`);
                         return (
                           <div
                             key={version.id}
-                            className={`rounded-lg border p-4 ${
+                            className={`rounded-lg border p-4 max-sm:p-3 ${
                               isLatest
                                 ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/10'
                                 : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02]'
@@ -2746,12 +2780,12 @@ Best regards`);
               )}
 
               {/* File Properties */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                <div className="flex items-center gap-2 mb-6">
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <File className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">File Properties</h3>
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">File Properties</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-4">
@@ -2770,9 +2804,9 @@ Best regards`);
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <HardDrive className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">File Size</div>
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {fullResumeData.fileSizeKb
                             ? `${fullResumeData.fileSizeKb} KB`
                             : (resumeVersions[0]?.size || 'Unknown')}
@@ -2783,18 +2817,18 @@ Best regards`);
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <File className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">File Type</div>
-                        <div className="text-sm text-gray-900">{(fullResumeData.fileType || 'PDF').toUpperCase()} Document</div>
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{(fullResumeData.fileType || 'PDF').toUpperCase()} Document</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <Calendar className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">Upload Date</div>
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {fullResumeData.uploadDate ? formatIST(fullResumeData.uploadDate) : 'Unknown'}
                         </div>
                       </div>
@@ -2805,9 +2839,9 @@ Best regards`);
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <Clock className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">Last Modified</div>
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {fullResumeData.lastUpdated ? formatIST(fullResumeData.lastUpdated) : 'Never'}
                         </div>
                       </div>
@@ -2816,18 +2850,18 @@ Best regards`);
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <User className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
-                        <div className="text-sm text-gray-900">{fullResumeData.uploadedBy || 'Unknown'}</div>
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{fullResumeData.uploadedBy || 'Unknown'}</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <FileText className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {resumeVersions.length || 1} file{(resumeVersions.length || 1) !== 1 ? 's' : ''}
                         </div>
                       </div>
@@ -2836,9 +2870,9 @@ Best regards`);
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
                         <History className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-xs text-gray-500 mb-1">Version Count</div>
-                        <div className="text-sm text-gray-900">
+                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {(fullResumeData.versionCount || resumeVersions.length || 1)} version{(fullResumeData.versionCount || resumeVersions.length || 1) !== 1 ? 's' : ''}
                         </div>
                       </div>
@@ -3078,12 +3112,12 @@ Best regards`);
               page open. The eye reuses View Resume, whose preview sits at
               z-[60], so it opens above this. */}
           {showShareResumeModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
-                <div className="p-6">
+            <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
+                <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5">
                   <div className="flex items-start justify-between gap-3 mb-6">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 flex-shrink-0 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                      <div className="hidden sm:flex w-10 h-10 flex-shrink-0 bg-brand-blue rounded-xl items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                         <Mail className="w-5 h-5 text-white" />
                       </div>
                       <div>
@@ -3207,7 +3241,7 @@ Best regards`);
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                  <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 mt-6 pt-4 border-t border-gray-100">
                     <Button
                       variant="primary"
                       onClick={handleSendShareEmail}
@@ -3234,17 +3268,17 @@ Best regards`);
           {/* The scorecard, read in place. z-[60] puts it over the share
               dialog, the same level the resume preview uses. */}
           {scorecardPreviewUrl && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[90dvh] flex flex-col overflow-hidden">
                 {/* Header — the resume preview's, with the scorecard's own
                     subtitle. */}
-                <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                    <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                       <Eye className="w-5 h-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
+                      <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
                       <p className="text-sm text-gray-500 truncate">
                         {fullResumeData.candidateName}
                         {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
@@ -3371,16 +3405,16 @@ Best regards`);
             };
 
             return (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                <div className={`bg-white rounded-2xl shadow-2xl w-full ${compareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+                <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] ${compareViewMode === 'side-by-side' ? 'sm:max-w-7xl' : 'sm:max-w-4xl'} h-[calc(100dvh-1.5rem)] sm:h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
                   {/* Header */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                      <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                         <History className="w-5 h-5 text-white" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Version Comparison</h2>
+                        <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate min-w-0">Version Comparison</h2>
                         <p className="text-sm text-gray-500 truncate">
                           Version {older.version} vs Version {newer.version}
                         </p>
@@ -3554,17 +3588,17 @@ Best regards`);
             const isLatestPreview = [...resumeVersions].sort(byNewestVersion)[0]?.id === versionPreview.id;
 
             return (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[90dvh] flex flex-col overflow-hidden">
                   {/* Header */}
-                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                      <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                         <Eye className="w-5 h-5 text-white" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
+                          <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
                           {isLatestPreview && (
                             <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                               Latest
@@ -3601,7 +3635,7 @@ Best regards`);
                   {/* Resume content — document style */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 p-4 sm:p-6">
                     {versionPreview.text ? (
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
                         {lines.map((line, idx) => {
                           const trimmed = line.trim();
                           if (!trimmed) return <div key={idx} className="h-3" />;

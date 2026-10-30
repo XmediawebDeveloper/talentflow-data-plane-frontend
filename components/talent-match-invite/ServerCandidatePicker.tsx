@@ -85,7 +85,7 @@ export const describeFilters = (f: InviteCandidateFilters): string => {
   return parts.join(' · ');
 };
 
-/* The AI Talent Match tab's rating badge tones (SendToPanel's). */
+/* The AI Talent Match tab's rating badge tones. */
 const ratingTone = (rank: number) =>
   rank >= 7 ? 'bg-success-subtle text-success-strong border-success-line'
     : rank >= 4 ? 'bg-warning-subtle text-warning-strong border-warning-line'
@@ -294,7 +294,7 @@ export default function ServerCandidatePicker({
     <section aria-labelledby="server-send-to-heading" className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h3 id="server-send-to-heading" className={SECTION}>
-          Candidates · {fmt(selectedTotal)} selected
+          Pick from your lists · {fmt(selectedTotal)} selected
         </h3>
         <div className="flex flex-wrap items-center gap-2">
           {selectedTotal > 0 && (
