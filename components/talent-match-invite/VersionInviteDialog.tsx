@@ -202,6 +202,8 @@ export default function VersionInviteDialog({
   const [serverSelection, setServerSelection] = useState<PickerSelection>(EMPTY_SELECTION);
   /* Manual / Upload Excel rows. */
   const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
+  // Typed-in cards with an invalid name / email — Send waits until they are fixed.
+  const [invalidExtras, setInvalidExtras] = useState(0);
   const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
   const bulkTracker = useOptionalBulkInviteProgress();
   const bulkReported = useRef(false);
@@ -519,7 +521,7 @@ export default function VersionInviteDialog({
   };
 
   const askSend = () => {
-    if (!selected?.sendable || recipientCount === 0 || jobLock) return;
+    if (!selected?.sendable || recipientCount === 0 || invalidExtras > 0 || jobLock) return;
     const scope = serverSelection.mode === 'filter'
       ? ` (everyone matching ${describeFilters(serverSelection.filters) || 'the current tab'})` : '';
     setConfirm({
@@ -530,7 +532,7 @@ export default function VersionInviteDialog({
     });
   };
 
-  const canSend = !!selected?.sendable && recipientCount > 0 && perms.canInvite && !off && !quotaShort && !jobLock;
+  const canSend = !!selected?.sendable && recipientCount > 0 && invalidExtras === 0 && perms.canInvite && !off && !quotaShort && !jobLock;
   const pickingOff = !selected?.sendable || !perms.canInvite || !!off;
 
   const footerText = off
@@ -694,7 +696,7 @@ export default function VersionInviteDialog({
                     listSlot={(
                       <div className="space-y-4">
                         {/* Manual first: it is open with an empty row on every opening. */}
-                        <ExtraCandidatesInput onChange={setExtras} disabled={pickingOff} onCopyLink={copyLinkFor} />
+                        <ExtraCandidatesInput onChange={setExtras} onInvalidChange={setInvalidExtras} disabled={pickingOff} onCopyLink={copyLinkFor} />
                         <ServerCandidatePicker
                           jdId={job.jdId}
                           kind={kind}
