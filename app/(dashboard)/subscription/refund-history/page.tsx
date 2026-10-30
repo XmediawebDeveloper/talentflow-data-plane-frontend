@@ -4,7 +4,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, RefreshCw, ExternalLink, Filter, Sparkles, X } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
-import { generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
+import { billToFromAuth, generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -92,7 +92,7 @@ const matchesRefundStatus = (status: string, filter: string) => {
 const EXPORT_HEADERS = ['Refund #', 'Date', 'Original Invoice', 'Reason', 'Amount', 'Status', 'Refund Method', 'Processed By'];
 
 export default function RefundHistoryPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user, tenant } = useAuth();
   const canExportRefundHistory = hasPermission('canExportUsage');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -284,7 +284,7 @@ export default function RefundHistoryPage() {
   const handleDownloadRefund = async (inv: RefundInvoice) => {
     setDownloadingId(inv.id);
     try {
-      await generateRefundReceiptPDF(inv);
+      await generateRefundReceiptPDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast.error('Failed to generate PDF. Please try again.');
