@@ -10,7 +10,7 @@ import type { JDLineageVersion } from '@/lib/services/jdService';
 import type { AssessmentResponse, JDResponse } from '@/lib/services';
 import type { CombinedAuditActivity } from '@/lib/services/assessmentService';
 import { isAssessmentArchived } from '@/lib/services/assessmentService';
-import { isJdDisabled } from '@/lib/utils/assessmentJobLock';
+import { isJdDisabled, assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -2032,8 +2032,12 @@ export default function AssessmentDetailsView({
         // and may not carry the backend flag yet).
         const isArchived = assessment.status === 'Archived';
         const hasRevoked = isAssessmentRevoked(assessment as any);
+        const jdStatus = jobVersions.find((v) => v.id === assessment?.jd_id)?.status;
+        const jdLockMessage = assessmentJobLockMessage(jdStatus);
         const blockedReason = isArchived
           ? 'Archived assessments cannot be shared'
+          : jdLockMessage
+          ? jdLockMessage
           : hasRevoked
           ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
           : '';
