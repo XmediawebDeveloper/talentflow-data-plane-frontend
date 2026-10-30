@@ -1221,6 +1221,11 @@ export default function JDListPage() {
             title: confirmDialog.jdTitle,
             versionNumber: confirmDialog.jdVersion,
           })}
+          job={{
+            job_id: confirmDialog.jdCode,
+            title: confirmDialog.jdTitle,
+            versionNumber: confirmDialog.jdVersion,
+          }}
           onConfirm={() => confirmDialog.jdId && handleDisable(confirmDialog.jdId)}
           onCancel={() => setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' })}
           isLoading={confirmLoading}

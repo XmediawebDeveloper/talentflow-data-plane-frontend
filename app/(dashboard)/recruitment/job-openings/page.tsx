@@ -1100,6 +1100,7 @@ export default function JobOpeningsPage() {
       <DisableJobModal
         isOpen={disableDialog.open}
         jobLabel={disableDialog.job ? formatJobVersionLabel(disableDialog.job) : ''}
+        job={disableDialog.job}
         isLoading={disableDialog.disabling}
         onCancel={closeDisableDialog}
         onConfirm={confirmDisableJob}
