@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import NameAvatar from '@/components/ui/name-avatar';
 import { tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
-import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
+import { exportRows, exportTextFile, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
 import EvaluationReportTab from './tabs/EvaluationReportTab';
@@ -43,6 +43,7 @@ import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
 import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
+import { downloadChatTranscriptPdf } from './chatTranscriptPdf';
 import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
@@ -611,6 +612,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const seekNonceRef = useRef(0);
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [chatDownloadOpen, setChatDownloadOpen] = useState(false);
   // Transcript table's Question / Raw Transcript columns: 4-word pills
   // (default) or full text, toggled together from the toolbar — same pill
   // as Resume Scoring's AI Reasoning.
@@ -4308,6 +4310,106 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   </button>
                 );
 
+                // Full chat download (PDF / TXT) — every message in order (Bina +
+                // candidate), independent of the Table view's grouped Q/A export.
+                const downloadChat = async (format: ExportFileFormat) => {
+                  const rows = labeled.map(({ msg, label }, i) => {
+                    const isUser = msg.role === 'user';
+                    const raw = isUser ? (msg.original_asr || msg.raw_content || '') : '';
+                    return [
+                      String(i + 1),
+                      label,
+                      isUser ? candidateName : 'Bina (AI Interviewer)',
+                      msg.content || '',
+                      raw && raw !== msg.content ? raw : '',
+                      isUser ? (msg.language || 'English') : '',
+                      formatTs(msg.timestamp),
+                    ];
+                  });
+                  // Candidate details — same sources as the header card above.
+                  const details: [label: string, value: string][] = [];
+                  const addDetail = (label: string, value: unknown) => {
+                    if (value !== null && value !== undefined && String(value).trim()) details.push([label, String(value)]);
+                  };
+                  addDetail('Candidate', interview.candidate_name || 'Unknown Candidate');
+                  addDetail('CID', interview.candidate_cid || liveSession.candidate_cid || fetchedCid);
+                  addDetail('Email', interview.candidate_email || liveSession.candidate_email);
+                  addDetail('Job', interview.position || (interview as any).jd_title || (liveSession as any).jd_title);
+                  addDetail('Status', getStatusLabel(interview.status));
+                  addDetail('Mode', isFlexibleMode ? 'Conversational Mode' : 'Timed Mode');
+                  if (interview.completed_at) {
+                    addDetail('Completed', `${formatISTDate(interview.completed_at)}, ${formatISTTime(interview.completed_at).toLowerCase()}`);
+                  }
+                  addDetail('Time Taken', formatDuration(eval_.duration_minutes || interview.duration_minutes));
+                  {
+                    const start = liveSession.started_at || interview.started_at;
+                    const end = liveSession.completed_at || interview.completed_at;
+                    let secs = start && end ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000) : NaN;
+                    if (!Number.isFinite(secs) || secs <= 0) {
+                      const mins = Number(eval_.duration_minutes);
+                      secs = Number.isFinite(mins) && mins > 0 ? Math.round(mins * 60) : NaN;
+                    }
+                    if (Number.isFinite(secs) && secs > 0) {
+                      const h = Math.floor(secs / 3600);
+                      const m = Math.floor((secs % 3600) / 60);
+                      const sec = secs % 60;
+                      addDetail('Duration', h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m${sec ? ` ${sec}s` : ''}` : `${sec}s`);
+                    }
+                  }
+                  // Result — only when the header card shows a final verdict.
+                  let result: { passed: boolean; score: number } | undefined;
+                  if ((isCompleted || isPartial) && !evaluationPending && !getPlaceholderMessage('eval')) {
+                    const d = buildQuestionAnalysisData();
+                    if (!d.isPartialEvaluation) {
+                      const passed = d.finalResult ? d.finalResult === 'Pass' : d.scores.mustHave >= MHS_THRESHOLD;
+                      result = { passed, score: Math.round(d.scores.mustHave * 10) };
+                      addDetail('Result', `${passed ? 'Pass' : 'Fail'} (Match Score ${result.score}%)`);
+                    }
+                  }
+                  addDetail('Messages', String(labeled.length));
+
+                  const fileName = `chat_transcript_${candidateName}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
+                  if (format === 'pdf') {
+                    // PDF mirrors the Chat view — header card + bubbles.
+                    const detail = (label: string) => details.find(([l]) => l === label)?.[1] || '';
+                    await downloadChatTranscriptPdf({
+                      candidateName,
+                      status: detail('Status'),
+                      mode: detail('Mode'),
+                      identity: [detail('CID'), detail('Email'), detail('Job')],
+                      timing: [
+                        detail('Completed') && `Completed ${detail('Completed')}`,
+                        detail('Time Taken') && `Time taken: ${detail('Time Taken')}`,
+                        detail('Duration') && `Duration: ${detail('Duration')}`,
+                      ],
+                      result,
+                      messages: rows.map(([, label, speaker, text, original, language, time]) => ({
+                        speaker: speaker === candidateName ? 'candidate' as const : 'bina' as const,
+                        label, text, original, language, time,
+                      })),
+                    }, fileName);
+                    return;
+                  }
+                  // TXT — details block, then one entry per message.
+                  const width = Math.max(...details.map(([l]) => l.length));
+                  const rule = '='.repeat(60);
+                  const text = [
+                    'CHAT TRANSCRIPT',
+                    rule,
+                    ...details.map(([l, v]) => `${l.padEnd(width)} : ${v}`),
+                    rule,
+                    '',
+                    ...rows.flatMap(([, label, speaker, message, original, language, time]) => [
+                      [`[${[label, time].filter(Boolean).join(' · ')}]`, speaker, language && language !== 'English' ? `(${language})` : '']
+                        .filter(s => s && s !== '[]').join(' '),
+                      message,
+                      ...(original ? [`  Original: ${original}`] : []),
+                      '',
+                    ]),
+                  ].join('\r\n');
+                  exportTextFile(text, fileName);
+                };
+
                 return (
                   <div className="w-full">
                     {/* Header with view toggle */}
@@ -4337,6 +4439,24 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {toggleBtn('chat', 'Chat', <MessageSquare className="w-3.5 h-3.5" />)}
                           {toggleBtn('table', 'Table', <Layers className="w-3.5 h-3.5" />)}
                         </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setChatDownloadOpen(true)}
+                          title="Download full chat transcript"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Download
+                        </Button>
+                        <ExportFormatModal
+                          open={chatDownloadOpen}
+                          onClose={() => setChatDownloadOpen(false)}
+                          title="Download Chat Transcript"
+                          recordCount={labeled.length}
+                          formats={['pdf', 'txt']}
+                          defaultFormat="pdf"
+                          onExport={downloadChat}
+                        />
                       </div>
                     </div>
 
