@@ -2,7 +2,7 @@
 
 import AppModal from '@/components/ui/app-modal';
 import { useEffect, useState } from 'react';
-import { Download, FileDown, FileSpreadsheet, FileText, Info } from 'lucide-react';
+import { Download, FileDown, FileSpreadsheet, FileText, FileType2, Info, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExportFileFormat } from '@/lib/utils/exportUtils';
 
@@ -35,6 +35,8 @@ interface ExportFormatModalProps {
    */
   onExport: (format: ExportFileFormat, pickedColumns?: string[]) => void | Promise<void>;
   defaultFormat?: ExportFileFormat;
+  /** Formats offered, in order. 'pdf' / 'txt' are opt-in — the caller's onExport must write them. */
+  formats?: ExportFileFormat[];
 }
 
 const FORMATS: { value: ExportFileFormat; label: string; hint: string; icon: typeof FileText; iconWrap: string; iconColor: string }[] = [
@@ -54,7 +56,25 @@ const FORMATS: { value: ExportFileFormat; label: string; hint: string; icon: typ
     iconWrap: 'bg-blue-100 dark:bg-blue-500/15',
     iconColor: 'text-blue-700 dark:text-blue-300',
   },
+  {
+    value: 'pdf',
+    label: 'PDF Format',
+    hint: 'Print-ready document, easy to share or attach.',
+    icon: FileType2,
+    iconWrap: 'bg-red-100 dark:bg-red-500/15',
+    iconColor: 'text-red-600 dark:text-red-300',
+  },
+  {
+    value: 'txt',
+    label: 'Text Format (.txt)',
+    hint: 'Plain text that opens anywhere — Notepad, email, any editor.',
+    icon: ScrollText,
+    iconWrap: 'bg-gray-100 dark:bg-slate-700',
+    iconColor: 'text-gray-600 dark:text-slate-300',
+  },
 ];
+
+const FORMAT_NAMES: Record<ExportFileFormat, string> = { csv: 'CSV', xlsx: 'Excel', pdf: 'PDF', txt: 'text' };
 
 /**
  * The CSV / Excel picker every Export opens — the design ScoredResumesTable's
@@ -71,6 +91,7 @@ export default function ExportFormatModal({
   defaultOffColumns,
   onExport,
   defaultFormat = 'csv',
+  formats = ['csv', 'xlsx'],
 }: ExportFormatModalProps) {
   const [format, setFormat] = useState<ExportFileFormat>(defaultFormat);
   const [exporting, setExporting] = useState(false);
@@ -116,7 +137,7 @@ export default function ExportFormatModal({
       onClose();
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error(`Failed to export to ${format === 'xlsx' ? 'Excel' : 'CSV'}`);
+      toast.error(`Failed to export to ${FORMAT_NAMES[format]}`);
     } finally {
       setExporting(false);
     }
@@ -151,7 +172,7 @@ export default function ExportFormatModal({
     >
           <p className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Choose export format</p>
           <div className="space-y-3" role="radiogroup" aria-label="Export format">
-            {FORMATS.map(option => {
+            {FORMATS.filter(option => formats.includes(option.value)).map(option => {
               const active = format === option.value;
               return (
                 <button

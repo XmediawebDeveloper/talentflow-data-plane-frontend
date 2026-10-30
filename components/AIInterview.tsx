@@ -5685,7 +5685,7 @@ export default function AIInterview() {
                     setSavingEditInvite(false);
                   }
                 }}
-                disabled={savingEditInvite || !!editInviteEmailError || !!editInviteNameError}
+                disabled={savingEditInvite || !isValidCandidateName(editInviteForm.candidate_name) || !isValidEmailFormat(editInviteEmailTrimmed)}
                 icon={savingEditInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
               >
                 Save & Send

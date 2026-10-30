@@ -5,7 +5,8 @@ import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Search, Trash2 } fro
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
-import { isValidEmailFormat } from '@/lib/utils/email';
+import { EMAIL_FORMAT_ERROR, isValidEmailFormat } from '@/lib/utils/email';
+import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
 import ListPagination from '@/components/ListPagination';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 
@@ -52,8 +53,13 @@ const parseCsvRows = (text: string): string[][] => {
   return text.trim().split(/\r?\n/).filter((l) => l.trim()).map(parseRow);
 };
 
+/* A sheet row with no name: one made from the email ("john.doe@x" → "john
+   doe"), when that is a valid name. */
+const nameFromEmail = (email: string) => email.split('@')[0].replace(/[^A-Za-z]+/g, ' ').trim().replace(/\s+/g, ' ');
+
 /* Rows of one sheet (header row first) → candidates. Needs an Email column;
-   Name is optional. Rows with a missing or malformed email are counted. */
+   Name is optional. Rows with a missing or malformed email, or a name that is
+   not letters and spaces, are counted as invalid and left out. */
 const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: string }[]; invalid: number; hasEmailColumn: boolean } => {
   if (rows.length < 2) return { found: [], invalid: 0, hasEmailColumn: false };
   const headers = rows[0].map((h) => String(h ?? '').trim());
@@ -67,7 +73,9 @@ const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: 
     if (row.every((v) => !String(v ?? '').trim())) continue;
     const email = cell(emailIdx).toLowerCase();
     if (!email || !isValidEmailFormat(email)) { invalid += 1; continue; }
-    found.push({ name: cell(nameIdx) || email.split('@')[0], email });
+    const name = cell(nameIdx) || nameFromEmail(email);
+    if (!isValidCandidateName(name)) { invalid += 1; continue; }
+    found.push({ name: name.replace(/\s+/g, ' '), email });
   }
   return { found, invalid, hasEmailColumn: true };
 };
@@ -117,12 +125,14 @@ export default function ExtraCandidatesInput({
     const n = name.trim();
     const e = email.trim().toLowerCase();
     if (!n || !e) { setError('Enter a name and an email address.'); return; }
-    if (!isValidEmailFormat(e)) { setError(`“${e}” is not a valid email address.`); return; }
+    // The invite flows' own rules: letters and spaces only; a valid email.
+    if (!isValidCandidateName(n)) { setError(NAME_FORMAT_ERROR); return; }
+    if (!isValidEmailFormat(e)) { setError(EMAIL_FORMAT_ERROR); return; }
     if (rows.some((r) => r.email === e)) { setError(`${e} is already added.`); return; }
     if (rows.length >= MAX_EXTRA_CANDIDATES) { setError(`At most ${MAX_EXTRA_CANDIDATES} candidates can be added by email.`); return; }
     const elsewhere = takenEmail?.(e);
     if (elsewhere) { setError(`${e} is already picked from ${elsewhere}.`); return; }
-    commit([{ id: newId(), name: n, email: e, origin: 'Manual' }, ...rows]);
+    commit([{ id: newId(), name: n.replace(/\s+/g, ' '), email: e, origin: 'Manual' }, ...rows]);
     setName('');
     setEmail('');
     setError(null);
@@ -187,7 +197,7 @@ export default function ExtraCandidatesInput({
       const over = fresh.length - kept.length;
       const notes = [
         repeated ? `${repeated} already added` : '',
-        invalid ? `${invalid} without a valid email` : '',
+        invalid ? `${invalid} with an invalid name or email` : '',
         over ? `${over} over the ${MAX_EXTRA_CANDIDATES} limit` : '',
       ].filter(Boolean).join(' · ');
       if (kept.length === 0) {

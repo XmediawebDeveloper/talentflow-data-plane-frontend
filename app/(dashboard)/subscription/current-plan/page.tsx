@@ -1787,6 +1787,12 @@ function CurrentPlanContent() {
           setShowPaymentModal(false);
           return;
         }
+        // Same plan while it is still active: refused before any charge.
+        if (orderResponse.status === 409 && orderData?.detail?.error === 'EARLY_RENEWAL_NOT_SUPPORTED') {
+          toast.info('Renewal not available yet', { description: orderData.detail.message, duration: 10000 });
+          setShowPaymentModal(false);
+          return;
+        }
         if (!orderResponse.ok) {
           const detail = orderData.detail;
           throw new Error((typeof detail === 'string' ? detail : detail?.message) || 'Failed to create payment order');
@@ -2407,12 +2413,17 @@ function CurrentPlanContent() {
                               ? daysSinceExpiry === 0
                                 ? `Your ${planName} plan expired today. Please renew to continue using all features.`
                                 : `Your ${planName} plan expired ${daysSinceExpiry} day${daysSinceExpiry !== 1 ? 's' : ''} ago. Please renew to continue using all features.`
-                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
+                              : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}. You can renew it once it expires.`
                             }
                           </p>
                         </div>
                       </div>
-                      {currentPlan && (
+                      {/* Renew only once expired: an early same-plan renewal is
+                          queued, and the Control Plane's queue rejects same-plan
+                          changes, so the payment could never be applied
+                          (tenant abc paid 3x, 2026-10-30). create-order also
+                          refuses it with EARLY_RENEWAL_NOT_SUPPORTED. */}
+                      {currentPlan && isExpired && (
                         <button
                           onClick={() => {
                             setSelectedPlanForPayment(currentPlan);
