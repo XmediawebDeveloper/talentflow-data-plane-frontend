@@ -972,6 +972,15 @@ export default function ResumeTable({
                                readable at the top of the overlay however little
                                room the menu was given. */
                             className="fixed w-52 flex flex-col bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] overflow-hidden"
+                            /* Tells TableScrollbars.tsx this is an open popover
+                               sitting over `.tf-table-shell`. Without it, that
+                               file's occlusion probe (sampled at the shell's
+                               right edge, which this end-aligned menu covers)
+                               reads the menu's top as the bottom of the visible
+                               table and drags the custom horizontal scrollbar
+                               up onto the first row(s) instead of standing the
+                               bar down the way it does for every other popup. */
+                            data-tf-popover
                             style={{
                               // Measured before paint by the layout effect;
                               // until then the panel sits at the origin with

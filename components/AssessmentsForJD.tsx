@@ -141,11 +141,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
 
   const handleArchive = async (assessment: any) => {
     try {
-      // was assessmentService.updateStatus(...), which does not exist on the service -
-      // every Archive click threw a TypeError and fell into the catch below, so the
-      // button only ever showed "Failed to archive assessment". update() is the real
-      // method and AssessmentUpdate already accepts status: 'archived'.
-      await assessmentService.update(assessment.id, { status: 'archived' });
+      await assessmentService.archive(assessment.id);
       toast.success('Assessment archived');
       fetchAssessments();
     } catch (error) {

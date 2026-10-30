@@ -4265,10 +4265,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  /* Unarchive — the All Assessments table's and the details page's, as is: no
-     dedicated endpoint, a status write back to `published`, gated on the
-     Archive permission, same toast. Archived rows get this instead of
-     Activate. */
+  /* Unarchive — the All Assessments table's and the details page's, as is:
+     the dedicated /{id}/unarchive endpoint, which restores the status the
+     assessment held right before it was archived, gated on the Archive
+     permission, same toast. Archived rows get this instead of Activate. */
   const handleUnarchiveAssessment = async (assessmentId: string) => {
     if (!canDeleteAssessment) {
       toast.error('You do not have permission to unarchive assessments');
@@ -4281,7 +4281,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     try {
-      const updated = await assessmentService.update(assessmentId, { status: 'published' });
+      const updated = await assessmentService.unarchive(assessmentId);
       toast.success('Assessment restored to Active');
       setOpenMenuId(null);
       await syncAssessmentAfterStatusChange(assessmentId, updated);
@@ -4308,7 +4308,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     })) return;
 
     try {
-      const updated = await assessmentService.update(assessmentId, { status: 'archived' as any });
+      const updated = await assessmentService.archive(assessmentId);
       setOpenMenuId(null);
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
@@ -5555,19 +5555,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             const invitationsSent =
               assessment.invitations_count ?? assessment.candidates ?? 0;
             const hasBeenShared = invitationsSent > 0;
-            const reason = hasBeenShared
+            /* Gated on the JOB's completed candidates (`getJobCompletedCandidates`,
+               the same figure the row's own Completed tile shows), not on
+               invitations: a job can be fully shared with nobody having
+               finished it yet, in which case the results page is still empty. */
+            const completedCount = getJobCompletedCandidates(assessment);
+            const hasCompleted = (completedCount ?? 0) > 0;
+            const reason = hasCompleted
               ? 'View results'
-              : assessment.status === 'Draft'
-                ? 'Publish the assessment to view results'
-                : 'Share the assessment to view results';
+              : hasBeenShared
+                ? 'No candidates have completed this assessment yet'
+                : assessment.status === 'Draft'
+                  ? 'Publish the assessment to view results'
+                  : 'Share the assessment to view results';
             return (
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={!hasBeenShared}
+                disabled={!hasCompleted}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!hasBeenShared) return;
+                  if (!hasCompleted) return;
                   /* The JOB's results: every job version of it and every
                      assessment revision within them, combined. BOTH scopes are
                      named explicitly rather than left to the results page's
@@ -5579,7 +5587,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   openJobResults(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all&view=total`);
                 }}
                 /* Same rule, with the version panel's Result colour. */
-                icon={<BarChart className={`w-3.5 h-3.5${hasBeenShared ? ' text-menu-icon-score' : ''}`} />}
+                icon={<BarChart className={`w-3.5 h-3.5${hasCompleted ? ' text-menu-icon-score' : ''}`} />}
                 aria-label={reason}
                 title={reason}
               >
@@ -6459,8 +6467,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const trackReason = hasBeenShared
       ? `Track invitation status (${invitationsSent})`
       : 'Share the assessment to track invitations';
-    const resultReason = hasBeenShared
+    /* View Results is gated on the COMPLETED count, not invitations: an
+       assessment can be shared with candidates who haven't finished it yet,
+       in which case there's still nothing to show on the results page. */
+    const hasCompleted = (assessment.completed_count ?? 0) > 0;
+    const resultReason = hasCompleted
       ? 'View results'
+      : hasBeenShared
+      ? 'No candidates have completed this assessment yet'
       : assessment.status === 'Draft'
       ? 'Publish the assessment to view results'
       : 'Share the assessment to view results';
@@ -6569,12 +6583,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <span className={MENU_ITEM_SCALE_CLASS}>Track</span>
         </button>
 
-        {/* View Results — also gated on having been shared: with no invitation
-            sent there is no attempt to score, so the results page would open
-            empty. */}
+        {/* View Results — gated on the completed count: with nobody finished
+            yet (whether or not anyone has been invited) the results page
+            would open empty. */}
         <button
           onClick={() => {
-            if (!hasBeenShared || assessment.status === 'Draft') return;
+            if (!hasCompleted || assessment.status === 'Draft') return;
             setOpenMenuId(null);
             /* Opened on the row's own coordinates: the JOB VERSION it sits
                under (the JD row the assessment points at) AND the ASSESSMENT
@@ -6585,11 +6599,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             const versionScope = typeof assessment.version === 'number' ? assessment.version : 'all';
             openJobResults(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}&view=total`);
           }}
-          disabled={!hasBeenShared}
+          disabled={!hasCompleted}
           title={resultReason}
-          className={itemClass(!hasBeenShared)}
+          className={itemClass(!hasCompleted)}
         >
-          <BarChart className={iconClass(!hasBeenShared, 'text-menu-icon-score')} />
+          <BarChart className={iconClass(!hasCompleted, 'text-menu-icon-score')} />
           <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
         </button>
       </>
