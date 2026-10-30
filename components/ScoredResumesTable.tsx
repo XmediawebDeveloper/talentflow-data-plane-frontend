@@ -1,6 +1,6 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Mail, Phone, Calendar, UserCheck, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useJobActionLock } from '@/components/jobs/JobActionLock';
@@ -1920,7 +1920,7 @@ Best regards`);
         </DropdownMenuSubTrigger>
         {/* w-64 with the "Create / Send …" labels (onOpenInviteDialog) — the
             width the selection Actions menu gives the same two labels. */}
-        <DropdownMenuSubContent className={`${onOpenInviteDialog ? 'w-64' : 'w-44'} !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
+        <DropdownMenuSubContent className={`${onOpenInviteDialog ? 'w-64' : 'w-44'} max-w-[calc(100vw-1rem)] !rounded-lg !bg-white !py-1 !px-0 !shadow-xl`}>
           {renderInviteMenuItems(resume)}
         </DropdownMenuSubContent>
       </DropdownMenuSub>
@@ -2242,7 +2242,7 @@ Best regards`);
           the selection Actions menu. Standalone keeps the header row. */}
       {!toolbarPortal && (title || onScoreResumes) && (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        {title && <h2 className="text-gray-900">{title}</h2>}
+        {title && <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900">{title}</h2>}
         {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
         {onScoreResumes && (
           <Button
@@ -2250,7 +2250,7 @@ Best regards`);
             size="md"
             onClick={onScoreResumes}
             icon={<ClipboardList className="w-4 h-4" />}
-            className="self-start sm:self-auto"
+            className="w-full sm:w-auto"
           >
             <span className="hidden sm:inline">Score Resumes</span>
             <span className="sm:hidden">Score</span>
@@ -2262,7 +2262,7 @@ Best regards`);
       {/* Compact: no toolbar — just the selection's actions once rows are
           ticked (Export is one of them). */}
       {compact && !hideSelectionBar && selectionActions && (
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">
           {selectionActions}
         </div>
       )}
@@ -2432,7 +2432,7 @@ Best regards`);
              Embedded in Job Details this drops the tinted/bordered card for
              the AI Talent Match reference's plain top-divider, so the panel
              reads as part of the same tab card the toolbar sits in. */
-          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10' : 'mt-3 bg-gray-50 border border-gray-200 rounded-lg p-4'}>
+          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10' : 'mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4'}>
             {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
                 a grid cell is a third of the panel wide and every control in it
                 stretched to fill that, so a "v2" dropdown was as wide as a job
@@ -2446,8 +2446,13 @@ Best regards`);
                 `basis` is the width it wants — that is what decides how many
                 fit on a row — and `grow` shares out whatever the row has left,
                 so a row is always filled edge to edge. `max-w` keeps a short
-                final row from stretching two fields across the whole panel. */}
-            <div className={embedded ? JOB_TAB_FILTER_GRID_CLASS : 'flex flex-wrap gap-4'}>
+                final row from stretching two fields across the whole panel.
+
+                Standalone now lays those fields on the same 1 / 2 / 4-column
+                grid as the embedded panel; `[&>div]:max-w-none` cancels the
+                FILTER_FIELD_* `sm:max-w-*` caps (meant for the flex row) so each
+                field fills its cell. The constants themselves are shared. */}
+            <div className={embedded ? JOB_TAB_FILTER_GRID_CLASS : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0 [&>div]:max-w-none'}>
               {/* 0. Scored By (Job Details) — who scored the row, from each
                   row's scoredBy (the API's scored_by / scored_by_name); the
                   same `recruiter` filter the standalone toolbar's select sets. */}
@@ -2638,7 +2643,7 @@ Best regards`);
             on a line of its own under Select All once rows are ticked, as
             View by Job shows it. */}
         {!embedded && selectionActions && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mt-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
           </div>
         )}
@@ -3006,7 +3011,9 @@ Best regards`);
                             : 'hover:bg-[var(--raw-fafbfc)]'
                         }`}
                       >
-                        <td className="px-4 py-3 align-middle min-w-0">
+                        {/* tf-wrap: the full name / email wrap inside the
+                            fixed 16rem column instead of being cut to "…". */}
+                        <td className="tf-wrap px-4 py-3 align-middle min-w-0">
                           {/* Checkbox before the name — no column of its own,
                               the same as View by Job's rows. Then name and
                               email only (no initials avatar, no phone). */}
@@ -3036,15 +3043,15 @@ Best regards`);
                               {onViewCandidate ? (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full truncate"
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full [overflow-wrap:anywhere]"
                                   title={primary.candidateName || undefined}
                                 >
                                   {primary.candidateName || 'Candidate'}
                                 </button>
                               ) : (
-                                <div className="text-sm font-medium text-gray-900">{primary.candidateName || 'Candidate'}</div>
+                                <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
                               )}
-                              {primary.email && <div className="text-xs text-gray-500 truncate" title={primary.email}>{primary.email}</div>}
+                              {primary.email && <div className="text-xs text-gray-500 [overflow-wrap:anywhere]" title={primary.email}>{primary.email}</div>}
                             </div>
                           </div>
                         </td>
@@ -3203,7 +3210,7 @@ Best regards`);
               const isExpanded = expandedGroupKeys.has(key);
               const groupSelected = isGroupSelected(rows);
               return (
-                <div key={key} className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                <div key={key} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
                       <button
@@ -3225,14 +3232,14 @@ Best regards`);
                         {onViewCandidate ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate w-full"
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block w-full [overflow-wrap:anywhere]"
                           >
                             {primary.candidateName || 'Candidate'}
                           </button>
                         ) : (
-                          <div className="text-sm font-medium text-gray-900 truncate">{primary.candidateName || 'Candidate'}</div>
+                          <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
                         )}
-                        {primary.email && <div className="text-xs text-gray-500 truncate">{primary.email}</div>}
+                        {primary.email && <div className="text-xs text-gray-500 [overflow-wrap:anywhere]">{primary.email}</div>}
                       </div>
                     </div>
                     <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -3485,56 +3492,57 @@ Best regards`);
         </div>
       </div>
 
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
-        {paginatedResumes.map((resume) => (
+      {/* Mobile Card View — JD AI Talent Match card anatomy: head (checkbox,
+          name + email, Match Status chip, ⋮), a two-column Label: value grid
+          of the table's columns (each hides with its column, hiddenColumnIds),
+          then the Invite / Share footer. */}
+      <div className="md:hidden space-y-3">
+        {paginatedResumes.map((resume) => {
+          const cardJobCode = rowJobCode(resume);
+          const showInvite = resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match';
+          const showShare = RESUME_EMAIL_SHARE_ENABLED && !!resume.resumeId;
+          return (
           <div
             key={resume.id}
-            className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-[var(--border-dark)] transition-all cursor-pointer"
+            className={`rounded-xl border p-4 space-y-3 hover:shadow-md transition-all cursor-pointer ${
+              selectedResumes.includes(resume.id)
+                ? 'border-brand-blue/40 bg-blue-50 dark:bg-slate-800/50'
+                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-[var(--border-dark)]'
+            }`}
             onClick={(e) => handleRowClick(resume.id, e)}
           >
             {/* Card Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-start gap-3 flex-1 min-w-0">
-                <button
-                  onClick={() => handleSelectResume(resume.id)}
-                  className="p-1 hover:bg-gray-200 rounded mt-1 shrink-0"
-                >
-                  {selectedResumes.includes(resume.id) ? (
-                    <CheckSquare className="w-5 h-5 text-gray-800" />
-                  ) : (
-                    <Square className="w-5 h-5 text-gray-400" />
-                  )}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-gray-900 mb-1 break-words">{showName(resume.candidateName)}</h3>
-                  {/* Show job title in global view */}
-                  {isGlobalView && resume.jobTitle && (
-                    <div className="text-xs text-gray-500 mb-1 truncate">
-                      Applied for: <span className="font-medium text-gray-700" title={resume.jobTitle || undefined}>{truncateJobTitle(resume.jobTitle)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
-                      {resume.matchStatus}
-                    </span>
-                    {/* Same three colours as the badge above, from the one palette in
-                        lib/utils/matchStatus.ts - green / brand orange / red. Not a score
-                        threshold: Exact and Partial share the 60-100 range and are told
-                        apart by the Required average, so any cut-off on the number would
-                        contradict the badge beside it. */}
-                    <div className={`text-lg ${
-                      MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
-                    }`}>
-                      {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
-                    </div>
-                  </div>
-                </div>
+            <div className="flex items-start gap-3">
+              <button
+                onClick={() => handleSelectResume(resume.id)}
+                className="p-1 -ml-1 hover:bg-gray-200 rounded shrink-0"
+              >
+                {selectedResumes.includes(resume.id) ? (
+                  <CheckSquare className="w-5 h-5 text-brand-blue" />
+                ) : (
+                  <Square className="w-5 h-5 text-gray-400" />
+                )}
+              </button>
+              {/* Full name and email (wrapping, never cut to "…"), with the
+                  Match Status chip under them — beside the name it left a
+                  320px card only a letter or two of the name. */}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">
+                  {showName(resume.candidateName)}
+                </p>
+                {resume.email && (
+                  <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{resume.email}</p>
+                )}
+                {!hiddenColumnIds?.includes('matchStatus') && (
+                  <span className={`mt-1.5 inline-flex px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${matchBadgeClass(resume.matchStatus)}`}>
+                    {resume.matchStatus}
+                  </span>
+                )}
               </div>
               {/* ⋮ — the table row's menu (renderRowMenuItems), so phones reach
                   the same per-row actions (Create / Send AI Interview etc.).
                   Its own click never opens the card. */}
-              <div className="shrink-0 ml-2" onClick={(e) => e.stopPropagation()}>
+              <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -3555,38 +3563,76 @@ Best regards`);
               </div>
             </div>
 
-            {/* Card Content — pl-10 lines it up under the name (the 28px
-                checkbox + 12px gap), one 16px icon + gap-2 per line so the
-                text starts on one edge; the email truncates, full on hover. */}
-            <div className="space-y-1.5 text-sm mb-3 pl-10 text-gray-600">
-              {resume.email && (
-                <div className="flex items-center gap-2 min-w-0">
-                  <Mail className="w-4 h-4 shrink-0 text-gray-400" />
-                  <span className="min-w-0 truncate" title={resume.email}>{resume.email}</span>
+            {/* Fields — the table's columns as Label: value (phone, experience
+                and education are export-only; see ScoredResumesExportModal).
+                Job Title reads "Applied for" in the cross-job (global) list. */}
+            {/* One column below sm: inside a job card a 320px phone leaves
+                each of two columns ~110px, which cut every value to "…". */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              {!hiddenColumnIds?.includes('jdId') && (
+                <div className="min-w-0 flex items-center gap-1">
+                  <span className="text-gray-500 dark:text-slate-500 flex-shrink-0">JD ID:</span>
+                  {cardJobCode
+                    ? <JobIdBadge className="min-w-0 truncate" title={cardJobCode}>{cardJobCode}</JobIdBadge>
+                    : <span className="text-gray-900 dark:text-slate-100">-</span>}
                 </div>
               )}
-              {/* Same fields as the fixed table columns — phone, experience and
-                  education are export-only now (see ScoredResumesExportModal). */}
-              <div className="flex items-center gap-2 min-w-0">
-                <UserCheck className="w-4 h-4 shrink-0 text-gray-400" />
-                <span className="min-w-0 truncate"><span className="text-gray-500">Scored by:</span> {resume.scoredBy}</span>
-              </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <Calendar className="w-4 h-4 shrink-0 text-gray-400" />
-                <span className="min-w-0 truncate">{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-              </div>
+              {!hiddenColumnIds?.includes('jobTitle') && (
+                <div className="min-w-0 truncate">
+                  <span className="text-gray-500 dark:text-slate-500">{isGlobalView ? 'Applied for' : 'Job Title'}: </span>
+                  <span className="text-gray-900 dark:text-slate-100" title={resume.jobTitle || undefined}>{resume.jobTitle ? truncateJobTitle(resume.jobTitle) : '-'}</span>
+                </div>
+              )}
+              {!hiddenColumnIds?.includes('jobVersion') && (
+                <div className="min-w-0 truncate">
+                  <span className="text-gray-500 dark:text-slate-500">Job Version: </span>
+                  <span className="text-gray-900 dark:text-slate-100">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
+                </div>
+              )}
+              {!hiddenColumnIds?.includes('version') && (
+                <div className="min-w-0 truncate">
+                  <span className="text-gray-500 dark:text-slate-500">Resume Version: </span>
+                  <span className="text-gray-900 dark:text-slate-100">v{resume.version || resume.resumeVersion || 1}</span>
+                </div>
+              )}
+              {/* Same three colours as the Match Status badge, from the one palette in
+                  lib/utils/matchStatus.ts - green / brand orange / red. Not a score
+                  threshold: Exact and Partial share the 60-100 range and are told
+                  apart by the Required average, so any cut-off on the number would
+                  contradict the badge beside it. */}
+              {!hiddenColumnIds?.includes('scorePercentage') && (
+                <div className="min-w-0 truncate">
+                  <span className="text-gray-500 dark:text-slate-500">Score: </span>
+                  <span className={`font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']}`}>
+                    {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+                  </span>
+                </div>
+              )}
+              {!hiddenColumnIds?.includes('scoredDate') && (
+                <>
+                  <div className="min-w-0 truncate">
+                    <span className="text-gray-500 dark:text-slate-500">Scored by: </span>
+                    <span className="text-gray-900 dark:text-slate-100" title={resume.scoredBy || undefined}>{resume.scoredBy}</span>
+                  </div>
+                  <div className="min-w-0 truncate">
+                    <span className="text-gray-500 dark:text-slate-500">Date: </span>
+                    <span className="text-gray-900 dark:text-slate-100">{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
+                  </div>
+                </>
+              )}
             </div>
 
-            {/* Card Actions — Invite / Share on their own full line. Download
-                Scorecard and View Resume live in the card's ⋮ (the table row's
-                menu), so they're not repeated as buttons here. */}
-            <div className="grid grid-cols-2 gap-2">
+            {/* Card Actions — Invite / Share. Download Scorecard and View
+                Resume live in the card's ⋮ (the table row's menu), so they're
+                not repeated as buttons here. */}
+            {(showInvite || showShare) && (
+            <div className="flex items-center justify-between gap-2 pt-1">
               {/* Invite Button - For Exact Match & Partial Match. Opens THE
                   invite popup for this candidate (the popup offers Create
                   when the job has none yet). No permission: greyed, with the
                   reason on hover, and a no-op. No units left: disabled. */}
-              {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
-                <div className="relative group col-span-2">
+              {showInvite && (
+                <div className="relative group flex-1 min-w-0">
                   {/* Create / Send Assessment's shared look (createSendActions). */}
                   <button
                     type="button"
@@ -3606,7 +3652,7 @@ Best regards`);
                   </button>
                   {(!canCreateAssessments || availableUnits === 0) && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
-                      <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
+                      <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 w-max max-w-[min(14rem,calc(100vw-2rem))] whitespace-normal break-words shadow-lg">
                         <div className="flex items-center gap-2">
                           <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                           <span>
@@ -3624,7 +3670,7 @@ Best regards`);
                 </div>
               )}
 
-              {RESUME_EMAIL_SHARE_ENABLED && resume.resumeId && (
+              {showShare && (
                 <Button
                   variant="secondary"
                   size="md"
@@ -3638,14 +3684,16 @@ Best regards`);
                   aria-disabled={!canShareResume}
                   title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className={`col-span-2 w-full !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`flex-1 min-w-0 !whitespace-normal !h-auto min-h-[2.5rem] py-2 text-center leading-snug ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>
               )}
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
 
         {filteredResumes.length === 0 && (
           <ListEmptyState
@@ -3714,15 +3762,15 @@ Best regards`);
           open: the attachment with an eye to read it, then recipient, subject
           and message. */}
       {shareCandidate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
-            <div className="p-6">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] overflow-y-auto">
+            <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5">
               <div className="flex items-start justify-between gap-3 mb-6">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 flex-shrink-0 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                  <div className="hidden sm:flex w-10 h-10 flex-shrink-0 bg-brand-blue rounded-xl items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Mail className="w-5 h-5 text-white" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
                     <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
@@ -3845,13 +3893,14 @@ Best regards`);
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 mt-6 pt-4 border-t border-gray-100">
                 <Button
                   variant="primary"
                   size="md"
                   onClick={handleSendShareEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}
                   icon={isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  className="w-full sm:w-auto"
                 >
                   {isSendingEmail ? 'Sending...' : 'Send Email'}
                 </Button>
@@ -3909,15 +3958,15 @@ Best regards`);
       {/* The scorecard, read in place. z-[60] puts it over the share
           dialog, the same level the resume preview uses. */}
       {scorecardPreviewUrl && shareCandidate && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                   <Eye className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
                   <p className="text-sm text-gray-500 truncate">
                     {shareCandidate.candidateName}
                     {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
@@ -4051,19 +4100,19 @@ export function BulkActionConfirmModal({
         aria-modal="true"
         aria-labelledby="bulk-action-title"
       >
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
-          <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+        <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-6 border-b border-gray-200 shrink-0">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="hidden sm:flex w-11 h-11 rounded-full bg-blue-50 items-center justify-center flex-shrink-0">
               <Icon className="w-5 h-5 text-blue-600" />
             </div>
-            <div>
-              <h3 id="bulk-action-title" className="text-lg font-bold text-gray-900">{info.title}</h3>
+            <div className="min-w-0">
+              <h3 id="bulk-action-title" className="text-base sm:text-lg font-bold text-gray-900">{info.title}</h3>
               <p className="text-sm text-gray-500 mt-1">{rows.length} selected</p>
             </div>
           </div>
         </div>
 
-        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           <div className="p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
             <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-gray-700">
@@ -4117,18 +4166,19 @@ export function BulkActionConfirmModal({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 p-5 border-t border-gray-200 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 px-4 py-4 sm:px-6 border-t border-gray-200 shrink-0">
           <p className="text-sm text-gray-600">
             <span className="font-semibold text-gray-900">{chosen.length}</span> of {rows.length} will be included
           </p>
-          <div className="flex items-center gap-3 ml-auto">
-            <Button variant="secondary" size="md" onClick={onCancel}>Cancel</Button>
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 sm:gap-3 sm:ml-auto">
+            <Button variant="secondary" size="md" onClick={onCancel} className="w-full sm:w-auto">Cancel</Button>
             <Button
               variant="primary"
               size="md"
               disabled={chosen.length === 0 || busy}
               onClick={() => void onConfirm(chosen)}
               icon={busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+              className="w-full sm:w-auto"
             >
               {info.continueLabel}
             </Button>

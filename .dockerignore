@@ -6,6 +6,7 @@ node_modules/
 # Secrets — runtime env comes from env_file, build-time from CI build args
 .env
 .env.*
+next-public.env
 
 # Tests / dev artifacts
 e2e/

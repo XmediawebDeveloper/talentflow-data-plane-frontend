@@ -131,18 +131,18 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
   const scoredJobVersion = resume.jobVersion || detail?.jd_version_number || jobVersion || null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl h-[90dvh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-6xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+            <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
             {header ? (
               /* Candidate (name + ID), then the job role, then the versions. */
               <div className="min-w-0">
                 <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate min-w-0">
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate min-w-0">
                     {resume.candidateName || 'Candidate'}
                   </h2>
                   {header.candidateId && (
@@ -172,10 +172,10 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobVersion, jo
               </div>
             ) : (
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Score Table</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Score Table</h2>
               {/* Candidate · Job ID · Job Title · Job Version — the ID and
                   version as the light brand chips the match tables use. */}
-              <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 text-sm text-gray-500 min-w-0">
                 <span className="truncate">{resume.candidateName || 'Candidate'}</span>
                 {(resume.jobCode || jobCode) && (
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 flex-shrink-0">

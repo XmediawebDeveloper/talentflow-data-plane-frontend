@@ -1089,9 +1089,9 @@ export default function SelectSourceModal({
     <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] [@media(max-height:820px)]:sm:h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-6 [@media(max-height:820px)]:sm:py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
+        <div className="flex items-start justify-between px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:820px)]:sm:py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
-            <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+            <div className="hidden sm:flex h-10 w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg items-center justify-center flex-shrink-0">
               <ClipboardList className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
@@ -1102,7 +1102,7 @@ export default function SelectSourceModal({
               {/* JD ID · job name · job version */}
               <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 {jobShortId && <JobIdBadge className="inline-flex items-center flex-shrink-0">{jobShortId}</JobIdBadge>}
-                <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{jobTitle}</span>
+                <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 max-w-full" title={jobTitle}>{jobTitle}</span>
                 {jobVersion != null && jobVersion > 0 && (
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
                 )}
@@ -1219,7 +1219,7 @@ export default function SelectSourceModal({
                       : 'font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
-                <Icon className={`h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-400'}`} />
+                <Icon className={`hidden sm:block h-4 w-4 shrink-0 ${allowed ? iconColor : 'text-gray-400'}`} />
                 {RESUME_TAB_LABEL[tab]}
                 {count !== undefined && count !== null && (
                   <span
@@ -1301,7 +1301,7 @@ export default function SelectSourceModal({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, skills..."
-                    className="w-full h-10 pl-10 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
+                    className="w-full h-9 pl-9 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
                   />
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
@@ -1311,7 +1311,7 @@ export default function SelectSourceModal({
                       onClick={() => { if (!canUploadResumes) return; setShowUploadModal(true); }}
                       aria-disabled={!canUploadResumes}
                       title={!canUploadResumes ? 'You do not have permission to upload resumes' : undefined}
-                      className={`px-4 py-2 text-sm rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                      className={`h-9 px-3 sm:px-4 text-sm whitespace-nowrap rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
                         canUploadResumes
                           ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                           : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
@@ -1333,7 +1333,7 @@ export default function SelectSourceModal({
                       <button
                         onClick={handleSelectAll}
                         disabled={filteredResumes.length === 0}
-                        className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
+                        className="h-9 px-3 sm:px-4 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
                       >
                         {allVisibleSelected ? (
                           <>
@@ -1357,7 +1357,7 @@ export default function SelectSourceModal({
                       </button>
                     );
                   })()}
-                  <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/15 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-transparent font-medium whitespace-nowrap">
+                  <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/15 h-9 inline-flex items-center px-2.5 sm:px-4 rounded-lg border border-transparent font-medium whitespace-nowrap">
                     <span className="text-brand-blue">{selectedResumes.length}</span> <span className="hidden sm:inline">selected</span>
                   </div>
                 </div>
@@ -1371,7 +1371,7 @@ export default function SelectSourceModal({
                 pagination — so this popup's Shared Database tab looks
                 exactly like the Resume Database page instead of a second,
                 hand-rolled implementation of it. */}
-            <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex-1 min-h-0 flex flex-col max-md:overflow-y-auto max-md:px-3">
               {loading ? (
                 <div className="flex-1 min-h-0 overflow-hidden px-3 sm:px-6 py-3 sm:py-4">
                   {/* Mirrors the ResumeTable: a header row of column labels
@@ -1463,7 +1463,7 @@ export default function SelectSourceModal({
                      — taller than the space left under the header and tabs —
                      so its scrollbars ended up floating over the footer
                      buttons instead of staying in the table. */
-                  containerClassName="flex-1 min-h-0 flex flex-col"
+                  containerClassName="flex flex-col md:flex-1 md:min-h-0"
                   tableShellClassName="tf-table-shell--fill flex-1 min-h-0"
                   showEmptyAction={false}
                   emptyState={
@@ -1516,13 +1516,13 @@ export default function SelectSourceModal({
                 <span>Select resumes to score</span>
               )}
             </div>
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 sm:gap-3">
               {cancelInFooter && (
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={submitting}
-                  className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="w-full sm:w-auto px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   Cancel
                 </button>
@@ -1542,7 +1542,7 @@ export default function SelectSourceModal({
                   return hasArchivedResumes;
                 })()}
                 title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
-                className={`px-4 py-2 text-sm bg-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
+                className={`w-full sm:w-auto justify-center px-4 py-2 text-sm bg-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-1.5 sm:gap-2 ${
                   canRunScoring ? 'hover:bg-brand-blue-2' : 'opacity-50 cursor-not-allowed'
                 }`}
               >

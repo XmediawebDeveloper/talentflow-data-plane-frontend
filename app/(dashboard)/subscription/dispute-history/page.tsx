@@ -4,7 +4,8 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, X } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
-import { generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
+import { billToFromAuth, generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
@@ -104,6 +105,7 @@ const matchesDisputeStatus = (d: DisputeInvoice, filter: string) => {
 const EXPORT_HEADERS = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
 
 export default function DisputeHistoryPage() {
+  const { user, tenant } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -284,7 +286,7 @@ export default function DisputeHistoryPage() {
   const handleDownloadDispute = async (inv: DisputeInvoice) => {
     setDownloadingId(inv.id);
     try {
-      await generateDisputeRecordPDF(inv);
+      await generateDisputeRecordPDF(inv, billToFromAuth(user, tenant));
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast.error('Failed to generate PDF. Please try again.');

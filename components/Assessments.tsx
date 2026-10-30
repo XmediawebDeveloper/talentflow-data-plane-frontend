@@ -5861,12 +5861,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      reason. */
   const candidatesAssessed =
     stats.total_candidates_completed || stats.total_candidates_tested || 0;
-  /* The Total Assessed card counts PEOPLE: one per candidate email, however
-     many assessments they took. `candidatesAssessed` above stays the attempt
-     count, which is what the Results tab lists row by row. Falls back to the
-     attempt count while an older backend doesn't send the unique figure. */
+  /* The Total Assessed card's big number is `candidatesAssessed` — the
+     attempt count the Results tab lists row by row, like every other card
+     matches its tab. Its pill counts PEOPLE: one per candidate email, however
+     many assessments they took. Undefined while an older backend doesn't send
+     the unique figure, and the pill is then hidden. */
   const uniqueCandidatesAssessed =
-    (stats as { total_unique_candidates?: number }).total_unique_candidates ?? candidatesAssessed;
+    (stats as { total_unique_candidates?: number }).total_unique_candidates;
 
   const visibleAssessments = collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
@@ -6965,15 +6966,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               showClickArrow
               icon={Users}
               label="Total Assessed"
-              value={isLoadingStats ? '...' : uniqueCandidatesAssessed.toLocaleString()}
+              value={isLoadingStats ? '...' : candidatesAssessed.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('completed-candidates')}
             >
-              {/* The attempts behind the people count, like the versions pill
+              {/* The people behind the attempt count, like the versions pill
                   under Configured Jobs. */}
-              {!isLoadingStats && (
+              {!isLoadingStats && uniqueCandidatesAssessed !== undefined && (
                 <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
-                  {candidatesAssessed} {candidatesAssessed === 1 ? 'interview' : 'interviews'}
+                  {uniqueCandidatesAssessed} {uniqueCandidatesAssessed === 1 ? 'candidate' : 'candidates'}
                 </span>
               )}
             </StatsCard>

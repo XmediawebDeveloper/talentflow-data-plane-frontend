@@ -237,13 +237,13 @@ export default function ScoredResumesExportModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
       <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-        <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
-          <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+        <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-6 border-b border-gray-200 shrink-0">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="hidden sm:flex w-11 h-11 rounded-full bg-blue-50 items-center justify-center flex-shrink-0">
               <FileDown className="w-5 h-5 text-blue-600" />
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-gray-900">Export Scored Resumes</h3>
+            <div className="min-w-0">
+              <h3 className="text-base sm:text-lg font-bold text-gray-900">Export Scored Resumes</h3>
               <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
                 {rows.length} {rows.length === 1 ? 'record' : 'records'}
                 <span className="w-1 h-1 rounded-full bg-blue-500" />
@@ -253,19 +253,19 @@ export default function ScoredResumesExportModal({
           </div>
         </div>
 
-        <div className="p-5 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
 
           <div className="space-y-3">
             <button
               onClick={() => setExportFormat('csv')}
-              className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+              className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left ${
                 exportFormat === 'csv'
                   ? 'border-blue-500 bg-blue-50/60'
                   : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
               }`}
             >
-              <div className="w-12 h-12 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
                 <FileText className="w-6 h-6 text-success" />
               </div>
               <div className="flex-1 min-w-0">
@@ -281,13 +281,13 @@ export default function ScoredResumesExportModal({
 
             <button
               onClick={() => setExportFormat('xls')}
-              className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+              className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left ${
                 exportFormat === 'xls'
                   ? 'border-blue-500 bg-blue-50/60'
                   : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
               }`}
             >
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <FileSpreadsheet className="w-6 h-6 text-blue-700" />
               </div>
               <div className="flex-1 min-w-0">
@@ -336,14 +336,15 @@ export default function ScoredResumesExportModal({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-          <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 px-4 py-4 sm:px-6 border-t border-gray-200 shrink-0">
+          <Button variant="secondary" size="md" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
           <Button
             variant="primary"
             size="md"
             onClick={() => (exportFormat === 'csv' ? exportToCSV() : void exportToXLS())}
             disabled={exportColumns.length === 0 || rows.length === 0}
             icon={<Download className="w-4 h-4" />}
+            className="w-full sm:w-auto"
           >
             Export
           </Button>
