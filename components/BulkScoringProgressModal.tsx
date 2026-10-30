@@ -494,11 +494,11 @@ export default function BulkScoringProgressModal({
             `h` and `max-h` together still resolve to a definite height. */}
         {/* Header with Overall Progress */}
         <div className="border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 rounded-t-2xl shrink-0">
-          <div className="p-4 sm:p-5">
+          <div className="px-4 sm:px-6 py-3 sm:py-4">
           {/* Top row: icon+title and action buttons */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-              <div className="w-9 h-9 sm:w-11 sm:h-11 bg-brand-blue/10 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="hidden sm:flex w-11 h-11 bg-brand-blue/10 rounded-xl items-center justify-center flex-shrink-0">
                 <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
               <div className="min-w-0">
@@ -666,7 +666,7 @@ export default function BulkScoringProgressModal({
                   onClick={() => setStatusFilter(isActive ? 'all' : stat.key)}
                   aria-pressed={isActive}
                   title={isActive ? `Showing ${stat.label} only - click to clear` : `Show ${stat.label} only`}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-all ${
+                  className={`inline-flex items-center gap-1.5 sm:gap-2 whitespace-nowrap rounded-full border px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm transition-all [&_svg]:w-3.5 [&_svg]:h-3.5 sm:[&_svg]:w-4 sm:[&_svg]:h-4 ${
                     isActive
                       ? 'border-brand-blue/40 ring-2 ring-brand-blue/20 bg-brand-blue/[0.05]'
                       : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-sm'
@@ -707,10 +707,13 @@ export default function BulkScoringProgressModal({
             to its own row below. Wraps only when the modal is too narrow to
             fit them all (phones), which the expanded panel doesn't need to
             match since it already lays its own fields out in a grid. */}
-        <div className="p-2.5 sm:p-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+        <div className="p-2.5 sm:p-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10">
+          {/* Phones: row 1 = Search + Filters, row 2 = Status | Source halves
+              (order-2), labels screen-reader only — the boxes' own
+              placeholders / "All Status" / "All Sources" name them. */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-3">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 max-sm:min-w-[calc(100%-5.5rem)] sm:flex-none sm:w-auto">
+              <label className="max-sm:sr-only text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Search
               </label>
               <input
@@ -718,19 +721,19 @@ export default function BulkScoringProgressModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Name or email..."
-                className="w-36 sm:w-44 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black text-xs"
+                className="flex-1 min-w-0 sm:flex-none sm:w-44 h-9 px-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black text-sm"
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+            <div className="flex items-center gap-1.5 max-sm:order-2 max-sm:w-[calc(50%-0.25rem)] sm:w-auto">
+              <label className="max-sm:sr-only text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Status
               </label>
               <FilterSelect
                 value={statusFilter}
                 onChange={(v) => setStatusFilter(v)}
                 ariaLabel="Status"
-                className="w-28 sm:w-32 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
+                className="flex-1 min-w-0 sm:flex-none sm:w-32 h-9 px-2.5 sm:px-2.5 rounded-lg sm:rounded-lg text-sm"
                 options={[
                   { value: 'all', label: 'All Status' },
                   { value: 'queued', label: 'Queued' },
@@ -742,15 +745,15 @@ export default function BulkScoringProgressModal({
               />
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+            <div className="flex items-center gap-1.5 max-sm:order-2 max-sm:w-[calc(50%-0.25rem)] sm:w-auto">
+              <label className="max-sm:sr-only text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Source
               </label>
               <FilterSelect
                 value={sourceFilter}
                 onChange={(v) => setSourceFilter(v)}
                 ariaLabel="Source"
-                className="w-28 sm:w-32 px-2.5 sm:px-2.5 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-xs"
+                className="flex-1 min-w-0 sm:flex-none sm:w-32 h-9 px-2.5 sm:px-2.5 rounded-lg sm:rounded-lg text-sm"
                 options={[
                   { value: 'all', label: 'All Sources' },
                   /* Shared Database option: always listed, greyed out (disabled)
@@ -768,14 +771,15 @@ export default function BulkScoringProgressModal({
               type="button"
               onClick={() => setShowMoreFilters(v => !v)}
               aria-expanded={showMoreFilters}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`inline-flex h-9 items-center gap-1.5 px-2.5 rounded-lg border text-sm font-medium whitespace-nowrap transition-colors ${
                 showMoreFilters || extraFiltersApplied
                   ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
                   : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:border-brand-blue/40 hover:text-brand-blue'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
-              Filters
+              {/* Icon-only on phones, so the search box keeps its row. */}
+              <span className="max-sm:sr-only">Filters</span>
               {activeExtraFilterCount > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-blue text-white text-2xs font-semibold">
                   {activeExtraFilterCount}
@@ -787,7 +791,7 @@ export default function BulkScoringProgressModal({
 
           {showMoreFilters && (
               <div className="mt-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.03] p-2.5 sm:p-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
                   {/* Each select appears only when the rows actually carry that
                       field - a popup for a single scoring run has no versions
                       to choose between - and its options are read off the rows
@@ -892,7 +896,10 @@ export default function BulkScoringProgressModal({
                takes every pixel left after the header, chips, filters and
                pager, which is both larger than any floor worth setting and
                guaranteed to fit. */
-            ? 'flex-1 min-h-0 overflow-hidden'
+            /* Below lg (cards) nothing here scrolls on its own: the body
+               above scrolls chips, filters and cards as one page, so on a
+               phone the list isn't left a strip under them. */
+            ? 'lg:flex-1 lg:min-h-0 lg:overflow-hidden'
             /* shrink-0, not flex-1: a flex child is free to shrink below its
                content, which is what let the empty state get squeezed and
                clipped instead of pushing the scroll region. */
@@ -1082,20 +1089,23 @@ export default function BulkScoringProgressModal({
                 </table>
               </div>
 
-              {/* Mobile card list — the only scroller below `sm`, where the
-                  shell above is display:none. */}
-              <div className="lg:hidden flex-1 min-h-0 overflow-y-auto space-y-2 pt-3 scrollbar-visible">
+              {/* Mobile card list — scrolls with the body (see above), not
+                  in a box of its own. */}
+              <div className="lg:hidden space-y-2 pt-3">
                 {pagedData.map((item) => (
                   <div
                     key={item.id}
                     onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
-                    className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 shadow-sm ${canViewResult(item) ? 'cursor-pointer' : ''}`}
+                    className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 sm:p-4 shadow-sm ${canViewResult(item) ? 'cursor-pointer' : ''}`}
                   >
-                    {/* Name + Status */}
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="min-w-0">
+                    {/* Top row: job / version info + Status chip; then the name
+                        and email on their own full-width lines (beside the chip
+                        a 320px card left the name a one-word column). */}
+                    <div className="mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="min-w-0 flex-1">
                         {showJobColumns && (
-                          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500 mb-0.5">
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
                             {/* One job: the header names it, so only the version. */}
                             {showJobIdTitleColumns && (
                               <>
@@ -1110,9 +1120,16 @@ export default function BulkScoringProgressModal({
                             )}
                           </div>
                         )}
-                        <div className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{item.candidateName}</div>
+                        </div>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border flex-shrink-0 whitespace-nowrap ${getStatusBadgeClass(item.status)}`}>
+                          {getStatusIcon(item.status)}
+                          <span className="inline">{item.status}</span>
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 dark:text-slate-50 text-sm [overflow-wrap:anywhere]">{item.candidateName}</div>
                         {item.email && (
-                          <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{item.email}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{item.email}</div>
                         )}
                         {item.jobTitle && !filterByJobId && !showJobColumns && !scopedToJobTitle && (
                           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
@@ -1121,10 +1138,6 @@ export default function BulkScoringProgressModal({
                           </div>
                         )}
                       </div>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border flex-shrink-0 ${getStatusBadgeClass(item.status)}`}>
-                        {getStatusIcon(item.status)}
-                        <span className="inline">{item.status}</span>
-                      </span>
                     </div>
                     {item.status === 'Failed' && (
                       <div className="flex items-start gap-1 text-xs text-destructive mb-2">
@@ -1132,29 +1145,48 @@ export default function BulkScoringProgressModal({
                         <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                       </div>
                     )}
-                    {/* Footer: Source + Date + Match */}
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
-                          {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
-                          {item.source}
-                        </span>
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
-                          Resume v{item.resumeVersion ?? 1}
-                        </span>
-                        {(item.scoredDateTime || item.status === 'Scored successfully') && (
-                          <span className="text-xs text-gray-500 dark:text-slate-500">
+                    {/* Fields — the JD version-history card's definition list
+                        (labels in one fixed column, values beside them), so every
+                        value lines up and wraps instead of being cut to "…".
+                        Tablet: two label/value pairs per row. */}
+                    <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-[5.5rem_minmax(0,1fr)] sm:grid-cols-[5.5rem_minmax(0,1fr)_5.5rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5 text-xs">
+                      <dt className="text-gray-500 dark:text-slate-500">Source</dt>
+                      <dd className="inline-flex items-center gap-1 min-w-0 text-gray-900 dark:text-slate-100">
+                        {item.source === 'Internal DB' ? <Database className="w-3 h-3 flex-shrink-0" /> : <FolderOpen className="w-3 h-3 flex-shrink-0" />}
+                        <span className="[overflow-wrap:anywhere]">{item.source}</span>
+                      </dd>
+                      <dt className="text-gray-500 dark:text-slate-500">Version</dt>
+                      <dd className="text-gray-900 dark:text-slate-100">Resume v{item.resumeVersion ?? 1}</dd>
+                      {(item.scoredDateTime || item.status === 'Scored successfully') && (
+                        <>
+                          <dt className="text-gray-500 dark:text-slate-500">Date</dt>
+                          <dd className="text-gray-900 dark:text-slate-100">
                             {formatDateTimeIST(item.scoredDateTime || new Date()).date}
-                          </span>
-                        )}
-                        {showScoredByColumn && item.scoredBy && (
-                          <span className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[120px]">{item.scoredBy}</span>
-                        )}
-                      </div>
-                      {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : null}
-                      {showScoreColumn && item.score !== undefined && item.matchResult && (
-                        <span className={`text-base font-semibold ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScore(item.overallRating10, item.score)}</span>
+                          </dd>
+                        </>
                       )}
+                      {showScoredByColumn && item.scoredBy && (
+                        <>
+                          <dt className="text-gray-500 dark:text-slate-500">Scored by</dt>
+                          <dd className="text-gray-900 dark:text-slate-100 [overflow-wrap:anywhere]" title={item.scoredBy}>{item.scoredBy}</dd>
+                        </>
+                      )}
+                      {item.matchResult && (
+                        <>
+                          <dt className="text-gray-500 dark:text-slate-500">Match</dt>
+                          <dd className="min-w-0">{getMatchResultBadge(item.matchResult, item.score)}</dd>
+                        </>
+                      )}
+                      {showScoreColumn && item.score !== undefined && item.matchResult && (
+                        <>
+                          <dt className="text-gray-500 dark:text-slate-500">Score</dt>
+                          <dd className={`font-semibold ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScore(item.overallRating10, item.score)}</dd>
+                        </>
+                      )}
+                    </dl>
+                    {/* Footer: View / Retry */}
+                    {(item.resumeId || (onRetryFailed && item.status === 'Failed')) && (
+                    <div className="flex items-center justify-between gap-2 pt-1 mt-2">
                       {item.resumeId && (
                         <Button
                           variant="secondary"
@@ -1178,6 +1210,7 @@ export default function BulkScoringProgressModal({
                         </Button>
                       )}
                     </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1188,6 +1221,7 @@ export default function BulkScoringProgressModal({
                 <ListPagination
                   compact
                   alwaysShow
+                  minimalOnMobile
                   currentPage={safePage}
                   itemsPerPage={rowsPerPage}
                   totalItems={filteredData.length}
@@ -1198,7 +1232,7 @@ export default function BulkScoringProgressModal({
               </div>
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center text-center py-10 sm:py-14 px-4">
+            <div className="flex flex-col items-center justify-center text-center p-8 sm:p-10">
               {/* One illustration for both themes: every shape is drawn in
                   currentColor at a different opacity, so the light build reads
                   as blue-on-white and the dark one as blue-on-slate without a
@@ -1242,7 +1276,7 @@ export default function BulkScoringProgressModal({
                 <path stroke="currentColor" strokeWidth="2" className="opacity-60" d="M191 76h8M195 72v8M56 88h8M60 84v8" />
               </svg>
 
-              <h3 className="mt-5 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50">No Records Found</h3>
+              <h3 className="mt-5 text-base sm:text-lg font-bold text-gray-900 dark:text-slate-50">No Records Found</h3>
               <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-slate-400 max-w-md">
                 {anyFiltersApplied
                   ? 'No scoring records match your current filters.'
