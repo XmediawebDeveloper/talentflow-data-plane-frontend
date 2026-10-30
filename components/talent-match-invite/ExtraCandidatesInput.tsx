@@ -5,7 +5,8 @@ import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Trash2 } from 'lucid
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
-import { isValidEmailFormat } from '@/lib/utils/email';
+import { EMAIL_FORMAT_ERROR, isValidEmailFormat } from '@/lib/utils/email';
+import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 import { inviteEntryModeTabClass } from './InviteEntryModeTabs';
 
@@ -83,7 +84,7 @@ const candidatesFromRows = (rows: unknown[][]): { found: BulkExtraCandidate[]; h
 };
 
 /* The rows that will be sent: a valid email, not repeated (the first keeps
-   it), and a name. Blank rows are simply ignored. */
+   it), and a valid name (letters and spaces). Blank rows are simply ignored. */
 const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
   const seen = new Set<string>();
   const out: BulkExtraCandidate[] = [];
@@ -91,11 +92,34 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
     if (r.linked) continue;
     const email = r.email.trim().toLowerCase();
     const name = r.name.trim();
-    if (!email || !name || !isValidEmailFormat(email) || seen.has(email)) continue;
+    if (!isValidEmailFormat(email) || !isValidCandidateName(name) || seen.has(email)) continue;
     seen.add(email);
     out.push({ name, email, phone: r.phone.trim() || undefined });
   }
   return out.slice(0, MAX_EXTRA_CANDIDATES);
+};
+
+const emailOf = (r: EntryRow) => r.email.trim().toLowerCase();
+/* A repeated email: an earlier card already has it (the first keeps it). */
+const isDuplicateIn = (rows: EntryRow[], row: EntryRow) => {
+  const e = emailOf(row);
+  if (!e) return false;
+  const first = rows.find((r) => emailOf(r) === e);
+  return !!first && first.id !== row.id;
+};
+
+const isBlank = (r: EntryRow) => !r.name.trim() && !r.email.trim() && !r.phone.trim();
+
+/* Field errors for a started (non-blank, not yet linked) card; a blank card
+   shows none. */
+const fieldErrors = (r: EntryRow): { name: string | null; email: string | null } => {
+  if (r.linked || isBlank(r)) return { name: null, email: null };
+  const name = r.name.trim();
+  const email = r.email.trim();
+  return {
+    name: !name ? 'Name is required' : !isValidCandidateName(name) ? NAME_FORMAT_ERROR : null,
+    email: !email ? 'Email is required' : !isValidEmailFormat(email) ? EMAIL_FORMAT_ERROR : null,
+  };
 };
 
 /**
@@ -108,10 +132,14 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
  */
 export default function ExtraCandidatesInput({
   onChange,
+  onInvalidChange,
   disabled = false,
   onCopyLink,
 }: {
   onChange: (next: BulkExtraCandidate[]) => void;
+  /** How many started cards have an invalid name or email (or a repeated
+   *  email) — the host keeps Send disabled while this is above zero. */
+  onInvalidChange?: (invalidRows: number) => void;
   disabled?: boolean;
   /** Per-row Copy Link: creates this candidate's invitation without an email
    *  and resolves to the link; the row is then left out of the email send. */
@@ -128,6 +156,11 @@ export default function ExtraCandidatesInput({
     const kept = next.length > 0 ? next : [newRow()];
     setRows(kept);
     onChange(toCandidates(kept));
+    onInvalidChange?.(kept.filter((r) => {
+      if (r.linked || isBlank(r)) return false;
+      const err = fieldErrors(r);
+      return !!err.name || !!err.email || isDuplicateIn(kept, r);
+    }).length);
   };
 
   const addRow = () => commit([...rows, newRow()]);
@@ -150,13 +183,7 @@ export default function ExtraCandidatesInput({
   };
   const clearAll = () => commit([]);
 
-  const emailOf = (r: EntryRow) => r.email.trim().toLowerCase();
-  const isDuplicate = (row: EntryRow) => {
-    const e = emailOf(row);
-    if (!e) return false;
-    const first = rows.find((r) => emailOf(r) === e);
-    return !!first && first.id !== row.id;
-  };
+  const isDuplicate = (row: EntryRow) => isDuplicateIn(rows, row);
 
   const onFile = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0];
@@ -243,10 +270,10 @@ export default function ExtraCandidatesInput({
       <>
           <div className="space-y-3 max-h-80 overflow-y-auto pr-0.5">
             {rows.map((row) => {
-              const email = row.email.trim();
-              const badEmail = !!email && !isValidEmailFormat(email);
+              const errors = fieldErrors(row);
+              const badEmail = !!errors.email;
               const dup = !badEmail && isDuplicate(row);
-              const missingName = !!email && !row.name.trim();
+              const badName = !!errors.name;
               return (
                 <div key={row.id} className="relative p-4 border rounded-lg bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">
                   <span className={`absolute top-2 right-3 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${
@@ -266,10 +293,10 @@ export default function ExtraCandidatesInput({
                           onChange={(e) => updateRow(row.id, 'name', e.target.value)}
                           placeholder="e.g., John Doe"
                           disabled={disabled || row.linked}
-                          aria-invalid={missingName || undefined}
-                          className={`${INPUT} ${missingName ? INPUT_BAD : INPUT_OK}`}
+                          aria-invalid={badName || undefined}
+                          className={`${INPUT} ${badName ? INPUT_BAD : INPUT_OK}`}
                         />
-                        {missingName && <p className="text-xs text-destructive mt-1">Name is required</p>}
+                        {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
                       </div>
                       <div className="min-w-0">
                         <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
@@ -282,7 +309,7 @@ export default function ExtraCandidatesInput({
                           aria-invalid={badEmail || dup || undefined}
                           className={`${INPUT} ${badEmail || dup ? INPUT_BAD : INPUT_OK}`}
                         />
-                        {badEmail && <p className="text-xs text-destructive mt-1">Please enter a valid email (e.g., user@example.com)</p>}
+                        {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
                         {dup && <p className="text-xs text-destructive mt-1">This email is already in the list</p>}
                       </div>
                     </div>
@@ -290,7 +317,7 @@ export default function ExtraCandidatesInput({
                       <button
                         type="button"
                         onClick={() => { if (!row.linked) void copyLink(row); }}
-                        disabled={disabled || linking === row.id || (!row.linked && (!row.name.trim() || !email || badEmail || dup))}
+                        disabled={disabled || linking === row.id || (!row.linked && (isBlank(row) || badName || badEmail || dup))}
                         title={row.linked ? 'Invited by link — not emailed' : "Create and copy this candidate’s invitation link (no email is sent)"}
                         className={`mt-6 shrink-0 flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-xs border transition-colors whitespace-nowrap disabled:opacity-50 ${
                           row.linked

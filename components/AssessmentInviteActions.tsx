@@ -773,7 +773,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
             variant="primary"
             size="md"
             onClick={save}
-            disabled={saving || !!emailError || !!nameError}
+            disabled={saving || !isValidCandidateName(form.candidate_name) || !isValidEmailFormat(emailTrimmed)}
             icon={saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
           >
             Save & Send
