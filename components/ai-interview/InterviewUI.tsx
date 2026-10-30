@@ -3687,22 +3687,47 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const [binaHasSpoken, setBinaHasSpoken] = useState(false);
   const binaAudibleRef = useRef(false);
   const binaAudibleSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const markBinaAudible = useCallback(() => {
+  // When this turn's voice actually became audible, on the tracker clock and
+  // the wall clock. The caption clock never starts before it. Needed on the
+  // FIRST utterance (intro + tips): the worklet loads cold, so the onset can
+  // land well after the delay estimate (1.5 s prior, 4 s clamp) or after the
+  // 3.5 s safety unlock — and the reveal, being monotonic, then stayed seconds
+  // ahead of Bina for the whole intro ("text streams fast, then she reads it").
+  const audibleAtCtxSecRef = useRef<number | null>(null);
+  const audibleAtMsRef = useRef<number | null>(null);
+  const realOnsetSeenRef = useRef(false);
+  const stampAudibleOnset = useCallback((fromSafety: boolean) => {
+    // First REAL onset of the turn wins (later ones are a stall re-arm mid-turn);
+    // the safety unlock only stands in until a real one arrives.
+    if (realOnsetSeenRef.current) return;
+    if (fromSafety && audibleAtMsRef.current !== null) return;
+    if (!fromSafety) realOnsetSeenRef.current = true;
+    const ctx = playbackTrackerCtxRef.current;
+    const outSec = ctx ? ((ctx as AudioContext & { outputLatency?: number }).outputLatency || 0) : 0;
+    audibleAtCtxSecRef.current = ctx && ctx.state === 'running' ? ctx.currentTime + outSec : null;
+    audibleAtMsRef.current = Date.now() + outSec * 1000;
+  }, []);
+  // Called bare by TalkingHead's onAudible (a real onset); `true` from the
+  // safety timer; 'no-anchor' when the safety moment is not a usable start.
+  const markBinaAudible = useCallback((fromSafety?: unknown) => {
+    if (fromSafety !== 'no-anchor') stampAudibleOnset(fromSafety === true);
     if (binaAudibleSafetyRef.current) { clearTimeout(binaAudibleSafetyRef.current); binaAudibleSafetyRef.current = null; }
     if (binaAudibleRef.current) return;
     binaAudibleRef.current = true;
     setBinaAudible(true);
     setBinaHasSpoken(true);
-  }, []);
+  }, [stampAudibleOnset]);
   // Backstop: audio is in flight but no audible signal arrived (e.g. the
   // worklet failed and its chunks were dropped) — don't hold the UI forever.
-  const armBinaAudibleSafety = useCallback(() => {
+  // `anchorCaption`: the safety moment also stands in as the caption's start
+  // (false when audio was already playing at announce — then it isn't one).
+  const armBinaAudibleSafety = useCallback((anchorCaption = true) => {
     if (binaAudibleRef.current || binaAudibleSafetyRef.current) return;
     binaAudibleSafetyRef.current = setTimeout(() => {
       binaAudibleSafetyRef.current = null;
       if (!binaAudibleRef.current) {
         console.warn(`[INTERVIEW-DEBUG] no audible-start signal ${BINA_AUDIBLE_SAFETY_MS}ms after first chunk — showing Bina as speaking anyway`);
-        markBinaAudible();
+        markBinaAudible(anchorCaption ? true : 'no-anchor');
       }
     }, BINA_AUDIBLE_SAFETY_MS);
   }, [markBinaAudible]);
@@ -3711,8 +3736,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (binaAudibleSafetyRef.current) { clearTimeout(binaAudibleSafetyRef.current); binaAudibleSafetyRef.current = null; }
     binaAudibleRef.current = false;
     setBinaAudible(false);
+    audibleAtCtxSecRef.current = null;
+    audibleAtMsRef.current = null;
+    realOnsetSeenRef.current = false;
     // Announced while audio is already playing → no new onset will come.
-    if (isPlayingRef.current) armBinaAudibleSafety();
+    if (isPlayingRef.current) armBinaAudibleSafety(false);
   }, [armBinaAudibleSafety]);
   useEffect(() => () => {
     if (binaAudibleSafetyRef.current) clearTimeout(binaAudibleSafetyRef.current);
@@ -4929,8 +4957,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // them with different values would reintroduce it — hence one `delaySec`.
       const delaySec = getAudibleDelayMs() / 1000;
       const rawStart = firstChunkStartCtxSecRef.current;
-      const ctxStart = rawStart === null ? null : rawStart + delaySec;
-      const ctxEnd = playbackScheduledEndAtRef.current + delaySec;
+      let ctxStart = rawStart === null ? null : rawStart + delaySec;
+      let ctxEnd = playbackScheduledEndAtRef.current + delaySec;
+      // The voice became audible LATER than the estimate (cold worklet on the
+      // intro): slide the whole span to the real onset — start and end by the
+      // SAME amount, so its length stays the audio's duration.
+      const audibleAt = audibleAtCtxSecRef.current;
+      if (ctxStart !== null && audibleAt !== null && audibleAt > ctxStart) {
+        const slip = audibleAt - ctxStart;
+        ctxStart += slip;
+        ctxEnd += slip;
+      }
       const ctxAvailable =
         !!pbCtx &&
         pbCtx.state === "running" &&
@@ -4967,7 +5004,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // path's audible delay (0 on TalkingHead's Web Audio fallback); in
         // Phase B the denominator is the accumulated — and by then total —
         // audio duration.
-        const audibleStartMs = firstPcmAt + getAudibleDelayMs();
+        const audibleStartMs = Math.max(firstPcmAt + getAudibleDelayMs(), audibleAtMsRef.current ?? 0);
         const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
         if (elapsedMs < 0) {
           if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
