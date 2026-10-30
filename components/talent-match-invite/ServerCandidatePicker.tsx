@@ -139,7 +139,7 @@ export default function ServerCandidatePicker({
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
     'talent-match': true,
     'score-resume': true,
-    'my-resumes': !!(perms?.canUploadResumes || perms?.canViewResumes),
+    'my-resumes': !!(perms?.canUploadResumes || perms?.canViewResumes || perms?.canUpdateResumes || perms?.canDeleteResumes),
     'internal-db': !!(perms?.canAccessInternalDB || perms?.canViewInternalDB),
   };
   /* My Resumes' folders, read once the tab is first opened. */
