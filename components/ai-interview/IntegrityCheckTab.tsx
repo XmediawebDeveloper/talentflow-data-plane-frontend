@@ -21,6 +21,7 @@ import {
   X, Download,
 } from 'lucide-react';
 import api from '@/lib/services/api';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import {
   type ViolationRecord, type RecruiterSeverity, type CategoryKey,
   CATEGORIES, CATEGORY_ORDER,
@@ -816,6 +817,92 @@ export default function IntegrityCheckTab({
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── VOICE ENROLLMENT ────────────────────────────────────────────── */}
+      <VoiceEnrollmentSection interviewId={interviewId} />
+    </div>
+  );
+}
+
+type VoiceClip = { stage: string; label: string; speech_seconds?: number | null; enrolled_at?: string | null; has_audio: boolean };
+
+/**
+ * The candidate's voice-ID enrollment clips (recorded at the system check /
+ * practice step and used as the voiceprint for speaker verification). Audio
+ * is fetched through GET /ai-interview/{id}/voice-enrollment/{stage}/audio
+ * with the auth header, so it plays from a local blob URL. Hidden when the
+ * interview has no enrollment; shows the expiry note once the viewing window
+ * (RECORDING_VIEW_DAYS) has closed.
+ */
+function VoiceEnrollmentSection({ interviewId }: { interviewId: string }) {
+  const [data, setData] = useState<{ clips: VoiceClip[]; expired: boolean; view_days: number; view_until: string | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/ai-interview/${interviewId}/voice-enrollment`)
+      .then((res) => { if (!cancelled) setData(res.data); })
+      .catch(() => { if (!cancelled) setData(null); });
+    return () => { cancelled = true; };
+  }, [interviewId]);
+
+  const clips = (data?.clips || []).filter(c => c.has_audio);
+  if (!data || clips.length === 0) return null;
+
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Voice enrollment</h3>
+      <p className="text-2xs text-gray-400 mb-3">
+        What the candidate said before the interview. This voiceprint is compared with the voice heard during the interview.
+      </p>
+      {data.expired ? (
+        <p className="text-sm text-gray-500">
+          Audio can be played for {data.view_days} days after the interview.
+          {data.view_until ? ` It expired on ${formatISTDate(data.view_until)}.` : ''}
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {clips.map(c => <VoiceClipCard key={c.stage} interviewId={interviewId} clip={c} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VoiceClipCard({ interviewId, clip }: { interviewId: string; clip: VoiceClip }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    api.get(`/ai-interview/${interviewId}/voice-enrollment/${encodeURIComponent(clip.stage)}/audio`, { responseType: 'blob' })
+      .then((res) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(res.data);
+        setUrl(objectUrl);
+      })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [interviewId, clip.stage]);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <span className="text-xs font-semibold text-gray-700">{clip.label}</span>
+        {clip.speech_seconds != null && (
+          <span className="text-2xs text-gray-400">{clip.speech_seconds.toFixed(1)}s of speech</span>
+        )}
+      </div>
+      {failed ? (
+        <p className="text-2xs text-gray-400">Audio not available</p>
+      ) : url ? (
+        <audio controls preload="metadata" src={url} className="w-full h-9" />
+      ) : (
+        <p className="text-2xs text-gray-400">Loading…</p>
       )}
     </div>
   );

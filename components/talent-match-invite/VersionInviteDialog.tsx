@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
 import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput, { type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
+import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
 import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
 import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteReviewStep';
 import InviteMessageStep from './InviteMessageStep';
@@ -236,6 +236,10 @@ export default function VersionInviteDialog({
      one of the lists), and a key that empties what was added directly. */
   const [addTab, setAddTab] = useState<ExtraMode | null>(null);
   const [extrasKey, setExtrasKey] = useState(0);
+  /* The candidates step, once opened, stays mounted (hidden on other steps). */
+  const [candidatesMounted, setCandidatesMounted] = useState(false);
+  /* Bumped when a Copy Link uses a unit: the units are read again. */
+  const [quotaKey, setQuotaKey] = useState(0);
   /* The version changed after candidates were added: "already invited" is
      per version, so the review re-checks it — said once, dismissible. */
   const [verNote, setVerNote] = useState<string | null>(null);
@@ -372,6 +376,27 @@ export default function VersionInviteDialog({
      everyone added so far. Null = no limit (unlimited plan, or the units
      could not be read — the server checks at send). */
   const unitsRoom = quotaAvailable === null ? null : quotaAvailable - recipientCount;
+  /* How many typed-in / Excel rows fit: the units available (or the backend's
+     per-send cap on unlimited plans), less everyone already picked elsewhere. */
+  const extraLimitByUnits = !quotaUnlimited && quotaAvailable !== null && quotaAvailable < MAX_EXTRA_CANDIDATES;
+  const extraMaxRows = Math.max(
+    0,
+    (extraLimitByUnits ? quotaAvailable! : MAX_EXTRA_CANDIDATES) - recipients.length - selectionCount(serverSelection),
+  );
+  const unitsTone = unitsRoom === null || unitsRoom > 0
+    ? { bar: 'bg-brand-blue', text: 'text-gray-600 dark:text-slate-300' }
+    : unitsRoom === 0
+      ? { bar: 'bg-warning', text: 'font-medium text-warning-strong' }
+      : { bar: 'bg-destructive', text: 'font-medium text-destructive' };
+  /* Emails added directly — a list row with one of them is not ticked again. */
+  const addedEmails = new Set(extras.map((x) => x.email.trim().toLowerCase()));
+  const clearCandidates = () => {
+    setServerSelection(EMPTY_SELECTION);
+    setExtras([]);
+    setExtraCounts({ manual: 0, excel: 0 });
+    setExtrasKey((k) => k + 1);
+  };
+  if (current === 'candidates' && !candidatesMounted) setCandidatesMounted(true);
 
   /* Closing with candidates added asks first — they would be lost. */
   const askDiscard = () => setConfirm({
@@ -512,7 +537,9 @@ export default function VersionInviteDialog({
     setVersionId(null);
     setLoaded(false);
     setStep(null);
-    setServerSelection(EMPTY_SELECTION);
+    clearCandidates();
+    setCandidatesMounted(false);
+    setAddTab(null);
     setVerNote(null);
     messageTouched.current = false;
   };
@@ -641,6 +668,7 @@ export default function VersionInviteDialog({
       ? await assessmentService.createInviteLink(selected.id, data)
       : await aiInterviewService.createInviteLink(selected.id, data);
     onSent?.(kind, 1);
+    setQuotaKey((k) => k + 1);
     return res.link;
   };
 
@@ -841,6 +869,7 @@ export default function VersionInviteDialog({
             {!off && (
               <InviteQuotaBar
                 kind={kind}
+                refreshKey={quotaKey}
                 onStats={(s) => {
                   setQuotaUnlimited(isUnlimitedQuota(s));
                   setQuotaAvailable(s && !isUnlimitedQuota(s) ? s.available : null);
@@ -1003,83 +1032,7 @@ export default function VersionInviteDialog({
                   />
                 </div>
               </div>
-            ) : current === 'candidates' ? (
-              <div className="space-y-4">
-                {recipients.length > 0 && (
-                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
-                    {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
-                  </p>
-                )}
-                <div>
-                  <h3 className={INTRO_H}>Who do you want to invite?</h3>
-                  <p className={INTRO_P}>
-                    Add people yourself, pick candidates matched or scored for{' '}
-                    <span className="font-medium text-brand-blue">{[job.jdCode, jobName].filter(Boolean).join(' · ')}</span>, or choose from your resume database.
-                    You can mix them — everyone you add stays selected when you switch tabs.
-                  </p>
-                </div>
-                <ServerCandidatePicker
-                  jdId={job.jdId}
-                  kind={kind}
-                  versionId={selected?.sendable ? selected.id : null}
-                  selection={serverSelection}
-                  onSelectionChange={setServerSelection}
-                  pickingDisabled={pickingOff}
-                  onOverlayChange={onOverlayChange}
-                  addTab={addTab}
-                  onAddTabChange={setAddTab}
-                  addCounts={extraCounts}
-                  room={unitsRoom}
-                  addPanel={(
-                    <ExtraCandidatesInput
-                      key={extrasKey}
-                      mode={addTab ?? 'manual'}
-                      room={unitsRoom}
-                      onChange={setExtras}
-                      onCounts={setExtraCounts}
-                      disabled={pickingOff}
-                      onCopyLink={copyLinkFor}
-                      takenEmail={takenEmail}
-                    />
-                  )}
-                  footer={(
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-b-xl border-t border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2.5 text-sm">
-                      {addedCount > 0 ? (
-                        <>
-                          <span className="min-w-0">
-                            <b className="font-semibold text-brand-blue tabular-nums">✓ {addedCount.toLocaleString()} selected</b>
-                            <span className="text-gray-500 dark:text-slate-400 tabular-nums">
-                              {[
-                                extraCounts.manual && `${extraCounts.manual.toLocaleString()} typed in`,
-                                extraCounts.excel && `${extraCounts.excel.toLocaleString()} from Excel`,
-                                selectionCount(serverSelection) && `${selectionCount(serverSelection).toLocaleString()} picked`,
-                              ].filter(Boolean).map((part) => ` · ${part}`).join('')}
-                            </span>
-                            {unitsRoom !== null && unitsRoom > 0 && (
-                              <span className="text-gray-500 dark:text-slate-400 tabular-nums"> · {plural(unitsRoom, 'unit')} left</span>
-                            )}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setServerSelection(EMPTY_SELECTION);
-                              setExtras([]);
-                              setExtraCounts({ manual: 0, excel: 0 });
-                              setExtrasKey((k) => k + 1);
-                            }}
-                            className="text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:underline underline-offset-2"
-                          >
-                            Clear selection
-                          </button>
-                        </>
-                      ) : (
-                        <span className="text-gray-500 dark:text-slate-400">No one selected yet — add or pick candidates above.</span>
-                      )}
-                    </div>
-                  )}
-                />
-              </div>
-            ) : current === 'review' && !perms.canInvite ? (
+            ) : current === 'candidates' ? null : current === 'review' && !perms.canInvite ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{deniedTitle}</div>
             ) : current === 'review' && reviewRequest ? (
               <div className="space-y-4">
@@ -1144,6 +1097,105 @@ export default function VersionInviteDialog({
                 </div>
               </div>
             ) : null}
+            {/* The candidates step stays mounted once opened (hidden on the
+                other steps), so what was typed in, uploaded, filtered or
+                opened is still there after Review → Back. */}
+            {!off && job && !bulkJob && loaded && candidatesMounted && (
+              <div className={current === 'candidates' ? 'space-y-4' : 'hidden'}>
+                {recipients.length > 0 && (
+                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                    {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
+                  </p>
+                )}
+                <div>
+                  <h3 className={INTRO_H}>Who do you want to invite?</h3>
+                  <p className={INTRO_P}>
+                    Add people, or pick from{' '}
+                    <span className="font-medium text-brand-blue">{[job.jdCode, jobName].filter(Boolean).join(' · ')}</span> and your resume database.
+                    Everyone you add stays selected across tabs.
+                  </p>
+                </div>
+                <ServerCandidatePicker
+                  jdId={job.jdId}
+                  kind={kind}
+                  versionId={selected?.sendable ? selected.id : null}
+                  selection={serverSelection}
+                  onSelectionChange={setServerSelection}
+                  pickingDisabled={pickingOff}
+                  onOverlayChange={onOverlayChange}
+                  addTab={addTab}
+                  onAddTabChange={setAddTab}
+                  addCounts={extraCounts}
+                  room={unitsRoom}
+                  addedEmails={addedEmails}
+                  addPanel={(
+                    <ExtraCandidatesInput
+                      key={extrasKey}
+                      mode={addTab ?? 'manual'}
+                      room={unitsRoom}
+                      onChange={setExtras}
+                      onCounts={setExtraCounts}
+                      disabled={pickingOff}
+                      onCopyLink={copyLinkFor}
+                      takenEmail={takenEmail}
+                      maxRows={extraMaxRows}
+                      limitByUnits={extraLimitByUnits}
+                    />
+                  )}
+                  footer={(
+                    /* Stays in view while the list scrolls (wide screens; on
+                       phones the popup's own footer carries the count). */
+                    <div className="sm:sticky sm:bottom-0 z-[2] flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-b-xl border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 text-sm">
+                      {addedCount > 0 ? (
+                        <span className="min-w-0">
+                          <b className="font-semibold text-brand-blue tabular-nums">✓ {addedCount.toLocaleString()} selected</b>
+                          <span className="text-gray-500 dark:text-slate-400 tabular-nums">
+                            {[
+                              extraCounts.manual && `${extraCounts.manual.toLocaleString()} typed in`,
+                              extraCounts.excel && `${extraCounts.excel.toLocaleString()} from Excel`,
+                              selectionCount(serverSelection) && `${selectionCount(serverSelection).toLocaleString()} picked`,
+                            ].filter(Boolean).map((part) => ` · ${part}`).join('')}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 dark:text-slate-400">No one selected yet — add or pick candidates above.</span>
+                      )}
+                      <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        {quotaAvailable !== null && (
+                          <span
+                            className="inline-flex items-center gap-2 text-xs tabular-nums"
+                            title={unitsRoom !== null && unitsRoom > 0 ? `${plural(unitsRoom, 'unit')} left` : undefined}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="relative h-1.5 w-20 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
+                            >
+                              <span
+                                className={`absolute inset-y-0 left-0 rounded-full ${unitsTone.bar}`}
+                                style={{ width: `${quotaAvailable > 0 ? Math.min(100, (recipientCount / quotaAvailable) * 100) : 100}%` }}
+                              />
+                            </span>
+                            <span className={unitsTone.text}>
+                              {recipientCount.toLocaleString()} / {quotaAvailable.toLocaleString()} units
+                              {unitsRoom !== null && unitsRoom === 0 ? ' · Full' : unitsRoom !== null && unitsRoom < 0 ? ` · ${(-unitsRoom).toLocaleString()} over` : ''}
+                            </span>
+                          </span>
+                        )}
+                        {addedCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={clearCandidates}
+                            className="text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:underline underline-offset-2"
+                          >
+                            Clear selection
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                />
+              </div>
+            )}
           </div>
 
           </div>

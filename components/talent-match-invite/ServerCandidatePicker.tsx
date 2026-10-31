@@ -161,6 +161,7 @@ export default function ServerCandidatePicker({
   onAddTabChange,
   addCounts,
   room = null,
+  addedEmails,
   addPanel,
   footer,
 }: {
@@ -184,6 +185,8 @@ export default function ServerCandidatePicker({
   /** How many more the units allow (null = no limit). At 0 nothing more
    *  can be ticked — ticked rows can still be unticked. */
   room?: number | null;
+  /** Emails typed in or uploaded: a row with one is already selected there. */
+  addedEmails?: Set<string>;
   addPanel: ReactNode;
   /** Below every tab: the selection summary. */
   footer?: ReactNode;
@@ -259,6 +262,10 @@ export default function ServerCandidatePicker({
         setCounts(res.counts);
         setError(null);
         setLoaded({ key: filterKey, page });
+        if (page === 1 && selection.mode === 'filter' && selection.source === source
+          && selection.total !== res.total && JSON.stringify(selection.filters) === JSON.stringify(filters)) {
+          onSelectionChange({ ...selection, total: res.total });
+        }
         if (page === 1 && selectOnLoad.current === filterKey) {
           selectOnLoad.current = null;
           if (listRoom !== null && res.total > listRoom) toast.warning(`This folder has ${fmt(res.total)} candidates — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left.`);
@@ -273,6 +280,22 @@ export default function ServerCandidatePicker({
     // filterKey stands for source + filters + versionId.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jdId, kind, filterKey, page]);
+
+  /* Phones: is part of the tab row off to the right? */
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const [tabsMore, setTabsMore] = useState(false);
+  const updateTabsMore = () => {
+    const el = tabsRef.current;
+    setTabsMore(!!el && el.scrollWidth - el.clientWidth - el.scrollLeft > 4);
+  };
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    updateTabsMore();
+    window.addEventListener('resize', updateTabsMore);
+    return () => window.removeEventListener('resize', updateTabsMore);
+  }, [addTab, source, counts]);
 
   /* First open: a job with no AI Talent Match candidates opens on Type in. */
   const defaulted = useRef(false);
@@ -315,8 +338,10 @@ export default function ServerCandidatePicker({
     selection.mode === 'ids' ? !!pickedOf(r)
       : selection.source === source && !selection.excluded[r.resume_id];
   /* Could be ticked, units aside; and can be ticked (or unticked) now. */
+  const addedDirectly = (r: ServerInviteCandidate) => !!r.email && !!addedEmails?.has(r.email.trim().toLowerCase());
   const canTickBase = (r: ServerInviteCandidate) =>
-    !pickingDisabled && !!r.email && !r.already_invited && (selection.mode === 'ids' || selection.source === source);
+    !pickingDisabled && !!r.email && !r.already_invited && (selection.mode === 'ids' || selection.source === source)
+    && (isOn(r) || !addedDirectly(r));
   const canTick = (r: ServerInviteCandidate) => canTickBase(r) && (isOn(r) || canAdd);
   const toggle = (r: ServerInviteCandidate) => {
     if (!canTick(r)) return;
@@ -500,13 +525,24 @@ export default function ServerCandidatePicker({
       {/* One tab row, grouped: add people yourself, the job's lists, the
           resume database — each with its count and its picks. Groups wrap
           to a second line when the popup is narrow; phones scroll sideways. */}
-      <div role="tablist" aria-label="Where candidates come from" className="flex items-end gap-x-6 sm:flex-wrap sm:gap-y-1 max-sm:overflow-x-auto border-b border-gray-200 dark:border-slate-700 px-2 sm:px-3 pt-2">
+      <div className="relative">
+      <div
+        ref={tabsRef}
+        onScroll={updateTabsMore}
+        role="tablist"
+        aria-label="Where candidates come from"
+        className="flex items-end gap-x-6 sm:flex-wrap sm:gap-y-1 max-sm:overflow-x-auto border-b border-gray-200 dark:border-slate-700 px-2 sm:px-3 pt-2"
+      >
         {TAB_GROUPS.map((g) => (
           <div key={g.label} role="group" aria-label={g.label} className="flex shrink-0 flex-col gap-0.5">
             <span className="pl-2 text-2xs font-semibold text-gray-400 dark:text-slate-500 whitespace-nowrap">{g.label}</span>
             <div className="flex gap-0.5">{g.tabs.map(tabButton)}</div>
           </div>
         ))}
+      </div>
+      {tabsMore && (
+        <span aria-hidden="true" className="sm:hidden pointer-events-none absolute right-0 top-0 bottom-px w-10 rounded-tr-xl bg-gradient-to-l from-white dark:from-slate-900 to-transparent" />
+      )}
       </div>
 
       <div className="p-3 sm:p-4">
@@ -672,14 +708,24 @@ export default function ServerCandidatePicker({
           <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
         </div>
       ) : rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
+        <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
           {counts && counts[source] === 0
             ? (source === 'talent-match' ? 'No AI Talent Match candidates for this job yet.'
               : source === 'score-resume' ? 'No scored resumes for this job outside AI Talent Match.'
               : source === 'my-resumes' ? 'You have not uploaded any resumes yet.'
               : 'No resumes in the Shared Database yet.')
             : 'No candidates match these filters.'}
-        </p>
+          {counts && counts[source] === 0 && (source === 'talent-match' || source === 'score-resume') && (
+            <span className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <button type="button" onClick={() => onAddTabChange('manual')} className="h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10">
+                <SourceIcon source="manual" className="w-3.5 h-3.5" />Type in candidates
+              </button>
+              <button type="button" onClick={() => onAddTabChange('excel')} className="h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800">
+                <SourceIcon source="excel" className="w-3.5 h-3.5" />Upload Excel
+              </button>
+            </span>
+          )}
+        </div>
       ) : (
         <ul ref={listRef} className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
           <li className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
@@ -696,6 +742,7 @@ export default function ServerCandidatePicker({
             const why = !r.email ? 'No email' : r.already_invited ? 'Already invited to this version'
               : pickingDisabled ? 'Pick a version first'
               : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
+              : !isOn(r) && addedDirectly(r) ? 'Already added in Type in / Upload Excel'
               : !isOn(r) && !canAdd ? 'No units left. Remove someone to add more.' : undefined;
             const shownName = kind === 'interview' ? formatCandidateFirstName(r.name) : r.name;
             return (

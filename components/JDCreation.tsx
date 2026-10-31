@@ -30,7 +30,7 @@ import type { IndustryValidationResponse } from '@/lib/services/jdService';
 import type { JDCreate, JDMergeTrailEntry, JDResponse } from '@/lib/services/jdService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
-import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
+import { normalizeManualJDToMarkdown, stripEmptyCertificationSections, stripExperienceDurationLine } from '@/lib/utils/jdMarkdown';
 import { convertSalaryAmount, formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
 import { setConfiguredExperienceLevels } from '@/lib/utils/jobExperience';
 import { getExchangeRate } from '@/lib/services/exchangeRateService';
@@ -91,9 +91,10 @@ const jdMarkdownComponents: Components = {
   ),
 };
 
-const getDisplayJDMarkdown = (text: string, mode: CreationMode): string => {
+const getDisplayJDMarkdown = (text: string, mode: CreationMode, hideExperienceLine = false): string => {
   const normalized = mode === 'manual' ? normalizeManualJDToMarkdown(text) : text;
-  return stripEmptyCertificationSections(normalized);
+  const withoutEmptyCerts = stripEmptyCertificationSections(normalized);
+  return hideExperienceLine ? stripExperienceDurationLine(withoutEmptyCerts) : withoutEmptyCerts;
 };
 
 // Detects SOURCE CODE pasted into a JD field.
@@ -11594,7 +11595,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       remarkPlugins={[remarkGfm, remarkBreaks]}
                       components={jdMarkdownComponents}
                     >
-                      {getDisplayJDMarkdown(mode === 'ai' ? generatedJD : manualJD, mode)}
+                      {getDisplayJDMarkdown(mode === 'ai' ? generatedJD : manualJD, mode, Boolean(extractedData.experience))}
                     </ReactMarkdown>
                   </div>
                 </div>

@@ -555,7 +555,8 @@ export default function AIInterview() {
     max_violations: 5,
     violation_low_threshold: 3,
     violation_medium_threshold: 8,
-    retention_days: 90,
+    retention_days: 30,
+    view_days: 7,
   });
   const [proctoringLoading, setProctoringLoading] = useState(false);
 
@@ -1231,7 +1232,9 @@ export default function AIInterview() {
         max_violations: settings.max_violations_before_flag ?? 5,
         violation_low_threshold: settings.violation_low_threshold ?? 3,
         violation_medium_threshold: settings.violation_medium_threshold ?? 8,
-        retention_days: settings.recording_retention_days ?? 90,
+        // Platform policy from the backend .env (read-only here).
+        retention_days: settings.recording_retention_days ?? 30,
+        view_days: settings.recording_view_days ?? 7,
       });
     } catch (error) {
       console.error('Failed to load proctoring settings:', error);
@@ -1779,7 +1782,6 @@ export default function AIInterview() {
         max_violations_before_flag: proctoringSettings.max_violations,
         violation_low_threshold: proctoringSettings.violation_low_threshold,
         violation_medium_threshold: proctoringSettings.violation_medium_threshold,
-        recording_retention_days: proctoringSettings.retention_days,
       });
       toast.success('Proctoring settings saved!');
     } catch (error) {
@@ -4867,15 +4869,11 @@ export default function AIInterview() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Retention (days)</label>
-                                <input
-                                  type="number"
-                                  value={proctoringSettings.retention_days}
-                                  onChange={(e) => setProctoringSettings(prev => ({ ...prev, retention_days: parseInt(e.target.value) || 90 }))}
-                                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                                  min={7}
-                                  max={365}
-                                />
+                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Recording retention</label>
+                                <div className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300 bg-gray-50 dark:bg-slate-800">
+                                  Viewable {proctoringSettings.view_days} days · Deleted after {proctoringSettings.retention_days} days
+                                </div>
+                                <p className="text-2xs text-gray-500 dark:text-slate-500 mt-1">Set by the platform; applies to all recordings.</p>
                               </div>
                             </div>
 

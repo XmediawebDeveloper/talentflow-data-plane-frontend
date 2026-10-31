@@ -10,8 +10,10 @@ import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
 import ListPagination from '@/components/ListPagination';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 
-/** The backend takes at most this many typed-in candidates per send. */
-export const MAX_EXTRA_CANDIDATES = 500;
+/** The most candidates one send may carry — the backend's BULK_INVITE_MAX_ROWS
+ *  default. The real cap is usually lower: the host passes `maxRows` from the
+ *  assessment / interview units still available. */
+export const MAX_EXTRA_CANDIDATES = 10000;
 
 const PAGE_SIZE = 10;
 const INPUT = 'h-9 min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
@@ -39,7 +41,7 @@ interface EntryRow {
 interface InvalidRow { row: number; email: string; problem: string }
 
 /** The last sheet uploaded: what came of it. */
-interface UploadSummary { file: string; added: number; repeated: number; over: number; overUnits: number; invalid: InvalidRow[]; open: boolean }
+interface UploadSummary { file: string; added: number; repeated: number; over: number; limit: number; byUnits: boolean; invalid: InvalidRow[]; open: boolean }
 
 const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -137,6 +139,8 @@ export default function ExtraCandidatesInput({
   disabled = false,
   onCopyLink,
   takenEmail,
+  maxRows = MAX_EXTRA_CANDIDATES,
+  limitByUnits = false,
 }: {
   mode: ExtraMode;
   /** How many more the units allow (null = no limit): at 0 nothing more
@@ -151,6 +155,11 @@ export default function ExtraCandidatesInput({
   onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
   /** Where else this email is already picked (a list), if anywhere. */
   takenEmail?: (email: string) => string | null;
+  /** How many rows here may be emailed — the units left after the other
+   *  picks (or the backend cap on unlimited plans). Rows past it are not added. */
+  maxRows?: number;
+  /** True when `maxRows` comes from the units, for the wording. */
+  limitByUnits?: boolean;
 }) {
   const [rows, setRows] = useState<EntryRow[]>([]);
   const [name, setName] = useState('');
@@ -185,8 +194,13 @@ export default function ExtraCandidatesInput({
     if (!isValidEmailFormat(e)) { setError(EMAIL_FORMAT_ERROR); return; }
     const same = rows.find((r) => r.email === e);
     if (same) { setError(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
-    if (rows.length >= MAX_EXTRA_CANDIDATES) { setError(`At most ${MAX_EXTRA_CANDIDATES} candidates can be added directly.`); return; }
     if (full) { setError(NO_ROOM); return; }
+    if (toCandidates(rows).length >= maxRows) {
+      setError(limitByUnits
+        ? `No units left for another candidate. ${maxRows.toLocaleString()} can be added with the units available.`
+        : `At most ${maxRows.toLocaleString()} candidates can be added directly.`);
+      return;
+    }
     const elsewhere = takenEmail?.(e);
     if (elsewhere) { setError(`${e} is already added from ${elsewhere}.`); return; }
     commit([{ id: newId(), name: n.replace(/\s+/g, ' '), email: e, origin: 'Manual' }, ...rows]);
@@ -278,13 +292,15 @@ export default function ExtraCandidatesInput({
         have.add(c.email);
         fresh.push({ id: newId(), name: c.name, email: c.email, origin: file.name });
       }
-      // The first rows, up to the 500 limit and the units left.
-      const byLimit = Math.max(0, MAX_EXTRA_CANDIDATES - rows.length);
-      const byUnits = room === null ? Infinity : Math.max(0, room);
-      const kept = fresh.slice(0, Math.min(byLimit, byUnits));
-      const cut = fresh.length - kept.length;
-      const overUnits = byUnits < byLimit ? cut : 0;
-      setUpload({ file: file.name, added: kept.length, repeated, over: cut - overUnits, overUnits, invalid, open: false });
+      // The first rows, up to the host's cap and the units left. Rows already
+      // invited by Copy Link are not emailed, so they don't count.
+      const byCap = Math.max(0, maxRows - toCandidates(rows).length);
+      const byRoom = room === null ? Infinity : Math.max(0, room);
+      const kept = fresh.slice(0, Math.min(byCap, byRoom));
+      setUpload({
+        file: file.name, added: kept.length, repeated, over: fresh.length - kept.length,
+        limit: maxRows, byUnits: limitByUnits || byRoom < byCap, invalid, open: false,
+      });
       if (kept.length === 0) return;
       commit([...rows, ...kept]);
       setOrigin('all');
@@ -377,7 +393,7 @@ export default function ExtraCandidatesInput({
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold text-gray-900 dark:text-slate-50">Drag and drop a sheet here</span>
                 <span className="block text-xs text-gray-500 dark:text-slate-400">
-                  .xlsx, .xls or .csv · needs <b className="font-semibold">Name</b> and <b className="font-semibold">Email</b> columns · up to {MAX_EXTRA_CANDIDATES} candidates
+                  .xlsx, .xls or .csv · needs <b className="font-semibold">Name</b> and <b className="font-semibold">Email</b> columns · up to {Math.min(maxRows, MAX_EXTRA_CANDIDATES).toLocaleString()} candidates
                 </span>
               </span>
               <span className="flex flex-wrap items-center gap-3 shrink-0">
@@ -415,10 +431,16 @@ export default function ExtraCandidatesInput({
                 <span className="font-medium text-success-strong tabular-nums">{upload.added.toLocaleString()} added</span>
                 {upload.invalid.length > 0 && <span className="font-medium text-destructive tabular-nums">{upload.invalid.length.toLocaleString()} invalid</span>}
                 {upload.repeated > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.repeated.toLocaleString()} repeated (already in the list)</span>}
-                {upload.over > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} over the {MAX_EXTRA_CANDIDATES} limit</span>}
-                {upload.overUnits > 0 && <span className="font-medium text-warning-strong tabular-nums">{upload.overUnits.toLocaleString()} not added — no units left</span>}
+                {upload.over > 0 && (upload.byUnits
+                  ? <span className="font-medium text-warning-strong tabular-nums">{upload.over.toLocaleString()} not added — no units left</span>
+                  : <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} over the {upload.limit.toLocaleString()} limit</span>)}
                 {upload.invalid.length > 0 && (
-                  <button type="button" onClick={() => setUpload({ ...upload, open: !upload.open })} className="text-xs font-medium text-brand-blue hover:underline underline-offset-2">
+                  <button
+                    type="button"
+                    onClick={() => setUpload({ ...upload, open: !upload.open })}
+                    aria-expanded={upload.open}
+                    className="inline-flex items-center h-6 px-2 rounded-full text-xs font-medium border border-warning-line bg-warning-subtle text-warning-strong hover:brightness-95"
+                  >
                     {upload.open ? 'Hide' : 'View'} invalid rows
                   </button>
                 )}
@@ -449,6 +471,12 @@ export default function ExtraCandidatesInput({
         </>
       )}
 
+      {mode === 'manual' && modeRows.length === 0 && (
+        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+          No one added yet. Type a name and email above.
+        </p>
+      )}
+
       {modeRows.length > 0 && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -472,19 +500,19 @@ export default function ExtraCandidatesInput({
               />
             </label>
           </div>
-          {mode === 'excel' && (
+          {mode === 'excel' && files.length > 1 && (
             <div role="group" aria-label="Added from" className="flex flex-wrap items-center gap-1.5">
-              {files.length > 1 && chips.map((c) => (
+              {chips.map((c) => (
                 <button key={c.key} type="button" aria-pressed={fileOrigin === c.key} onClick={() => { setOrigin(c.key); setPage(1); }} className={`${CHIP} ${fileOrigin === c.key ? CHIP_ON : CHIP_OFF}`}>
                   {c.key !== 'all' && <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
                   <span className="truncate">{c.label}</span>
                   <span className="tabular-nums text-gray-400">{c.n.toLocaleString()}</span>
                 </button>
               ))}
-              {(files.length === 1 || fileOrigin !== 'all') && (
+              {files.length > 1 && fileOrigin !== 'all' && (
                 <button
                   type="button"
-                  onClick={() => removeFile(files.length === 1 ? files[0] : fileOrigin)}
+                  onClick={() => removeFile(fileOrigin)}
                   disabled={disabled}
                   className="text-xs font-medium text-destructive hover:underline underline-offset-2 disabled:opacity-50"
                 >
