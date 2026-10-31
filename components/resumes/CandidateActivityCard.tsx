@@ -434,7 +434,9 @@ export default function CandidateActivityCard({
         <p className="text-sm text-destructive py-6 text-center">Could not load candidate activity. Please refresh to try again.</p>
       ) : (
         <>
-          <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-gray-100 mb-4 -mx-1 px-1">
+          {/* scrollbar-light: the slim 6px bar (the candidate scoring page's
+              tab strip) instead of the app's 12px one under these tabs. */}
+          <div role="tablist" className="flex gap-1 overflow-x-auto overflow-y-hidden scrollbar-auto-hide scrollbar-light border-b border-gray-100 mb-4 -mx-1 px-1">
             {tabs.map(({ key, label, Icon, plan }) => {
               const planLocked = isPlanLocked(plan);
               // Plan message wins when both apply.
