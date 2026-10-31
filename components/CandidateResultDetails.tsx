@@ -846,6 +846,9 @@ export default function CandidateResultDetails({
     });
   }, []);
   const recordingRequestedRef = useRef<string | null>(null);
+  // Set when the backend reports the recruiter viewing window
+  // (RECORDING_VIEW_DAYS) has closed for this attempt.
+  const [recordingExpired, setRecordingExpired] = useState<{ key: string; days: number; until: string | null } | null>(null);
   useEffect(() => {
     if (currentDetailTab !== 'recording' || !assessmentId || !candidateId) return;
     if (recordingRequestedRef.current === candidateId) return;
@@ -858,6 +861,9 @@ export default function CandidateResultDetails({
       try {
         const meta = await assessmentService.getRecordingUrl(assessmentId, candidateId, kind);
         if (cancelled) return;
+        if (meta?.expired) {
+          setRecordingExpired({ key: candidateId, days: meta.view_days ?? 7, until: meta.view_until ?? null });
+        }
         if (!meta || !meta.url) {
           updateRecording(candidateId, kind, { ...EMPTY_RECORDING_SOURCE, available: false });
           return;
@@ -2821,6 +2827,12 @@ export default function CandidateResultDetails({
                 {/* Recording Tab Content */}
                 {activeQuestionTab === 'recording' && (
                   <div className="space-y-4 sm:space-y-6">
+                    {recordingExpired?.key === candidateId && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                        Recordings can be viewed for {recordingExpired.days} days after the assessment.
+                        {recordingExpired.until ? ` This one expired on ${formatISTDate(recordingExpired.until)}.` : ''}
+                      </div>
+                    )}
                     <RecordingPlayer
                       candidate={candidateRecording}
                       screen={screenRecording}
@@ -3282,6 +3294,9 @@ export default function CandidateResultDetails({
 
                     </div>
 
+                    {/* Violation evidence: the frame captured for phone / object detections */}
+                    <AssessmentViolationEvidence attemptId={candidateId} />
+
                     {/* Event Log / Timeline */}
                     <div className="mt-2">
                       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -3547,3 +3562,107 @@ export default function CandidateResultDetails({
     </div>
   );
 }
+
+const EVIDENCE_EVENT_TYPES = ['phone_detected', 'unauthorized_object'] as const;
+const EVIDENCE_LABELS: Record<string, string> = {
+  phone_detected: 'Phone detected',
+  unauthorized_object: 'Unauthorized object',
+};
+
+/**
+ * Evidence screenshots for an assessment attempt: one frame per flagged
+ * object (phone / unauthorized object), captured by server-side proctor
+ * vision. Fetched separately from the Event Log so evidence is found even
+ * when the log has more than one page of events. Renders nothing when the
+ * attempt has no screenshots.
+ */
+function AssessmentViolationEvidence({ attemptId }: { attemptId: string | null | undefined }) {
+  const [events, setEvents] = useState<ProctoringEvent[]>([]);
+
+  useEffect(() => {
+    if (!attemptId) return;
+    let cancelled = false;
+    Promise.all(EVIDENCE_EVENT_TYPES.map(t =>
+      proctoringService.getEvents({ attempt_id: attemptId, event_type: t, page_size: 100 })
+        .then(r => r.items || [])
+        .catch(() => [] as ProctoringEvent[]),
+    )).then(lists => {
+      if (cancelled) return;
+      setEvents(lists.flat().filter(e => !!e.screenshot_url));
+    });
+    return () => { cancelled = true; };
+  }, [attemptId]);
+
+  if (events.length === 0) return null;
+  return (
+    <div>
+      <h4 className="text-base font-semibold text-gray-900 tracking-tight mb-1">Violation Evidence</h4>
+      <p className="text-xs text-gray-500 mb-3">One captured frame per flagged item. Click a thumbnail to enlarge.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {events.map(e => <AssessmentEvidenceCard key={e.id} event={e} />)}
+      </div>
+    </div>
+  );
+}
+
+function AssessmentEvidenceCard({ event }: { event: ProctoringEvent }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    proctoringService.getEventScreenshot(event.id).then(blob => {
+      if (cancelled) return;
+      if (!blob) { setFailed(true); return; }
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [event.id]);
+
+  if (failed) return null;
+  const details = (event.details || {}) as Record<string, unknown>;
+  const objectLabel = typeof details.object_label === 'string' ? details.object_label : null;
+  const label = EVIDENCE_LABELS[event.event_type] || event.event_type;
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => url && setEnlarged(true)}
+          disabled={!url}
+          className="block w-full aspect-video bg-slate-100"
+        >
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={label} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>
+          )}
+        </button>
+        <div className="px-3 py-2.5">
+          <div className="text-xs font-semibold text-gray-700">{label}{objectLabel ? ` · ${objectLabel}` : ''}</div>
+          <div className="text-2xs text-gray-500 mt-0.5">{formatISTWithSeconds(event.timestamp)}</div>
+        </div>
+      </div>
+      {enlarged && url && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setEnlarged(false)}
+          role="dialog"
+          aria-label={label}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+    </>
+  );
+}
+
