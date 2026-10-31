@@ -8,7 +8,7 @@ import type { InviteCandidateSourceTab } from '@/lib/services/bulkInviteService'
  * Where an invited candidate came from, drawn the way the rest of the app
  * draws it: Manual = Edit3 (the old Manual tab), brand blue · Excel =
  * FileSpreadsheet, emerald 600 (the Upload Excel button) · AI Talent Match =
- * TalentMatchIcon, brand cyan · Score Resume = ResumeScoringIcon, brand blue
+ * TalentMatchIcon, brand cyan · Scored Resumes = ResumeScoringIcon, brand blue
  * (the dashboard tiles) · My Resumes = FolderOpen, brand orange · Shared
  * Database = Database, brand cyan (the Resume Database tabs).
  */
@@ -21,7 +21,7 @@ export const SOURCE_META: Record<InviteSourceKey, SourceMeta> = {
   excel: { label: 'Excel upload', Icon: FileSpreadsheet, tone: 'text-emerald-600 dark:text-emerald-400' },
   page: { label: 'From the page', Icon: Users, tone: 'text-gray-500 dark:text-slate-400' },
   'talent-match': { label: 'AI Talent Match', Icon: TalentMatchIcon, tone: 'text-brand-cyan' },
-  'score-resume': { label: 'Score Resume', Icon: ResumeScoringIcon, tone: 'text-brand-blue' },
+  'score-resume': { label: 'Scored Resumes', Icon: ResumeScoringIcon, tone: 'text-brand-blue' },
   'my-resumes': { label: 'My Resumes', Icon: FolderOpen, tone: 'text-brand-orange' },
   'internal-db': { label: 'Shared Database', Icon: Database, tone: 'text-brand-cyan' },
 };
@@ -36,6 +36,7 @@ const BY_LABEL: Record<string, InviteSourceKey> = {
   excel: 'excel',
   'ai talent match': 'talent-match',
   'score resume': 'score-resume',
+  'scored resumes': 'score-resume',
   'resume scoring': 'score-resume',
   'my resumes': 'my-resumes',
   'shared database': 'internal-db',

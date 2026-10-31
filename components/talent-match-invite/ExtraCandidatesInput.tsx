@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
+import { Check, CheckCircle, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
@@ -16,10 +16,13 @@ import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 export const MAX_EXTRA_CANDIDATES = 10000;
 
 const PAGE_SIZE = 10;
-const INPUT = 'h-10 w-full min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
+const INPUT = 'h-9 min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
 const CHIP = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium border whitespace-nowrap max-w-full';
 const CHIP_ON = 'border-brand-blue bg-brand-blue/10 text-brand-blue';
 const CHIP_OFF = 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800';
+const NO_ROOM = 'No units left. Remove someone to add more.';
+const LABEL = 'block mb-1 text-xs font-semibold text-gray-600 dark:text-slate-300';
+const BROWSE = 'h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed';
 
 const EMAIL_HEADER = /^(email|e.?mail|candidate.?email|email.?address)$/i;
 const NAME_HEADER = /^(name|full.?name|candidate.?name|first.?name)$/i;
@@ -102,16 +105,35 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] =>
 /** How the rows added here split, for the popup's summary. */
 export interface ExtraCounts { manual: number; excel: number }
 
+/** Which way of adding is shown: typing people in, or a sheet. */
+export type ExtraMode = 'manual' | 'excel';
+
+/* "Download sample file": the headers the upload looks for, and one example row. */
+const SAMPLE_CSV = 'Name,Email\nPriya Raman,priya.raman@example.com\n';
+const downloadSample = () => {
+  const url = URL.createObjectURL(new Blob([SAMPLE_CSV], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'candidates-sample.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
 /**
- * Candidates added directly: one quick-add row (name, email, Add Candidate;
- * Enter adds) and Upload Excel, then a compact table of everyone added this
- * way — search, All / Manual / per-sheet chips (a sheet's chip can remove
- * every row it brought), a per-row Copy Link (invites by link, no email) and
- * remove, 10 a page. Each upload leaves a summary — added, invalid (row by
- * row), repeated. The rows not invited by link are handed up as
- * `extra_candidates`; the backend applies the same skips as every other row.
+ * Candidates added directly, one way at a time (`mode`), the rows kept across
+ * both: Type in — labelled name and email, Add Candidate (Enter adds) — or
+ * Upload Excel — a slim drop zone (or Browse) with a sample file to download,
+ * replaced by "Upload another sheet" once a sheet has added rows. Each
+ * shows a compact table of the rows it added — search, per-sheet chips (a
+ * sheet's chip can remove every row it brought), a per-row Copy Link (invites
+ * by link, no email), edit in place and remove, 10 a page. Each upload leaves a summary —
+ * added, invalid (row by row), repeated. The rows not invited by link are
+ * handed up as `extra_candidates`; the backend applies the same skips as
+ * every other row.
  */
 export default function ExtraCandidatesInput({
+  mode,
+  room = null,
   onChange,
   onCounts,
   disabled = false,
@@ -120,6 +142,10 @@ export default function ExtraCandidatesInput({
   maxRows = MAX_EXTRA_CANDIDATES,
   limitByUnits = false,
 }: {
+  mode: ExtraMode;
+  /** How many more the units allow (null = no limit): at 0 nothing more
+   *  can be added; a sheet adds its first rows up to it. */
+  room?: number | null;
   onChange: (next: BulkExtraCandidate[]) => void;
   /** Manual vs sheet rows that will be emailed, for the summary. */
   onCounts?: (counts: ExtraCounts) => void;
@@ -143,7 +169,11 @@ export default function ExtraCandidatesInput({
   const [origin, setOrigin] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [linking, setLinking] = useState<string | null>(null);
+  /* The row being edited in place, its draft and what is wrong with it. */
+  const [editing, setEditing] = useState<{ id: string; name: string; email: string; error: string | null } | null>(null);
   const [upload, setUpload] = useState<UploadSummary | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const full = room !== null && room <= 0;
   const fileRef = useRef<HTMLInputElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
 
@@ -166,6 +196,7 @@ export default function ExtraCandidatesInput({
     if (!isValidEmailFormat(e)) { setError(EMAIL_FORMAT_ERROR); return; }
     const same = rows.find((r) => r.email === e);
     if (same) { setError(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
+    if (full) { setError(NO_ROOM); return; }
     if (toCandidates(rows).length >= maxRows) {
       setError(limitByUnits
         ? `No units left for another candidate. ${maxRows.toLocaleString()} can be added with the units available.`
@@ -182,16 +213,48 @@ export default function ExtraCandidatesInput({
     nameRef.current?.focus();
   };
 
-  const remove = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const remove = (id: string) => {
+    if (editing?.id === id) setEditing(null);
+    commit(rows.filter((r) => r.id !== id));
+  };
+  /* Edit: the add rules again — a name of letters and spaces, a valid email
+     not already in this list or picked elsewhere. A row invited by Copy Link
+     already has its invitation, so it is not edited. */
+  const startEdit = (r: EntryRow) => setEditing({ id: r.id, name: r.name, email: r.email, error: null });
+  const saveEdit = () => {
+    if (!editing) return;
+    const n = editing.name.trim();
+    const e = editing.email.trim().toLowerCase();
+    const fail = (error: string) => setEditing({ ...editing, error });
+    if (!n || !e) { fail('Enter a full name and an email address.'); return; }
+    if (!isValidCandidateName(n)) { fail(NAME_FORMAT_ERROR); return; }
+    if (!isValidEmailFormat(e)) { fail(EMAIL_FORMAT_ERROR); return; }
+    const before = rows.find((r) => r.id === editing.id);
+    if (!before) { setEditing(null); return; }
+    if (e !== before.email) {
+      const same = rows.find((r) => r.id !== editing.id && r.email === e);
+      if (same) { fail(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
+      const elsewhere = takenEmail?.(e);
+      if (elsewhere) { fail(`${e} is already added from ${elsewhere}.`); return; }
+    }
+    commit(rows.map((r) => (r.id === editing.id ? { ...r, name: n.replace(/\s+/g, ' '), email: e } : r)));
+    setEditing(null);
+  };
+  const editKeys = (ev: React.KeyboardEvent<HTMLInputElement>) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+    // Escape cancels the edit only, not the popup.
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); setEditing(null); }
+  };
   const removeFile = (file: string) => {
     commit(rows.filter((r) => r.origin !== file));
     if (upload?.file === file) setUpload(null);
     setOrigin('all');
     setPage(1);
   };
+  /* Clears the rows of the way shown: typed-in rows, or every sheet's. */
   const clearAll = () => {
-    commit([]);
-    setUpload(null);
+    commit(rows.filter((r) => (mode === 'manual' ? r.origin !== 'Manual' : r.origin === 'Manual')));
+    if (mode === 'excel') setUpload(null);
     setOrigin('all');
     setPage(1);
   };
@@ -210,10 +273,24 @@ export default function ExtraCandidatesInput({
     }
   };
 
-  const onFile = async (ev: React.ChangeEvent<HTMLInputElement>) => {
+  const onFile = (ev: React.ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0];
     if (fileRef.current) fileRef.current.value = '';
-    if (!file) return;
+    if (file) void readSheet(file);
+  };
+  const onDrop = (ev: React.DragEvent<HTMLDivElement>) => {
+    ev.preventDefault();
+    setDragOver(false);
+    const file = ev.dataTransfer.files?.[0];
+    if (!file || disabled || full) return;
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+      toast.error('Use an .xlsx, .xls or .csv file with Name and Email columns.');
+      return;
+    }
+    void readSheet(file);
+  };
+
+  const readSheet = async (file: File) => {
     try {
       const found: { name: string; email: string }[] = [];
       const invalid: InvalidRow[] = [];
@@ -248,10 +325,15 @@ export default function ExtraCandidatesInput({
         have.add(c.email);
         fresh.push({ id: newId(), name: c.name, email: c.email, origin: file.name });
       }
-      // Rows already invited by Copy Link are not emailed, so they don't count.
-      const kept = fresh.slice(0, Math.max(0, maxRows - toCandidates(rows).length));
-      const over = fresh.length - kept.length;
-      setUpload({ file: file.name, added: kept.length, repeated, over, limit: maxRows, byUnits: limitByUnits, invalid, open: false });
+      // The first rows, up to the host's cap and the units left. Rows already
+      // invited by Copy Link are not emailed, so they don't count.
+      const byCap = Math.max(0, maxRows - toCandidates(rows).length);
+      const byRoom = room === null ? Infinity : Math.max(0, room);
+      const kept = fresh.slice(0, Math.min(byCap, byRoom));
+      setUpload({
+        file: file.name, added: kept.length, repeated, over: fresh.length - kept.length,
+        limit: maxRows, byUnits: limitByUnits || byRoom < byCap, invalid, open: false,
+      });
       if (kept.length === 0) return;
       commit([...rows, ...kept]);
       setOrigin('all');
@@ -262,126 +344,183 @@ export default function ExtraCandidatesInput({
   };
 
   const files = useMemo(() => [...new Set(rows.filter((r) => r.origin !== 'Manual').map((r) => r.origin))], [rows]);
-  const manualCount = rows.filter((r) => r.origin === 'Manual').length;
+  /* The rows of the way shown: typed in, or from the sheets. */
+  const modeRows = useMemo(() => rows.filter((r) => (mode === 'manual') === (r.origin === 'Manual')), [rows, mode]);
+  const fileOrigin = mode === 'excel' && files.includes(origin) ? origin : 'all';
   const q = query.trim().toLowerCase();
   const shown = useMemo(
-    () => rows.filter((r) => (origin === 'all' || r.origin === origin)
+    () => modeRows.filter((r) => (fileOrigin === 'all' || r.origin === fileOrigin)
       && (!q || r.name.toLowerCase().includes(q) || r.email.includes(q))),
-    [rows, origin, q],
+    [modeRows, fileOrigin, q],
   );
   const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
   const curPage = Math.min(page, pages);
   const pageRows = shown.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
   const chips: { key: string; label: string; n: number }[] = [
-    { key: 'all', label: 'All', n: rows.length },
-    ...(manualCount ? [{ key: 'Manual', label: 'Manual', n: manualCount }] : []),
+    { key: 'all', label: 'All sheets', n: modeRows.length },
     ...files.map((f) => ({ key: f, label: f, n: rows.filter((r) => r.origin === f).length })),
   ];
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <p className="text-sm text-gray-600 dark:text-slate-400">Add people directly: type them in, or upload a sheet with Name and Email columns.</p>
-        <div className="flex items-center gap-2 shrink-0">
-          {rows.length > 0 && (
-            <button type="button" onClick={clearAll} disabled={disabled} className="h-9 px-3 rounded-lg text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
-              Clear all
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={disabled}
-            className="h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="An .xlsx, .xls or .csv with Name and Email columns"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-            Upload Excel
-          </button>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] gap-2">
-        <input
-          ref={nameRef}
-          type="text"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setError(null); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          placeholder="Full name"
-          aria-label="Full name"
-          disabled={disabled}
-          className={`${INPUT} border-gray-200 dark:border-slate-700`}
-        />
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => { setEmail(e.target.value); setError(null); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          placeholder="Email address"
-          aria-label="Email address"
-          aria-invalid={!!error || undefined}
-          disabled={disabled}
-          className={`${INPUT} ${error ? 'border-destructive-line' : 'border-gray-200 dark:border-slate-700'}`}
-        />
-        <button
-          type="button"
-          onClick={add}
-          disabled={disabled}
-          className="h-10 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-        >
-          <Plus className="w-4 h-4" aria-hidden="true" />
-          Add Candidate
-        </button>
-      </div>
-      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-
-      {upload && (
-        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
-            <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
-              <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-              <b className="truncate font-semibold text-gray-900 dark:text-slate-50">{upload.file}</b>
-            </span>
-            <span className="font-medium text-success-strong tabular-nums">{upload.added.toLocaleString()} added</span>
-            {upload.invalid.length > 0 && <span className="font-medium text-destructive tabular-nums">{upload.invalid.length.toLocaleString()} invalid</span>}
-            {upload.repeated > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.repeated.toLocaleString()} repeated (already in the list)</span>}
-            {upload.over > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} {upload.byUnits ? `over your available units (${upload.limit.toLocaleString()})` : `over the ${upload.limit.toLocaleString()} limit`}</span>}
-            {upload.invalid.length > 0 && (
-              <button type="button" onClick={() => setUpload({ ...upload, open: !upload.open })} className="text-xs font-medium text-brand-blue hover:underline underline-offset-2">
-                {upload.open ? 'Hide' : 'View'} invalid rows
-              </button>
-            )}
-            <button type="button" onClick={() => setUpload(null)} aria-label="Dismiss" className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
-              <X className="w-3.5 h-3.5" aria-hidden="true" />
+      {mode === 'manual' ? (
+        <>
+          <p className="text-sm text-gray-600 dark:text-slate-400">
+            Type a candidate&apos;s name and email, then press <b className="font-semibold text-gray-800 dark:text-slate-200">Enter</b> or <b className="font-semibold text-gray-800 dark:text-slate-200">Add Candidate</b>.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="min-w-0 w-full sm:w-auto">
+              <span className={LABEL}>Full name</span>
+              <input
+                ref={nameRef}
+                type="text"
+                value={name}
+                onChange={(e) => { setName(e.target.value); setError(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                placeholder="e.g. Priya Raman"
+                disabled={disabled || full}
+                className={`${INPUT} w-full sm:w-48 border-gray-200 dark:border-slate-700`}
+              />
+            </label>
+            <label className="min-w-0 w-full sm:w-auto">
+              <span className={LABEL}>Email address</span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                placeholder="e.g. priya@company.com"
+                aria-invalid={!!error || undefined}
+                disabled={disabled || full}
+                className={`${INPUT} w-full sm:w-64 ${error ? 'border-destructive-line' : 'border-gray-200 dark:border-slate-700'}`}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={add}
+              disabled={disabled || full}
+              title={full ? NO_ROOM : undefined}
+              className="h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              Add Candidate
             </button>
           </div>
-          {upload.open && upload.invalid.length > 0 && (
-            <div className="mt-2.5 max-h-48 overflow-y-auto">
-              <table className="w-full table-fixed text-xs">
-                <thead className="text-left text-gray-600 dark:text-slate-400">
-                  <tr><th className="w-16 px-2 py-1.5 font-semibold">Row</th><th className="px-2 py-1.5 font-semibold">Email in the sheet</th><th className="w-28 px-2 py-1.5 font-semibold">Problem</th></tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 border-t border-gray-100 dark:border-slate-700/60">
-                  {upload.invalid.map((r) => (
-                    <tr key={`${r.row}-${r.email}`}>
-                      <td className="px-2 py-1.5 tabular-nums">{r.row}</td>
-                      <td className="px-2 py-1.5"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
-                      <td className="px-2 py-1.5">{r.problem}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+        </>
+      ) : (
+        <>
+          {files.length === 0 ? (
+            <div
+              onDragEnter={(e) => { e.preventDefault(); if (!disabled && !full) setDragOver(true); }}
+              onDragOver={(e) => e.preventDefault()}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false); }}
+              onDrop={onDrop}
+              className={`flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 transition-colors ${
+                dragOver ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10' : 'border-gray-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/40'
+              }`}
+            >
+              <span className="hidden sm:flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <Upload className="w-4 h-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-gray-900 dark:text-slate-50">Drag and drop a sheet here</span>
+                <span className="block text-xs text-gray-500 dark:text-slate-400">
+                  .xlsx, .xls or .csv · needs <b className="font-semibold">Name</b> and <b className="font-semibold">Email</b> columns · up to {Math.min(maxRows, MAX_EXTRA_CANDIDATES).toLocaleString()} candidates
+                </span>
+              </span>
+              <span className="flex flex-wrap items-center gap-3 shrink-0">
+                <button type="button" onClick={downloadSample} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline underline-offset-2">
+                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                  Download sample file
+                </button>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={disabled || full} title={full ? NO_ROOM : undefined} className={BROWSE}>
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  Browse file
+                </button>
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={disabled || full} title={full ? NO_ROOM : undefined} className={BROWSE}>
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                Upload another sheet
+              </button>
+              <button type="button" onClick={downloadSample} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-blue hover:underline underline-offset-2">
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                Download sample file
+              </button>
             </div>
           )}
-        </div>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={onFile} className="hidden" aria-label="Upload a sheet of candidates" />
+
+          {upload && (
+            <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">
+              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+                <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                  <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <b className="truncate font-semibold text-gray-900 dark:text-slate-50">{upload.file}</b>
+                </span>
+                <span className="font-medium text-success-strong tabular-nums">{upload.added.toLocaleString()} added</span>
+                {upload.invalid.length > 0 && <span className="font-medium text-destructive tabular-nums">{upload.invalid.length.toLocaleString()} invalid</span>}
+                {upload.repeated > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.repeated.toLocaleString()} repeated (already in the list)</span>}
+                {upload.over > 0 && (upload.byUnits
+                  ? <span className="font-medium text-warning-strong tabular-nums">{upload.over.toLocaleString()} not added — no units left</span>
+                  : <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} over the {upload.limit.toLocaleString()} limit</span>)}
+                {upload.invalid.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setUpload({ ...upload, open: !upload.open })}
+                    aria-expanded={upload.open}
+                    className="inline-flex items-center h-6 px-2 rounded-full text-xs font-medium border border-warning-line bg-warning-subtle text-warning-strong hover:brightness-95"
+                  >
+                    {upload.open ? 'Hide' : 'View'} invalid rows
+                  </button>
+                )}
+                <button type="button" onClick={() => setUpload(null)} aria-label="Dismiss" className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              {upload.open && upload.invalid.length > 0 && (
+                <div className="mt-2.5 max-h-48 overflow-y-auto">
+                  <table className="w-full table-fixed text-xs">
+                    <thead className="text-left text-gray-600 dark:text-slate-400">
+                      <tr><th className="w-16 px-2 py-1.5 font-semibold">Row</th><th className="px-2 py-1.5 font-semibold">Email in the sheet</th><th className="w-28 px-2 py-1.5 font-semibold">Problem</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 border-t border-gray-100 dark:border-slate-700/60">
+                      {upload.invalid.map((r) => (
+                        <tr key={`${r.row}-${r.email}`}>
+                          <td className="px-2 py-1.5 tabular-nums">{r.row}</td>
+                          <td className="px-2 py-1.5"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
+                          <td className="px-2 py-1.5">{r.problem}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
-      {rows.length > 0 && (
+      {mode === 'manual' && modeRows.length === 0 && (
+        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+          No one added yet. Type a name and email above.
+        </p>
+      )}
+
+      {modeRows.length > 0 && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <b className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">{rows.length.toLocaleString()} added directly</b>
+            <span className="inline-flex items-center gap-2.5">
+              <b className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">
+                {modeRows.length.toLocaleString()} {mode === 'manual' ? 'typed in' : 'from sheets'}
+              </b>
+              <button type="button" onClick={clearAll} disabled={disabled} className="text-xs font-medium text-gray-500 dark:text-slate-400 hover:text-destructive hover:underline underline-offset-2 disabled:opacity-50">
+                Clear all
+              </button>
+            </span>
             <label className="relative w-full sm:w-56">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
               <input
@@ -394,17 +533,22 @@ export default function ExtraCandidatesInput({
               />
             </label>
           </div>
-          {chips.length > 2 && (
+          {mode === 'excel' && files.length > 1 && (
             <div role="group" aria-label="Added from" className="flex flex-wrap items-center gap-1.5">
               {chips.map((c) => (
-                <button key={c.key} type="button" aria-pressed={origin === c.key} onClick={() => { setOrigin(c.key); setPage(1); }} className={`${CHIP} ${origin === c.key ? CHIP_ON : CHIP_OFF}`}>
-                  {c.key !== 'all' && c.key !== 'Manual' && <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
+                <button key={c.key} type="button" aria-pressed={fileOrigin === c.key} onClick={() => { setOrigin(c.key); setPage(1); }} className={`${CHIP} ${fileOrigin === c.key ? CHIP_ON : CHIP_OFF}`}>
+                  {c.key !== 'all' && <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
                   <span className="truncate">{c.label}</span>
                   <span className="tabular-nums text-gray-400">{c.n.toLocaleString()}</span>
                 </button>
               ))}
-              {origin !== 'all' && origin !== 'Manual' && (
-                <button type="button" onClick={() => removeFile(origin)} disabled={disabled} className="text-xs font-medium text-destructive hover:underline underline-offset-2 disabled:opacity-50">
+              {files.length > 1 && fileOrigin !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => removeFile(fileOrigin)}
+                  disabled={disabled}
+                  className="text-xs font-medium text-destructive hover:underline underline-offset-2 disabled:opacity-50"
+                >
                   Remove all from this file
                 </button>
               )}
@@ -416,60 +560,131 @@ export default function ExtraCandidatesInput({
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">Name</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left font-semibold">Email</th>
-                  <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>
-                  {onCopyLink && <th className="w-[6.75rem] px-2 py-2 text-center font-semibold">Link</th>}
-                  <th className="w-11 px-2 py-2"><span className="sr-only">Remove</span></th>
+                  {mode === 'excel' && <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>}
+                  <th className={`${onCopyLink ? 'w-[10.5rem]' : 'w-[5rem]'} px-2 py-2 text-center font-semibold`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                {pageRows.map((r) => (
-                  <tr key={r.id} className="bg-white dark:bg-slate-900">
-                    <td className="px-3 py-2">
-                      <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
-                      <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
+                {pageRows.map((r) => {
+                  const draft = editing?.id === r.id ? editing : null;
+                  return (
+                  <tr key={r.id} className={draft ? 'bg-brand-blue/[0.03] dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'}>
+                    <td className="px-3 py-2 align-top">
+                      {draft ? (
+                        <>
+                          <input
+                            autoFocus
+                            value={draft.name}
+                            onChange={(e) => setEditing({ ...draft, name: e.target.value, error: null })}
+                            onKeyDown={editKeys}
+                            aria-label="Full name"
+                            className={`${INPUT} h-8 w-full border-gray-200 dark:border-slate-700`}
+                          />
+                          <input
+                            type="email"
+                            value={draft.email}
+                            onChange={(e) => setEditing({ ...draft, email: e.target.value, error: null })}
+                            onKeyDown={editKeys}
+                            aria-label="Email address"
+                            className={`${INPUT} sm:hidden mt-1.5 h-8 w-full border-gray-200 dark:border-slate-700`}
+                          />
+                          {draft.error && <p role="alert" className="mt-1 text-xs text-destructive">{draft.error}</p>}
+                        </>
+                      ) : (
+                        <>
+                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
+                          <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
+                        </>
+                      )}
                     </td>
-                    <td className="hidden sm:table-cell px-3 py-2 text-gray-600 dark:text-slate-400"><span className="block truncate" title={r.email}>{r.email}</span></td>
-                    <td className="hidden md:table-cell px-3 py-2">
-                      <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.origin}>
-                        {r.origin !== 'Manual' && <FileSpreadsheet className="w-3 h-3 shrink-0 text-emerald-600" aria-hidden="true" />}
-                        <span className="truncate">{r.origin}</span>
-                      </span>
+                    <td className="hidden sm:table-cell px-3 py-2 align-top text-gray-600 dark:text-slate-400">
+                      {draft ? (
+                        <input
+                          type="email"
+                          value={draft.email}
+                          onChange={(e) => setEditing({ ...draft, email: e.target.value, error: null })}
+                          onKeyDown={editKeys}
+                          aria-label="Email address"
+                          aria-invalid={!!draft.error || undefined}
+                          className={`${INPUT} h-8 w-full ${draft.error ? 'border-destructive-line' : 'border-gray-200 dark:border-slate-700'}`}
+                        />
+                      ) : <span className="block truncate" title={r.email}>{r.email}</span>}
                     </td>
-                    {onCopyLink && (
-                      <td className="px-2 py-2 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => { if (!r.linked) void copyLink(r); }}
-                          disabled={disabled || linking === r.id}
-                          title={r.linked ? 'Invited by link — not emailed' : 'Create and copy this candidate’s link (no email is sent)'}
-                          className={`inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs border disabled:opacity-50 ${
-                            r.linked
-                              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
-                              : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          {linking === r.id
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
-                        </button>
+                    {mode === 'excel' && (
+                      <td className="hidden md:table-cell px-3 py-2 align-top">
+                        <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.origin}>
+                          <FileSpreadsheet className="w-3 h-3 shrink-0 text-emerald-600" aria-hidden="true" />
+                          <span className="truncate">{r.origin}</span>
+                        </span>
                       </td>
                     )}
-                    <td className="px-2 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => remove(r.id)}
-                        disabled={disabled}
-                        aria-label={`Remove ${r.name}`}
-                        title="Remove"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
+                    <td className="px-2 py-2 align-top">
+                      <span className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        {draft ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={saveEdit}
+                              className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium bg-brand-blue text-white hover:bg-brand-blue-2"
+                            >
+                              <Check className="w-3.5 h-3.5" aria-hidden="true" />Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditing(null)}
+                              className="inline-flex items-center h-7 px-2 rounded-md text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {onCopyLink && (
+                              <button
+                                type="button"
+                                onClick={() => { if (!r.linked) void copyLink(r); }}
+                                disabled={disabled || linking === r.id}
+                                title={r.linked ? 'Invited by link — not emailed' : 'Create and copy this candidate’s link (no email is sent)'}
+                                className={`inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs border disabled:opacity-50 ${
+                                  r.linked
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                                    : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                {linking === r.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => startEdit(r)}
+                              disabled={disabled || !!r.linked || linking === r.id}
+                              aria-label={`Edit ${r.name}`}
+                              title={r.linked ? 'Invited by link — the invitation already uses this name and email' : 'Edit'}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                            >
+                              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => remove(r.id)}
+                              disabled={disabled}
+                              aria-label={`Remove ${r.name}`}
+                              title="Remove"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {pageRows.length === 0 && (
-                  <tr><td colSpan={5} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
+                  <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
                 )}
               </tbody>
             </table>

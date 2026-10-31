@@ -1,17 +1,16 @@
 'use client';
 
-import { Fragment, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
+import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps } from 'react';
 import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Loader2, Mail, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { usePathname } from 'next/navigation';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
 import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type ExtraCounts } from './ExtraCandidatesInput';
-import { SOURCE_META, SOURCE_ORDER, SourceIcon, type InviteSourceKey } from './inviteSources';
-import type { InviteCandidateSourceTab } from '@/lib/services/bulkInviteService';
+import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
 import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
 import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteReviewStep';
 import InviteMessageStep from './InviteMessageStep';
@@ -233,12 +232,17 @@ export default function VersionInviteDialog({
   /* Added by email (typed / Excel). */
   const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
   const [extraCounts, setExtraCounts] = useState<ExtraCounts>({ manual: 0, excel: 0 });
+  /* The candidates step's open tab when it is Type in / Upload Excel (null =
+     one of the lists), and a key that empties what was added directly. */
+  const [addTab, setAddTab] = useState<ExtraMode | null>(null);
+  const [extrasKey, setExtrasKey] = useState(0);
+  /* The candidates step, once opened, stays mounted (hidden on other steps). */
+  const [candidatesMounted, setCandidatesMounted] = useState(false);
+  /* Bumped when a Copy Link uses a unit: the units are read again. */
+  const [quotaKey, setQuotaKey] = useState(0);
   /* The version changed after candidates were added: "already invited" is
      per version, so the review re-checks it — said once, dismissible. */
   const [verNote, setVerNote] = useState<string | null>(null);
-  /* The summary's checklist: the Review and Message steps were opened. */
-  const [reviewed, setReviewed] = useState(false);
-  const [messageSeen, setMessageSeen] = useState(false);
   const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
   const [sending, setSending] = useState(false);
   const bulkTracker = useOptionalBulkInviteProgress();
@@ -347,8 +351,6 @@ export default function VersionInviteDialog({
   const stepIndex = steps.indexOf(current);
   const goTo = (s: Step) => {
     setStep(s);
-    if (s === 'review') setReviewed(true);
-    if (s === 'send') setMessageSeen(true);
     bodyRef.current?.scrollTo({ top: 0 });
     dialogRef.current?.scrollTo({ top: 0 });
   };
@@ -365,22 +367,15 @@ export default function VersionInviteDialog({
     setVersionId(id);
   };
 
-  /* Everyone added, by where they came from — the summary's breakdown. */
-  const bySource: Partial<Record<InviteSourceKey, number>> = {};
-  if (recipients.length) bySource.page = recipients.length;
-  if (extraCounts.manual) bySource.manual = extraCounts.manual;
-  if (extraCounts.excel) bySource.excel = extraCounts.excel;
-  if (serverSelection.mode === 'ids') {
-    for (const p of Object.values(serverSelection.picked)) bySource[p.source] = (bySource[p.source] ?? 0) + 1;
-  } else {
-    const tab: InviteCandidateSourceTab = serverSelection.source;
-    bySource[tab] = selectionCount(serverSelection);
-  }
   const blocked = createBlockedReason(versions, perms, kind);
   const returnUrl = job ? `/recruitment/job-details?id=${encodeURIComponent(job.jdId)}` : '/recruitment/job-openings';
   // What will be sent: the review's count once it has one, else everyone added.
   const willInvite = reviewCounts && (current === 'review' || current === 'send') ? reviewCounts.invite : recipientCount;
   const quotaShort = quotaAvailable !== null && willInvite > quotaAvailable;
+  /* How many more can be added on the candidates step: the units left after
+     everyone added so far. Null = no limit (unlimited plan, or the units
+     could not be read — the server checks at send). */
+  const unitsRoom = quotaAvailable === null ? null : quotaAvailable - recipientCount;
   /* How many typed-in / Excel rows fit: the units available (or the backend's
      per-send cap on unlimited plans), less everyone already picked elsewhere. */
   const extraLimitByUnits = !quotaUnlimited && quotaAvailable !== null && quotaAvailable < MAX_EXTRA_CANDIDATES;
@@ -388,23 +383,104 @@ export default function VersionInviteDialog({
     0,
     (extraLimitByUnits ? quotaAvailable! : MAX_EXTRA_CANDIDATES) - recipients.length - selectionCount(serverSelection),
   );
+  const unitsTone = unitsRoom === null || unitsRoom > 0
+    ? { bar: 'bg-brand-blue', text: 'text-gray-600 dark:text-slate-300' }
+    : unitsRoom === 0
+      ? { bar: 'bg-warning', text: 'font-medium text-warning-strong' }
+      : { bar: 'bg-destructive', text: 'font-medium text-destructive' };
+  /* Emails added directly — a list row with one of them is not ticked again. */
+  const addedEmails = new Set(extras.map((x) => x.email.trim().toLowerCase()));
+  const clearCandidates = () => {
+    setServerSelection(EMPTY_SELECTION);
+    setExtras([]);
+    setExtraCounts({ manual: 0, excel: 0 });
+    setExtrasKey((k) => k + 1);
+  };
+  if (current === 'candidates' && !candidatesMounted) setCandidatesMounted(true);
 
   /* Closing with candidates added asks first — they would be lost. */
+  const askDiscard = () => setConfirm({
+    title: `Discard ${plural(addedCount, 'selected candidate')}?`,
+    message: 'Closing now loses everyone you have picked. This cannot be undone.',
+    confirmText: 'Discard and close',
+    cancelText: 'Keep editing',
+    destructive: true,
+    run: async () => onClose(),
+  });
   const requestClose = () => {
     if (confirmBusy) return;
     if (!bulkJob && addedCount > 0) {
-      setConfirm({
-        title: `Discard ${plural(addedCount, 'selected candidate')}?`,
-        message: 'Closing now loses everyone you have picked. This cannot be undone.',
-        confirmText: 'Discard and close',
-        cancelText: 'Keep editing',
-        destructive: true,
-        run: async () => onClose(),
-      });
+      askDiscard();
       return;
     }
     onClose();
   };
+
+  /* The browser's Back button closes the popup, not the page under it.
+     Opening adds a history entry on the same URL (Next's own state copied
+     in, so its router reads it as this page); Back pops it and lands here:
+     the top layer closes (resume / versions preview, View, the confirm), or
+     with candidates added the discard question opens — both put the entry
+     back so the next Back is caught too — else the popup closes. Closing any
+     other way takes the entry off again. The footer's Back moves between
+     steps; the browser's does not. */
+  const guardId = useRef(`invite${useId()}`);
+  const mounted = useRef(false);
+  const onGuardEntry = () => (window.history.state as { tfInvite?: string } | null)?.tfInvite === guardId.current;
+  /* Whether the popup's entry is on the stack, and the address it was added
+     on — Next rewrites the current entry's state after a Back, so the tag
+     alone cannot say whether the entry is still there. */
+  const guard = useRef<{ active: boolean; href: string }>({ active: false, href: '' });
+  const pushGuard = () => {
+    if (guard.current.active && onGuardEntry()) return;
+    window.history.pushState({ ...(window.history.state ?? {}), tfInvite: guardId.current }, '', window.location.href);
+    guard.current = { active: true, href: window.location.href };
+  };
+  const onBrowserBack = useEffectEvent(() => {
+    if (onGuardEntry()) return; // Forward onto the popup's own entry: nothing to undo.
+    guard.current.active = false;
+    if (childOverlay.current) { childOverlay.current(); pushGuard(); return; }
+    if (viewing) { setViewing(null); pushGuard(); return; }
+    if (viewingInterviewId) { setViewingInterviewId(null); pushGuard(); return; }
+    // An editor over the popup keeps its unsaved work: Back is held.
+    if (editing || creatingFirst || wizardHref) { pushGuard(); return; }
+    if (confirm) { if (!confirmBusy) setConfirm(null); pushGuard(); return; }
+    if (!bulkJob && addedCount > 0) { pushGuard(); askDiscard(); return; }
+    onClose();
+  });
+  useEffect(() => {
+    mounted.current = true;
+    pushGuard();
+    const onPop = () => onBrowserBack();
+    window.addEventListener('popstate', onPop);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener('popstate', onPop);
+      // Closed by Cancel / Done / Discard: take the popup's entry off, so the
+      // next Back goes back a page. A remount in the same tick keeps it.
+      // A link that left the page moved the address: its entry is left alone.
+      setTimeout(() => {
+        if (mounted.current || !guard.current.active) return;
+        guard.current.active = false;
+        if (window.location.href === guard.current.href) window.history.back();
+      }, 0);
+    };
+    // Once per opening; the handlers read the latest state themselves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* The page changed under the popup some other way (a sidebar or logo
+     link): close it — or, with candidates added, ask first. */
+  const pathname = usePathname();
+  const [seenPath, setSeenPath] = useState(pathname);
+  const [routeLeft, setRouteLeft] = useState(false);
+  if (pathname !== seenPath) {
+    setSeenPath(pathname);
+    if (!bulkJob && addedCount > 0) askDiscard();
+    else setRouteLeft(true);
+  }
+  const closeOnRouteLeft = useEffectEvent(() => onClose());
+  useEffect(() => { if (routeLeft) closeOnRouteLeft(); }, [routeLeft]);
 
   const reloadAfterReturn = useEffectEvent(() => {
     if (off || !job || confirmBusy || creating || !loaded) return;
@@ -461,7 +537,9 @@ export default function VersionInviteDialog({
     setVersionId(null);
     setLoaded(false);
     setStep(null);
-    setServerSelection(EMPTY_SELECTION);
+    clearCandidates();
+    setCandidatesMounted(false);
+    setAddTab(null);
     setVerNote(null);
     messageTouched.current = false;
   };
@@ -590,6 +668,7 @@ export default function VersionInviteDialog({
       ? await assessmentService.createInviteLink(selected.id, data)
       : await aiInterviewService.createInviteLink(selected.id, data);
     onSent?.(kind, 1);
+    setQuotaKey((k) => k + 1);
     return res.link;
   };
 
@@ -737,15 +816,6 @@ export default function VersionInviteDialog({
   const latestId = (jobWideVersions ?? listedVersions(kind, versions))[0]?.id;
   const jobName = job ? job.jdTitle || selected?.raw?.jd_title || selected?.name || '' : '';
   const pickedName = selected ? `${jobName || selected.name} · v${selected.version}` : '—';
-  const reviewedDone = (reviewed || current === 'review' || current === 'send') && selectedNow > 0;
-  const messageDone = messageSeen || current === 'send';
-  const unitsAfterText = quotaUnlimited
-    ? 'Unlimited'
-    : quotaAvailable === null
-      ? '—'
-      : quotaShort
-        ? `${shortBy.toLocaleString()} short`
-        : `${Math.max(0, quotaAvailable - willInvite).toLocaleString()} available`;
   const alerts: { tone: 'warn' | 'info' | 'danger'; text: string; onDismiss?: () => void }[] = [];
   if (inSteps && deniedTitle) {
     alerts.push({ tone: 'warn', text: !inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `Sending invites needs the Invite permission for ${label.plural}. Ask a workspace admin.` });
@@ -754,17 +824,19 @@ export default function VersionInviteDialog({
   if (inSteps && quotaShort && current !== 'version') {
     alerts.push({ tone: 'danger', text: `Only ${plural(quotaAvailable ?? 0, 'unit')} ${quotaAvailable === 1 ? 'is' : 'are'} available for ${plural(willInvite, 'candidate')}. Deselect ${shortBy.toLocaleString()} to continue, or add units.` });
   }
+  if (inSteps && current === 'candidates' && !quotaShort && unitsRoom === 0) {
+    alerts.push({
+      tone: 'warn',
+      text: recipientCount === 0
+        ? `No ${label.singular} units left. Add units to invite candidates.`
+        : `Units full (${recipientCount.toLocaleString()}/${(quotaAvailable ?? 0).toLocaleString()}). Remove someone to add more.`,
+    });
+  }
   const ALERT_TONE = {
     warn: 'border-warning-line bg-warning-subtle text-warning-strong',
     info: 'border-brand-blue/20 bg-brand-blue/[0.06] text-brand-blue',
     danger: 'border-destructive-line bg-destructive-subtle text-destructive',
   };
-  const checklist = [
-    { label: `${label.singular} version picked`, done: !!selected?.sendable },
-    { label: 'Candidates added', done: recipientCount > 0 },
-    { label: 'Candidates reviewed', done: reviewedDone },
-    { label: 'Message checked', done: messageDone },
-  ];
 
   return (
     <>
@@ -797,6 +869,7 @@ export default function VersionInviteDialog({
             {!off && (
               <InviteQuotaBar
                 kind={kind}
+                refreshKey={quotaKey}
                 onStats={(s) => {
                   setQuotaUnlimited(isUnlimitedQuota(s));
                   setQuotaAvailable(s && !isUnlimitedQuota(s) ? s.available : null);
@@ -959,38 +1032,7 @@ export default function VersionInviteDialog({
                   />
                 </div>
               </div>
-            ) : current === 'candidates' ? (
-              <div className="space-y-4">
-                {recipients.length > 0 && (
-                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
-                    {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
-                  </p>
-                )}
-                <section aria-label="Add people directly" className={BLOCK}>
-                  <ExtraCandidatesInput onChange={setExtras} onCounts={setExtraCounts} disabled={pickingOff} onCopyLink={copyLinkFor} takenEmail={takenEmail} maxRows={extraMaxRows} limitByUnits={extraLimitByUnits} />
-                </section>
-                <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500" aria-hidden="true">
-                  <span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />or<span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />
-                </div>
-                <section aria-labelledby="pick-for-job" className={`${BLOCK} space-y-3`}>
-                  <div>
-                    <h3 id="pick-for-job" className="text-sm font-semibold text-gray-900 dark:text-slate-50">
-                      Pick candidates for <span className="text-brand-blue">{[job.jdCode, jobName].filter(Boolean).join(' · ')}</span>
-                    </h3>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Candidates matched, scored or saved for this job.</p>
-                  </div>
-                  <ServerCandidatePicker
-                    jdId={job.jdId}
-                    kind={kind}
-                    versionId={selected?.sendable ? selected.id : null}
-                    selection={serverSelection}
-                    onSelectionChange={setServerSelection}
-                    pickingDisabled={pickingOff}
-                    onOverlayChange={onOverlayChange}
-                  />
-                </section>
-              </div>
-            ) : current === 'review' && !perms.canInvite ? (
+            ) : current === 'candidates' ? null : current === 'review' && !perms.canInvite ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{deniedTitle}</div>
             ) : current === 'review' && reviewRequest ? (
               <div className="space-y-4">
@@ -1055,53 +1097,107 @@ export default function VersionInviteDialog({
                 </div>
               </div>
             ) : null}
+            {/* The candidates step stays mounted once opened (hidden on the
+                other steps), so what was typed in, uploaded, filtered or
+                opened is still there after Review → Back. */}
+            {!off && job && !bulkJob && loaded && candidatesMounted && (
+              <div className={current === 'candidates' ? 'space-y-4' : 'hidden'}>
+                {recipients.length > 0 && (
+                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                    {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
+                  </p>
+                )}
+                <div>
+                  <h3 className={INTRO_H}>Who do you want to invite?</h3>
+                  <p className={INTRO_P}>
+                    Add people, or pick from{' '}
+                    <span className="font-medium text-brand-blue">{[job.jdCode, jobName].filter(Boolean).join(' · ')}</span> and your resume database.
+                    Everyone you add stays selected across tabs.
+                  </p>
+                </div>
+                <ServerCandidatePicker
+                  jdId={job.jdId}
+                  kind={kind}
+                  versionId={selected?.sendable ? selected.id : null}
+                  selection={serverSelection}
+                  onSelectionChange={setServerSelection}
+                  pickingDisabled={pickingOff}
+                  onOverlayChange={onOverlayChange}
+                  addTab={addTab}
+                  onAddTabChange={setAddTab}
+                  addCounts={extraCounts}
+                  room={unitsRoom}
+                  addedEmails={addedEmails}
+                  addPanel={(
+                    <ExtraCandidatesInput
+                      key={extrasKey}
+                      mode={addTab ?? 'manual'}
+                      room={unitsRoom}
+                      onChange={setExtras}
+                      onCounts={setExtraCounts}
+                      disabled={pickingOff}
+                      onCopyLink={copyLinkFor}
+                      takenEmail={takenEmail}
+                      maxRows={extraMaxRows}
+                      limitByUnits={extraLimitByUnits}
+                    />
+                  )}
+                  footer={(
+                    /* Stays in view while the list scrolls (wide screens; on
+                       phones the popup's own footer carries the count). */
+                    <div className="sm:sticky sm:-bottom-6 z-[2] flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-b-xl border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 text-sm">
+                      {addedCount > 0 ? (
+                        <span className="min-w-0">
+                          <b className="font-semibold text-brand-blue tabular-nums">✓ {addedCount.toLocaleString()} selected</b>
+                          <span className="text-gray-500 dark:text-slate-400 tabular-nums">
+                            {[
+                              extraCounts.manual && `${extraCounts.manual.toLocaleString()} typed in`,
+                              extraCounts.excel && `${extraCounts.excel.toLocaleString()} from Excel`,
+                              selectionCount(serverSelection) && `${selectionCount(serverSelection).toLocaleString()} picked`,
+                            ].filter(Boolean).map((part) => ` · ${part}`).join('')}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 dark:text-slate-400">No one selected yet — add or pick candidates above.</span>
+                      )}
+                      <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                        {quotaAvailable !== null && (
+                          <span
+                            className="inline-flex items-center gap-2 text-xs tabular-nums"
+                            title={unitsRoom !== null && unitsRoom > 0 ? `${plural(unitsRoom, 'unit')} left` : undefined}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="relative h-1.5 w-20 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
+                            >
+                              <span
+                                className={`absolute inset-y-0 left-0 rounded-full ${unitsTone.bar}`}
+                                style={{ width: `${quotaAvailable > 0 ? Math.min(100, (recipientCount / quotaAvailable) * 100) : 100}%` }}
+                              />
+                            </span>
+                            <span className={unitsTone.text}>
+                              {recipientCount.toLocaleString()} / {quotaAvailable.toLocaleString()} units
+                              {unitsRoom !== null && unitsRoom === 0 ? ' · Full' : unitsRoom !== null && unitsRoom < 0 ? ` · ${(-unitsRoom).toLocaleString()} over` : ''}
+                            </span>
+                          </span>
+                        )}
+                        {addedCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={clearCandidates}
+                            className="text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:underline underline-offset-2"
+                          >
+                            Clear selection
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                />
+              </div>
+            )}
           </div>
 
-          {/* The summary beside the steps (wide screens; the footer's line
-              carries it on smaller ones). */}
-          {inSteps && (
-            <aside aria-label="Invite summary" className="hidden lg:flex w-[18.75rem] shrink-0 flex-col gap-4 overflow-y-auto border-l border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Invite summary</h3>
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-xs text-gray-500 dark:text-slate-400">{label.singular}</dt>
-                  <dd className="mt-0.5 font-medium text-gray-900 dark:text-slate-50 break-words">{pickedName}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-500 dark:text-slate-400">Candidates</dt>
-                  <dd className="mt-0.5 font-medium text-gray-900 dark:text-slate-50 tabular-nums">
-                    {selectedNow.toLocaleString()} selected{totalNow > selectedNow ? ` of ${totalNow.toLocaleString()}` : ''}
-                    {SOURCE_ORDER.some((k) => bySource[k]) && (
-                      <ul className="mt-2 space-y-1 text-xs font-normal text-gray-700 dark:text-slate-300">
-                        {SOURCE_ORDER.filter((k) => bySource[k]).map((k) => (
-                          <li key={k} className="flex items-center gap-1.5">
-                            <SourceIcon source={k} />
-                            <span className="flex-1 truncate">{SOURCE_META[k].label}</span>
-                            <span className="tabular-nums text-gray-500 dark:text-slate-400">{(bySource[k] ?? 0).toLocaleString()}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-gray-500 dark:text-slate-400">Units after send</dt>
-                  <dd className={`mt-0.5 font-medium tabular-nums ${quotaShort ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{unitsAfterText}</dd>
-                </div>
-              </dl>
-              <ul className="space-y-2.5 border-t border-gray-100 dark:border-slate-700/60 pt-3.5 text-sm">
-                {checklist.map((c) => (
-                  <li key={c.label} className={`flex items-center gap-2 ${c.done ? 'text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400'}`}>
-                    <span className={`flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] ${c.done ? 'border-success bg-success text-white' : 'border-gray-300 dark:border-slate-600 text-transparent'}`}>
-                      <Check className="w-3 h-3" aria-hidden="true" />
-                    </span>
-                    {c.label}
-                    <span className="sr-only">{c.done ? '(done)' : '(not yet)'}</span>
-                  </li>
-                ))}
-              </ul>
-            </aside>
-          )}
           </div>
 
           <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 shrink-0 ${inSteps ? 'max-sm:sticky max-sm:bottom-0 max-sm:z-10' : ''}`}>
