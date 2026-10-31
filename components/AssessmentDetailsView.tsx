@@ -1679,18 +1679,13 @@ export default function AssessmentDetailsView({
                 )}
               </div>
 
-              {/* Row 2: Rounds + Duration + Created Date + Created By + versions */}
-              {/* `relative` here, and only `sm:relative` on the two version
-                  switchers below: under 640px their popovers anchor to this
-                  full-width row instead of to their pill, so a pill that
-                  wrapped to the right edge cannot push its menu off-screen. */}
-              <div className="relative flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+              {/* Row 2: Duration + Created Date + Created By + Last Updated */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
                 {/* No per-icon colour. The four icons inherit the row's own
                     `text-gray-600 dark:text-slate-400` through currentColor, so
                     they read as one quiet line of facts instead of four tinted
                     ones competing with the pills above and beside them. */}
                 {([
-                  { key: 'rounds', icon: Layers, label: sections.length > 0 ? `${sections.length} round${sections.length !== 1 ? 's' : ''}` : null },
                   { key: 'duration', icon: Clock, label: formattedDuration },
                   { key: 'created-at', icon: Calendar, label: assessment.created_at ? `Created ${formatIST(assessment.created_at)}` : null },
                   { key: 'created-by', icon: User, label: assessment.created_by_name ? `By ${assessment.created_by_name}` : null },
@@ -1708,12 +1703,21 @@ export default function AssessmentDetailsView({
                       </div>
                     </Fragment>
                   ))}
+              </div>
 
-                {/* Version badges, on the tail of the row exactly as the Job
-                    Details card ends on its own. */}
-                {(selectedJobVersionNumber != null || assessment.version != null) && (
-                  <span aria-hidden className="text-gray-300">&bull;</span>
-                )}
+              {/* Row 3: round pills + Job Version + Assessment Version, on
+                  their own line below the facts — the AI Interview Details
+                  header's own row 3 (mode/round/version chips). `relative`
+                  here, and only `sm:relative` on the two version switchers
+                  below: under 640px their popovers anchor to this full-width
+                  row instead of to their pill, so a pill that wrapped to the
+                  right edge cannot push its menu off-screen. */}
+              <div className="relative flex flex-wrap items-center gap-1.5 mt-2">
+                {sections.map((section) => (
+                  <span key={section.type} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-brand-blue/10 text-brand-blue rounded-full ring-1 ring-brand-blue/20">
+                    <Layers className="w-3 h-3" /> {section.name}
+                  </span>
+                ))}
                 {selectedJobVersionNumber != null && (
                   /* MANAGE JOBS - the job-version switcher.
                    *
