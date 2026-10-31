@@ -497,6 +497,11 @@ type CandidateResultRow = AssessmentAttemptResponse & {
 /** Session key holding the Total Jobs page a job's Results was opened from. */
 const RESULTS_RETURN_PAGE_KEY = 'assessments:resultsReturnPage';
 
+/** Distinct candidates in a set of results: one per email (trimmed, lowercased);
+ *  rows with no email are left out. */
+const countCandidateEmails = (rows: { candidate_email?: string | null }[]): number =>
+  new Set(rows.map((r) => (r.candidate_email || '').trim().toLowerCase()).filter(Boolean)).size;
+
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab, initialFocusAssessmentId }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
@@ -1496,6 +1501,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   /* Both cross-assessment tabs start from the last set this page loaded, so a
      return from a details page (or reopening the tab) shows rows at once; their
      loads below still run and replace them. */
+  /* Candidates assessed, one per email, counted from the completed results
+     when the stats endpoint does not send `total_unique_candidates`. */
+  const [uniqueEmailsAssessed, setUniqueEmailsAssessed] = useState<number | undefined>(undefined);
   const [completedCandidates, setCompletedCandidates] = useState<CandidateResultRow[]>(() => readListSnapshot<CandidateResultRow[]>('assessments-results:rows') ?? []);
   const completedCandidatesRef = useRef(completedCandidates);
   completedCandidatesRef.current = completedCandidates;
@@ -1672,6 +1680,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        (`candidatesAssessed`), which is why the Total Assessed card is not
        stuck on 0 the way reading the optional field alone left it. */
     total_candidates_tested: 0,
+    /* People behind those attempts — one per candidate email — when the
+       stats endpoint sends it (`total_unique_candidates`). */
+    total_unique_candidates: undefined as number | undefined,
     total_invitations: 0,
     total_candidates_completed: 0,
     average_pass_rate: null as number | null,
@@ -3590,6 +3601,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             draft_assessments: response.draft_assessments || 0,
             archived_assessments: response.archived_assessments || 0,
             total_candidates_tested: response.total_candidates_tested || 0,
+            total_unique_candidates: response.total_unique_candidates,
             total_invitations: response.total_invitations || 0,
             total_candidates_completed: response.total_candidates_completed || 0,
             average_pass_rate: response.average_pass_rate,
@@ -3598,6 +3610,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           };
           setStats(freshStats);
           writeListSnapshot('assessments:stats', freshStats);
+          /* No people count from the server: count them here, one per
+             candidate email across every completed result (one request). */
+          if (response.total_unique_candidates == null) {
+            assessmentService.getAllResults()
+              .then((rows) => setUniqueEmailsAssessed(countCandidateEmails(rows)))
+              .catch(() => setUniqueEmailsAssessed(undefined));
+          }
           console.log('[TalentFlow] Loaded assessment stats from API');
         } else {
           console.log(
@@ -3874,12 +3893,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         draft_assessments: statsResponse.draft_assessments || 0,
         archived_assessments: statsResponse.archived_assessments || 0,
         total_candidates_tested: statsResponse.total_candidates_tested || 0,
+        total_unique_candidates: statsResponse.total_unique_candidates,
         total_invitations: statsResponse.total_invitations || 0,
         total_candidates_completed: statsResponse.total_candidates_completed || 0,
         average_pass_rate: statsResponse.average_pass_rate,
         average_score: statsResponse.average_score,
         units_consumed: statsResponse.units_consumed || 0,
       });
+      // As on the first load: no people count from the server, count emails here.
+      if (statsResponse.total_unique_candidates == null) {
+        assessmentService.getAllResults()
+          .then((rows) => setUniqueEmailsAssessed(countCandidateEmails(rows)))
+          .catch(() => setUniqueEmailsAssessed(undefined));
+      }
     } catch (error) {
       console.log('[TalentFlow] Failed to reload stats:', error);
     }
@@ -5875,7 +5901,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      many assessments they took. Undefined while an older backend doesn't send
      the unique figure, and the pill is then hidden. */
   const uniqueCandidatesAssessed =
-    (stats as { total_unique_candidates?: number }).total_unique_candidates;
+    stats.total_unique_candidates
+    ?? (completedCandidates.length > 0 ? countCandidateEmails(completedCandidates) : uniqueEmailsAssessed);
 
   const visibleAssessments = collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
