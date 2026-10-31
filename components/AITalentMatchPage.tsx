@@ -97,9 +97,10 @@ const SHOW_STAT_CARDS = true;
 const SHOW_ALL_RESUMES_VIEW = false;
 const SHOW_VERSIONS_PANEL = false;
 
-/* Toolbar size (h-[38px]) — More Filters / Sort by height, as on Resume Scoring. */
+/* Toolbar size (h-9) — the search box / More Filters height, so every
+   control in a toolbar row is the same 36px box. */
 const TOOLBAR_BUTTON_CLASS =
-  'h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue';
+  'h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue';
 
 type RatingBand = 'exact' | 'partial' | 'no_match';
 
@@ -3561,7 +3562,7 @@ export default function AITalentMatchPage({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                 aria-label={`Actions for ${count} selected ${count === 1 ? noun.one : noun.many}`}
               >
                 <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -3715,7 +3716,7 @@ export default function AITalentMatchPage({
        rating: "Job + Rating 10" lists the jobs that have a 10, each opening
        its own 10s. */
     const pillClass = (active: boolean) =>
-      `inline-flex items-center gap-2 h-[38px] px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+      `inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
         active
           ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
           : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3767,7 +3768,7 @@ export default function AITalentMatchPage({
           <div
             role="radiogroup"
             aria-label="View by"
-            className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+            className="relative grid grid-cols-2 h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
           >
             <span
               aria-hidden
@@ -4024,7 +4025,7 @@ export default function AITalentMatchPage({
                 <ListViewToggle
                   value={matchDisplayMode}
                   onChange={setDisplayModeEverywhere}
-                  className="h-[38px] !border-brand-blue/10"
+                  className="h-9 [&>button]:p-[7px] !border-brand-blue/10"
                 />
               </ListToolbar>
 
@@ -4947,7 +4948,7 @@ export default function AITalentMatchPage({
                   </div>
                 )}
 
-                <ListViewToggle value={matchDisplayMode} onChange={setDisplayModeEverywhere} className="ml-auto" />
+                <ListViewToggle value={matchDisplayMode} onChange={setDisplayModeEverywhere} className="ml-auto h-9 [&>button]:p-[7px]" />
               </div>
 
               {/* Same filter panel as "View by Candidates" — one filter set
@@ -5575,7 +5576,7 @@ export default function AITalentMatchPage({
             <ListViewToggle
               value={jobListDisplayMode}
               onChange={setDisplayModeEverywhere}
-              className="h-[38px] !border-brand-blue/10"
+              className="h-9 [&>button]:p-[7px] !border-brand-blue/10"
             />
           </ListToolbar>
 
@@ -5698,7 +5699,7 @@ export default function AITalentMatchPage({
                       variant="primary"
                       size="sm"
                       onClick={() => setShowHistoryFilters(false)}
-                      className="!h-[38px] !px-4 !text-sm"
+                      className="!h-9 !px-4 !text-sm"
                     >
                       Done
                     </Button>
@@ -7751,7 +7752,7 @@ export default function AITalentMatchPage({
                     setMatchError(null);
                     router.push('/recruitment/ai-talent-match', { scroll: false });
                   }}
-                  className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium whitespace-nowrap"
+                  className="w-full sm:w-auto h-10 px-4 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium whitespace-nowrap"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>New AI Match</span>
@@ -7892,7 +7893,7 @@ export default function AITalentMatchPage({
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                          className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                           aria-label={`Actions for ${selectedCandidates.length} selected`}
                         >
                           <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -8012,7 +8013,7 @@ export default function AITalentMatchPage({
                   </>
                 );
               })()}
-              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} />
+              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} className="h-9 [&>button]:p-[7px]" />
             </ListToolbar>
 
             {selectedCandidates.length > 0 && availableUnits !== null && selectedCandidates.length > availableUnits && (
