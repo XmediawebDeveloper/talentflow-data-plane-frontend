@@ -30,13 +30,13 @@ const PAGE_SIZE = 50;
    tabs so the bulk path keeps it. */
 export const TAB_LABEL: Record<InviteCandidateSourceTab, string> = {
   'talent-match': 'AI Talent Match',
-  'score-resume': 'Score Resume',
+  'score-resume': 'Scored Resumes',
   'my-resumes': 'My Resumes',
   'internal-db': 'Shared Database',
 };
 const LIST_HEADING: Record<InviteCandidateSourceTab, string> = {
   'talent-match': 'AI Talent Match Candidates',
-  'score-resume': 'Score Resume Candidates',
+  'score-resume': 'Scored Resumes',
   'my-resumes': 'My Resumes',
   'internal-db': 'Shared Database',
 };
@@ -389,7 +389,15 @@ export default function ServerCandidatePicker({
     }
   };
 
-  /* ── a row's resume: 👁 opens it (AI Talent Match / Score Resume send the
+  /** Why this row cannot be ticked now, or null when it can. */
+  const tickBlockReason = (r: ServerInviteCandidate): string | null =>
+    !r.email ? 'No email' : r.already_invited ? 'Already invited to this version'
+      : pickingDisabled ? 'Pick a version first'
+      : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
+      : !isOn(r) && addedDirectly(r) ? 'Already added in Type in / Upload Excel'
+      : !isOn(r) && !canAdd ? 'No units left. Remove someone to add more.' : null;
+
+  /* ── a row's resume: 👁 opens it (AI Talent Match / Scored Resumes send the
      matched / scored version) or its versions (My Resumes / Shared Database,
      where another version can be chosen). ── */
   const [previewing, setPreviewing] = useState<ServerInviteCandidate | null>(null);
@@ -400,11 +408,18 @@ export default function ServerCandidatePicker({
   const closeVersions = () => { setVersionsOf(null); onOverlayChange?.(null); };
   const openPreview = (r: ServerInviteCandidate) => { setPreviewing(r); onOverlayChange?.(closePreview); };
   const openVersions = (r: ServerInviteCandidate) => {
+    if (!canTick(r) || selection.mode !== 'ids') {
+      const reason = tickBlockReason(r)
+        ?? (selection.mode === 'filter' ? 'Clear “Select all matching” (or the folder tick) to choose a version.' : null);
+      if (reason) toast.info(`${reason} — versions open to view only.`);
+    }
     onOverlayChange?.(closeVersions);
     setVersionsOf({ row: r, list: [], loading: true });
     resumeService.getVersions(r.resume_id)
       .then((res: unknown) => {
-        const list = (Array.isArray(res) ? res as ResumeVersionRow[] : []).slice().sort((a, b) => (b.version || 0) - (a.version || 0));
+        const raw = res as ResumeVersionRow[] | { versions?: ResumeVersionRow[]; items?: ResumeVersionRow[] } | null;
+        const found = Array.isArray(raw) ? raw : raw?.versions ?? raw?.items ?? [];
+        const list = found.slice().sort((a, b) => (b.version || 0) - (a.version || 0));
         const versions = list.length ? list : [{ id: r.resume_id, version: 1, created_at: new Date().toISOString() }];
         setVersionCounts((c) => ({ ...c, [r.resume_id]: versions.length }));
         setVersionsOf((v) => (v && v.row.resume_id === r.resume_id ? { ...v, list: versions, loading: false } : v));
@@ -578,6 +593,16 @@ export default function ServerCandidatePicker({
         </div>
       </div>
 
+      {/* Above the search: how to send another version of a resume. */}
+      {isDbTab(source) && (
+        <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 px-3 py-2 text-xs text-gray-700 dark:text-slate-300">
+          <Lightbulb className="w-3.5 h-3.5 mt-px shrink-0 text-amber-500" aria-hidden="true" />
+          <span>
+            <b className="font-semibold">Tip:</b> For multi-version resumes, the latest version is selected by default. Click the{' '}
+            <Eye className="inline w-3.5 h-3.5 -mt-px" aria-label="eye" /> icon to switch versions.
+          </span>
+        </p>
+      )}
       {/* Search + filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[12rem]">
@@ -739,11 +764,7 @@ export default function ServerCandidatePicker({
             const on = isOn(r) && !!r.email && !r.already_invited;
             const tickable = canTick(r);
             const picked = pickedOf(r);
-            const why = !r.email ? 'No email' : r.already_invited ? 'Already invited to this version'
-              : pickingDisabled ? 'Pick a version first'
-              : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
-              : !isOn(r) && addedDirectly(r) ? 'Already added in Type in / Upload Excel'
-              : !isOn(r) && !canAdd ? 'No units left. Remove someone to add more.' : undefined;
+            const why = tickBlockReason(r) ?? undefined;
             const shownName = kind === 'interview' ? formatCandidateFirstName(r.name) : r.name;
             return (
               <li key={r.resume_id}>
@@ -816,15 +837,6 @@ export default function ServerCandidatePicker({
             </li>
           )}
         </ul>
-      )}
-      {isDbTab(source) && rows.length > 0 && (
-        <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 px-3 py-2 text-xs text-gray-700 dark:text-slate-300">
-          <Lightbulb className="w-3.5 h-3.5 mt-px shrink-0 text-amber-500" aria-hidden="true" />
-          <span>
-            <b className="font-semibold">Tip:</b> For multi-version resumes, the latest version is selected by default. Click the{' '}
-            <Eye className="inline w-3.5 h-3.5 -mt-px" aria-label="eye" /> icon to switch versions.
-          </span>
-        </p>
       )}
       </div>
       </div>

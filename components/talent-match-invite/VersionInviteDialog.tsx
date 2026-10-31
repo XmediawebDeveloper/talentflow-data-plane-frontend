@@ -1145,7 +1145,7 @@ export default function VersionInviteDialog({
                   footer={(
                     /* Stays in view while the list scrolls (wide screens; on
                        phones the popup's own footer carries the count). */
-                    <div className="sm:sticky sm:bottom-0 z-[2] flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-b-xl border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 text-sm">
+                    <div className="sm:sticky sm:-bottom-6 z-[2] flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-b-xl border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 text-sm">
                       {addedCount > 0 ? (
                         <span className="min-w-0">
                           <b className="font-semibold text-brand-blue tabular-nums">✓ {addedCount.toLocaleString()} selected</b>

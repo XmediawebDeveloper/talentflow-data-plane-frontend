@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CheckCircle, Copy, Download, FileSpreadsheet, Loader2, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { Check, CheckCircle, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
@@ -126,7 +126,7 @@ const downloadSample = () => {
  * replaced by "Upload another sheet" once a sheet has added rows. Each
  * shows a compact table of the rows it added — search, per-sheet chips (a
  * sheet's chip can remove every row it brought), a per-row Copy Link (invites
- * by link, no email) and remove, 10 a page. Each upload leaves a summary —
+ * by link, no email), edit in place and remove, 10 a page. Each upload leaves a summary —
  * added, invalid (row by row), repeated. The rows not invited by link are
  * handed up as `extra_candidates`; the backend applies the same skips as
  * every other row.
@@ -169,6 +169,8 @@ export default function ExtraCandidatesInput({
   const [origin, setOrigin] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [linking, setLinking] = useState<string | null>(null);
+  /* The row being edited in place, its draft and what is wrong with it. */
+  const [editing, setEditing] = useState<{ id: string; name: string; email: string; error: string | null } | null>(null);
   const [upload, setUpload] = useState<UploadSummary | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const full = room !== null && room <= 0;
@@ -211,7 +213,38 @@ export default function ExtraCandidatesInput({
     nameRef.current?.focus();
   };
 
-  const remove = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const remove = (id: string) => {
+    if (editing?.id === id) setEditing(null);
+    commit(rows.filter((r) => r.id !== id));
+  };
+  /* Edit: the add rules again — a name of letters and spaces, a valid email
+     not already in this list or picked elsewhere. A row invited by Copy Link
+     already has its invitation, so it is not edited. */
+  const startEdit = (r: EntryRow) => setEditing({ id: r.id, name: r.name, email: r.email, error: null });
+  const saveEdit = () => {
+    if (!editing) return;
+    const n = editing.name.trim();
+    const e = editing.email.trim().toLowerCase();
+    const fail = (error: string) => setEditing({ ...editing, error });
+    if (!n || !e) { fail('Enter a full name and an email address.'); return; }
+    if (!isValidCandidateName(n)) { fail(NAME_FORMAT_ERROR); return; }
+    if (!isValidEmailFormat(e)) { fail(EMAIL_FORMAT_ERROR); return; }
+    const before = rows.find((r) => r.id === editing.id);
+    if (!before) { setEditing(null); return; }
+    if (e !== before.email) {
+      const same = rows.find((r) => r.id !== editing.id && r.email === e);
+      if (same) { fail(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
+      const elsewhere = takenEmail?.(e);
+      if (elsewhere) { fail(`${e} is already added from ${elsewhere}.`); return; }
+    }
+    commit(rows.map((r) => (r.id === editing.id ? { ...r, name: n.replace(/\s+/g, ' '), email: e } : r)));
+    setEditing(null);
+  };
+  const editKeys = (ev: React.KeyboardEvent<HTMLInputElement>) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+    // Escape cancels the edit only, not the popup.
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); setEditing(null); }
+  };
   const removeFile = (file: string) => {
     commit(rows.filter((r) => r.origin !== file));
     if (upload?.file === file) setUpload(null);
@@ -528,61 +561,130 @@ export default function ExtraCandidatesInput({
                   <th className="px-3 py-2 text-left font-semibold">Name</th>
                   <th className="hidden sm:table-cell px-3 py-2 text-left font-semibold">Email</th>
                   {mode === 'excel' && <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>}
-                  {onCopyLink && <th className="w-[6.75rem] px-2 py-2 text-center font-semibold">Link</th>}
-                  <th className="w-11 px-2 py-2"><span className="sr-only">Remove</span></th>
+                  <th className={`${onCopyLink ? 'w-[10.5rem]' : 'w-[5rem]'} px-2 py-2 text-center font-semibold`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                {pageRows.map((r) => (
-                  <tr key={r.id} className="bg-white dark:bg-slate-900">
-                    <td className="px-3 py-2">
-                      <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
-                      <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
+                {pageRows.map((r) => {
+                  const draft = editing?.id === r.id ? editing : null;
+                  return (
+                  <tr key={r.id} className={draft ? 'bg-brand-blue/[0.03] dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'}>
+                    <td className="px-3 py-2 align-top">
+                      {draft ? (
+                        <>
+                          <input
+                            autoFocus
+                            value={draft.name}
+                            onChange={(e) => setEditing({ ...draft, name: e.target.value, error: null })}
+                            onKeyDown={editKeys}
+                            aria-label="Full name"
+                            className={`${INPUT} h-8 w-full border-gray-200 dark:border-slate-700`}
+                          />
+                          <input
+                            type="email"
+                            value={draft.email}
+                            onChange={(e) => setEditing({ ...draft, email: e.target.value, error: null })}
+                            onKeyDown={editKeys}
+                            aria-label="Email address"
+                            className={`${INPUT} sm:hidden mt-1.5 h-8 w-full border-gray-200 dark:border-slate-700`}
+                          />
+                          {draft.error && <p role="alert" className="mt-1 text-xs text-destructive">{draft.error}</p>}
+                        </>
+                      ) : (
+                        <>
+                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
+                          <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
+                        </>
+                      )}
                     </td>
-                    <td className="hidden sm:table-cell px-3 py-2 text-gray-600 dark:text-slate-400"><span className="block truncate" title={r.email}>{r.email}</span></td>
+                    <td className="hidden sm:table-cell px-3 py-2 align-top text-gray-600 dark:text-slate-400">
+                      {draft ? (
+                        <input
+                          type="email"
+                          value={draft.email}
+                          onChange={(e) => setEditing({ ...draft, email: e.target.value, error: null })}
+                          onKeyDown={editKeys}
+                          aria-label="Email address"
+                          aria-invalid={!!draft.error || undefined}
+                          className={`${INPUT} h-8 w-full ${draft.error ? 'border-destructive-line' : 'border-gray-200 dark:border-slate-700'}`}
+                        />
+                      ) : <span className="block truncate" title={r.email}>{r.email}</span>}
+                    </td>
                     {mode === 'excel' && (
-                      <td className="hidden md:table-cell px-3 py-2">
+                      <td className="hidden md:table-cell px-3 py-2 align-top">
                         <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.origin}>
                           <FileSpreadsheet className="w-3 h-3 shrink-0 text-emerald-600" aria-hidden="true" />
                           <span className="truncate">{r.origin}</span>
                         </span>
                       </td>
                     )}
-                    {onCopyLink && (
-                      <td className="px-2 py-2 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => { if (!r.linked) void copyLink(r); }}
-                          disabled={disabled || linking === r.id}
-                          title={r.linked ? 'Invited by link — not emailed' : 'Create and copy this candidate’s link (no email is sent)'}
-                          className={`inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs border disabled:opacity-50 ${
-                            r.linked
-                              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
-                              : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          {linking === r.id
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
-                        </button>
-                      </td>
-                    )}
-                    <td className="px-2 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => remove(r.id)}
-                        disabled={disabled}
-                        aria-label={`Remove ${r.name}`}
-                        title="Remove"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      </button>
+                    <td className="px-2 py-2 align-top">
+                      <span className="flex items-center justify-center gap-1 whitespace-nowrap">
+                        {draft ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={saveEdit}
+                              className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium bg-brand-blue text-white hover:bg-brand-blue-2"
+                            >
+                              <Check className="w-3.5 h-3.5" aria-hidden="true" />Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditing(null)}
+                              className="inline-flex items-center h-7 px-2 rounded-md text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {onCopyLink && (
+                              <button
+                                type="button"
+                                onClick={() => { if (!r.linked) void copyLink(r); }}
+                                disabled={disabled || linking === r.id}
+                                title={r.linked ? 'Invited by link — not emailed' : 'Create and copy this candidate’s link (no email is sent)'}
+                                className={`inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs border disabled:opacity-50 ${
+                                  r.linked
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                                    : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                {linking === r.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => startEdit(r)}
+                              disabled={disabled || !!r.linked || linking === r.id}
+                              aria-label={`Edit ${r.name}`}
+                              title={r.linked ? 'Invited by link — the invitation already uses this name and email' : 'Edit'}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-gray-400"
+                            >
+                              <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => remove(r.id)}
+                              disabled={disabled}
+                              aria-label={`Remove ${r.name}`}
+                              title="Remove"
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                          </>
+                        )}
+                      </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {pageRows.length === 0 && (
-                  <tr><td colSpan={5} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
+                  <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
                 )}
               </tbody>
             </table>
