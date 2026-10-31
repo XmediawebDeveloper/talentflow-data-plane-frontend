@@ -5,7 +5,7 @@ import { Fragment, useState, useEffect, useRef, useCallback, type ComponentType 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
-import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
+import { proctoringService, ProctoringEvent, AssessmentShareBarCheck } from '@/lib/services/proctoringService';
 import { RecordingPlayer, EMPTY_RECORDING_SOURCE, type RecordingSource } from '@/components/recording/RecordingPlayer';
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
@@ -3297,6 +3297,9 @@ export default function CandidateResultDetails({
                     {/* Violation evidence: the frame captured for phone / object detections */}
                     <AssessmentViolationEvidence attemptId={candidateId} />
 
+                    {/* Screen-share check: images from the pre-assessment "hide the sharing bar" check */}
+                    <AssessmentShareBarChecks attemptId={candidateId} />
+
                     {/* Event Log / Timeline */}
                     <div className="mt-2">
                       <div className="flex flex-wrap items-center gap-2 mb-4">
@@ -3602,6 +3605,124 @@ function AssessmentViolationEvidence({ attemptId }: { attemptId: string | null |
         {events.map(e => <AssessmentEvidenceCard key={e.id} event={e} />)}
       </div>
     </div>
+  );
+}
+
+/**
+ * Pre-assessment screen-share check: the original capture and the enhanced
+ * copy sent to the vision model, for every "Continue" try (oldest first).
+ * Renders nothing when the attempt has no checks.
+ */
+function AssessmentShareBarChecks({ attemptId }: { attemptId: string | null | undefined }) {
+  const [checks, setChecks] = useState<AssessmentShareBarCheck[]>([]);
+
+  useEffect(() => {
+    if (!attemptId) return;
+    let cancelled = false;
+    proctoringService.getShareBarChecks(attemptId).then(c => { if (!cancelled) setChecks(c); });
+    return () => { cancelled = true; };
+  }, [attemptId]);
+
+  if (!attemptId || checks.length === 0) return null;
+  return (
+    <div>
+      <h4 className="text-base font-semibold text-gray-900 tracking-tight mb-1">Screen-share Verification</h4>
+      <p className="text-xs text-gray-500 mb-3">
+        Images from the check that the sharing bar was hidden before the assessment started. Click a thumbnail to enlarge.
+      </p>
+      <div className="space-y-4">
+        {checks.map(c => {
+          const issues = [
+            c.hidden === false ? 'Sharing bar visible' : null,
+            c.pip_detected ? 'Picture-in-picture' : null,
+            c.recorder_overlay_detected ? 'Recorder overlay' : null,
+            c.foreign_app_detected ? (c.foreign_app_label ? `Other app: ${c.foreign_app_label}` : 'Other app') : null,
+          ].filter(Boolean) as string[];
+          return (
+            <div key={c.index}>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-xs font-semibold text-gray-700">
+                  {checks.length > 1 ? `Try ${c.index + 1} of ${checks.length}` : 'Check'}
+                </span>
+                {c.checked_at && (
+                  <span className="text-2xs text-gray-500">{formatISTWithSeconds(c.checked_at)}</span>
+                )}
+                <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ${issues.length ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                  {issues.length ? issues.join(' · ') : 'Passed'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {c.has_original && (
+                  <ShareBarImageCard attemptId={attemptId} index={c.index} which="original" label="Original capture" />
+                )}
+                {c.has_enhanced && (
+                  <ShareBarImageCard attemptId={attemptId} index={c.index} which="enhanced" label="Enhanced (sent to AI)" />
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ShareBarImageCard({ attemptId, index, which, label }: {
+  attemptId: string; index: number; which: 'original' | 'enhanced'; label: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    proctoringService.getShareBarScreenshot(attemptId, index, which).then(blob => {
+      if (cancelled) return;
+      if (!blob) { setFailed(true); return; }
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [attemptId, index, which]);
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => url && setEnlarged(true)}
+          disabled={!url}
+          className="block w-full aspect-video bg-slate-100"
+        >
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={label} className="w-full h-full object-contain hover:opacity-90 transition-opacity" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+              {failed ? 'Image no longer available' : 'Loading…'}
+            </div>
+          )}
+        </button>
+        <div className="px-3 py-2.5">
+          <div className="text-xs font-semibold text-gray-700">{label}</div>
+        </div>
+      </div>
+      {enlarged && url && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setEnlarged(false)}
+          role="dialog"
+          aria-label={label}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="max-w-full max-h-full rounded-lg" />
+        </div>
+      )}
+    </>
   );
 }
 
