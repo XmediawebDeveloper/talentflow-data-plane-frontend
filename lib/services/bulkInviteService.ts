@@ -43,6 +43,9 @@ export interface ServerInviteCandidate {
   /** The latest resume score for this job, or null when never scored. */
   score: { percent: number; match_status: ServerMatchStatus; scored_at: string | null } | null;
   already_invited: boolean;
+  /** This resume's version and how many the candidate has, when the server sends them. */
+  version?: number | null;
+  version_count?: number | null;
 }
 
 export interface InviteCandidatesPage {
@@ -74,7 +77,50 @@ export interface BulkInviteRequest {
   base_url?: string;
 }
 
-export type BulkInviteJobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+/** The popup's Review step: the send as it stands, plus the rows unticked there. */
+export interface BulkInviteReviewRequest {
+  kind: BulkInviteKind;
+  version_id: string;
+  selection: BulkInviteSelection;
+  extra_candidates?: BulkExtraCandidate[];
+  /** `key`s of the rows unticked in the review. */
+  left_out?: string[];
+  view?: BulkInviteReviewStatus | 'all';
+  group?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export type BulkInviteReviewStatus = 'invite' | 'skipped' | 'left_out';
+
+export interface BulkInviteReviewRow {
+  /** The resume, else `email:<address>` — what `left_out` takes. */
+  key: string;
+  resume_id: string | null;
+  name: string;
+  email: string;
+  /** From a list's selection, or an extra (page-ticked / typed / Excel). */
+  origin: 'list' | 'extra';
+  source: InviteCandidateSourceTab | 'extra';
+  /** Where the row came from, as shown (AI Talent Match, Manual, …). */
+  group: string;
+  status: BulkInviteReviewStatus;
+  reason: string | null;
+}
+
+export interface BulkInviteReviewPage {
+  items: BulkInviteReviewRow[];
+  /** Rows matching view + group + search. */
+  total: number;
+  page: number;
+  page_size: number;
+  /** The whole send, by status. */
+  counts: { all: number } & Record<BulkInviteReviewStatus, number>;
+  groups: { label: string; count: number }[];
+}
+
+export type BulkInviteJobStatus ='queued' | 'running' | 'done' | 'failed' | 'cancelled';
 export type BulkInviteItemStatus = 'queued' | 'processing' | 'sent' | 'skipped' | 'failed';
 
 export interface BulkInviteJob {
@@ -161,6 +207,16 @@ export const bulkInviteService = {
         ...body,
         base_url: body.base_url ?? (typeof window !== 'undefined' ? window.location.origin : undefined),
       });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** What Send would do, row by row — nothing is sent. */
+  async review(jdId: string, body: BulkInviteReviewRequest, signal?: AbortSignal): Promise<BulkInviteReviewPage> {
+    try {
+      const response = await api.post<BulkInviteReviewPage>(`/jd/${jdId}/bulk-invites/review`, body, { signal });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

@@ -23,7 +23,7 @@ export default function ResumeScoringSkeleton({
   variant?: 'overview' | 'list';
 }) {
   return (
-    <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950" aria-busy="true" aria-label="Loading Resume Scoring">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" aria-busy="true" aria-label="Loading Resume Scoring">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl min-h-[calc(100dvh-7rem)]">
           {/* Breadcrumb bar */}
@@ -34,15 +34,15 @@ export default function ResumeScoringSkeleton({
           </div>
 
           {/* Header: icon + title + subtitle | units + Score Resumes */}
-          <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
-              <div className="space-y-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
+            <div className="flex items-start gap-3 min-w-0">
+              <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+              <div className="min-w-0 space-y-2">
                 <Skeleton className="h-6 w-44" />
                 <Skeleton className="h-4 w-72 max-w-[60vw]" />
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <Skeleton className="h-10 w-44 rounded-lg" />
               <Skeleton className="h-10 w-48 rounded-lg" />
             </div>
@@ -120,18 +120,20 @@ export default function ResumeScoringSkeleton({
                         <Skeleton className="h-4 w-28" />
                       </div>
                     </div>
-                    <div className="flex items-start justify-end gap-6 w-full sm:w-auto">
-                      <div className="flex flex-col gap-1.5">
-                        <Skeleton className="h-6 w-36 rounded-md" />
-                        <Skeleton className="h-6 w-36 rounded-md" />
-                        <Skeleton className="h-6 w-36 rounded-md" />
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto">
+                      {/* Phones mirror the real card: verdict chips in one wrapping
+                          row, then a footer row (View Candidates | icon buttons). */}
+                      <div className="flex flex-row flex-wrap gap-1 sm:flex-col sm:items-stretch sm:gap-1.5 flex-shrink-0">
+                        <Skeleton className="h-6 w-24 sm:w-36 rounded-md" />
+                        <Skeleton className="h-6 w-24 sm:w-36 rounded-md" />
+                        <Skeleton className="h-6 w-24 sm:w-36 rounded-md" />
                       </div>
-                      <div className="flex flex-col items-stretch gap-2">
-                        <div className="flex items-center gap-1.5 self-end">
+                      <div className="flex flex-row-reverse items-center gap-2 sm:flex-col sm:items-stretch">
+                        <div className="flex items-center gap-1.5 sm:self-end">
                           <Skeleton className="h-10 w-10 rounded-lg" />
                           <Skeleton className="h-10 w-10 rounded-lg" />
                         </div>
-                        <Skeleton className="h-10 w-48 rounded-lg" />
+                        <Skeleton className="h-9 flex-1 sm:flex-none sm:w-48 rounded-lg" />
                       </div>
                     </div>
                   </div>

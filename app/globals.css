@@ -229,6 +229,22 @@ html.tf-app-shell body {
   .scrollbar-auto-hide:active { scrollbar-color: var(--sb-thumb) transparent !important; }
 }
 
+/* Lighter, slimmer bar for small sideways strips (e.g. a tab row) where the
+   full app bar reads too heavy. Only overrides the tokens the global rules
+   read, so it combines with .scrollbar-auto-hide. */
+.scrollbar-light {
+  --sb-area: 6px;
+  --sb-pill: 3px;
+  --sb-pill-hover: 4px;
+  --sb-inset: 4px;
+  --sb-thumb: rgba(148, 163, 184, 0.3);
+  --sb-thumb-hover: rgba(100, 116, 139, 0.45);
+}
+.dark .scrollbar-light {
+  --sb-thumb: rgba(148, 163, 184, 0.22);
+  --sb-thumb-hover: rgba(148, 163, 184, 0.4);
+}
+
 /* Apply auto-hide scrollbar to ALL scrollable descendants inside main content area.
    Pages define their own overflow-y-auto containers, so we target them via parent wrapper. */
 .scrollbar-auto-hide-area,

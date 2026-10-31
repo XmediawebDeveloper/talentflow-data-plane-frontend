@@ -1,21 +1,35 @@
 /**
- * Chat transcript PDF that mirrors the Transcript tab's Chat view: the
- * candidate header card on top, then Bina's bubbles on the left and the
- * candidate's on the right, each with its Q/F label and time. jsPDF is
- * loaded on demand so it stays out of the page bundle.
+ * Chat transcript PDF that mirrors the Transcript tab's Chat view bubble for
+ * bubble: Bina's questions (with skip notes) on the left, the candidate's
+ * Original (ASR) + Corrected pair on the right. Rendered from HTML with
+ * html2pdf (same approach as the Q&A PDF export) so the browser shapes the
+ * text — Tamil, Chinese, etc. in the Original ASR come out exactly as on
+ * screen, which jsPDF's built-in fonts can't do.
  */
 import { formatIST } from '@/lib/utils/dateUtils';
 
-export interface ChatPdfMessage {
-  speaker: 'bina' | 'candidate';
-  /** Q1 / F1 / D1 / CL1 / End — empty for interstitial nudges. */
-  label: string;
-  text: string;
-  /** Candidate's raw ASR when it differs from the corrected text. */
-  original?: string;
-  language?: string;
-  time?: string;
-}
+export type ChatPdfMessage =
+  | {
+      speaker: 'bina';
+      /** Q1 / F1 / D1 / CL1 — empty for the opening, closing and nudges. */
+      label: string;
+      kind: 'main' | 'followup' | 'deepdive';
+      text: string;
+      /** "Skipped — candidate clicked “Next Question”" etc. */
+      skipNote?: { text: string; amber: boolean };
+      time?: string;
+    }
+  | {
+      speaker: 'candidate';
+      label: string;
+      kind: 'main' | 'followup' | 'deepdive';
+      language?: string;
+      original: string;
+      corrected: string;
+      noScorableEnglish: boolean;
+      fullSentenceRewrite: boolean;
+      time?: string;
+    };
 
 export interface ChatPdfData {
   candidateName: string;
@@ -29,170 +43,136 @@ export interface ChatPdfData {
   messages: ChatPdfMessage[];
 }
 
-type RGB = [number, number, number];
-const BRAND: RGB = [23, 55, 140];
-const BRAND_TINT: RGB = [241, 244, 251];
-const BRAND_LINE: RGB = [208, 216, 236];
-const GRAY_BUBBLE: RGB = [243, 244, 246];
-const TEXT: RGB = [17, 24, 39];
-const MUTED: RGB = [107, 114, 128];
-const WHITE: RGB = [255, 255, 255];
-const ON_BRAND_MUTED: RGB = [205, 215, 240];
-const GREEN: [RGB, RGB] = [[220, 252, 231], [21, 128, 61]];
-const ORANGE: [RGB, RGB] = [[255, 237, 213], [194, 65, 12]];
-const RED: [RGB, RGB] = [[254, 226, 226], [185, 28, 28]];
+const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Chat-view colours as plain hex (html2canvas can't read the theme's oklch tokens).
+const C = {
+  brand: '#17378c',
+  brandTint: '#eef2fb',
+  brandLine: '#d0d8ec',
+  cyan: '#0e7490', cyanTint: '#ecfeff', cyanLine: '#a5f3fc',
+  teal: '#0f766e', tealTint: '#f0fdfa', tealLine: '#99f6e4',
+  binaBubble: '#eff0f3', binaText: '#08132e',
+  skyBubble: '#e3f2fc', skyText: '#0c4a6e', skyLabel: '#0369a1',
+  greenBubble: '#e9f8ee', greenText: '#14532d', greenLabel: '#15803d',
+  orange: '#c2410c',
+  muted: '#6b7280', faint: '#9ca3af',
+  amberBg: '#fffbeb', amberText: '#b45309', amberLine: '#fde68a',
+  slateBg: '#f8fafc', slateText: '#64748b', slateLine: '#e2e8f0',
+};
+
+const pill = (text: string, bg: string, fg: string, line: string) =>
+  `<span style="display:inline-block;vertical-align:middle;height:16px;line-height:14px;padding:0 6px;box-sizing:border-box;font-size:9px;font-weight:600;border-radius:4px;background:${bg};color:${fg};border:1px solid ${line};white-space:nowrap">${esc(text)}</span>`;
+
+const labelPill = (label: string, kind: ChatPdfMessage['kind']) =>
+  kind === 'deepdive' ? pill(label, C.tealTint, C.teal, C.tealLine)
+    : kind === 'followup' ? pill(label, C.cyanTint, C.cyan, C.cyanLine)
+      : pill(label, C.brandTint, C.brand, C.brandLine);
+
+const avatar = (letter: string, filled: boolean) =>
+  `<div style="flex:none;display:inline-block;vertical-align:middle;width:24px;height:24px;line-height:24px;text-align:center;box-sizing:border-box;border-radius:50%;font-size:10px;font-weight:700;${
+    filled ? `background:${C.brand};color:#fff` : `background:${C.brandTint};color:${C.brand};border:1px solid ${C.brandLine};line-height:22px`
+  }">${esc(letter)}</div>`;
+
+function messageHtml(m: ChatPdfMessage, initial: string): string {
+  const isBina = m.speaker === 'bina';
+  const indent = m.kind !== 'main'
+    ? `padding-left:18px;margin-left:10px;border-left:2px solid ${m.kind === 'deepdive' ? C.tealLine : C.cyanLine};`
+    : '';
+  const metaPills = [
+    m.label ? labelPill(m.label, m.kind) : '',
+    !isBina && m.language ? pill(m.language, C.slateBg, C.slateText, C.slateLine) : '',
+  ].filter(Boolean);
+  const meta = metaPills.length
+    ? `<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;${isBina ? '' : 'flex-direction:row-reverse'}">${metaPills.join('')}</div>`
+    : '';
+  const bubble = (bg: string, fg: string, inner: string, extra = '') =>
+    `<div style="padding:8px 12px;border-radius:14px;font-size:11.5px;line-height:1.55;background:${bg};color:${fg};white-space:pre-line;word-break:break-word;${extra}">${inner}</div>`;
+  const caption = (text: string, color: string) =>
+    `<div style="font-size:8.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${color};margin-bottom:3px">${text}</div>`;
+
+  let body: string;
+  if (m.speaker === 'bina') {
+    body = bubble(C.binaBubble, C.binaText, esc(m.text), 'border-top-left-radius:4px');
+    if (m.skipNote) {
+      const [bg, fg, line] = m.skipNote.amber ? [C.amberBg, C.amberText, C.amberLine] : [C.slateBg, C.slateText, C.slateLine];
+      body += `<div style="margin-top:6px;display:inline-block;height:20px;line-height:18px;padding:0 9px;box-sizing:border-box;border-radius:8px;font-size:9.5px;font-weight:500;background:${bg};color:${fg};border:1px solid ${line}">&#9197; ${esc(m.skipNote.text)}</div>`;
+    }
+  } else {
+    body = bubble(C.skyBubble, C.skyText, caption('Original (ASR)', C.skyLabel) + esc(m.original), 'border-top-right-radius:4px');
+    body += bubble(
+      C.greenBubble, C.greenText,
+      caption('Corrected', C.greenLabel) + (m.noScorableEnglish
+        ? `<span style="font-style:italic;color:${C.muted}">— no scorable English (not scored)</span>`
+        : esc(m.corrected)),
+      'margin-top:6px',
+    );
+    if (m.fullSentenceRewrite) {
+      body += `<div style="font-size:9px;color:${C.orange};font-style:italic;text-align:right;margin-top:3px;padding-right:4px">full-sentence rewrite</div>`;
+    }
+  }
+  const time = m.time
+    ? `<div style="font-size:9px;color:${C.faint};margin-top:3px;${isBina ? 'padding-left:4px' : 'padding-right:4px;text-align:right'}">${esc(m.time)}</div>`
+    : '';
+
+  return `<div class="chat-msg" style="display:flex;gap:9px;padding-top:8px;margin-bottom:6px;${isBina ? '' : 'flex-direction:row-reverse;'}${indent}">
+    ${avatar(isBina ? 'B' : initial, isBina)}
+    <div style="max-width:75%;${isBina ? '' : 'display:flex;flex-direction:column;align-items:flex-end'}">${meta}${body}${time}</div>
+  </div>`;
+}
 
 export async function downloadChatTranscriptPdf(data: ChatPdfData, filename: string): Promise<void> {
-  const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const W = doc.internal.pageSize.getWidth();
-  const H = doc.internal.pageSize.getHeight();
-  const M = 14;
-  const BOTTOM = H - 14;
-  let y = M;
+  const html2pdf = (await import('html2pdf.js')).default;
+  const name = data.candidateName || 'Candidate';
+  const initial = name.charAt(0).toUpperCase();
 
-  const font = (size: number, style: 'normal' | 'bold' | 'italic' = 'normal', color: RGB = TEXT) => {
-    doc.setFont('helvetica', style);
-    doc.setFontSize(size);
-    doc.setTextColor(...color);
-  };
-  const pill = (text: string, x: number, yMid: number, [bg, fg]: [RGB, RGB], align: 'left' | 'right' = 'left') => {
-    font(7.5, 'bold', fg);
-    const w = doc.getTextWidth(text) + 5;
-    const left = align === 'right' ? x - w : x;
-    doc.setFillColor(...bg);
-    doc.roundedRect(left, yMid - 2.6, w, 5.2, 2.6, 2.6, 'F');
-    doc.text(text, left + 2.5, yMid + 1);
-    return w;
-  };
-  const initial = (data.candidateName || 'C').charAt(0).toUpperCase();
-  const avatar = (letter: string, cx: number, cy: number, filled: boolean) => {
-    if (filled) {
-      doc.setFillColor(...BRAND);
-      doc.circle(cx, cy, 3.5, 'F');
-      font(8, 'bold', WHITE);
-    } else {
-      doc.setFillColor(...BRAND_TINT);
-      doc.setDrawColor(...BRAND_LINE);
-      doc.circle(cx, cy, 3.5, 'FD');
-      font(8, 'bold', BRAND);
-    }
-    doc.text(letter, cx, cy + 1.1, { align: 'center' });
-  };
+  const statusPills = [
+    data.status ? pill(data.status, '#dcfce7', '#15803d', '#bbf7d0') : '',
+    data.mode ? pill(data.mode, '#ffedd5', '#c2410c', '#fed7aa') : '',
+  ].join(' ');
+  const resultPill = data.result
+    ? pill(`${data.result.passed ? 'Pass' : 'Fail'}  |  ${data.result.score}%`,
+      data.result.passed ? '#dcfce7' : '#fee2e2', data.result.passed ? '#15803d' : '#b91c1c', data.result.passed ? '#bbf7d0' : '#fecaca')
+    : '';
 
-  // ── Title bar ─────────────────────────────────────────────
-  font(15, 'bold', BRAND);
-  doc.text('Chat Transcript', M, y + 5);
-  font(8, 'normal', MUTED);
-  doc.text(`Exported ${formatIST(new Date().toISOString())}`, W - M, y + 5, { align: 'right' });
-  y += 10;
+  const root = document.createElement('div');
+  root.style.cssText = `width:720px;padding:8px 4px;font-family:Inter,'Segoe UI','Noto Sans','Noto Sans Tamil','Noto Sans CJK SC',Arial,sans-serif;color:${C.binaText};background:#fff`;
+  root.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <div style="font-size:18px;font-weight:700;color:${C.brand}">Chat Transcript</div>
+      <div style="font-size:9.5px;color:${C.muted}">Exported ${esc(formatIST(new Date().toISOString()))}</div>
+    </div>
+    <div style="border:1px solid ${C.brandLine};background:${C.brandTint};border-radius:10px;padding:12px 14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:16px;font-weight:700;line-height:20px">${esc(name)}</span> ${statusPills}
+        </div>
+        ${resultPill}
+      </div>
+      <div style="font-size:11px;color:${C.muted};margin-top:6px">${data.identity.filter(Boolean).map(esc).join('&nbsp;&nbsp;|&nbsp;&nbsp;')}</div>
+      <div style="font-size:11px;color:${C.muted};margin-top:3px">${data.timing.filter(Boolean).map(esc).join('&nbsp;&nbsp;·&nbsp;&nbsp;')}</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;margin-bottom:14px;border-bottom:1px solid #f1f2f4">
+      <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;color:${C.muted}">
+        ${avatar('B', true)} Bina (AI Interviewer) <span style="color:#e5e7eb">·</span> ${avatar(initial, false)} ${esc(name)}
+      </div>
+      <div style="font-size:10.5px;color:${C.faint}">${data.messages.length} messages</div>
+    </div>
+    ${data.messages.map(m => messageHtml(m, initial)).join('')}`;
 
-  // ── Candidate card ────────────────────────────────────────
-  const cardTop = y;
-  const cardH = 26;
-  doc.setFillColor(...BRAND_TINT);
-  doc.setDrawColor(...BRAND_LINE);
-  doc.roundedRect(M, cardTop, W - 2 * M, cardH, 3, 3, 'FD');
-
-  let x = M + 5;
-  font(14, 'bold');
-  const name = data.candidateName || 'Unknown Candidate';
-  doc.text(name, x, cardTop + 8);
-  x += doc.getTextWidth(name) + 3;
-  if (data.status) x += pill(data.status, x, cardTop + 6.8, GREEN) + 2;
-  if (data.mode) pill(data.mode, x, cardTop + 6.8, ORANGE);
-  if (data.result) {
-    pill(`${data.result.passed ? 'Pass' : 'Fail'}  |  ${data.result.score}%`, W - M - 5, cardTop + 6.8, data.result.passed ? GREEN : RED, 'right');
+  document.body.appendChild(root);
+  try {
+    await html2pdf().set({
+      margin: [10, 10, 12, 10],
+      filename: `${filename.replace(/\.pdf$/i, '')}.pdf`,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      // Keep each message whole on a page (a bubble taller than a page still splits).
+      pagebreak: { mode: ['css'], avoid: '.chat-msg' },
+    }).from(root).save();
+  } finally {
+    document.body.removeChild(root);
   }
-  font(9, 'normal', MUTED);
-  doc.text(data.identity.filter(Boolean).join('   |   '), M + 5, cardTop + 15);
-  doc.text(data.timing.filter(Boolean).join('     ·     '), M + 5, cardTop + 21);
-  y = cardTop + cardH + 7;
-
-  // ── Participants row ──────────────────────────────────────
-  avatar('B', M + 3.5, y, true);
-  font(8.5, 'normal', MUTED);
-  doc.text('Bina (AI Interviewer)', M + 9, y + 1.2);
-  const binaW = doc.getTextWidth('Bina (AI Interviewer)');
-  avatar(initial, M + 15 + binaW, y, false);
-  font(8.5, 'normal', MUTED);
-  doc.text(data.candidateName || 'Candidate', M + 20.5 + binaW, y + 1.2);
-  doc.text(`${data.messages.length} messages`, W - M, y + 1.2, { align: 'right' });
-  y += 5;
-  doc.setDrawColor(229, 231, 235);
-  doc.line(M, y, W - M, y);
-  y += 6;
-
-  // ── Bubbles ───────────────────────────────────────────────
-  const maxBubbleW = (W - 2 * M) * 0.72;
-  const PAD = 3.5;
-  type Line = { text: string; small: boolean };
-  const lineH = (l: Line) => (l.small ? 3.6 : 4.3);
-  const setLineFont = (l: Line, isBina: boolean) => {
-    if (l.small) font(7.5, 'italic', isBina ? MUTED : ON_BRAND_MUTED);
-    else font(9.5, 'normal', isBina ? TEXT : WHITE);
-  };
-
-  for (const m of data.messages) {
-    const isBina = m.speaker === 'bina';
-    const inner = maxBubbleW - 2 * PAD;
-    font(9.5);
-    const lines: Line[] = (doc.splitTextToSize(m.text || '', inner) as string[]).map(text => ({ text, small: false }));
-    if (m.original) {
-      font(7.5, 'italic');
-      lines.push(...(doc.splitTextToSize(`Original: ${m.original}`, inner) as string[]).map(text => ({ text, small: true })));
-    }
-    const widest = Math.max(...lines.map(l => { setLineFont(l, isBina); return doc.getTextWidth(l.text); }));
-    const bubbleW = Math.min(maxBubbleW, widest + 2 * PAD);
-    const bubbleLeft = isBina ? M + 10 : W - M - 10 - bubbleW;
-
-    // Keep the meta line with at least the first few lines of the bubble.
-    const firstLines = lines.slice(0, 3).reduce((h, l) => h + lineH(l), 0);
-    if (y + 6 + firstLines + 2 * PAD > BOTTOM) { doc.addPage(); y = M; }
-
-    // Meta line: avatar, label · time · language.
-    const metaY = y + 2;
-    if (isBina) avatar('B', M + 3.5, metaY + 3.5, true);
-    else avatar(initial, W - M - 3.5, metaY + 3.5, false);
-    const meta = [m.label, m.time, !isBina && m.language && m.language !== 'English' ? m.language : '']
-      .filter(Boolean).join('  ·  ');
-    if (meta) {
-      font(7.5, 'bold', MUTED);
-      doc.text(meta, isBina ? bubbleLeft : bubbleLeft + bubbleW, metaY, { align: isBina ? 'left' : 'right' });
-    }
-    y = metaY + 2;
-
-    // Bubble, drawn page by page so a long answer can span pages.
-    let i = 0;
-    while (i < lines.length) {
-      const room = BOTTOM - y - 2 * PAD;
-      let h = 0;
-      let j = i;
-      while (j < lines.length && h + lineH(lines[j]) <= room) h += lineH(lines[j++]);
-      if (j === i) { doc.addPage(); y = M; continue; }
-      doc.setFillColor(...(isBina ? GRAY_BUBBLE : BRAND));
-      doc.roundedRect(bubbleLeft, y, bubbleW, h + 2 * PAD - 1, 3, 3, 'F');
-      let ty = y + PAD + 2.4;
-      for (const l of lines.slice(i, j)) {
-        setLineFont(l, isBina);
-        doc.text(l.text, bubbleLeft + PAD, ty);
-        ty += lineH(l);
-      }
-      y += h + 2 * PAD - 1;
-      i = j;
-      if (i < lines.length) { doc.addPage(); y = M; }
-    }
-    y += 5;
-  }
-
-  // ── Footer on every page ──────────────────────────────────
-  const pages = doc.getNumberOfPages();
-  for (let p = 1; p <= pages; p++) {
-    doc.setPage(p);
-    font(7.5, 'normal', MUTED);
-    doc.text(`${data.candidateName} · Chat Transcript`, M, H - 7);
-    doc.text(`Page ${p} of ${pages}`, W - M, H - 7, { align: 'right' });
-  }
-
-  doc.save(`${filename.replace(/\.pdf$/i, '')}.pdf`);
 }

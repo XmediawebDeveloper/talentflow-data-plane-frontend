@@ -1,23 +1,28 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bot, ClipboardList, Info, Loader2, ShieldAlert } from 'lucide-react';
+import { Info, Loader2 } from 'lucide-react';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { InviteKind } from './inviteVersions';
 
-type Stats = { total_quota: number; consumed: number; pending: number; available: number };
+export type InviteQuotaStats = { total_quota: number; consumed: number; pending: number; available: number };
+
+/** Unlimited plans report a very large quota. */
+export const isUnlimitedQuota = (s: InviteQuotaStats | null) => !!s && s.total_quota >= 999999;
 
 /**
- * The invite popup's unit card (AS units for assessments, AIU for AI
- * interviews): available / total, consumed and held-by-pending, low / out
- * tones. Read once per opening. `onStats` hands the numbers to the popup so
- * Send can be held back when the quota is out.
+ * The invite popup's units, in its header (AS units for assessments, AIU for
+ * AI interviews): available of total, a thin bar (used, then held by open
+ * invitations) and how much is free; under it the total, what attended
+ * candidates consumed and what pending invitations hold. Read once per
+ * opening. `onStats` hands the numbers to the popup so Send is held back
+ * when they run short.
  */
-export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; onStats?: (s: Stats | null) => void }) {
-  const [stats, setStats] = useState<Stats | null>(null);
+export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; onStats?: (s: InviteQuotaStats | null) => void }) {
+  const [stats, setStats] = useState<InviteQuotaStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const noun = kind === 'interview' ? 'AI interview' : 'assessment';
+  const noun = kind === 'interview' ? 'AI interview' : 'Assessment';
 
   useEffect(() => {
     let cancelled = false;
@@ -30,91 +35,57 @@ export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
 
-  const panel = (tone: 'ok' | 'low' | 'out') =>
-    `p-3 sm:p-4 rounded-xl border ring-1 ring-black/[0.02] ${
-      tone === 'out'
-        ? 'bg-destructive-subtle border-destructive-line'
-        : tone === 'low'
-          ? 'bg-warning-subtle border-warning-line'
-          : 'bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 border-brand-blue/15'
-    }`;
-  const KindIcon = kind === 'interview' ? Bot : ClipboardList;
-  const tile = (tone: 'ok' | 'low' | 'out') => (
-    <div className={`flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-lg ring-1 max-sm:hidden flex items-center justify-center ${
-      tone === 'out' ? 'bg-destructive/10 ring-destructive/20' : tone === 'low' ? 'bg-brand-orange/10 ring-brand-orange/20' : 'bg-brand-blue/10 ring-brand-blue/15'
-    }`}>
-      {tone === 'out'
-        ? <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
-        : <KindIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${tone === 'low' ? 'text-brand-orange-deep' : 'text-brand-blue'}`} />}
-    </div>
-  );
-
+  const shell = 'flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:max-w-[32.5rem] sm:flex-1 rounded-lg border px-3 py-2';
   if (loading) {
     return (
-      <div className={`${panel('ok')} flex items-center gap-3 text-sm text-gray-500 dark:text-slate-400`}>
-        {tile('ok')}
-        <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Checking {noun} quota...</span>
+      <div className={`${shell} border-gray-200 dark:border-slate-700 text-xs text-gray-500 dark:text-slate-400`}>
+        <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Checking units…</span>
       </div>
     );
   }
   if (!stats) return null;
-
-  const { total_quota, consumed, pending, available } = stats;
-  if (total_quota >= 999999) {
+  if (isUnlimitedQuota(stats)) {
     return (
-      <div className={`${panel('ok')} flex items-center gap-3`}>
-        {tile('ok')}
-        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Unlimited {noun} units</span>
+      <div className={`${shell} border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40`}>
+        <span className="text-xs font-medium text-gray-700 dark:text-slate-300">{noun} units · Unlimited</span>
       </div>
     );
   }
+
+  const { total_quota, consumed, pending, available } = stats;
   const out = available <= 0;
   const low = !out && available <= 3;
-  const tone = out ? 'out' : low ? 'low' : 'ok';
   const pct = (n: number) => (total_quota > 0 ? Math.min(100, (n / total_quota) * 100) : 0);
-  const freePercent = total_quota > 0 ? (available / total_quota) * 100 : 0;
+  const free = Math.max(0, Math.round(pct(available)));
+  const used = Math.round(pct(consumed + pending));
 
   return (
-    <div className={panel(tone)}>
-      <div className="flex items-start gap-3">
-        {tile(tone)}
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
-            <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
-              {out ? `No ${noun} units available` : low ? `Only ${available} unit${available !== 1 ? 's' : ''} available` : `${available.toLocaleString()} ${noun} unit${available !== 1 ? 's' : ''} available`}
-            </span>
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
-              {available.toLocaleString()} / {total_quota.toLocaleString()} available
-            </span>
-          </div>
-          <div className="w-full flex bg-brand-blue/15 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-            <div className={`h-full transition-all duration-300 ${tone === 'out' ? 'bg-red-600' : tone === 'low' ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
-            <div className="h-full bg-brand-cyan/70 transition-all duration-300" style={{ width: `${pct(pending)}%` }} />
-          </div>
-          <div className="flex items-start justify-between gap-2 mt-1.5 max-sm:flex-col-reverse max-sm:gap-1.5">
-            <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400 max-sm:w-full">
-              <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
-                <span>Total: {total_quota}</span>
-                <span>Attended (consumed): {consumed}</span>
-                {pending > 0 && <span>Pending invitations (held): {pending}</span>}
-              </div>
-              {pending > 0 && (
-                <p className="mt-1.5 inline-flex max-sm:flex items-start sm:items-center gap-1.5 rounded-lg sm:rounded-full bg-brand-cyan/10 ring-1 ring-brand-cyan/25 px-2.5 py-1 sm:py-0.5 text-brand-blue dark:text-slate-200">
-                  <Info className="w-3 h-3 flex-shrink-0 mt-0.5 sm:mt-0" />
-                  <span><span className="font-semibold">Note:</span> {pending} unit{pending > 1 ? 's' : ''} held by active invitations — freed when an invite expires or you revoke it.</span>
-                </p>
-              )}
-            </div>
-            {tone === 'out' ? (
-              <span className="flex-shrink-0 text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">Quota exhausted</span>
-            ) : tone === 'low' ? (
-              <span className="flex-shrink-0 text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">Low quota</span>
-            ) : (
-              <span className="flex-shrink-0 text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">{freePercent.toFixed(0)}% free</span>
-            )}
-          </div>
+    <div className={`${shell} ${out ? 'border-destructive-line bg-destructive-subtle' : low ? 'border-warning-line bg-warning-subtle' : 'border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40'}`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap">{noun} units</span>
+        <span className={`text-sm tabular-nums font-semibold whitespace-nowrap ${out ? 'text-destructive' : low ? 'text-warning-strong' : 'text-gray-900 dark:text-slate-50'}`}>
+          {available.toLocaleString()}
+          <span className="font-normal text-gray-500 dark:text-slate-400"> / {total_quota.toLocaleString()} available</span>
+        </span>
+        <div className="flex h-1.5 flex-1 min-w-[3.75rem] basis-20 overflow-hidden rounded-full bg-gray-200/80 dark:bg-slate-700" role="img" aria-label={`${used}% of units used`}>
+          <div className={`h-full ${out ? 'bg-destructive' : low ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
+          <div className="h-full bg-brand-cyan/70" style={{ width: `${pct(pending)}%` }} />
         </div>
+        <span className={`inline-flex items-center px-1.5 py-px rounded-full text-2xs font-semibold border whitespace-nowrap ${
+          out ? 'border-destructive-line bg-white/60 text-destructive' : low ? 'border-warning-line bg-white/60 text-warning-strong' : 'border-success-line bg-success-subtle text-success-strong'
+        }`}>
+          {free}% free
+        </span>
       </div>
+      <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-2xs leading-4 text-gray-500 dark:text-slate-400 tabular-nums">
+        <span>Total {total_quota.toLocaleString()} · Attended (consumed) {consumed.toLocaleString()} · Pending invitations (held) {pending.toLocaleString()}</span>
+        {pending > 0 && (
+          <span className="inline-flex items-center gap-1">
+            <Info className="w-3 h-3 shrink-0" aria-hidden="true" />
+            {pending.toLocaleString()} {pending === 1 ? 'unit' : 'units'} held by active invitations, freed when an invite expires or you revoke it.
+          </span>
+        )}
+      </p>
     </div>
   );
 }

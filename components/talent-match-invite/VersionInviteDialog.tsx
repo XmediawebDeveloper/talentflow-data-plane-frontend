@@ -1,21 +1,23 @@
 'use client';
 
-import { useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
-import { ArrowLeft, CheckCircle, ClipboardList, Loader2, Mail, Video } from 'lucide-react';
+import { Fragment, useEffect, useEffectEvent, useRef, useState, type ComponentProps } from 'react';
+import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Loader2, Mail, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
-import VersionList, { VersionTitle, VersionUsage } from './VersionList';
-import SendToPanel from './SendToPanel';
-import ServerCandidatePicker, { EMPTY_SELECTION, describeFilters, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput from './ExtraCandidatesInput';
-import InviteQuotaBar from './InviteQuotaBar';
+import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
+import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
+import ExtraCandidatesInput, { type ExtraCounts } from './ExtraCandidatesInput';
+import { SOURCE_META, SOURCE_ORDER, SourceIcon, type InviteSourceKey } from './inviteSources';
+import type { InviteCandidateSourceTab } from '@/lib/services/bulkInviteService';
+import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
+import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteReviewStep';
+import InviteMessageStep from './InviteMessageStep';
 import { DEFAULT_EXPIRY_DAYS, defaultInviteMessage } from './inviteDefaults';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
-import { bulkInviteService, type BulkInviteJob, type BulkExtraCandidate } from '@/lib/services/bulkInviteService';
+import { bulkInviteService, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -26,7 +28,6 @@ import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
 import AIInterviewWizardDialog from '@/components/ai-interview/AIInterviewWizardDialog';
-import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { AssessmentJobStatusBadge } from '@/components/assessments/AllAssessmentsTable';
 import { useJobLockBadges } from '@/lib/hooks/useJobLockBadges';
 import { assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
@@ -57,6 +58,7 @@ interface PendingConfirm {
   title: string;
   message: string;
   confirmText: string;
+  cancelText?: string;
   destructive?: boolean;
   run: () => Promise<void>;
 }
@@ -69,25 +71,43 @@ interface InviteJob {
   jobVersionNumber?: number;
 }
 
+type Step = 'version' | 'candidates' | 'review' | 'send';
+const STEP_LABEL: Record<Exclude<Step, 'version'>, string> = {
+  candidates: 'Add candidates',
+  review: 'Review candidates',
+  send: 'Message and send',
+};
+const stepLabel = (s: Step, singular: string) => (s === 'version' ? singular : STEP_LABEL[s]);
+
+/* The page's sections: an intro over each step, a white block. */
+const INTRO_H = 'text-base font-semibold text-gray-900 dark:text-slate-50';
+const INTRO_P = 'mt-1 text-sm text-gray-600 dark:text-slate-400';
+const BLOCK = 'rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4';
+
+/** A candidate's identity in the review — the backend's `review_key`. */
+const reviewKey = (c: { resume_id?: string | null; email?: string | null }) =>
+  c.resume_id ? String(c.resume_id) : `email:${(c.email || '').trim().toLowerCase()}`;
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
 /**
  * THE invite popup — every Invite / Send / Invite More / Share / Create /
  * Send button for an Assessment or an AI Interview opens this one component
  * (through `InviteDialogProvider`'s `useInviteDialog().open(...)`, or the
  * hosts that mount it). Change it here and every place follows.
  *
- * One popup, top to bottom:
- *  - the job (picked first when the button has none: every published
- *    assessment / AI interview, any job);
- *  - the version cards — only when the button did not fix the version — with
- *    create, view, edit and the rest of the version actions;
- *  - the unit quota;
- *  - the candidates the page ticked (untick to leave out), Select From (the
- *    job's AI Talent Match / Scored Resumes lists and the resume database,
- *    server-paged) and Manual / Upload Excel with a per-row Copy Link;
- *  - the email message (a template) and the link expiry.
- * Send starts one background job (POST /jd/{id}/bulk-invites) for every
- * candidate, whose progress replaces the body and survives closing the popup.
- * Mounted only while open, so every opening starts fresh.
+ * Steps (the ones the opening needs):
+ *  1. Version — the version cards with create / view / edit and the rest.
+ *     Left out when the button fixed the version ("Change version" brings it).
+ *  2. Candidates — add by email (typed or Excel, per-row Copy Link) and pick
+ *     from the job's lists and the resume database (server-paged).
+ *  3. Review — everyone the send names, as the server plans it: who is
+ *     invited, who is skipped and why; untick to leave someone out. The
+ *     page's own ticked candidates land here directly.
+ *  4. Message — the email (template) and link expiry, then Send.
+ * With no job given it first lists every published assessment / AI
+ * interview. Send starts one background job (POST /jd/{id}/bulk-invites)
+ * whose progress replaces the body and survives closing the popup.
  */
 export default function VersionInviteDialog({
   kind,
@@ -118,7 +138,7 @@ export default function VersionInviteDialog({
   /** The candidates ticked on the page ([] / omitted = none). */
   candidates?: InviteCandidate[];
   /** The version the button is for (a version row's Invite, Invite More):
-   *  its card list is left out. Omitted: the cards, newest sendable ticked. */
+   *  the Version step is left out. Omitted: the cards, newest sendable ticked. */
   versionId?: string;
   /** Why this type is off for the job (feature disabled, JD disabled), or null. */
   disabledReason?: string | null;
@@ -134,7 +154,7 @@ export default function VersionInviteDialog({
   inviteAllowed?: boolean;
   /** Shown when `inviteAllowed` is false. */
   inviteDeniedReason?: string;
-  /** Tick every page candidate on open. False = listed unticked. */
+  /** Include every page candidate on open. False = listed, left out. */
   preselect?: boolean;
   /** Accepted for older hosts; every send is the background job now. */
   bulk?: boolean;
@@ -162,6 +182,7 @@ export default function VersionInviteDialog({
       };
   if (!inviteAllowed) perms.canInvite = false;
   const label = KIND_LABEL[kind];
+  const article = label.singular === 'Assessment' ? 'an assessment' : 'an AI interview';
   const off = disabledReason || null;
   const deniedTitle = !perms.canInvite
     ? (!inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `You do not have permission to invite to ${label.plural.toLowerCase()}`)
@@ -173,8 +194,8 @@ export default function VersionInviteDialog({
   const [jobPickList, setJobPickList] = useState<AssessmentResponse[] | AIInterviewResponse[] | null>(null);
   const [aiPick, setAiPick] = useState<AIInterviewPickerSelection | null>(null);
   const [asPick, setAsPick] = useState<AssessmentResponse | null>(null);
-  /* The job's Disabled / Archived / Draft badge beside its name in the header
-     — the Assessments page's — kept live while the popup is open. Assessment
+  /* The job's Disabled / Archived / Draft badge beside its name — the
+     Assessments page's — kept live while the popup is open. Assessment
      invites only. A Disabled / Archived job takes no invites: Send is held,
      with the Assessments page's lock message, until the job is re-enabled /
      unarchived, which this picks up without reopening. */
@@ -193,18 +214,33 @@ export default function VersionInviteDialog({
   const [loading, setLoading] = useState(!off && !!job);
   const [error, setError] = useState<string | null>(null);
   const [versionId, setVersionId] = useState<string | null>(null);
-  const [candidateIds, setCandidateIds] = useState<string[]>(() => (preselect ? candidates.filter((c) => c.email).map((c) => c.id) : []));
+  const [step, setStep] = useState<Step | null>(null);
+  /* The page's candidates with an email go straight into the send (no email,
+     no invite — said once in Review). `preselect` false lists them left out. */
+  const recipients = candidates.filter((c) => c.email);
+  const noEmailCount = candidates.length - recipients.length;
+  const [leftOut, setLeftOut] = useState<LeftOut>(() => (
+    preselect ? {} : Object.fromEntries(recipients.map((c) => [reviewKey({ resume_id: c.resumeId, email: c.email }), 'extra' as const]))
+  ));
+  const [reviewCounts, setReviewCounts] = useState<ReviewCounts | null>(null);
   const [message, setMessage] = useState('');
   const messageTouched = useRef(false);
   const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
   const [quotaAvailable, setQuotaAvailable] = useState<number | null>(null);
-  /* Select From: the picked rows or the filter — never the rows themselves. */
+  const [quotaUnlimited, setQuotaUnlimited] = useState(false);
+  /* Pick from lists: the picked rows or the filter — never the rows themselves. */
   const [serverSelection, setServerSelection] = useState<PickerSelection>(EMPTY_SELECTION);
-  /* Manual / Upload Excel rows. */
+  /* Added by email (typed / Excel). */
   const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
-  // Typed-in cards with an invalid name / email — Send waits until they are fixed.
-  const [invalidExtras, setInvalidExtras] = useState(0);
+  const [extraCounts, setExtraCounts] = useState<ExtraCounts>({ manual: 0, excel: 0 });
+  /* The version changed after candidates were added: "already invited" is
+     per version, so the review re-checks it — said once, dismissible. */
+  const [verNote, setVerNote] = useState<string | null>(null);
+  /* The summary's checklist: the Review and Message steps were opened. */
+  const [reviewed, setReviewed] = useState(false);
+  const [messageSeen, setMessageSeen] = useState(false);
   const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
+  const [sending, setSending] = useState(false);
   const bulkTracker = useOptionalBulkInviteProgress();
   const bulkReported = useRef(false);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
@@ -217,11 +253,16 @@ export default function VersionInviteDialog({
   const [busyId, setBusyId] = useState<string | null>(null);
   const reloadOnFocus = useRef(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  /* Phones scroll the whole popup in the steps, not just the body. */
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   /* Assessment View / Edit and the AI interview preview, over this popup. */
   const [viewing, setViewing] = useState<AssessmentResponse | null>(null);
   const [editing, setEditing] = useState<AssessmentResponse | null>(null);
   const [viewingInterviewId, setViewingInterviewId] = useState<string | null>(null);
   const preselected = useRef(false);
+  /* A resume / versions popup open over a step: Esc closes it, not this. */
+  const childOverlay = useRef<(() => void) | null>(null);
+  const onOverlayChange = (close: (() => void) | null) => { childOverlay.current = close; };
   const lastLoadedAt = useRef(0);
 
   const applyVersions = (next: InviteVersion[], wide?: InviteVersion[] | null) => {
@@ -236,10 +277,17 @@ export default function VersionInviteDialog({
     const firstLoad = !preselected.current;
     preselected.current = true;
     const listed = listedVersions(kind, next);
+    if (firstLoad) {
+      // The button's own version first; else the newest sendable one.
+      const fixed = pickedVersionId ? next.find((v) => v.id === pickedVersionId && v.sendable) : undefined;
+      const chosen = fixed ?? listed.find((v) => v.sendable);
+      // Open where the work is: the page's candidates → Review; a fixed
+      // version → Candidates; else the Version step.
+      setStep(!chosen ? 'version' : recipients.length > 0 ? 'review' : fixed ? 'candidates' : 'version');
+    }
     setVersionId((cur) => {
       if (cur && pool.some((v) => v.id === cur && v.sendable)) return cur;
       if (firstLoad) {
-        // The button's own version first; else the newest sendable one.
         if (pickedVersionId && next.some((v) => v.id === pickedVersionId)) return pickedVersionId;
         return listed.find((v) => v.sendable)?.id ?? null;
       }
@@ -250,6 +298,7 @@ export default function VersionInviteDialog({
   const applyLoadError = (err: unknown) => {
     setLoaded(true);
     setLoading(false);
+    setStep('version');
     setError((err as Error)?.message || `Could not load ${label.singular.toLowerCase()} versions.`);
     return null;
   };
@@ -279,14 +328,76 @@ export default function VersionInviteDialog({
   /* The template message, filled once the job is known (and again when it
      changes) unless the recruiter has typed in it. */
   const selected = (jobWideVersions ?? versions).find((v) => v.id === versionId) ?? null;
+  const template = job
+    ? defaultInviteMessage(kind, {
+        jobTitle: job.jdTitle || selected?.config?.jd_title || selected?.raw?.jd_title,
+        companyName: (user as { tenantName?: string } | null)?.tenantName,
+        location: selected?.config?.jd_location,
+      })
+    : '';
   useEffect(() => {
     if (!job || messageTouched.current) return;
-    setMessage(defaultInviteMessage(kind, {
-      jobTitle: job.jdTitle || selected?.config?.jd_title || selected?.raw?.jd_title,
-      companyName: (user as { tenantName?: string } | null)?.tenantName,
-      location: selected?.config?.jd_location,
-    }));
-  }, [job, kind, selected?.id, user]);
+    setMessage(template);
+  }, [job, template]);
+
+  /* The version is fixed when the button named it and it can still be sent. */
+  const versionFixed = !!pickedVersionId && !!selected && selected.id === pickedVersionId && selected.sendable;
+  const steps: Step[] = versionFixed ? ['candidates', 'review', 'send'] : ['version', 'candidates', 'review', 'send'];
+  const current: Step = step && steps.includes(step) ? step : steps[0];
+  const stepIndex = steps.indexOf(current);
+  const goTo = (s: Step) => {
+    setStep(s);
+    if (s === 'review') setReviewed(true);
+    if (s === 'send') setMessageSeen(true);
+    bodyRef.current?.scrollTo({ top: 0 });
+    dialogRef.current?.scrollTo({ top: 0 });
+  };
+
+  const addedCount = selectionCount(serverSelection) + extras.length;
+  const recipientCount = recipients.length + addedCount;
+
+  /* Picking another version once candidates are in: say the review re-checks them. */
+  const pickVersion = (id: string | null) => {
+    if (id && versionId && id !== versionId && recipientCount > 0) {
+      const v = (jobWideVersions ?? versions).find((x) => x.id === id);
+      if (v) setVerNote(`${label.singular} version changed to v${v.version}. Invited status is re-checked for everyone selected; anyone already invited to v${v.version} will be skipped.`);
+    }
+    setVersionId(id);
+  };
+
+  /* Everyone added, by where they came from — the summary's breakdown. */
+  const bySource: Partial<Record<InviteSourceKey, number>> = {};
+  if (recipients.length) bySource.page = recipients.length;
+  if (extraCounts.manual) bySource.manual = extraCounts.manual;
+  if (extraCounts.excel) bySource.excel = extraCounts.excel;
+  if (serverSelection.mode === 'ids') {
+    for (const p of Object.values(serverSelection.picked)) bySource[p.source] = (bySource[p.source] ?? 0) + 1;
+  } else {
+    const tab: InviteCandidateSourceTab = serverSelection.source;
+    bySource[tab] = selectionCount(serverSelection);
+  }
+  const blocked = createBlockedReason(versions, perms, kind);
+  const returnUrl = job ? `/recruitment/job-details?id=${encodeURIComponent(job.jdId)}` : '/recruitment/job-openings';
+  // What will be sent: the review's count once it has one, else everyone added.
+  const willInvite = reviewCounts && (current === 'review' || current === 'send') ? reviewCounts.invite : recipientCount;
+  const quotaShort = quotaAvailable !== null && willInvite > quotaAvailable;
+
+  /* Closing with candidates added asks first — they would be lost. */
+  const requestClose = () => {
+    if (confirmBusy) return;
+    if (!bulkJob && addedCount > 0) {
+      setConfirm({
+        title: `Discard ${plural(addedCount, 'selected candidate')}?`,
+        message: 'Closing now loses everyone you have picked. This cannot be undone.',
+        confirmText: 'Discard and close',
+        cancelText: 'Keep editing',
+        destructive: true,
+        run: async () => onClose(),
+      });
+      return;
+    }
+    onClose();
+  };
 
   const reloadAfterReturn = useEffectEvent(() => {
     if (off || !job || confirmBusy || creating || !loaded) return;
@@ -299,11 +410,12 @@ export default function VersionInviteDialog({
   const closeOnEscape = useEffectEvent((e: KeyboardEvent) => {
     if (e.key !== 'Escape') return;
     if (document.querySelector('[role="menu"]')) return;
+    if (childOverlay.current) { childOverlay.current(); return; }
     if (viewing) { setViewing(null); return; }
     if (viewingInterviewId) return;
     if (editing || creatingFirst || wizardHref) return;
     if (confirm && !confirmBusy) setConfirm(null);
-    else if (!confirmBusy) onClose();
+    else requestClose();
   });
   useEffect(() => {
     const onFocus = () => reloadAfterReturn();
@@ -318,15 +430,6 @@ export default function VersionInviteDialog({
     };
   }, []);
 
-  /* The version is fixed when the button named it and it can still be sent. */
-  const versionFixed = !!pickedVersionId && !!selected && selected.id === pickedVersionId && selected.sendable;
-  const recipients = candidates.filter((c) => c.email && candidateIds.includes(c.id));
-  const recipientCount = recipients.length + selectionCount(serverSelection) + extras.length;
-  const blocked = createBlockedReason(versions, perms, kind);
-  const returnUrl = job ? `/recruitment/job-details?id=${encodeURIComponent(job.jdId)}` : '/recruitment/job-openings';
-  const close = () => { if (!confirmBusy) onClose(); };
-  const quotaShort = quotaAvailable !== null && recipientCount > quotaAvailable;
-
   /* Picking from the full list (no job given): the job and the version. */
   const chooseFromList = () => {
     if (kind === 'assessment' && asPick) {
@@ -339,6 +442,7 @@ export default function VersionInviteDialog({
       setPickedVersionId(cfg.id);
     }
     preselected.current = false;
+    setStep(null);
     setLoading(true);
     bodyRef.current?.scrollTo({ top: 0 });
   };
@@ -349,11 +453,16 @@ export default function VersionInviteDialog({
     setJobWideVersions(null);
     setVersionId(null);
     setLoaded(false);
+    setStep(null);
     setServerSelection(EMPTY_SELECTION);
+    setVerNote(null);
     messageTouched.current = false;
   };
-  /* "Change version" on a fixed version: the cards come back. */
-  const showAllVersions = () => setPickedVersionId(undefined);
+  /* "Change version": the Version step comes back. */
+  const changeVersion = () => {
+    setPickedVersionId(undefined);
+    goTo('version');
+  };
 
   const handleCreate = () => {
     if (!job) return;
@@ -465,10 +574,10 @@ export default function VersionInviteDialog({
     }
   };
 
-  /* Per-row Copy Link (Manual cards): this version's invitation for one
+  /* Per-row Copy Link (added by email): this version's invitation for one
      candidate, created without an email. */
   const copyLinkFor = async (c: { name: string; email: string }): Promise<string> => {
-    if (!selected?.sendable) throw new Error(`Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version first.`);
+    if (!selected?.sendable) throw new Error(`Select ${article} version first.`);
     const data = { candidate_name: c.name, candidate_email: c.email, expiry_days: expiryDays };
     const res = kind === 'assessment'
       ? await assessmentService.createInviteLink(selected.id, data)
@@ -477,36 +586,72 @@ export default function VersionInviteDialog({
     return res.link;
   };
 
-  /* One background job for everyone: the ticked page candidates and the
-     Manual / Excel rows as extras, the Select From picks as the selection. */
-  const sendAll = async () => {
-    if (!selected || !job) return;
-    const ticked: BulkExtraCandidate[] = recipients.map((c) => ({
+  /* An email typed in that is already picked elsewhere — said at once. */
+  const takenEmail = (email: string): string | null => {
+    if (recipients.some((c) => c.email.trim().toLowerCase() === email)) return 'this page';
+    if (serverSelection.mode === 'ids') {
+      const hit = Object.values(serverSelection.picked).find((x) => x.email.trim().toLowerCase() === email);
+      if (hit) return TAB_LABEL[hit.source];
+    }
+    return null;
+  };
+
+  /* The send as it stands: the page's candidates and the typed / Excel rows
+     as extras, the list picks as the selection. */
+  const allExtras: BulkExtraCandidate[] = [
+    ...recipients.map((c) => ({
       name: c.name,
       email: c.email,
       phone: c.phone || undefined,
       resume_id: c.resumeId || undefined,
       invite_source: c.inviteSource || (c.source ? INVITE_SOURCE_BY_TAB[c.source] : undefined),
-    }));
-    const allExtras = [...ticked, ...extras];
-    // The selected version's own job version — a job-wide pick may sit on
-    // another job version than the one first picked.
-    const started = await bulkInviteService.start(selected.jdId || job.jdId, {
-      kind,
-      version_id: selected.id,
-      selection: toRequestSelection(serverSelection),
-      extra_candidates: allExtras.length ? allExtras : undefined,
-      delivery: 'email',
-      message: message.trim() || undefined,
-      expiry_days: expiryDays,
-    });
-    bulkReported.current = false;
-    setBulkJob(started);
-    bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
-    bodyRef.current?.scrollTo({ top: 0 });
-    const queued = started.queued ?? 0;
-    if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
-    else toast.success(`Sending ${queued.toLocaleString()} invitation${queued === 1 ? '' : 's'}`);
+    })),
+    ...extras,
+  ];
+  const sendableId = selected?.sendable ? selected.id : null;
+  // The Review step keys its fetch on this request's content, not its identity.
+  const reviewRequest = sendableId ? {
+    kind,
+    version_id: sendableId,
+    selection: toRequestSelection(serverSelection),
+    extra_candidates: allExtras.length ? allExtras : undefined,
+  } : null;
+
+  /* One background job for everyone, minus the rows left out in Review. */
+  const sendAll = async () => {
+    if (!selected || !job || !reviewRequest || sending) return;
+    const outList = new Set(Object.entries(leftOut).filter(([, o]) => o === 'list').map(([k]) => k));
+    const outExtra = new Set(Object.entries(leftOut).filter(([, o]) => o === 'extra').map(([k]) => k));
+    const sel = reviewRequest.selection;
+    const selection: BulkInviteSelection = sel.mode === 'ids'
+      ? { mode: 'ids', resume_ids: sel.resume_ids.filter((id) => !outList.has(id)) }
+      : { ...sel, exclude_ids: [...sel.exclude_ids, ...outList] };
+    const kept = allExtras.filter((c) => !outExtra.has(reviewKey(c)));
+    setSending(true);
+    try {
+      // The selected version's own job version — a job-wide pick may sit on
+      // another job version than the one first picked.
+      const started = await bulkInviteService.start(selected.jdId || job.jdId, {
+        kind,
+        version_id: selected.id,
+        selection,
+        extra_candidates: kept.length ? kept : undefined,
+        delivery: 'email',
+        message: message.trim() || undefined,
+        expiry_days: expiryDays,
+      });
+      bulkReported.current = false;
+      setBulkJob(started);
+      bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
+      bodyRef.current?.scrollTo({ top: 0 });
+      const queued = started.queued ?? 0;
+      if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
+      else toast.success(`Sending ${plural(queued, 'invitation')}`);
+    } catch (err) {
+      toast.error(friendlyErrorMessage(err, 'Could not start sending. Please try again.'));
+    } finally {
+      setSending(false);
+    }
   };
   const onBulkJobChange = (j: BulkInviteJob) => {
     setBulkJob(j);
@@ -520,55 +665,118 @@ export default function VersionInviteDialog({
     void reload();
   };
 
-  const askSend = () => {
-    if (!selected?.sendable || recipientCount === 0 || invalidExtras > 0 || jobLock) return;
-    const scope = serverSelection.mode === 'filter'
-      ? ` (everyone matching ${describeFilters(serverSelection.filters) || 'the current tab'})` : '';
-    setConfirm({
-      title: `Send ${label.singular} V${selected.version}?`,
-      message: `Sends ${selected.name} V${selected.version} to ${recipientCount.toLocaleString()} candidate${recipientCount === 1 ? '' : 's'}${scope}. Anyone already invited to this version, team members, repeated emails and candidates without an email are skipped.`,
-      confirmText: 'Send Invitations',
-      run: sendAll,
-    });
-  };
-
-  const canSend = !!selected?.sendable && recipientCount > 0 && invalidExtras === 0 && perms.canInvite && !off && !quotaShort && !jobLock;
   const pickingOff = !selected?.sendable || !perms.canInvite || !!off;
+  const emptyMessage = !message.trim();
+  const canSend = !!selected?.sendable && !!reviewCounts && reviewCounts.invite > 0 && perms.canInvite && !off && !quotaShort && !jobLock && !emptyMessage;
+  const shortBy = quotaAvailable !== null ? Math.max(0, willInvite - quotaAvailable) : 0;
+  const versionTag = selected ? `${label.singular} v${selected.version}` : label.singular;
+  const selectedNow = reviewCounts ? reviewCounts.all - reviewCounts.left_out : recipientCount;
+  const totalNow = reviewCounts ? reviewCounts.all : recipientCount;
 
+  /* The footer's one line: what holds the next step, else where things stand. */
   const footerText = off
     ? ''
     : !job
-      ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} to continue`
+      ? `Select ${article} to continue`
       : bulkJob
         ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
-        : jobLock
-          ? jobLock
-        : !selected
-          ? `Select ${label.singular === 'Assessment' ? 'an assessment' : 'an AI interview'} version to continue`
-          : recipientCount === 0
-            ? 'Add candidates: tick them, pick them from Select From, or type them in'
-            : quotaShort
-              ? `Only ${quotaAvailable} unit${quotaAvailable === 1 ? '' : 's'} available for ${recipientCount} candidates`
-              : null;
+        : !loaded
+          ? ''
+          : jobLock
+            ? jobLock
+            : current === 'version'
+              ? (!selected?.sendable ? `Select ${article} version to continue` : `${versionTag} picked`)
+              : deniedTitle
+                ? deniedTitle
+              : current === 'candidates' && recipientCount === 0
+                ? 'Add at least one candidate to continue'
+                : current === 'review' && reviewCounts && selectedNow === 0
+                  ? 'Select at least one candidate to continue'
+                  : (current === 'review' || current === 'send') && quotaShort
+                    ? `Deselect ${shortBy.toLocaleString()} ${shortBy === 1 ? 'candidate' : 'candidates'} or add units to continue`
+                    : current === 'send' && emptyMessage
+                      ? 'Write a message to continue'
+                      : `${selectedNow.toLocaleString()} of ${totalNow.toLocaleString()} selected · ${versionTag}`;
+
+  /* What each step needs before the next one opens. */
+  const stepReady = (s: Step): boolean => s === 'version'
+    ? !!selected?.sendable
+    : s === 'candidates'
+      ? recipientCount > 0 && !pickingOff
+      : s === 'review'
+        ? !!reviewCounts && reviewCounts.invite > 0 && !quotaShort && !jobLock && perms.canInvite
+        : canSend;
+  const nextDisabled = current === 'send' ? !canSend || sending : !stepReady(current);
+  /* A step can be opened from the bar once every step before it is ready. */
+  const reachable = (i: number) => steps.slice(0, i).every(stepReady);
+  const nextStep = steps[stepIndex + 1];
+  const primaryLabel = current === 'send'
+    ? (reviewCounts && reviewCounts.invite > 0 ? `Send to ${plural(reviewCounts.invite, 'candidate')}` : 'Send')
+    : nextStep === 'review'
+      ? `Next: Review ${recipientCount ? `${plural(recipientCount, 'candidate')}` : 'candidates'}`
+      : nextStep === 'send'
+        ? 'Next: Message'
+        : `Next: ${stepLabel(nextStep, label.singular)}`;
+  const onPrimary = () => {
+    if (nextDisabled) return;
+    if (current === 'send') void sendAll();
+    else goTo(nextStep);
+  };
 
   const Icon = kind === 'assessment' ? ClipboardList : Video;
   const listPicked = kind === 'assessment' ? !!asPick : !!aiPick;
+  const inSteps = !off && !!job && !bulkJob && loaded;
+  const unitsAfter = reviewCounts && quotaAvailable !== null ? quotaAvailable - reviewCounts.invite : null;
+  const latestId = (jobWideVersions ?? listedVersions(kind, versions))[0]?.id;
+  const jobName = job ? job.jdTitle || selected?.raw?.jd_title || selected?.name || '' : '';
+  const pickedName = selected ? `${jobName || selected.name} · v${selected.version}` : '—';
+  const reviewedDone = (reviewed || current === 'review' || current === 'send') && selectedNow > 0;
+  const messageDone = messageSeen || current === 'send';
+  const unitsAfterText = quotaUnlimited
+    ? 'Unlimited'
+    : quotaAvailable === null
+      ? '—'
+      : quotaShort
+        ? `${shortBy.toLocaleString()} short`
+        : `${Math.max(0, quotaAvailable - willInvite).toLocaleString()} available`;
+  const alerts: { tone: 'warn' | 'info' | 'danger'; text: string; onDismiss?: () => void }[] = [];
+  if (inSteps && deniedTitle) {
+    alerts.push({ tone: 'warn', text: !inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `Sending invites needs the Invite permission for ${label.plural}. Ask a workspace admin.` });
+  }
+  if (inSteps && verNote) alerts.push({ tone: 'info', text: verNote, onDismiss: () => setVerNote(null) });
+  if (inSteps && quotaShort && current !== 'version') {
+    alerts.push({ tone: 'danger', text: `Only ${plural(quotaAvailable ?? 0, 'unit')} ${quotaAvailable === 1 ? 'is' : 'are'} available for ${plural(willInvite, 'candidate')}. Deselect ${shortBy.toLocaleString()} to continue, or add units.` });
+  }
+  const ALERT_TONE = {
+    warn: 'border-warning-line bg-warning-subtle text-warning-strong',
+    info: 'border-brand-blue/20 bg-brand-blue/[0.06] text-brand-blue',
+    danger: 'border-destructive-line bg-destructive-subtle text-destructive',
+  };
+  const checklist = [
+    { label: `${label.singular} version picked`, done: !!selected?.sendable },
+    { label: 'Candidates added', done: recipientCount > 0 },
+    { label: 'Candidates reviewed', done: reviewedDone },
+    { label: 'Message checked', done: messageDone },
+  ];
 
   return (
     <>
       <div
         className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-        onClick={close}
+        onClick={requestClose}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="version-invite-title"
-          className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl h-[calc(100dvh-1.5rem)] sm:h-[min(46rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}
         >
-          <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* Header: what this is, and the units it spends. No X — the
+              footer's Cancel closes (the popup standard). */}
+          <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 <Icon className="w-4 h-4 text-brand-blue" />
               </div>
@@ -576,26 +784,104 @@ export default function VersionInviteDialog({
                 <h2 id="version-invite-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
                   Invite to {label.singular}
                 </h2>
-                {job && (
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500 dark:text-slate-500 min-w-0">
-                    {job.jdCode && <JobIdBadge>{job.jdCode}</JobIdBadge>}
-                    <span className="min-w-0 truncate">{job.jdTitle}</span>
-                    {headerJobBadge && <AssessmentJobStatusBadge kind={headerJobBadge} />}
-                    {(selected?.jobVersion ?? job.jobVersionNumber) ? <VersionChip kind="job" version={(selected?.jobVersion ?? job.jobVersionNumber)!} /> : null}
-                    {selected && (
-                      <span className="inline-flex items-center gap-1">
-                        <span>{label.singular} Version</span>
-                        <VersionChip kind="assessment" version={selected.version} />
-                      </span>
-                    )}
-                  </div>
-                )}
+                <p className="text-xs text-gray-500 dark:text-slate-400">Send the {label.singular.toLowerCase()} link to candidates</p>
               </div>
             </div>
-            {/* No X — the footer's Cancel closes (the popup standard). */}
+            {!off && (
+              <InviteQuotaBar
+                kind={kind}
+                onStats={(s) => {
+                  setQuotaUnlimited(isUnlimitedQuota(s));
+                  setQuotaAvailable(s && !isUnlimitedQuota(s) ? s.available : null);
+                }}
+              />
+            )}
           </div>
 
-          <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+          {inSteps && (
+            <>
+              {/* Steps — any step whose earlier steps are ready opens from here. */}
+              <nav aria-label="Steps" className="flex-shrink-0 max-sm:sticky max-sm:top-0 max-sm:z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 overflow-x-auto">
+                <ol className="flex min-w-max sm:min-w-0 items-center gap-2">
+                  {steps.map((s, i) => {
+                    const done = i < stepIndex;
+                    const here = i === stepIndex;
+                    const open = !here && reachable(i);
+                    return (
+                      <Fragment key={s}>
+                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
+                        <li>
+                          <button
+                            type="button"
+                            onClick={() => { if (open) goTo(s); }}
+                            disabled={!open}
+                            aria-current={here ? 'step' : undefined}
+                            className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
+                              here ? 'font-semibold text-gray-900 dark:text-slate-50' : open ? 'font-medium text-brand-blue hover:underline underline-offset-2' : 'font-medium text-gray-400 dark:text-slate-500'
+                            }`}
+                          >
+                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                              here || done ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
+                            }`}>
+                              {done ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : i + 1}
+                            </span>
+                            <span className={here ? '' : 'max-sm:hidden'}>{stepLabel(s, label.singular)}</span>
+                          </button>
+                        </li>
+                      </Fragment>
+                    );
+                  })}
+                </ol>
+              </nav>
+
+              {/* The version being sent, pinned under the steps. */}
+              {selected && (
+                <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 sm:px-6 py-2.5 bg-brand-blue/[0.03] dark:bg-slate-800/40 border-b border-brand-blue/10 dark:border-slate-700/60">
+                  <span className="min-w-0 flex flex-wrap items-center gap-2">
+                    <VersionTitle version={selected} compact spansJobVersions={!!jobWideVersions} />
+                    {selected.id === latestId && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">Latest</span>
+                    )}
+                    <span className={`shrink-0 inline-flex text-2xs font-semibold px-2 py-0.5 rounded-md ring-1 ${STATUS_PILL[selected.status]}`}>{selected.statusLabel}</span>
+                    {headerJobBadge && <AssessmentJobStatusBadge kind={headerJobBadge} />}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                    {!jdId && (
+                      <button type="button" onClick={backToList} className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2">
+                        <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                        Choose a different {label.singular.toLowerCase()}
+                      </button>
+                    )}
+                    {current !== 'version' && (
+                      <button type="button" onClick={changeVersion} className="h-8 px-3 rounded-lg text-xs font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10">
+                        Change version
+                      </button>
+                    )}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
+
+          <div className={`flex-1 min-h-0 flex ${inSteps ? 'max-sm:flex-none max-sm:block' : ''}`}>
+          <div ref={bodyRef} className={`flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 ${inSteps ? 'bg-slate-50/70 dark:bg-slate-950/30 max-sm:overflow-visible' : ''}`}>
+            {alerts.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {alerts.map((al) => (
+                  <p key={al.text} role={al.tone === 'info' ? 'status' : 'alert'} className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm ${ALERT_TONE[al.tone]}`}>
+                    <span className="flex items-start gap-2 min-w-0">
+                      {al.tone === 'info' ? <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />}
+                      <span>{al.text}</span>
+                    </span>
+                    {al.onDismiss && (
+                      <button type="button" onClick={al.onDismiss} aria-label="Dismiss" className="shrink-0 inline-flex items-center justify-center w-6 h-6 -mr-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
+                        <X className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </p>
+                ))}
+              </div>
+            )}
             {off ? (
               <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{off}</div>
             ) : !job ? (
@@ -613,8 +899,6 @@ export default function VersionInviteDialog({
                   scrollContainerRef={bodyRef}
                 />
               ) : (
-                /* A full-height column, so the picker's pagination can sit at
-                   the foot of the body whichever view (and list height) is on. */
                 <div className="flex flex-col min-h-full">
                   <AssessmentPicker
                     assessments={jobPickList as AssessmentResponse[]}
@@ -628,131 +912,231 @@ export default function VersionInviteDialog({
               /* The send's live counts and per-candidate rows; the floating
                  widget keeps following it after this popup closes. */
               <BulkInviteProgressPanel jobId={bulkJob.job_id} initialJob={bulkJob} compact onJobChange={onBulkJobChange} />
-            ) : (
-              <div className="space-y-6">
-                {!jdId && (
-                  <button
-                    type="button"
-                    onClick={backToList}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-                    Choose a different {label.singular.toLowerCase()}
-                  </button>
-                )}
-                {versionFixed ? (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-2.5">
-                    {/* The version cards' title: JD ID, job, versions. */}
-                    <span className="min-w-0 flex flex-wrap items-center gap-2">
-                      {selected && <VersionTitle version={selected} compact />}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={showAllVersions}
-                      className="text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
-                    >
-                      Change version
-                    </button>
+            ) : !loaded ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+              </div>
+            ) : current === 'version' ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className={INTRO_H}>Choose the version to send</h3>
+                  <p className={INTRO_P}>Candidates take the version you pick here. Only Active versions can be sent.</p>
+                </div>
+                <div className={`${BLOCK} space-y-4`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    {!jdId && !selected ? (
+                      <button type="button" onClick={backToList} className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2">
+                        <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                        Choose a different {label.singular.toLowerCase()}
+                      </button>
+                    ) : <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Select {label.singular.toLowerCase()} version</h4>}
+                    {!error && <VersionUsage kind={kind} used={versions.length} />}
                   </div>
-                ) : (
-                  <section aria-labelledby="version-heading">
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                      <h3 id="version-heading" className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-                        Select {label.singular} Version
-                      </h3>
-                      {loaded && !error && <VersionUsage kind={kind} used={versions.length} />}
-                    </div>
-                    <VersionList
-                      kind={kind}
-                      versions={jobWideVersions ?? listedVersions(kind, versions)}
-                      allVersions={versions}
-                      spansJobVersions={!!jobWideVersions}
-                      loading={loading && !loaded}
-                      error={error}
-                      onRetry={() => void reload()}
-                      selectedId={versionId}
-                      onSelect={setVersionId}
-                      createBlocked={blocked}
-                      creating={creating}
-                      onCreate={handleCreate}
-                      perms={perms}
-                      busyId={busyId}
-                      onAction={handleAction}
-                      hideDuplicate={hideDuplicate}
-                    />
-                  </section>
-                )}
-                <InviteQuotaBar kind={kind} onStats={(s) => setQuotaAvailable(s && s.total_quota < 999999 ? s.available : null)} />
-                <section aria-label="Send to" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-                  <SendToPanel
+                  <VersionList
                     kind={kind}
-                    candidates={candidates}
-                    selectedIds={candidateIds}
-                    onSelectedIds={setCandidateIds}
-                    message={message}
-                    onMessage={(m) => { messageTouched.current = true; setMessage(m); }}
-                    expiryDays={expiryDays}
-                    onExpiry={setExpiryDays}
-                    listSlot={(
-                      <div className="space-y-4">
-                        {/* Manual first: it is open with an empty row on every opening. */}
-                        <ExtraCandidatesInput onChange={setExtras} onInvalidChange={setInvalidExtras} disabled={pickingOff} onCopyLink={copyLinkFor} />
-                        <ServerCandidatePicker
-                          jdId={job.jdId}
-                          kind={kind}
-                          versionId={selected?.sendable ? selected.id : null}
-                          selection={serverSelection}
-                          onSelectionChange={setServerSelection}
-                          pickingDisabled={pickingOff}
-                        />
-                      </div>
-                    )}
+                    versions={jobWideVersions ?? listedVersions(kind, versions)}
+                    allVersions={versions}
+                    spansJobVersions={!!jobWideVersions}
+                    loading={loading && !loaded}
+                    error={error}
+                    onRetry={() => void reload()}
+                    selectedId={versionId}
+                    onSelect={pickVersion}
+                    createBlocked={blocked}
+                    creating={creating}
+                    onCreate={handleCreate}
+                    perms={perms}
+                    busyId={busyId}
+                    onAction={handleAction}
+                    hideDuplicate={hideDuplicate}
+                  />
+                </div>
+              </div>
+            ) : current === 'candidates' ? (
+              <div className="space-y-4">
+                {recipients.length > 0 && (
+                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                    {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
+                  </p>
+                )}
+                <section aria-label="Add people directly" className={BLOCK}>
+                  <ExtraCandidatesInput onChange={setExtras} onCounts={setExtraCounts} disabled={pickingOff} onCopyLink={copyLinkFor} takenEmail={takenEmail} />
+                </section>
+                <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500" aria-hidden="true">
+                  <span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />or<span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />
+                </div>
+                <section aria-labelledby="pick-for-job" className={`${BLOCK} space-y-3`}>
+                  <div>
+                    <h3 id="pick-for-job" className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                      Pick candidates for <span className="text-brand-blue">{[job.jdCode, jobName].filter(Boolean).join(' · ')}</span>
+                    </h3>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Candidates matched, scored or saved for this job.</p>
+                  </div>
+                  <ServerCandidatePicker
+                    jdId={job.jdId}
+                    kind={kind}
+                    versionId={selected?.sendable ? selected.id : null}
+                    selection={serverSelection}
+                    onSelectionChange={setServerSelection}
+                    pickingDisabled={pickingOff}
+                    onOverlayChange={onOverlayChange}
                   />
                 </section>
               </div>
-            )}
+            ) : current === 'review' && !perms.canInvite ? (
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{deniedTitle}</div>
+            ) : current === 'review' && reviewRequest ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className={INTRO_H}>Review candidates</h3>
+                  <p className={INTRO_P}>Everyone ticked here gets the invite. Untick anyone you want to leave out. Nothing is sent until step {steps.length}.</p>
+                </div>
+                {noEmailCount > 0 && (
+                  <p role="note" className="flex items-start gap-1.5 rounded-lg bg-warning-subtle border border-warning-line px-3 py-2 text-xs text-warning-strong">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" aria-hidden="true" />
+                    <span>{plural(noEmailCount, 'candidate')} from the page {noEmailCount === 1 ? 'has' : 'have'} no email address and won’t be invited.</span>
+                  </p>
+                )}
+                <InviteReviewStep
+                  jdId={selected?.jdId || job.jdId}
+                  kind={kind}
+                  request={reviewRequest}
+                  leftOut={leftOut}
+                  onLeftOut={setLeftOut}
+                  onCounts={setReviewCounts}
+                  onAddCandidates={() => goTo('candidates')}
+                  onOverlayChange={onOverlayChange}
+                />
+              </div>
+            ) : current === 'send' ? (
+              <div className="space-y-4">
+                <div>
+                  <h3 className={INTRO_H}>Check the message and send</h3>
+                  <p className={INTRO_P}>This is the email each candidate receives with their personal link.</p>
+                </div>
+                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { term: label.singular, value: pickedName, bad: false },
+                    {
+                      term: 'Will be invited',
+                      value: reviewCounts
+                        ? `${reviewCounts.invite.toLocaleString()}${reviewCounts.skipped ? ` (${reviewCounts.skipped.toLocaleString()} skipped)` : ''}`
+                        : recipientCount.toLocaleString(),
+                      bad: false,
+                    },
+                    {
+                      term: 'Units after send',
+                      value: quotaUnlimited ? 'Unlimited' : unitsAfter !== null ? Math.max(0, unitsAfter).toLocaleString() : '—',
+                      bad: unitsAfter !== null && unitsAfter < 0,
+                    },
+                  ].map((d) => (
+                    <div key={d.term} className="min-w-0 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
+                      <dt className="text-xs text-gray-500 dark:text-slate-400">{d.term}</dt>
+                      <dd className={`mt-0.5 truncate text-[0.9375rem] font-semibold tabular-nums ${d.bad ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`} title={d.value}>{d.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className={BLOCK}>
+                  <InviteMessageStep
+                    kind={kind}
+                    message={message}
+                    onMessage={(m) => { messageTouched.current = true; setMessage(m); }}
+                    template={template}
+                    expiryDays={expiryDays}
+                    onExpiry={setExpiryDays}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
-            <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-              {footerText ?? (selected && (
-                <span className="inline-flex items-center gap-1.5 align-middle">
-                  <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  Ready to invite {recipientCount.toLocaleString()} candidate{recipientCount === 1 ? '' : 's'} to {label.singular} V{selected.version}
-                </span>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full sm:w-auto">
+          {/* The summary beside the steps (wide screens; the footer's line
+              carries it on smaller ones). */}
+          {inSteps && (
+            <aside aria-label="Invite summary" className="hidden lg:flex w-[18.75rem] shrink-0 flex-col gap-4 overflow-y-auto border-l border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Invite summary</h3>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-gray-500 dark:text-slate-400">{label.singular}</dt>
+                  <dd className="mt-0.5 font-medium text-gray-900 dark:text-slate-50 break-words">{pickedName}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-500 dark:text-slate-400">Candidates</dt>
+                  <dd className="mt-0.5 font-medium text-gray-900 dark:text-slate-50 tabular-nums">
+                    {selectedNow.toLocaleString()} selected{totalNow > selectedNow ? ` of ${totalNow.toLocaleString()}` : ''}
+                    {SOURCE_ORDER.some((k) => bySource[k]) && (
+                      <ul className="mt-2 space-y-1 text-xs font-normal text-gray-700 dark:text-slate-300">
+                        {SOURCE_ORDER.filter((k) => bySource[k]).map((k) => (
+                          <li key={k} className="flex items-center gap-1.5">
+                            <SourceIcon source={k} />
+                            <span className="flex-1 truncate">{SOURCE_META[k].label}</span>
+                            <span className="tabular-nums text-gray-500 dark:text-slate-400">{(bySource[k] ?? 0).toLocaleString()}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-gray-500 dark:text-slate-400">Units after send</dt>
+                  <dd className={`mt-0.5 font-medium tabular-nums ${quotaShort ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{unitsAfterText}</dd>
+                </div>
+              </dl>
+              <ul className="space-y-2.5 border-t border-gray-100 dark:border-slate-700/60 pt-3.5 text-sm">
+                {checklist.map((c) => (
+                  <li key={c.label} className={`flex items-center gap-2 ${c.done ? 'text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400'}`}>
+                    <span className={`flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] ${c.done ? 'border-success bg-success text-white' : 'border-gray-300 dark:border-slate-600 text-transparent'}`}>
+                      <Check className="w-3 h-3" aria-hidden="true" />
+                    </span>
+                    {c.label}
+                    <span className="sr-only">{c.done ? '(done)' : '(not yet)'}</span>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
+          </div>
+
+          <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 shrink-0 ${inSteps ? 'max-sm:sticky max-sm:bottom-0 max-sm:z-10' : ''}`}>
+            <p className="min-w-0 sm:truncate text-sm text-gray-700 dark:text-slate-300">{footerText}</p>
+            {/* Back / Cancel is as wide as its word; the main action takes the rest on phones. */}
+            <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
               {bulkJob ? (
                 <button
                   onClick={onClose}
-                  className="col-span-2 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Done
                 </button>
               ) : (
                 <>
-                  <Button variant="secondary" onClick={close} className="!h-9 w-full">
-                    Cancel
+                  <Button
+                    variant="secondary"
+                    onClick={() => (inSteps && stepIndex > 0 ? goTo(steps[stepIndex - 1]) : requestClose())}
+                    className="!h-9 shrink-0 px-4"
+                  >
+                    {inSteps && stepIndex > 0 ? 'Back' : 'Cancel'}
                   </Button>
                   {!job && !off ? (
                     <button
                       onClick={chooseFromList}
                       disabled={!listPicked}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Continue
                     </button>
                   ) : (
                     <button
-                      onClick={askSend}
-                      aria-disabled={!canSend}
-                      disabled={!canSend && perms.canInvite}
-                      title={deniedTitle}
-                      className={`w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${!perms.canInvite ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      onClick={onPrimary}
+                      disabled={!inSteps || (nextDisabled && !(current === 'send' && !perms.canInvite))}
+                      aria-disabled={!inSteps || nextDisabled}
+                      aria-label={primaryLabel}
+                      title={current === 'send' ? deniedTitle : undefined}
+                      className={`flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      <Mail className="w-4 h-4" />
-                      {selected ? `Send with V${selected.version}` : 'Send Invitations'}
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : current === 'send' ? <Mail className="w-4 h-4" /> : null}
+                      {/* Phones: "Next:" gives way so the label fits. */}
+                      {primaryLabel.startsWith('Next: ') ? <span className="truncate"><span className="max-sm:hidden">Next: </span>{primaryLabel.slice(6)}</span> : primaryLabel}
                     </button>
                   )}
                 </>
@@ -765,14 +1149,15 @@ export default function VersionInviteDialog({
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
                 <h3 id="version-invite-confirm" className="text-base font-semibold text-gray-900 dark:text-slate-50">{confirm.title}</h3>
                 <p className="mt-1.5 text-sm text-gray-600 dark:text-slate-400">{confirm.message}</p>
-                <div className="mt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => setConfirm(null)} disabled={confirmBusy}>Cancel</Button>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => setConfirm(null)} disabled={confirmBusy} className="w-full">{confirm.cancelText ?? 'Cancel'}</Button>
                   <Button
                     variant={confirm.destructive ? 'destructive' : 'primary'}
                     size="sm"
                     onClick={() => void runConfirm()}
                     disabled={confirmBusy}
                     icon={confirmBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                    className="w-full"
                     autoFocus
                   >
                     {confirm.confirmText}

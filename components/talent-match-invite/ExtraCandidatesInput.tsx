@@ -1,48 +1,47 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Trash2 } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { CheckCircle, Copy, FileSpreadsheet, Loader2, Plus, Search, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
 import { EMAIL_FORMAT_ERROR, isValidEmailFormat } from '@/lib/utils/email';
 import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
+import ListPagination from '@/components/ListPagination';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
-import { inviteEntryModeTabClass } from './InviteEntryModeTabs';
 
 /** The backend takes at most this many typed-in candidates per send. */
 export const MAX_EXTRA_CANDIDATES = 500;
 
-const INPUT = 'w-full h-10 px-3 py-2 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-inset disabled:opacity-60';
-const INPUT_OK = 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent';
-const INPUT_BAD = 'border-destructive-line focus:ring-destructive-line';
+const PAGE_SIZE = 10;
+const INPUT = 'h-10 w-full min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
+const CHIP = 'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-xs font-medium border whitespace-nowrap max-w-full';
+const CHIP_ON = 'border-brand-blue bg-brand-blue/10 text-brand-blue';
+const CHIP_OFF = 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800';
 
 const EMAIL_HEADER = /^(email|e.?mail|candidate.?email|email.?address)$/i;
 const NAME_HEADER = /^(name|full.?name|candidate.?name|first.?name)$/i;
-const PHONE_HEADER = /^(phone|mobile|phone.?number|mobile.?number|contact)$/i;
 
 interface EntryRow {
   id: string;
   name: string;
   email: string;
-  phone: string;
-  origin: 'manual' | 'excel';
+  /** "Manual", or the sheet it came from. */
+  origin: string;
   /** Copy Link already invited this row by link — it is not emailed. */
   linked?: boolean;
 }
 
-const newRow = (partial: Partial<EntryRow> = {}): EntryRow => ({
-  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  name: '',
-  email: '',
-  phone: '',
-  origin: 'manual',
-  ...partial,
-});
+/** A sheet row that was not added, as the upload summary lists it. */
+interface InvalidRow { row: number; email: string; problem: string }
 
-/* A minimal CSV reader (quoted fields, doubled quotes) — the invite modal's own. */
+/** The last sheet uploaded: what came of it. */
+interface UploadSummary { file: string; added: number; repeated: number; over: number; invalid: InvalidRow[]; open: boolean }
+
+const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+/* A minimal CSV reader (quoted fields, doubled quotes). */
 const parseCsvRows = (text: string): string[][] => {
-  const lines = text.trim().split(/\r?\n/).filter((l) => l.trim());
   const parseRow = (line: string): string[] => {
     const out: string[] = [];
     let cur = '';
@@ -61,140 +60,154 @@ const parseCsvRows = (text: string): string[][] => {
     out.push(cur.trim());
     return out;
   };
-  return lines.map(parseRow);
+  return text.trim().split(/\r?\n/).filter((l) => l.trim()).map(parseRow);
 };
+
+/* A sheet row with no name: one made from the email ("john.doe@x" → "john
+   doe"), when that is a valid name. */
+const nameFromEmail = (email: string) => email.split('@')[0].replace(/[^A-Za-z]+/g, ' ').trim().replace(/\s+/g, ' ');
 
 /* Rows of one sheet (header row first) → candidates. Needs an Email column;
-   Name and Phone are optional. */
-const candidatesFromRows = (rows: unknown[][]): { found: BulkExtraCandidate[]; hasEmailColumn: boolean } => {
-  if (rows.length < 2) return { found: [], hasEmailColumn: false };
+   Name is optional. Rows with a missing or malformed email, or a name that is
+   not letters and spaces, are listed as invalid (with their sheet row number)
+   and left out. */
+const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: string }[]; invalid: InvalidRow[]; hasEmailColumn: boolean } => {
+  if (rows.length < 2) return { found: [], invalid: [], hasEmailColumn: false };
   const headers = rows[0].map((h) => String(h ?? '').trim());
   const emailIdx = headers.findIndex((h) => EMAIL_HEADER.test(h));
-  if (emailIdx === -1) return { found: [], hasEmailColumn: false };
+  if (emailIdx === -1) return { found: [], invalid: [], hasEmailColumn: false };
   const nameIdx = headers.findIndex((h) => NAME_HEADER.test(h));
-  const phoneIdx = headers.findIndex((h) => PHONE_HEADER.test(h));
-  const found: BulkExtraCandidate[] = [];
-  for (const row of rows.slice(1)) {
-    const cell = (i: number) => (i === -1 ? '' : String(row[i] ?? '').trim());
+  const found: { name: string; email: string }[] = [];
+  const invalid: InvalidRow[] = [];
+  rows.slice(1).forEach((row, i) => {
+    const cell = (c: number) => (c === -1 ? '' : String(row[c] ?? '').trim());
+    if (row.every((v) => !String(v ?? '').trim())) return;
+    const sheetRow = i + 2; // the header is row 1
     const email = cell(emailIdx).toLowerCase();
-    if (!email || !isValidEmailFormat(email)) continue;
-    found.push({ name: cell(nameIdx) || email.split('@')[0], email, phone: cell(phoneIdx) || undefined });
-  }
-  return { found, hasEmailColumn: true };
+    if (!email) { invalid.push({ row: sheetRow, email: '', problem: 'Missing email' }); return; }
+    if (!isValidEmailFormat(email)) { invalid.push({ row: sheetRow, email, problem: 'Invalid email' }); return; }
+    const name = cell(nameIdx) || nameFromEmail(email);
+    if (!isValidCandidateName(name)) { invalid.push({ row: sheetRow, email, problem: 'Invalid name' }); return; }
+    found.push({ name: name.replace(/\s+/g, ' '), email });
+  });
+  return { found, invalid, hasEmailColumn: true };
 };
 
-/* The rows that will be sent: a valid email, not repeated (the first keeps
-   it), and a valid name (letters and spaces). Blank rows are simply ignored. */
-const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] => {
-  const seen = new Set<string>();
-  const out: BulkExtraCandidate[] = [];
-  for (const r of rows) {
-    if (r.linked) continue;
-    const email = r.email.trim().toLowerCase();
-    const name = r.name.trim();
-    if (!isValidEmailFormat(email) || !isValidCandidateName(name) || seen.has(email)) continue;
-    seen.add(email);
-    out.push({ name, email, phone: r.phone.trim() || undefined });
-  }
-  return out.slice(0, MAX_EXTRA_CANDIDATES);
-};
+/* The rows that will be emailed: not invited by link already. */
+const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] =>
+  rows.filter((r) => !r.linked).map((r) => ({ name: r.name, email: r.email }));
 
-const emailOf = (r: EntryRow) => r.email.trim().toLowerCase();
-/* A repeated email: an earlier card already has it (the first keeps it). */
-const isDuplicateIn = (rows: EntryRow[], row: EntryRow) => {
-  const e = emailOf(row);
-  if (!e) return false;
-  const first = rows.find((r) => emailOf(r) === e);
-  return !!first && first.id !== row.id;
-};
-
-const isBlank = (r: EntryRow) => !r.name.trim() && !r.email.trim() && !r.phone.trim();
-
-/* Field errors for a started (non-blank, not yet linked) card; a blank card
-   shows none. */
-const fieldErrors = (r: EntryRow): { name: string | null; email: string | null } => {
-  if (r.linked || isBlank(r)) return { name: null, email: null };
-  const name = r.name.trim();
-  const email = r.email.trim();
-  return {
-    name: !name ? 'Name is required' : !isValidCandidateName(name) ? NAME_FORMAT_ERROR : null,
-    email: !email ? 'Email is required' : !isValidEmailFormat(email) ? EMAIL_FORMAT_ERROR : null,
-  };
-};
+/** How the rows added here split, for the popup's summary. */
+export interface ExtraCounts { manual: number; excel: number }
 
 /**
- * The invite modal's Manual / Upload Excel entry, inside the bulk Create /
- * Send popup: candidate cards with Full Name and Email Address, "Add
- * Candidate" for another, and an .xlsx / .csv import that fills the same
- * cards. The valid rows are handed up as `extra_candidates`, sent on top of
- * whatever is ticked in the lists above; the backend applies the same skips
- * as every other row (team member, repeated email, already invited).
+ * Candidates added directly: one quick-add row (name, email, Add Candidate;
+ * Enter adds) and Upload Excel, then a compact table of everyone added this
+ * way — search, All / Manual / per-sheet chips (a sheet's chip can remove
+ * every row it brought), a per-row Copy Link (invites by link, no email) and
+ * remove, 10 a page. Each upload leaves a summary — added, invalid (row by
+ * row), repeated. The rows not invited by link are handed up as
+ * `extra_candidates`; the backend applies the same skips as every other row.
  */
 export default function ExtraCandidatesInput({
   onChange,
-  onInvalidChange,
+  onCounts,
   disabled = false,
   onCopyLink,
+  takenEmail,
 }: {
   onChange: (next: BulkExtraCandidate[]) => void;
-  /** How many started cards have an invalid name or email (or a repeated
-   *  email) — the host keeps Send disabled while this is above zero. */
-  onInvalidChange?: (invalidRows: number) => void;
+  /** Manual vs sheet rows that will be emailed, for the summary. */
+  onCounts?: (counts: ExtraCounts) => void;
   disabled?: boolean;
   /** Per-row Copy Link: creates this candidate's invitation without an email
    *  and resolves to the link; the row is then left out of the email send. */
   onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
+  /** Where else this email is already picked (a list), if anywhere. */
+  takenEmail?: (email: string) => string | null;
 }) {
+  const [rows, setRows] = useState<EntryRow[]>([]);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [origin, setOrigin] = useState<string>('all');
+  const [page, setPage] = useState(1);
   const [linking, setLinking] = useState<string | null>(null);
-  // Opens with one empty card, like every other invite popup. Upload Excel
-  // only opens the file chooser; its rows land in these cards.
-  const [rows, setRows] = useState<EntryRow[]>(() => [newRow()]);
+  const [upload, setUpload] = useState<UploadSummary | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const nameRef = useRef<HTMLInputElement | null>(null);
 
-  // Manual never goes empty: removing the last card leaves a blank one.
   const commit = (next: EntryRow[]) => {
-    const kept = next.length > 0 ? next : [newRow()];
-    setRows(kept);
-    onChange(toCandidates(kept));
-    onInvalidChange?.(kept.filter((r) => {
-      if (r.linked || isBlank(r)) return false;
-      const err = fieldErrors(r);
-      return !!err.name || !!err.email || isDuplicateIn(kept, r);
-    }).length);
+    setRows(next);
+    const emailed = next.filter((r) => !r.linked);
+    onChange(toCandidates(next));
+    onCounts?.({
+      manual: emailed.filter((r) => r.origin === 'Manual').length,
+      excel: emailed.filter((r) => r.origin !== 'Manual').length,
+    });
   };
 
-  const addRow = () => commit([...rows, newRow()]);
-  const updateRow = (id: string, field: 'name' | 'email' | 'phone', value: string) =>
-    commit(rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  const removeRow = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const add = () => {
+    const n = name.trim();
+    const e = email.trim().toLowerCase();
+    if (!n || !e) { setError('Enter a full name and an email address.'); return; }
+    // The invite flows' own rules: letters and spaces only; a valid email.
+    if (!isValidCandidateName(n)) { setError(NAME_FORMAT_ERROR); return; }
+    if (!isValidEmailFormat(e)) { setError(EMAIL_FORMAT_ERROR); return; }
+    const same = rows.find((r) => r.email === e);
+    if (same) { setError(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
+    if (rows.length >= MAX_EXTRA_CANDIDATES) { setError(`At most ${MAX_EXTRA_CANDIDATES} candidates can be added directly.`); return; }
+    const elsewhere = takenEmail?.(e);
+    if (elsewhere) { setError(`${e} is already added from ${elsewhere}.`); return; }
+    commit([{ id: newId(), name: n.replace(/\s+/g, ' '), email: e, origin: 'Manual' }, ...rows]);
+    setName('');
+    setEmail('');
+    setError(null);
+    setPage(1);
+    nameRef.current?.focus();
+  };
+
+  const remove = (id: string) => commit(rows.filter((r) => r.id !== id));
+  const removeFile = (file: string) => {
+    commit(rows.filter((r) => r.origin !== file));
+    if (upload?.file === file) setUpload(null);
+    setOrigin('all');
+    setPage(1);
+  };
+  const clearAll = () => {
+    commit([]);
+    setUpload(null);
+    setOrigin('all');
+    setPage(1);
+  };
   const copyLink = async (row: EntryRow) => {
     if (!onCopyLink) return;
     setLinking(row.id);
     try {
-      const link = await onCopyLink({ name: row.name.trim(), email: row.email.trim().toLowerCase() });
+      const link = await onCopyLink({ name: row.name, email: row.email });
       try { await navigator.clipboard.writeText(link); } catch { /* shown in the toast below */ }
       commit(rows.map((r) => (r.id === row.id ? { ...r, linked: true } : r)));
-      toast.success(`Invitation link for ${row.name.trim()} copied`, { description: link });
+      toast.success(`Invitation link for ${row.name} copied`, { description: link });
     } catch (err) {
       toast.error(friendlyErrorMessage(err, 'Could not create the link. Please try again.'));
     } finally {
       setLinking(null);
     }
   };
-  const clearAll = () => commit([]);
-
-  const isDuplicate = (row: EntryRow) => isDuplicateIn(rows, row);
 
   const onFile = async (ev: React.ChangeEvent<HTMLInputElement>) => {
     const file = ev.target.files?.[0];
     if (fileRef.current) fileRef.current.value = '';
     if (!file) return;
     try {
-      let found: BulkExtraCandidate[] = [];
+      const found: { name: string; email: string }[] = [];
+      const invalid: InvalidRow[] = [];
       let anyEmailColumn = false;
       if (file.name.toLowerCase().endsWith('.csv')) {
         const r = candidatesFromRows(parseCsvRows(await file.text()));
-        found = r.found;
+        found.push(...r.found);
+        invalid.push(...r.invalid);
         anyEmailColumn = r.hasEmailColumn;
       } else {
         // Either [{ sheet, data: Row[][] }] (every sheet) or Row[][] (one sheet).
@@ -206,146 +219,263 @@ export default function ExtraCandidatesInput({
           const r = candidatesFromRows(data ?? []);
           anyEmailColumn = anyEmailColumn || r.hasEmailColumn;
           found.push(...r.found);
+          invalid.push(...r.invalid);
         }
       }
       if (!anyEmailColumn) {
         toast.error('Could not find an "Email" column in the file. Expected headers: Name, Email.');
         return;
       }
-      const have = new Set(rows.map(emailOf).filter(Boolean));
+      const have = new Set(rows.map((r) => r.email));
       const fresh: EntryRow[] = [];
       let repeated = 0;
       for (const c of found) {
-        if (have.has(c.email)) { repeated += 1; continue; }
+        if (have.has(c.email) || takenEmail?.(c.email)) { repeated += 1; continue; }
         have.add(c.email);
-        fresh.push(newRow({ name: c.name, email: c.email, phone: c.phone || '', origin: 'excel' }));
+        fresh.push({ id: newId(), name: c.name, email: c.email, origin: file.name });
       }
-      const room = Math.max(0, MAX_EXTRA_CANDIDATES - rows.filter((r) => emailOf(r)).length);
-      const kept = fresh.slice(0, room);
-      if (kept.length === 0) {
-        toast.error(repeated ? `Every email in ${file.name} is already in the list` : `No valid candidates found in ${file.name}`);
-        return;
-      }
-      // Imported rows join the cards; an untouched blank card is dropped.
-      commit([...rows.filter((r) => r.name || r.email || r.phone), ...kept]);
-      const notes = [repeated ? `${repeated} already in the list` : '', fresh.length > kept.length ? `${fresh.length - kept.length} over the ${MAX_EXTRA_CANDIDATES} limit` : ''].filter(Boolean);
-      toast.success(`Added ${kept.length} candidate${kept.length === 1 ? '' : 's'} from ${file.name}${notes.length ? ` · ${notes.join(', ')}` : ''}`);
+      const kept = fresh.slice(0, Math.max(0, MAX_EXTRA_CANDIDATES - rows.length));
+      const over = fresh.length - kept.length;
+      setUpload({ file: file.name, added: kept.length, repeated, over, invalid, open: false });
+      if (kept.length === 0) return;
+      commit([...rows, ...kept]);
+      setOrigin('all');
+      setPage(1);
     } catch {
       toast.error('Could not read that file. Use an .xlsx, .xls or .csv with Name and Email columns.');
     }
   };
 
-  const ready = toCandidates(rows).length;
+  const files = useMemo(() => [...new Set(rows.filter((r) => r.origin !== 'Manual').map((r) => r.origin))], [rows]);
+  const manualCount = rows.filter((r) => r.origin === 'Manual').length;
+  const q = query.trim().toLowerCase();
+  const shown = useMemo(
+    () => rows.filter((r) => (origin === 'all' || r.origin === origin)
+      && (!q || r.name.toLowerCase().includes(q) || r.email.includes(q))),
+    [rows, origin, q],
+  );
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const curPage = Math.min(page, pages);
+  const pageRows = shown.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const chips: { key: string; label: string; n: number }[] = [
+    { key: 'all', label: 'All', n: rows.length },
+    ...(manualCount ? [{ key: 'Manual', label: 'Manual', n: manualCount }] : []),
+    ...files.map((f) => ({ key: f, label: f, n: rows.filter((r) => r.origin === f).length })),
+  ];
 
   return (
-    <section aria-label="Add candidates" className="space-y-3">
-      {/* One row: the hint, then Clear all · Add Candidate · Upload Excel. No
-          section heading and no Manual tab — typing into the cards below is
-          the only manual mode there is. */}
+    <div className="space-y-3">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <p className="text-sm text-gray-600 dark:text-slate-400">
-          Enter candidate details manually{ready > 0 ? ` · ${ready.toLocaleString()} ready` : ''}
-        </p>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <button type="button" onClick={clearAll} disabled={disabled} className="text-xs font-medium text-gray-500 hover:text-gray-900 dark:hover:text-slate-100 disabled:opacity-50">
-            Clear all
-          </button>
+        <p className="text-sm text-gray-600 dark:text-slate-400">Add people directly: type them in, or upload a sheet with Name and Email columns.</p>
+        <div className="flex items-center gap-2 shrink-0">
+          {rows.length > 0 && (
+            <button type="button" onClick={clearAll} disabled={disabled} className="h-9 px-3 rounded-lg text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 hover:bg-gray-100 dark:hover:text-slate-100 dark:hover:bg-slate-800 disabled:opacity-50">
+              Clear all
+            </button>
+          )}
           <button
             type="button"
-            onClick={addRow}
-            disabled={disabled || rows.length >= MAX_EXTRA_CANDIDATES}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm text-brand-blue hover:text-brand-blue-2 rounded-lg transition-colors disabled:opacity-50"
+            onClick={() => fileRef.current?.click()}
+            disabled={disabled}
+            className="h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="An .xlsx, .xls or .csv with Name and Email columns"
           >
-            <Plus className="w-4 h-4" aria-hidden="true" />
-            Add Candidate
-          </button>
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={disabled} className={inviteEntryModeTabClass(false)}>
             <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
             Upload Excel
           </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
         </div>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => void onFile(e)} className="hidden" aria-label="Upload a sheet of candidates" />
       </div>
 
-      <>
-          <div className="space-y-3 max-h-80 overflow-y-auto pr-0.5">
-            {rows.map((row) => {
-              const errors = fieldErrors(row);
-              const badEmail = !!errors.email;
-              const dup = !badEmail && isDuplicate(row);
-              const badName = !!errors.name;
-              return (
-                <div key={row.id} className="relative p-4 border rounded-lg bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">
-                  <span className={`absolute top-2 right-3 inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ring-1 ${
-                    row.origin === 'excel'
-                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20'
-                      : 'bg-gray-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700'
-                  }`}>
-                    {row.origin === 'excel' ? 'Excel' : 'Manual'}
-                  </span>
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="min-w-0">
-                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
-                        <input
-                          type="text"
-                          value={row.name}
-                          onChange={(e) => updateRow(row.id, 'name', e.target.value)}
-                          placeholder="e.g., John Doe"
-                          disabled={disabled || row.linked}
-                          aria-invalid={badName || undefined}
-                          className={`${INPUT} ${badName ? INPUT_BAD : INPUT_OK}`}
-                        />
-                        {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
-                      </div>
-                      <div className="min-w-0">
-                        <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
-                        <input
-                          type="email"
-                          value={row.email}
-                          onChange={(e) => updateRow(row.id, 'email', e.target.value)}
-                          placeholder="e.g., john.doe@example.com"
-                          disabled={disabled || row.linked}
-                          aria-invalid={badEmail || dup || undefined}
-                          className={`${INPUT} ${badEmail || dup ? INPUT_BAD : INPUT_OK}`}
-                        />
-                        {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
-                        {dup && <p className="text-xs text-destructive mt-1">This email is already in the list</p>}
-                      </div>
-                    </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_auto] gap-2">
+        <input
+          ref={nameRef}
+          type="text"
+          value={name}
+          onChange={(e) => { setName(e.target.value); setError(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          placeholder="Full name"
+          aria-label="Full name"
+          disabled={disabled}
+          className={`${INPUT} border-gray-200 dark:border-slate-700`}
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); setError(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          placeholder="Email address"
+          aria-label="Email address"
+          aria-invalid={!!error || undefined}
+          disabled={disabled}
+          className={`${INPUT} ${error ? 'border-destructive-line' : 'border-gray-200 dark:border-slate-700'}`}
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={disabled}
+          className="h-10 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+        >
+          <Plus className="w-4 h-4" aria-hidden="true" />
+          Add Candidate
+        </button>
+      </div>
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+
+      {upload && (
+        <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+            <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+              <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+              <b className="truncate font-semibold text-gray-900 dark:text-slate-50">{upload.file}</b>
+            </span>
+            <span className="font-medium text-success-strong tabular-nums">{upload.added.toLocaleString()} added</span>
+            {upload.invalid.length > 0 && <span className="font-medium text-destructive tabular-nums">{upload.invalid.length.toLocaleString()} invalid</span>}
+            {upload.repeated > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.repeated.toLocaleString()} repeated (already in the list)</span>}
+            {upload.over > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} over the {MAX_EXTRA_CANDIDATES} limit</span>}
+            {upload.invalid.length > 0 && (
+              <button type="button" onClick={() => setUpload({ ...upload, open: !upload.open })} className="text-xs font-medium text-brand-blue hover:underline underline-offset-2">
+                {upload.open ? 'Hide' : 'View'} invalid rows
+              </button>
+            )}
+            <button type="button" onClick={() => setUpload(null)} aria-label="Dismiss" className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+          {upload.open && upload.invalid.length > 0 && (
+            <div className="mt-2.5 max-h-48 overflow-y-auto">
+              <table className="w-full table-fixed text-xs">
+                <thead className="text-left text-gray-600 dark:text-slate-400">
+                  <tr><th className="w-16 px-2 py-1.5 font-semibold">Row</th><th className="px-2 py-1.5 font-semibold">Email in the sheet</th><th className="w-28 px-2 py-1.5 font-semibold">Problem</th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 border-t border-gray-100 dark:border-slate-700/60">
+                  {upload.invalid.map((r) => (
+                    <tr key={`${r.row}-${r.email}`}>
+                      <td className="px-2 py-1.5 tabular-nums">{r.row}</td>
+                      <td className="px-2 py-1.5"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
+                      <td className="px-2 py-1.5">{r.problem}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <b className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">{rows.length.toLocaleString()} added directly</b>
+            <label className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                placeholder="Search name or email"
+                aria-label="Search added candidates"
+                className="h-8 w-full pl-8 pr-2 text-xs border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+              />
+            </label>
+          </div>
+          {chips.length > 2 && (
+            <div role="group" aria-label="Added from" className="flex flex-wrap items-center gap-1.5">
+              {chips.map((c) => (
+                <button key={c.key} type="button" aria-pressed={origin === c.key} onClick={() => { setOrigin(c.key); setPage(1); }} className={`${CHIP} ${origin === c.key ? CHIP_ON : CHIP_OFF}`}>
+                  {c.key !== 'all' && c.key !== 'Manual' && <FileSpreadsheet className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />}
+                  <span className="truncate">{c.label}</span>
+                  <span className="tabular-nums text-gray-400">{c.n.toLocaleString()}</span>
+                </button>
+              ))}
+              {origin !== 'all' && origin !== 'Manual' && (
+                <button type="button" onClick={() => removeFile(origin)} disabled={disabled} className="text-xs font-medium text-destructive hover:underline underline-offset-2 disabled:opacity-50">
+                  Remove all from this file
+                </button>
+              )}
+            </div>
+          )}
+          <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700">
+            <table className="w-full table-fixed text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs text-gray-500 dark:text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Name</th>
+                  <th className="hidden sm:table-cell px-3 py-2 text-left font-semibold">Email</th>
+                  <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>
+                  {onCopyLink && <th className="w-[6.75rem] px-2 py-2 text-center font-semibold">Link</th>}
+                  <th className="w-11 px-2 py-2"><span className="sr-only">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                {pageRows.map((r) => (
+                  <tr key={r.id} className="bg-white dark:bg-slate-900">
+                    <td className="px-3 py-2">
+                      <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
+                    </td>
+                    <td className="hidden sm:table-cell px-3 py-2 text-gray-600 dark:text-slate-400"><span className="block truncate" title={r.email}>{r.email}</span></td>
+                    <td className="hidden md:table-cell px-3 py-2">
+                      <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.origin}>
+                        {r.origin !== 'Manual' && <FileSpreadsheet className="w-3 h-3 shrink-0 text-emerald-600" aria-hidden="true" />}
+                        <span className="truncate">{r.origin}</span>
+                      </span>
+                    </td>
                     {onCopyLink && (
+                      <td className="px-2 py-2 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => { if (!r.linked) void copyLink(r); }}
+                          disabled={disabled || linking === r.id}
+                          title={r.linked ? 'Invited by link — not emailed' : 'Create and copy this candidate’s link (no email is sent)'}
+                          className={`inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs border disabled:opacity-50 ${
+                            r.linked
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
+                              : 'border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {linking === r.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : r.linked ? <><CheckCircle className="w-3.5 h-3.5" />Copied</> : <><Copy className="w-3.5 h-3.5" />Copy link</>}
+                        </button>
+                      </td>
+                    )}
+                    <td className="px-2 py-2 text-center">
                       <button
                         type="button"
-                        onClick={() => { if (!row.linked) void copyLink(row); }}
-                        disabled={disabled || linking === row.id || (!row.linked && (isBlank(row) || badName || badEmail || dup))}
-                        title={row.linked ? 'Invited by link — not emailed' : "Create and copy this candidate’s invitation link (no email is sent)"}
-                        className={`mt-6 shrink-0 flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-xs border transition-colors whitespace-nowrap disabled:opacity-50 ${
-                          row.linked
-                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/30 dark:text-emerald-300'
-                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
+                        onClick={() => remove(r.id)}
+                        disabled={disabled}
+                        aria-label={`Remove ${r.name}`}
+                        title="Remove"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-destructive hover:bg-destructive-subtle disabled:opacity-50"
                       >
-                        {linking === row.id
-                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          : row.linked ? <><CheckCircle className="w-3.5 h-3.5" /><span>Copied</span></> : <><Copy className="w-3.5 h-3.5" /><span>Copy Link</span></>}
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeRow(row.id)}
-                      disabled={disabled}
-                      aria-label="Remove candidate"
-                      title="Remove"
-                      className="mt-6 shrink-0 p-2 rounded-lg text-gray-400 hover:text-destructive hover:bg-destructive-subtle transition-colors disabled:opacity-50"
-                    >
-                      <Trash2 className="w-4 h-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                    </td>
+                  </tr>
+                ))}
+                {pageRows.length === 0 && (
+                  <tr><td colSpan={5} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
-      </>
-    </section>
+          {shown.length > 0 && (
+            <ListPagination
+              currentPage={curPage}
+              itemsPerPage={PAGE_SIZE}
+              totalItems={shown.length}
+              onPageChange={setPage}
+              onItemsPerPageChange={() => setPage(1)}
+              pageSizeOptions={[PAGE_SIZE]}
+              itemLabel="candidates"
+              compact
+              attached
+              minimalOnMobile
+              alwaysShow
+            />
+          )}
+        </div>
+      )}
+    </div>
   );
 }
