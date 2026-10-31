@@ -62,8 +62,9 @@ const C = {
   slateBg: '#f8fafc', slateText: '#64748b', slateLine: '#e2e8f0',
 };
 
+// Pills and avatars centre their text with flex rather than a tall line-height.
 const pill = (text: string, bg: string, fg: string, line: string) =>
-  `<span style="display:inline-block;vertical-align:middle;height:16px;line-height:14px;padding:0 6px;box-sizing:border-box;font-size:9px;font-weight:600;border-radius:4px;background:${bg};color:${fg};border:1px solid ${line};white-space:nowrap">${esc(text)}</span>`;
+  `<span style="display:inline-flex;align-items:center;vertical-align:middle;height:16px;line-height:1;padding:0 6px;box-sizing:border-box;font-size:9px;font-weight:600;border-radius:4px;background:${bg};color:${fg};border:1px solid ${line};white-space:nowrap">${esc(text)}</span>`;
 
 const labelPill = (label: string, kind: ChatPdfMessage['kind']) =>
   kind === 'deepdive' ? pill(label, C.tealTint, C.teal, C.tealLine)
@@ -71,8 +72,8 @@ const labelPill = (label: string, kind: ChatPdfMessage['kind']) =>
       : pill(label, C.brandTint, C.brand, C.brandLine);
 
 const avatar = (letter: string, filled: boolean) =>
-  `<div style="flex:none;display:inline-block;vertical-align:middle;width:24px;height:24px;line-height:24px;text-align:center;box-sizing:border-box;border-radius:50%;font-size:10px;font-weight:700;${
-    filled ? `background:${C.brand};color:#fff` : `background:${C.brandTint};color:${C.brand};border:1px solid ${C.brandLine};line-height:22px`
+  `<div style="flex:none;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;width:24px;height:24px;line-height:1;box-sizing:border-box;border-radius:50%;font-size:10px;font-weight:700;${
+    filled ? `background:${C.brand};color:#fff` : `background:${C.brandTint};color:${C.brand};border:1px solid ${C.brandLine}`
   }">${esc(letter)}</div>`;
 
 function messageHtml(m: ChatPdfMessage, initial: string): string {
@@ -97,7 +98,7 @@ function messageHtml(m: ChatPdfMessage, initial: string): string {
     body = bubble(C.binaBubble, C.binaText, esc(m.text), 'border-top-left-radius:4px');
     if (m.skipNote) {
       const [bg, fg, line] = m.skipNote.amber ? [C.amberBg, C.amberText, C.amberLine] : [C.slateBg, C.slateText, C.slateLine];
-      body += `<div style="margin-top:6px;display:inline-block;height:20px;line-height:18px;padding:0 9px;box-sizing:border-box;border-radius:8px;font-size:9.5px;font-weight:500;background:${bg};color:${fg};border:1px solid ${line}">&#9197; ${esc(m.skipNote.text)}</div>`;
+      body += `<div style="margin-top:6px;display:inline-flex;align-items:center;height:20px;line-height:1;padding:0 9px;box-sizing:border-box;border-radius:8px;font-size:9.5px;font-weight:500;background:${bg};color:${fg};border:1px solid ${line}">&#9197; ${esc(m.skipNote.text)}</div>`;
     }
   } else {
     body = bubble(C.skyBubble, C.skyText, caption('Original (ASR)', C.skyLabel) + esc(m.original), 'border-top-right-radius:4px');
@@ -161,6 +162,13 @@ export async function downloadChatTranscriptPdf(data: ChatPdfData, filename: str
     </div>
     ${data.messages.map(m => messageHtml(m, initial)).join('')}`;
 
+  /* html2canvas finds the text baseline by measuring a 1x1 <img> it adds to
+     <body>; Tailwind's preflight `img { display: block }` breaks that and every
+     line of text lands a few px low (letters at the bottom of avatars and
+     pills). Put that one image back inline for the capture only. */
+  const baselineFix = document.createElement('style');
+  baselineFix.textContent = 'body > div > img[width="1"][height="1"] { display: inline !important; }';
+  document.head.appendChild(baselineFix);
   document.body.appendChild(root);
   try {
     await html2pdf().set({
@@ -174,5 +182,6 @@ export async function downloadChatTranscriptPdf(data: ChatPdfData, filename: str
     }).from(root).save();
   } finally {
     document.body.removeChild(root);
+    baselineFix.remove();
   }
 }
