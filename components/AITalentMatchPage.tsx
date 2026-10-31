@@ -1217,6 +1217,12 @@ export default function AITalentMatchPage({
   // scoring keys on), then runs the same single-candidate scoring flow every
   // other "Score Resume" action already uses.
   const scoreJobMatchCandidate = async (job: { historyId: string; jobId: string; resumeId?: string }) => {
+    // Safety net behind the greyed-out menu items: never score against a Disabled / Archived JD.
+    const lock = jobLockFor(job.jobId);
+    if (lock) {
+      toast.error(`${lock} — resumes can't be scored against it`);
+      return;
+    }
     const item = matchHistory.find(h => h.id === job.historyId);
     if (!item) {
       toast.error('Match session not found');
@@ -2332,8 +2338,17 @@ export default function AITalentMatchPage({
   const inviteTargets = useAllJobInviteTargets(viewMode === 'history' || viewMode === 'results');
   const inviteTargetJobOf = (jdId: string, title?: string): InviteTargetJob => {
     const job = jobs.find(j => j.id === jdId);
-    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status: job?.status };
+    /* `jobs` can miss an older (e.g. disabled) version — fall back to that
+       version's own lineage status, so its invites still lock. Capitalised,
+       as resolveSelectionJobLock compares 'Archived' / 'Disabled'. */
+    const raw = job?.status || lineageByJob[historyKeyForJd(jdId)]?.find(v => v.id === jdId)?.status;
+    const status = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : undefined;
+    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status };
   };
+  /** 'JD is disabled' / 'JD is archived' when that JD can't be scored or
+   *  invited to; null otherwise. Gates every per-candidate Score / Create action. */
+  const jobLockFor = (jdId: string, title?: string): string | null =>
+    jdId ? resolveSelectionJobLock([inviteTargetJobOf(jdId, title)]) : null;
   /* Create / Send Assessment | AI Interview — Job Details' popup, for ONE job
      per opening (a selection spanning jobs stays greyed: "one job at a time").
      null = closed; rendered with aiInviteDialog in every view. */
@@ -2399,6 +2414,7 @@ export default function AITalentMatchPage({
   /** A candidate's invite items for its ⋮ menu — greyed with "＋ Create …"
    *  when its job has no AI Assessment / AI Interview yet. */
   const renderRowInviteItems = (row: MatchInviteRow, view: 'job' | 'candidates' | 'results', jobTitle?: string) => {
+    const rowJobLock = jobLockFor(row.jobId, jobTitle);
     const guardEmail = (): boolean => {
       if (row.email) return true;
       toast.error('Candidate has no email on file');
@@ -2414,8 +2430,11 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAssessmentFromMatch,
           deniedReason: ASSESSMENT_INVITE_DENIED,
+          // A Disabled / Archived JD: nothing can be created or sent for it.
+          extraDisabled: !!rowJobLock,
+          extraDisabledReason: rowJobLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAssessmentFromMatch) {
+            if (!canInviteAssessmentFromMatch || rowJobLock) {
               e.preventDefault();
               return;
             }
@@ -2429,8 +2448,10 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAIInterviewFromMatch,
           deniedReason: AI_INTERVIEW_INVITE_DENIED,
+          extraDisabled: !!rowJobLock,
+          extraDisabledReason: rowJobLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAIInterviewFromMatch) {
+            if (!canInviteAIInterviewFromMatch || rowJobLock) {
               e.preventDefault();
               return;
             }
@@ -3368,12 +3389,13 @@ export default function AITalentMatchPage({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={!job.resumeId}
+            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            // A Disabled / Archived JD can't be scored against.
+            disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
             aria-disabled={!canRunScoring || undefined}
-            title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
             onSelect={(e) => {
-              if (!canRunScoring) {
+              if (!canRunScoring || jobLockFor(job.jobId)) {
                 e.preventDefault();
                 return;
               }
@@ -3568,11 +3590,13 @@ export default function AITalentMatchPage({
                 </DropdownMenuItem>
               ) : (
               <DropdownMenuItem
-                className={`${actionsMenuItemClass} ${!canRunScoring ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                className={`${actionsMenuItemClass} ${!canRunScoring || selectionJobLock ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                 aria-disabled={!canRunScoring || undefined}
-                title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                // A Disabled / Archived JD can't be scored against.
+                disabled={canRunScoring && !!selectionJobLock}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : selectionJobLock ?? undefined}
                 onSelect={(e) => {
-                  if (!canRunScoring) {
+                  if (!canRunScoring || selectionJobLock) {
                     e.preventDefault();
                     return;
                   }
@@ -3790,8 +3814,9 @@ export default function AITalentMatchPage({
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />
         {/* Header — shared PageHeader (User Management uniform) */}
         <PageHeader
-          icon={<History className="h-5 w-5" />}
-          title="AI Talent Match - Matched Jobs"
+          // Same icon as the dashboard's AI Talent Match card.
+          icon={<Sparkles className="h-5 w-5 text-brand-orange-deep" />}
+          title="AI Talent Match"
           description="Review jobs with AI-matched candidates and their results"
           actions={
             <div className="flex items-center gap-2 flex-wrap sm:justify-end">
@@ -4430,12 +4455,12 @@ export default function AITalentMatchPage({
                                                 </td>
                                                 <td className="py-2.5 px-4 align-middle whitespace-nowrap">
                                                   {jobScoreId ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
                                                       <CheckCircle2 className="w-3 h-3" />
                                                       Scored
                                                     </span>
                                                   ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
                                                       <XCircle className="w-3 h-3" />
                                                       Not Scored
                                                     </span>
@@ -4448,7 +4473,7 @@ export default function AITalentMatchPage({
                                                   </div>
                                                 </td>
                                                 <td className="text-center py-2.5 px-4 align-middle whitespace-nowrap">
-                                                  <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                                                  <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
                                                     v{job.resumeVersion ?? 1}
                                                   </span>
                                                 </td>
@@ -4686,12 +4711,12 @@ export default function AITalentMatchPage({
                                             {toMatchRating(job.score)}
                                           </span>
                                           {jobScoreId ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
                                               <CheckCircle2 className="w-3 h-3" />
                                               Scored
                                             </span>
                                           ) : (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
                                               <XCircle className="w-3 h-3" />
                                               Not Scored
                                             </span>
@@ -5141,12 +5166,12 @@ export default function AITalentMatchPage({
 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {scored ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success-subtle text-success rounded-full text-2xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 border bg-success-subtle text-success-strong border-success-line rounded-full text-2xs font-medium">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-2xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
@@ -5336,7 +5361,7 @@ export default function AITalentMatchPage({
                             {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
                           <td className="text-center py-3 px-4 align-middle whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                            <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
                               v{job.resumeVersion ?? 1}
                             </span>
                           </td>
@@ -5353,12 +5378,12 @@ export default function AITalentMatchPage({
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
                             {row.resumeId && allScoredResumeIds.has(row.resumeId) ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs font-medium">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 border bg-success-subtle text-success-strong border-success-line rounded-full text-xs font-medium">
                                 <CheckCircle className="w-3 h-3" />
                                 Scored
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
                                 <XCircle className="w-3 h-3" />
                                 Not Scored
                               </span>
@@ -5386,12 +5411,13 @@ export default function AITalentMatchPage({
                                   <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!job.resumeId}
+                                  className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  // A Disabled / Archived JD can't be scored against.
+                                  disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
                                   aria-disabled={!canRunScoring || undefined}
-                                  title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                                  title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
                                   onSelect={(e) => {
-                                    if (!canRunScoring) {
+                                    if (!canRunScoring || jobLockFor(job.jobId)) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -5832,6 +5858,35 @@ export default function AITalentMatchPage({
                 if (!isJobExpanded && !loaded) void loadHistoryCandidates(item);
                 toggleJobExpanded(jobKey);
               };
+              /* One ⋮ menu per job row — View Details and Match History (which
+                 used to sit beside the job title), as on Resume Scoring. */
+              const renderJobActionsMenu = (sizeClass: string) => (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`More actions for ${item.jobTitle}`}
+                      title="More actions"
+                      className={`${sizeClass} p-0`}
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem className="group" onSelect={openResults}>
+                      <FileText className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="group" onSelect={() => openMatchHistoryModal(item, historyKey)}>
+                      <History className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>Match History</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
 
               /* One candidate's state in this job's panel — shared by the
                  table rows and the Grid cards. */
@@ -5890,12 +5945,13 @@ export default function AITalentMatchPage({
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
-                        className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={!c.resumeId}
+                        className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        // A Disabled / Archived JD can't be scored against.
+                        disabled={!c.resumeId || (canRunScoring && !!jobLockFor(item.jobId))}
                         aria-disabled={!canRunScoring || undefined}
-                        title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                        title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
                         onSelect={(e) => {
-                          if (!canRunScoring) {
+                          if (!canRunScoring || jobLockFor(item.jobId)) {
                             e.preventDefault();
                             return;
                           }
@@ -6016,7 +6072,7 @@ export default function AITalentMatchPage({
                                     <span>Experience: <span className="text-gray-700 dark:text-slate-300">{c.experience || '-'}</span></span>
                                     <span className="inline-flex items-center gap-1">
                                       Resume
-                                      <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                                      <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
                                         v{c.resumeVersion ?? 1}
                                       </span>
                                     </span>
@@ -6026,12 +6082,12 @@ export default function AITalentMatchPage({
                                       still bubbles its clicks to the card. */}
                                   <div className="mt-auto flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                                     {scored ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
                                         <CheckCircle2 className="w-3 h-3" />
                                         Scored
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
                                         <XCircle className="w-3 h-3" />
                                         Not Scored
                                       </span>
@@ -6132,18 +6188,18 @@ export default function AITalentMatchPage({
                                     </td>
                                     <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{c.experience || '-'}</td>
                                     <td className="text-center px-3 py-2.5 align-middle whitespace-nowrap">
-                                      <span className="inline-flex px-2 py-0.5 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                                      <span className="inline-flex px-2 py-0.5 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
                                         v{c.resumeVersion ?? 1}
                                       </span>
                                     </td>
                                     <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                                       {scored ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success/20">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
                                           <CheckCircle2 className="w-3 h-3" />
                                           Scored
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
                                           <XCircle className="w-3 h-3" />
                                           Not Scored
                                         </span>
@@ -6276,17 +6332,7 @@ export default function AITalentMatchPage({
                             </span>
                           );
                         })()}
-                        {/* Match History — every run across this job's whole
-                            lineage, with its Rating 10 / 9 – 7 / Below 7 roll-up. */}
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }}
-                          className="h-7 w-7 p-0 flex-shrink-0"
-                          aria-label="Match History" title="Match History"
-                        >
-                          <History className="w-3.5 h-3.5" />
-                        </Button>
+                        {/* Match History moved into the row's ⋮ menu. */}
                       </div>
 
                       {/* "By: name  Matched: date" — Resume Scoring's meta
@@ -6374,16 +6420,7 @@ export default function AITalentMatchPage({
                       )}
                       <div className="flex flex-col items-stretch gap-2">
                         <div className="flex items-center gap-1.5 self-end">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); openResults(); }}
-                            aria-label="View Details"
-                            title="View Details"
-                            className="h-9 w-9 p-0"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </Button>
+                          {renderJobActionsMenu('h-9 w-9')}
                         </div>
                         {hasMatches && (
                           <button
@@ -6532,9 +6569,7 @@ export default function AITalentMatchPage({
                             </span>
                           );
                         })()}
-                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }} className="h-6 w-6 p-0 flex-shrink-0" aria-label="Match History" title="Match History">
-                          <History className="w-3.5 h-3.5" />
-                        </Button>
+                        {/* Match History moved into the row's ⋮ menu. */}
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
@@ -6548,44 +6583,47 @@ export default function AITalentMatchPage({
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
                       <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{item.totalMatches}</span>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      {!hasMatches ? (
+                    {/* Rating: one column per band (10 / 9–7 / Below 7), as Resume
+                        Scoring's Exact / Partial / No Match columns. */}
+                    {!hasMatches ? (
+                      <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" />No match</span>
-                      ) : !loaded ? (
+                      </td>
+                    ) : !loaded ? (
+                      <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap"><FileText className="w-3.5 h-3.5" />{item.totalMatches}</span>
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {([
-                            { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
-                            { id: 'partial' as const, label: 'Rating 9–7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
-                            { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
-                          ]).map(({ id, label, count, Icon, cls }) => {
-                            const muted = !!candidateRatingBand && id !== candidateRatingBand;
-                            return (
-                              <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={label}>
-                                <Icon className="w-3.5 h-3.5" /><span className="tabular-nums">{count}</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </td>
+                      </td>
+                    ) : (
+                      ([
+                        { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                        { id: 'partial' as const, label: 'Rating 9–7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                        { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                      ]).map(({ id, label, count, Icon, cls }) => {
+                        const muted = !!candidateRatingBand && id !== candidateRatingBand;
+                        return (
+                          <td key={id} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={label}>
+                              <Icon className="w-3.5 h-3.5" /><span className="tabular-nums">{count}</span>
+                            </span>
+                          </td>
+                        );
+                      })
+                    )}
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                      {/* Expand first, then the ⋮ menu — same order as Resume Scoring. */}
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openResults(); }} aria-label="View Details" title="View Details" className="h-8 w-8 p-0">
-                          <FileText className="w-4 h-4" />
-                        </Button>
                         {hasMatches && (
                           <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8 p-0">
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                           </Button>
                         )}
+                        {renderJobActionsMenu('h-8 w-8')}
                       </div>
                     </td>
                   </tr>
                   {hasMatches && isJobExpanded && (
                     <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                      <td colSpan={8} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">{inlineCandidatesPanel}</td>
+                      <td colSpan={10} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">{inlineCandidatesPanel}</td>
                     </tr>
                   )}
                 </Fragment>
@@ -6609,12 +6647,14 @@ export default function AITalentMatchPage({
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job ID</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matched By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Date &amp; Time</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matched</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matches</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Rating</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Rating 10</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Rating 9–7</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Below 7</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
@@ -7556,6 +7596,17 @@ export default function AITalentMatchPage({
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
                     <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 [overflow-wrap:anywhere] sm:truncate">{resultsJobTitle}</h1>
+                    {/* Disabled / Archived — same badge as the job list row. */}
+                    {!canRunAgainHere && (() => {
+                      const label = resultsJobStatus === 'archived' ? 'Archived' : 'Disabled';
+                      const tone = getStatusConfig(label);
+                      return (
+                        <span className={`inline-flex h-6 items-center gap-1.5 px-2 rounded-full text-xs font-medium border ${tone.bg} ${tone.text} ${tone.border} flex-shrink-0`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+                          {label}
+                        </span>
+                      );
+                    })()}
                     {/* JD version — a dropdown once the job has more than one
                         version to pick from, else the same pill as the
                         table's Job Version column. */}
@@ -7653,6 +7704,15 @@ export default function AITalentMatchPage({
                       AI Talent Match • 0 units consumed
                     </span>
                   </div>
+                  {!canRunAgainHere && (
+                    <div role="status" className="mt-2 flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2 text-xs text-warning-strong ring-1 ring-warning-line">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        This job is <strong>{resultsJobStatus}</strong>. Its matches can still be viewed and exported,
+                        but running the match again, scoring and sending assessments or AI interviews are turned off.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -7850,12 +7910,13 @@ export default function AITalentMatchPage({
                         </div>
                         {/* Score — the shared Score Resume dialog for the ticked candidates. */}
                         <DropdownMenuItem
-                          className={`${actionsMenuItemClass} ${(!canRunScoring || unitsShort) ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                          className={`${actionsMenuItemClass} ${(!canRunScoring || unitsShort || jobLock) ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                           aria-disabled={!canRunScoring || undefined}
-                          disabled={canRunScoring && unitsShort}
-                          title={!canRunScoring ? 'You do not have permission to score resumes' : unitsShort ? 'Insufficient units for this selection' : undefined}
+                          // A Disabled / Archived JD can't be scored against — same as Resume Scoring.
+                          disabled={canRunScoring && (unitsShort || !!jobLock)}
+                          title={!canRunScoring ? 'You do not have permission to score resumes' : jobLock ? jobLock : unitsShort ? 'Insufficient units for this selection' : undefined}
                           onSelect={(e) => {
-                            if (!canRunScoring) { e.preventDefault(); return; }
+                            if (!canRunScoring || jobLock) { e.preventDefault(); return; }
                             void handleSubmitToScoring();
                           }}
                         >
@@ -8232,12 +8293,12 @@ export default function AITalentMatchPage({
                     {isResultColumnVisible('scoredStatus') && (
                     <td className="px-4 py-4">
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-success-subtle text-success-strong border-success-line">
                           <CheckCircle className="w-3 h-3" />
                           Scored
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
                           <XCircle className="w-3 h-3" />
                           Not Scored
                         </span>
@@ -8265,12 +8326,13 @@ export default function AITalentMatchPage({
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={!candidate.resumeId}
+                            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            // A Disabled / Archived JD can't be scored against.
+                            disabled={!candidate.resumeId || (canRunScoring && !!jobLockFor(selectedJob))}
                             aria-disabled={!canRunScoring || undefined}
-                            title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
                             onSelect={(e) => {
-                              if (!canRunScoring) {
+                              if (!canRunScoring || jobLockFor(selectedJob)) {
                                 e.preventDefault();
                                 return;
                               }
@@ -8395,12 +8457,12 @@ export default function AITalentMatchPage({
                     <div className="mt-auto pt-4">
                       <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
                         {isScored ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border bg-success-subtle text-success-strong border-success-line">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
@@ -8517,12 +8579,12 @@ export default function AITalentMatchPage({
                         {candidate.attachmentCount || 1}
                       </button>
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-success-subtle text-success-strong border-success-line">
                           <CheckCircle className="w-3 h-3" />
                           Scored
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
                           <XCircle className="w-3 h-3" />
                           Not Scored
                         </span>
