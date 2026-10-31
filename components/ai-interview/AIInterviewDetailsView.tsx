@@ -79,7 +79,7 @@ function TabHeading({ icon: Icon, title, description }: { icon: React.ComponentT
         </div>
         <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
       </div>
-      {description && <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">{description}</p>}
+      {description && <p className="tf-card-desc mt-1">{description}</p>}
     </div>
   );
 }
@@ -113,7 +113,7 @@ function SectionCard({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between py-2">
-      <span className="text-sm text-gray-500">{label}</span>
+      <span className="tf-body-muted">{label}</span>
       <span className="text-sm font-medium text-gray-900 text-right">{value}</span>
     </div>
   );
@@ -823,8 +823,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <Timer className="w-5 h-5 text-brand-orange-deep" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">Timed — {duration} min</p>
-                        <p className="text-xs text-gray-500">Structured interview with timed rounds</p>
+                        <p className="tf-cell-name">Timed — {duration} min</p>
+                        <p className="tf-meta">Structured interview with timed rounds</p>
                       </div>
                     </>
                   ) : (
@@ -833,8 +833,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <Zap className="w-5 h-5 text-brand-blue" />
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">Flexible</p>
-                        <p className="text-xs text-gray-500">Adaptive interview with dynamic pacing</p>
+                        <p className="tf-cell-name">Flexible</p>
+                        <p className="tf-meta">Adaptive interview with dynamic pacing</p>
                       </div>
                     </>
                   )}
@@ -852,10 +852,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <QrCode className={`w-5 h-5 ${config.environment_verification_enabled ? 'text-brand-blue' : 'text-gray-400'}`} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">
+                      <p className="tf-cell-name">
                         {config.environment_verification_enabled ? 'QR Trigger Enabled' : 'QR Trigger Disabled'}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="tf-meta">
                         Pauses the interview once, after the first must-have-skills question, to verify the candidate's physical environment via a QR code and their phone's camera.
                       </p>
                     </div>
@@ -879,10 +879,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <table className="w-full sm:min-w-[420px] text-sm whitespace-nowrap">
                       <thead>
                         <tr className="bg-white text-left border-b border-gray-100">
-                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-xs">Round</th>
-                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Questions</th>
-                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Clusters</th>
-                          <th className="px-2 sm:px-4 py-2.5 font-semibold text-gray-600 text-right text-xs">Time</th>
+                          <th className="px-2 sm:px-4 py-2.5 tf-th">Round</th>
+                          <th className="px-2 sm:px-4 py-2.5 tf-th text-right">Questions</th>
+                          <th className="px-2 sm:px-4 py-2.5 tf-th text-right">Clusters</th>
+                          <th className="px-2 sm:px-4 py-2.5 tf-th text-right">Time</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -1164,7 +1164,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-blue/20 transition-shadow">
                               <div className="flex items-center gap-2 mb-2">
                                 <PriorityBadge p={cluster.priority} />
-                                <span className="min-w-0 text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{cluster.name}</span>
+                                <span className="min-w-0 tf-cell-name [overflow-wrap:anywhere]">{cluster.name}</span>
                                 <span className="text-xs text-gray-400 ml-auto flex-shrink-0 whitespace-nowrap">{cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
@@ -1188,7 +1188,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white shadow-sm shadow-brand-blue/5 hover:ring-brand-cyan/20 transition-shadow">
                               <div className="flex items-center gap-2 mb-2">
                                 <PriorityBadge p={cluster.priority} />
-                                <span className="min-w-0 text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{cluster.name}</span>
+                                <span className="min-w-0 tf-cell-name [overflow-wrap:anywhere]">{cluster.name}</span>
                                 <span className="text-xs text-gray-400 ml-auto flex-shrink-0 whitespace-nowrap">{cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="flex flex-wrap gap-1.5">
@@ -1251,7 +1251,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   />
                   {config.introduction_video_url ? (
                     <div className="py-3">
-                      <p className="text-sm text-gray-500 mb-2">Introduction Video</p>
+                      <p className="tf-body-muted mb-2">Introduction Video</p>
                       <video src={config.introduction_video_url} controls className="w-full max-w-md rounded-lg border border-gray-100 ring-1 ring-black/[0.02] bg-black" style={{ maxHeight: '240px' }}>
                         Your browser does not support the video tag.
                       </video>
@@ -1371,7 +1371,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 {config.jd_short_id && (
                   <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
                 )}
-                <h1 className="min-w-0 font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate">
+                <h1 className="min-w-0 tf-page-title truncate">
                   {config.jd_title || config.position || 'Untitled'}
                 </h1>
                 <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
@@ -1382,7 +1382,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Row 2: quiet bulleted facts. Experience level and the invite count
                   are not repeated here: the Interview Info panel and the
                   Invitation Status tab carry them. */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+              <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
                 {([
                   { key: 'duration', icon: Clock, label: formattedDuration },
                   { key: 'created-at', icon: Calendar, label: config.created_at ? `Created ${formatIST(config.created_at)}` : null },
@@ -1468,11 +1468,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         <div className="border-t border-gray-100 dark:border-slate-700/60" />
                         <div className="max-h-72 overflow-y-auto py-1">
                           {jobVersionsLoading ? (
-                            <div className="px-3 py-3 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                            <div className="px-3 py-3 flex items-center gap-2 tf-meta">
                               <Loader2 className="w-3 h-3 animate-spin text-brand-blue" /> Loading job versions…
                             </div>
                           ) : jobVersions.length === 0 ? (
-                            <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">No versions available</div>
+                            <div className="px-3 py-3 tf-meta">No versions available</div>
                           ) : (
                             jobVersions.map((version) => {
                               const isCurrent = version.id === config.jd_id;
@@ -1505,7 +1505,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                     <span className="w-4 flex-shrink-0 flex items-center justify-center">
                                       {isCurrent && <Check className="w-3.5 h-3.5 text-brand-blue" />}
                                     </span>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 tabular-nums flex-shrink-0">
+                                    <span className="tf-cell-name tabular-nums flex-shrink-0">
                                       V{version.version_number}
                                     </span>
                                     {version.is_latest_version && (
@@ -1900,7 +1900,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         </div>
                         <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">AI Interview Info</h3>
                       </div>
-                      <p className="text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
+                      <p className="tf-card-desc">Metadata from the job description used to configure this interview</p>
                     </div>
                     <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
                       {/* Key Metadata Cards */}
@@ -2013,7 +2013,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           <div className="flex items-center gap-2 mb-3">
                             <Brain className="w-4 h-4 text-brand-blue" />
                             <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Must-Have Skills</h4>
-                            <span className="text-xs text-gray-500">({mthSkills.length})</span>
+                            <span className="tf-meta">({mthSkills.length})</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {mthSkills.map((skill: string) => (
@@ -2029,7 +2029,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           <div className="flex items-center gap-2 mb-3">
                             <Sparkles className="w-4 h-4 text-brand-cyan" />
                             <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
-                            <span className="text-xs text-gray-500">({nthSkills.length})</span>
+                            <span className="tf-meta">({nthSkills.length})</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {nthSkills.map((skill: string) => (
@@ -2125,7 +2125,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     ))}
                   </div>
                 ) : events.length === 0 ? (
-                  <div className="text-sm text-gray-500 italic">No recent activity</div>
+                  <div className="tf-body-muted italic">No recent activity</div>
                 ) : (
                   <div className="space-y-3">
                     {pageEvents.map((e) => {
@@ -2134,7 +2134,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           <div className={`w-2 h-2 ${e.dot} rounded-full mt-1.5 flex-shrink-0`} />
                           <div className="min-w-0 flex-1">
                             <div className="text-sm text-gray-900 truncate">{e.title}</div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 tf-meta">
                               <span className="inline-flex items-center gap-1">
                                 <Clock className="w-3 h-3" strokeWidth={1.75} />
                                 {e.date ? formatIST(e.date) : 'N/A'}
@@ -2162,7 +2162,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       );
                     })}
                     {events.length > ACTIVITY_PAGE_SIZE && (
-                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 text-xs text-gray-500">
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2 tf-meta">
                         <span className="tabular-nums">
                           {(safePage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(safePage * ACTIVITY_PAGE_SIZE, events.length)} of {events.length}
                         </span>
@@ -2213,7 +2213,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <span className="text-2xs text-gray-500">Job V{config.jd_version ?? 1}</span>
                   )}
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-card-desc">
                   {config.jd_id
                     ? `Every interview version created for Job V${config.jd_version ?? 1} (V1 is the original).`
                     : 'All versions of this interview (V1 is the original).'}
@@ -2222,8 +2222,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {!config.jd_id ? (
                 <div className="px-6 py-12 text-center">
                   <Layers className="w-12 h-12 text-brand-blue/30 mx-auto mb-3" />
-                  <p className="text-gray-600 mb-1 text-sm">No linked job version</p>
-                  <p className="text-sm text-gray-500">Interview versions are grouped by the job version they were created for</p>
+                  <p className="tf-card-desc mb-1">No linked job version</p>
+                  <p className="tf-body-muted">Interview versions are grouped by the job version they were created for</p>
                 </div>
               ) : jobVersionInterviews.length === 0 ? (
                 <div className="p-6 space-y-4">
@@ -2294,7 +2294,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               </div>
                             </div>
 
-                            <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700 mt-2">
+                            <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 tf-body mt-2">
                               <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-1.5 min-w-0">
                                 <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                                 <span className="shrink-0">Created by</span>
@@ -2356,7 +2356,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {!config.jd_id ? (
                 <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
                   <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No linked job description found</p>
+                  <p className="tf-body-muted">No linked job description found</p>
                 </div>
               ) : jdFullError ? (
                 <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
@@ -2444,7 +2444,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-blue/30 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2 tracking-tight">{confirmAction.title}</h3>
-            <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
+            <p className="tf-card-desc mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-3">
               <Button variant="secondary" size="md" onClick={() => setConfirmAction(null)}>
                 Cancel

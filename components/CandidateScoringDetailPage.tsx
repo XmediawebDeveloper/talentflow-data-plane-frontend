@@ -1498,7 +1498,7 @@ Best regards`);
             {/* No inset: the name, years and version badge start on the same
                 left edge as the contact badges and action buttons below. */}
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl text-gray-900 font-semibold mb-2 truncate">{resume.candidateName}</h1>
+              <h1 className="tf-page-title mb-2 truncate">{resume.candidateName}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
@@ -1609,7 +1609,7 @@ Best regards`);
 
           {/* Row 2: contact badges and actions share one line — badges left,
               actions right (Invite primary > View Resume > Download quiet). */}
-          <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6 tf-card-desc">
             {/* Compact contact badges — the resume view's own chip
                 (resume-view/[id]), not button-sized boxes. */}
             <span className={`${CONTACT_BADGE} min-w-0 max-w-full`}>
@@ -1875,7 +1875,7 @@ Best regards`);
                 )}
               </span>
             </div>
-            <div className="text-sm text-gray-600 whitespace-nowrap">
+            <div className="tf-card-desc whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
                 ? formatIST(fullResumeData.scoredDate)
                 : fullResumeData.scoredDate}
@@ -1950,7 +1950,7 @@ Best regards`);
           {/* {activeTab === 'comparison' && (
             <div className="space-y-6">
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">Candidate vs Job Requirements - {jobTitle}</h3>
+                <h3 className="tf-section-title mb-6">Candidate vs Job Requirements - {jobTitle}</h3>
                 <div className="grid grid-cols-2 gap-8">
                   <div>
                     <h4 className="font-medium text-gray-700 mb-4 text-lg">Candidate Strengths</h4>
@@ -2055,9 +2055,9 @@ Best regards`);
                 <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <MessageSquare className="w-5 h-5 text-gray-700" />
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">AI Analysis</h3>
+                    <h3 className="tf-section-title">AI Analysis</h3>
                   </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{aiReasoning}</p>
+                  <p className="tf-body leading-relaxed">{aiReasoning}</p>
                 </div>
               )}
 
@@ -2067,7 +2067,7 @@ Best regards`);
                 <div className="bg-success-subtle border border-success-line rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ThumbsUp className="w-5 h-5 text-success" />
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Strengths</h3>
+                    <h3 className="tf-section-title">Strengths</h3>
                   </div>
                   {keyStrengths.length > 0 ? (
                     <ul className="space-y-3">
@@ -2079,7 +2079,7 @@ Best regards`);
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm text-gray-500">No strengths data available.</p>
+                    <p className="tf-body-muted">No strengths data available.</p>
                   )}
                 </div>
 
@@ -2087,7 +2087,7 @@ Best regards`);
                 <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ThumbsDown className="w-5 h-5 text-destructive" />
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900">Weaknesses</h3>
+                    <h3 className="tf-section-title">Weaknesses</h3>
                   </div>
                   {(improvementAreas.length > 0 || missingSkills.length > 0) ? (
                     <ul className="space-y-3">
@@ -2107,7 +2107,7 @@ Best regards`);
                       )}
                     </ul>
                   ) : (
-                    <p className="text-sm text-gray-500">No weaknesses identified.</p>
+                    <p className="tf-body-muted">No weaknesses identified.</p>
                   )}
                 </div>
               </div>
@@ -2161,7 +2161,7 @@ Best regards`);
                   <AlertCircle className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-brand-orange-deep font-medium">Limited resume data available</p>
-                    <p className="text-gray-700 text-sm mt-1">
+                    <p className="tf-body mt-1">
                       Some details may be missing. View the full resume in{' '}
                       <a href={`/recruitment/resume-view/${fullResumeData.resumeId || resume.resumeId || resume.id}`} className="text-brand-blue underline hover:text-brand-blue-2">
                         Resume Details
@@ -2184,7 +2184,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
+                    <h3 className="tf-section-title">Professional Summary</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
                     {fullResumeData.professionalSummary}
@@ -2198,7 +2198,7 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Briefcase className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
+                  <h3 className="tf-section-title">Work Experience</h3>
                 </div>
                 {fullResumeData.experienceDetails && fullResumeData.experienceDetails.length > 0 ? (
                   <div className="space-y-6">
@@ -2213,7 +2213,7 @@ Best regards`);
                                 <Building2 className="w-4 h-4" />
                                 <span>{exp.company || 'Company'}</span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-600">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-card-desc">
                                 {exp.location && (
                                   <span className="flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
@@ -2241,7 +2241,7 @@ Best regards`);
                                 .map((point: string) => point.trim())
                                 .filter((point: string) => point.length > 0)
                                 .map((point: string, pointIndex: number) => (
-                                  <div key={pointIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                                  <div key={pointIndex} className="flex items-start gap-2 tf-body">
                                     <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                                     <span>{point}</span>
                                   </div>
@@ -2251,7 +2251,7 @@ Best regards`);
                           {exp.achievements && exp.achievements.length > 0 && (
                             <div className="space-y-1.5">
                               {exp.achievements.map((achievement: string, achIndex: number) => (
-                                <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                                <div key={achIndex} className="flex items-start gap-2 tf-body">
                                   <ChevronRight className="w-4 h-4 text-brand-cyan flex-shrink-0 mt-0.5" />
                                   <span>{achievement}</span>
                                 </div>
@@ -2265,7 +2265,7 @@ Best regards`);
                 ) : (
                   <div className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center">
                     <p className="text-gray-600">Work experience details not available.</p>
-                    <p className="text-sm text-gray-500 mt-2">Please re-upload the resume to extract full details.</p>
+                    <p className="tf-body-muted mt-2">Please re-upload the resume to extract full details.</p>
                   </div>
                 )}
               </div>
@@ -2276,7 +2276,7 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
+                  <h3 className="tf-section-title">Education</h3>
                 </div>
                 {fullResumeData.educationDetails && fullResumeData.educationDetails.length > 0 ? (
                   <div className="space-y-4">
@@ -2289,7 +2289,7 @@ Best regards`);
                         {(edu.institution || edu.school) && (
                           <div className="text-gray-700 mb-1">{edu.institution || edu.school}</div>
                         )}
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-gray-600">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-card-desc">
                           {edu.location && (
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
@@ -2349,7 +2349,7 @@ Best regards`);
                       <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Code className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                      <h3 className="tf-section-title">Skills</h3>
                     </div>
                     <div className="space-y-5">
                       {groups.map((group) => (
@@ -2374,7 +2374,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                       <Award className="w-4 h-4 text-brand-orange" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
+                    <h3 className="tf-section-title">Certifications</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.certifications.map((cert, index) => {
@@ -2388,8 +2388,8 @@ Best regards`);
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <h4 className="font-semibold text-gray-900 mb-1">{certName}</h4>
-                              {certIssuer && <div className="text-sm text-gray-700 mb-1">{certIssuer}</div>}
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                              {certIssuer && <div className="tf-body mb-1">{certIssuer}</div>}
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
                                 {certDate && (
                                   <span className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" />
@@ -2415,7 +2415,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Languages className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
+                    <h3 className="tf-section-title">Languages</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                     {fullResumeData.languages.map((language: any, index: number) => {
@@ -2425,7 +2425,7 @@ Best regards`);
                       return (
                         <div key={index} className="p-3 sm:p-4 min-w-0 [overflow-wrap:anywhere] bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center">
                           <div className="font-medium text-gray-900 mb-1">{langName}</div>
-                          <div className="text-sm text-gray-600">{proficiency}</div>
+                          <div className="tf-card-desc">{proficiency}</div>
                         </div>
                       );
                     })}
@@ -2440,7 +2440,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Code className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
+                    <h3 className="tf-section-title">Projects</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.projects.map((project: any, index: number) => (
@@ -2454,9 +2454,9 @@ Best regards`);
                           )}
                         </div>
                         {project.description && (
-                          <p className="text-gray-700 text-sm mb-2">{project.description}</p>
+                          <p className="tf-body mb-2">{project.description}</p>
                         )}
-                        <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                        <div className="flex flex-wrap gap-2 tf-meta-strong">
                           {project.duration && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -2482,7 +2482,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                       <Award className="w-4 h-4 text-brand-orange" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Awards &amp; Honors</h3>
+                    <h3 className="tf-section-title">Awards &amp; Honors</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.awards.map((award: any, index: number) => (
@@ -2490,15 +2490,15 @@ Best regards`);
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h4 className="font-semibold text-gray-900 mb-1">{award.name}</h4>
-                            {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
+                            {award.issuer && <div className="tf-body">{award.issuer}</div>}
                             {award.date && (
-                              <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                              <div className="tf-meta-strong flex items-center gap-1 mt-1">
                                 <Calendar className="w-3 h-3" />
                                 {award.date}
                               </div>
                             )}
                             {award.description && (
-                              <p className="text-sm text-gray-600 mt-2">{award.description}</p>
+                              <p className="tf-card-desc mt-2">{award.description}</p>
                             )}
                           </div>
                           <Award className="w-6 h-6 text-brand-orange flex-shrink-0" />
@@ -2516,7 +2516,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
+                    <h3 className="tf-section-title">Achievements</h3>
                   </div>
                   <div className="space-y-2">
                     {fullResumeData.achievements.map((achievement: any, index: number) => (
@@ -2536,7 +2536,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Hobbies &amp; Interests</h3>
+                    <h3 className="tf-section-title">Hobbies &amp; Interests</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {fullResumeData.hobbies.map((hobby: any, index: number) => (
@@ -2555,7 +2555,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
+                    <h3 className="tf-section-title">Social &amp; Portfolio Links</h3>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     {fullResumeData.linkedinUrl && (
@@ -2587,7 +2587,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Clock className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Notice Period</h3>
+                    <h3 className="tf-section-title">Notice Period</h3>
                   </div>
                   <p className="text-gray-700">{fullResumeData.noticePeriod}</p>
                 </div>
@@ -2600,20 +2600,20 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
+                    <h3 className="tf-section-title">Volunteer Experience</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.volunteerExperience.map((vol: any, index: number) => (
                       <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                         <h4 className="font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
-                        {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
+                        {vol.organization && <div className="tf-body mb-1">{vol.organization}</div>}
                         {vol.duration && (
-                          <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                          <div className="tf-meta-strong flex items-center gap-1 mb-2">
                             <Calendar className="w-3 h-3" />
                             {vol.duration}
                           </div>
                         )}
-                        {vol.description && <p className="text-sm text-gray-600">{vol.description}</p>}
+                        {vol.description && <p className="tf-card-desc">{vol.description}</p>}
                       </div>
                     ))}
                   </div>
@@ -2627,7 +2627,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
+                    <h3 className="tf-section-title">Career Objective</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed">{fullResumeData.objective}</p>
                 </div>
@@ -2640,7 +2640,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
+                    <h3 className="tf-section-title">Additional Information</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{fullResumeData.additionalInfo}</p>
                 </div>
@@ -2654,7 +2654,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <History className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Version History</h3>
+                    <h3 className="tf-section-title">Version History</h3>
                     <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
                       {resumeVersions.length} version{resumeVersions.length !== 1 ? 's' : ''}
                     </span>
@@ -2726,9 +2726,9 @@ Best regards`);
                                     )}
                                   </div>
                                   {version.fileName && (
-                                    <div className="text-sm text-gray-700 truncate max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]" title={version.fileName}>{version.fileName}</div>
+                                    <div className="tf-body truncate max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]" title={version.fileName}>{version.fileName}</div>
                                   )}
-                                  <div className="flex items-center gap-x-4 gap-y-1 text-xs text-gray-600 mt-1 flex-wrap">
+                                  <div className="flex items-center gap-x-4 gap-y-1 tf-meta-strong mt-1 flex-wrap">
                                     {version.uploadDate && (
                                       <span className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />
@@ -2746,7 +2746,7 @@ Best regards`);
                                   resume-view's View Changes / view / download
                                   cluster. */}
                               <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0 max-lg:justify-between max-lg:pt-3 max-lg:border-t max-lg:border-gray-200/70">
-                                <span className="text-xs text-gray-600 whitespace-nowrap max-lg:mr-auto">{version.size}</span>
+                                <span className="tf-meta-strong whitespace-nowrap max-lg:mr-auto">{version.size}</span>
                                 {previousVersion ? (
                                   <button
                                     onClick={() => handleViewVersionChanges(previousVersion.id, version.id)}
@@ -2802,7 +2802,7 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <File className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">File Properties</h3>
+                  <h3 className="tf-section-title">File Properties</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-4">
@@ -2811,7 +2811,7 @@ Best regards`);
                         <FileText className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">File Name</div>
+                        <div className="tf-meta mb-1">File Name</div>
                         <div className="text-sm text-gray-900 break-all">
                           {fullResumeData.fileName || `${(fullResumeData.candidateName || 'Candidate').replace(/\s+/g, '_')}_Resume.pdf`}
                         </div>
@@ -2822,7 +2822,7 @@ Best regards`);
                         <HardDrive className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">File Size</div>
+                        <div className="tf-meta mb-1">File Size</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {fullResumeData.fileSizeKb
                             ? `${fullResumeData.fileSizeKb} KB`
@@ -2835,7 +2835,7 @@ Best regards`);
                         <File className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">File Type</div>
+                        <div className="tf-meta mb-1">File Type</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{(fullResumeData.fileType || 'PDF').toUpperCase()} Document</div>
                       </div>
                     </div>
@@ -2844,7 +2844,7 @@ Best regards`);
                         <Calendar className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">Upload Date</div>
+                        <div className="tf-meta mb-1">Upload Date</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {fullResumeData.uploadDate ? formatIST(fullResumeData.uploadDate) : 'Unknown'}
                         </div>
@@ -2857,7 +2857,7 @@ Best regards`);
                         <Clock className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">Last Modified</div>
+                        <div className="tf-meta mb-1">Last Modified</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {fullResumeData.lastUpdated ? formatIST(fullResumeData.lastUpdated) : 'Never'}
                         </div>
@@ -2868,7 +2868,7 @@ Best regards`);
                         <User className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
+                        <div className="tf-meta mb-1">Uploaded By</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{fullResumeData.uploadedBy || 'Unknown'}</div>
                       </div>
                     </div>
@@ -2877,7 +2877,7 @@ Best regards`);
                         <FileText className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
+                        <div className="tf-meta mb-1">Total Attachments</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {resumeVersions.length || 1} file{(resumeVersions.length || 1) !== 1 ? 's' : ''}
                         </div>
@@ -2888,7 +2888,7 @@ Best regards`);
                         <History className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 mb-1">Version Count</div>
+                        <div className="tf-meta mb-1">Version Count</div>
                         <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
                           {(fullResumeData.versionCount || resumeVersions.length || 1)} version{(fullResumeData.versionCount || resumeVersions.length || 1) !== 1 ? 's' : ''}
                         </div>
@@ -2962,7 +2962,7 @@ Best regards`);
                       )}
                       <h3
                         onClick={() => setShowJdNavConfirm(true)}
-                        className="text-base sm:text-lg font-semibold text-gray-900 hover:text-brand-blue transition-colors cursor-pointer"
+                        className="tf-section-title hover:text-brand-blue transition-colors cursor-pointer"
                       >
                         {jdDetails.title || jobTitle}
                       </h3>
@@ -2979,7 +2979,7 @@ Best regards`);
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+                    <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
                       {jdLocationGroups.length > 0 && (
                         <>
                           {jdLocationGroups.map((label) => (
@@ -3036,7 +3036,7 @@ Best regards`);
 
                   {/* Job Description */}
                   <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
-                    <h4 className="text-base font-semibold text-gray-900 mb-3">Job Description</h4>
+                    <h4 className="tf-card-title mb-3">Job Description</h4>
                     <div className="h-px bg-gray-200 mb-3"></div>
                     {jdDescriptionMarkdown.trim() ? (
                       <div className="markdown-content prose prose-sm max-w-none text-gray-700">
@@ -3053,20 +3053,20 @@ Best regards`);
                   {jdDetails.additional_details && (
                     <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-3">
-                        <h4 className="text-sm font-semibold text-gray-900">Additional Details</h4>
+                        <h4 className="tf-subsection-title">Additional Details</h4>
                         <span className="text-xs text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded">
                           Visible to candidates
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600 whitespace-pre-wrap">{jdDetails.additional_details}</p>
+                      <p className="tf-card-desc whitespace-pre-wrap">{jdDetails.additional_details}</p>
                     </div>
                   )}
 
                   {/* Internal Recruiter Notes & Assessment Guidance */}
                   <div className={`grid ${jdDetails.assessment_guidance ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
                     <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
-                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Internal Recruiter Notes</h4>
-                      <div className="text-sm text-gray-600 space-y-2">
+                      <h4 className="tf-subsection-title mb-3">Internal Recruiter Notes</h4>
+                      <div className="tf-card-desc space-y-2">
                         {jdInternalNotes.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1">
                             {jdInternalNotes.map((note, index) => (
@@ -3081,8 +3081,8 @@ Best regards`);
 
                     {jdDetails.assessment_guidance && (
                       <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
-                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Assessment Guidance</h4>
-                        <p className="text-sm text-gray-600 whitespace-pre-wrap">{jdDetails.assessment_guidance}</p>
+                        <h4 className="tf-subsection-title mb-3">Assessment Guidance</h4>
+                        <p className="tf-card-desc whitespace-pre-wrap">{jdDetails.assessment_guidance}</p>
                       </div>
                     )}
                   </div>
@@ -3139,7 +3139,7 @@ Best regards`);
                       </div>
                       <div>
                         <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                        <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                        <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                       </div>
                     </div>
                     <Button
@@ -3157,7 +3157,7 @@ Best regards`);
                     {/* Both files this page can send on, side by side: the
                         resume itself and the scorecard for this JD. */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                      <label className="block tf-label mb-1">Attachments</label>
                       <div className="flex flex-col sm:flex-row items-stretch gap-3">
                         <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 min-w-0 flex-1">
                           <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
@@ -3170,7 +3170,7 @@ Best regards`);
                             >
                               {fullResumeData.fileName || `${fullResumeData.candidateName}.pdf`}
                             </div>
-                            <div className="text-xs text-gray-500 truncate">
+                            <div className="tf-meta truncate">
                               Resume
                               {fullResumeData.fileType && <> &middot; {fullResumeData.fileType.toUpperCase()}</>}
                               {fullResumeData.fileSizeKb ? <> &middot; {Math.round(fullResumeData.fileSizeKb)} KB</> : null}
@@ -3202,7 +3202,7 @@ Best regards`);
                             >
                               Scorecard - {fullResumeData.candidateName}.pdf
                             </div>
-                            <div className="text-xs text-gray-500 truncate">
+                            <div className="tf-meta truncate">
                               Scorecard &middot; PDF
                               {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
                             </div>
@@ -3223,7 +3223,7 @@ Best regards`);
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block tf-label mb-1">
                         Recipient Email <span className="text-destructive">*</span>
                       </label>
                       <input
@@ -3236,7 +3236,7 @@ Best regards`);
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                      <label className="block tf-label mb-1">Subject</label>
                       <input
                         type="text"
                         value={shareSubject}
@@ -3247,7 +3247,7 @@ Best regards`);
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                      <label className="block tf-label mb-1">Message</label>
                       <textarea
                         value={shareMessage}
                         onChange={(e) => setShareMessage(e.target.value)}
@@ -3295,8 +3295,8 @@ Best regards`);
                       <Eye className="w-5 h-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
-                      <p className="text-sm text-gray-500 truncate">
+                      <h2 className="tf-section-title truncate">Scorecard</h2>
+                      <p className="tf-body-muted truncate">
                         {fullResumeData.candidateName}
                         {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
                       </p>
@@ -3431,8 +3431,8 @@ Best regards`);
                         <History className="w-5 h-5 text-white" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate min-w-0">Version Comparison</h2>
-                        <p className="text-sm text-gray-500 truncate">
+                        <h2 className="tf-section-title truncate min-w-0">Version Comparison</h2>
+                        <p className="tf-body-muted truncate">
                           Version {older.version} vs Version {newer.version}
                         </p>
                       </div>
@@ -3509,9 +3509,9 @@ Best regards`);
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 bg-destructive rounded-full"></span>
                               <span className="text-sm font-semibold text-destructive-strong">Version {older.version}</span>
-                              <span className="text-xs text-destructive ml-1">(older)</span>
+                              <span className="tf-error ml-1">(older)</span>
                             </div>
-                            <p className="text-xs text-destructive mt-0.5 truncate">{older.fileName}</p>
+                            <p className="tf-error mt-0.5 truncate">{older.fileName}</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-4 max-sm:p-2">
                             <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
@@ -3615,14 +3615,14 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
+                          <h2 className="tf-section-title truncate">Version {versionPreview.versionNumber}</h2>
                           {isLatestPreview && (
                             <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                               Latest
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-gray-500 truncate">{versionPreview.fileName}</p>
+                        <p className="tf-body-muted truncate">{versionPreview.fileName}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -3687,7 +3687,7 @@ Best regards`);
                       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
                         <FileText className="w-10 h-10 text-gray-400 mb-3" />
                         <p className="text-sm font-medium text-gray-900">Preview not available</p>
-                        <p className="text-sm text-gray-500 mt-1">Download the resume to view the original file.</p>
+                        <p className="tf-body-muted mt-1">Download the resume to view the original file.</p>
                       </div>
                     )}
                   </div>

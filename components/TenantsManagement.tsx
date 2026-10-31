@@ -102,7 +102,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-50">Tenants</h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Manage your organization tenants</p>
+              <p className="tf-card-desc">Manage your organization tenants</p>
             </div>
           </div>
           <button
@@ -134,7 +134,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Total Tenants</p>
+              <p className="tf-card-desc">Total Tenants</p>
               <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">{tenants.length}</p>
             </div>
             <div className="w-12 h-12 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
@@ -145,7 +145,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Active Tenants</p>
+              <p className="tf-card-desc">Active Tenants</p>
               <p className="text-3xl font-semibold text-green-600 mt-1">
                 {tenants.filter(t => t.isActive).length}
               </p>
@@ -158,7 +158,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Total Users</p>
+              <p className="tf-card-desc">Total Users</p>
               <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">
                 {tenants.reduce((acc, t) => acc + t.userCount, 0)}
               </p>
@@ -175,22 +175,22 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
         <table className="w-full">
           <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-6 py-4 text-left tf-th">
                 Tenant
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-6 py-4 text-left tf-th">
                 Plan
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-6 py-4 text-left tf-th">
                 Users
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-6 py-4 text-left tf-th">
                 Status
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-6 py-4 text-left tf-th">
                 Created
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-6 py-4 text-right tf-th">
                 Actions
               </th>
             </tr>
@@ -211,7 +211,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                     </div>
                     <div>
                       <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{tenant.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500">{tenant.email}</div>
+                      <div className="tf-meta">{tenant.email}</div>
                     </div>
                   </div>
                 </td>
@@ -248,7 +248,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   </button>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                  <div className="flex items-center gap-2 tf-body-muted">
                     <Calendar className="w-4 h-4" />
                     {tenant.createdAt}
                   </div>
@@ -304,7 +304,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
 
             <div className="space-y-4 px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block tf-label mb-1">
                   Tenant Name
                 </label>
                 <input
@@ -316,7 +316,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block tf-label mb-1">
                   Email
                 </label>
                 <input

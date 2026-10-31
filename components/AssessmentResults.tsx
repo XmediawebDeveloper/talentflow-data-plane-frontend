@@ -1863,7 +1863,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const renderDetailValue = (id: string, candidate: CandidateResult) => {
     switch (id) {
       case 'timeline':
-        return <div className="text-xs text-gray-500 dark:text-slate-400">{renderTimeline(candidate)}</div>;
+        return <div className="tf-meta">{renderTimeline(candidate)}</div>;
       case 'inviteSource':
         return <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />;
       case 'phone':
@@ -1957,7 +1957,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   assessment version) in the same way. Wraps under itself on a
                   phone; the divider only shows while they share a line. */}
               {!embedded && (
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-gray-600">
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tf-card-desc">
                   <span className="shrink-0">
                     {effectiveJobVersion === 'all' ? 'Showing all JD versions' : `Showing JD-Version V${effectiveJobVersion}`}
                   </span>
@@ -2609,12 +2609,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
                     <>
                       <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
-                      <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
+                      <p className="tf-body-muted">Try adjusting your filters or search query</p>
                     </>
                   ) : (
                     <>
                       <p className="text-gray-600 mb-1">No assessment results yet</p>
-                      <p className="text-sm text-gray-500">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
+                      <p className="tf-body-muted">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
                       {emptyStateAction && <div className="mt-4">{emptyStateAction}</div>}
                     </>
                   )}
@@ -2708,7 +2708,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </div>
                         {candidate.email && (
-                          <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{candidate.email}</p>
+                          <p className="tf-meta [overflow-wrap:anywhere]">{candidate.email}</p>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                           {rounds.map(({ label, value }) => (
@@ -2721,7 +2721,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           ))}
                         </div>
                         {candidate.completedDate && candidate.completedDate !== '-' && (
-                          <p className="mt-2 text-xs text-gray-500 [overflow-wrap:anywhere]">
+                          <p className="mt-2 tf-meta [overflow-wrap:anywhere]">
                             Submitted {candidate.completedDate}
                             {candidate.duration && candidate.duration !== '-' ? <> &middot; {candidate.duration}</> : null}
                           </p>
@@ -2977,7 +2977,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             /* The AI Talent Match table's name over email, no avatar. */
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]" title={showName(candidate.name) || 'Unknown'}>{showName(candidate.name) || 'Unknown'}</p>
-                              {candidate.email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
+                              {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                             </div>
                           ) : (
                           <div className="flex min-w-0 items-center gap-2">
@@ -2989,7 +2989,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 let the separate Email column go. */}
                             <div className="min-w-0">
                               <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={showName(candidate.name) || 'Unknown'}>{showName(candidate.name) || 'Unknown'}</div>
-                              <div className="truncate text-xs text-gray-500 dark:text-slate-400" title={candidate.email || ''}>{candidate.email || '-'}</div>
+                              <div className="truncate tf-meta" title={candidate.email || ''}>{candidate.email || '-'}</div>
                             </div>
                           </div>
                           )}

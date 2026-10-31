@@ -405,7 +405,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
           {group.answer && (
             <div className="px-4 py-3 bg-white">
               <p className="text-2xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Candidate Answer</p>
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{group.answer}</p>
+              <p className="tf-card-desc leading-relaxed whitespace-pre-wrap">{group.answer}</p>
             </div>
           )}
           {group.response_type === 'skipped' && (
@@ -435,11 +435,11 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
                       </span>
                       <ScorePill score={fu.score} />
                     </div>
-                    <p className="text-sm text-gray-700 leading-snug">{fu.question || 'Question'}</p>
+                    <p className="tf-body leading-snug">{fu.question || 'Question'}</p>
                   </div>
                   {fu.answer && (
                     <div className="px-4 py-3 bg-white pl-8">
-                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
+                      <p className="tf-card-desc leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
                     </div>
                   )}
                 </div>
@@ -815,7 +815,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                                <span className="text-sm font-semibold text-gray-900 truncate">{skill}</span>
+                                <span className="tf-cell-name truncate">{skill}</span>
                               </div>
                             </div>
                             <LevelBadge level={level} />

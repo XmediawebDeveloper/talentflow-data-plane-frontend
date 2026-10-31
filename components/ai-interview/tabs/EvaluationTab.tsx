@@ -325,7 +325,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
       {/* ── Section → Cluster → Skill hierarchy ──────────────────── */}
       {sections.length > 0 && (
         <div className="space-y-5">
-          <h3 className="text-sm font-semibold text-gray-900">Section Breakdown</h3>
+          <h3 className="tf-subsection-title">Section Breakdown</h3>
           {sections.map(section => {
             const sStyle = SECTION_STYLES[section.key] || SECTION_STYLES.mth;
             const sectionCards = sectionSkillMap[section.key] || [];
@@ -369,7 +369,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                             className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors text-left"
                           >
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-gray-900">{cl.name}</span>
+                              <span className="tf-cell-name">{cl.name}</span>
                               <span className={`text-2xs px-1.5 py-0.5 rounded ${
                                 (cl as any).priority_label === 'High' || cl.priority >= 3 ? 'bg-emerald-50 text-emerald-700' :
                                 (cl as any).priority_label === 'Medium' || cl.priority === 2 ? 'bg-amber-50 text-amber-700' :
@@ -506,7 +506,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
       {/* ── v1 Cluster Insights fallback (when sections couldn't be built) ── */}
       {sections.length === 0 && clusterInsights.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Skill Breakdown</h3>
+          <h3 className="tf-subsection-title mb-3">Skill Breakdown</h3>
           <div className="space-y-4">
             {clusterInsights.map((ci: any, idx: number) => {
               const bandScore = Number(ci.band_score) || 0;
@@ -514,7 +514,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
               return (
                 <div key={idx} className="border border-gray-200 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-semibold text-gray-900">{ci.cluster_name || 'Skills'}</h4>
+                    <h4 className="tf-subsection-title">{ci.cluster_name || 'Skills'}</h4>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                       (ci.band === 'High' || ci.band === 'Strong') ? 'bg-emerald-100 text-emerald-700' :
                       (ci.band === 'Medium' || ci.band === 'Proficient' || ci.band === 'Developing') ? 'bg-amber-100 text-amber-700' :

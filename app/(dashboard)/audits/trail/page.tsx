@@ -967,7 +967,7 @@ export default function AuditTrailPage() {
             <div className="flex items-center gap-2 sm:gap-3">
               {/* The list loads on demand (Refresh), so say how fresh it is. */}
               {lastUpdated !== null && (
-                <span className="hidden md:inline text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap" title={formatIST(new Date(lastUpdated).toISOString())}>
+                <span className="hidden md:inline tf-meta whitespace-nowrap" title={formatIST(new Date(lastUpdated).toISOString())}>
                   Updated {formatAgo(now - lastUpdated)}
                 </span>
               )}
@@ -1029,7 +1029,7 @@ export default function AuditTrailPage() {
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
                     <p
-                      className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1"
+                      className="tf-meta mt-1 sm:mt-2 flex items-center gap-1"
                       title={isCustomRange && customFrom ? `Summary counts cover ${customFrom} to today` : undefined}
                     >
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
@@ -1053,7 +1053,7 @@ export default function AuditTrailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Active Users</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
                     </p>
@@ -1072,7 +1072,7 @@ export default function AuditTrailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Action Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
                     </p>
@@ -1091,7 +1091,7 @@ export default function AuditTrailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
                     </p>
@@ -1136,7 +1136,7 @@ export default function AuditTrailPage() {
                 <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700/60">
                   {statsPopup === 'users' && (
                     stats.top_active_users.length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No users found.</p>
+                      <p className="px-4 py-6 tf-body-muted text-center">No users found.</p>
                     ) : (
                       stats.top_active_users.map((u) => {
                         const isActive = userFilter === u.user_id;
@@ -1156,7 +1156,7 @@ export default function AuditTrailPage() {
                               <NameAvatar name={u.user_name} fallback={u.user_email} userId={u.user_id} size="sm" />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{u.user_name || 'Unknown'}</p>
-                                {u.user_email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{u.user_email}</p>}
+                                {u.user_email && <p className="tf-meta truncate">{u.user_email}</p>}
                               </div>
                             </div>
                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{u.action_count}</span>
@@ -1167,7 +1167,7 @@ export default function AuditTrailPage() {
                   )}
                   {statsPopup === 'actions' && (
                     Object.entries(stats.actions_by_type).length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No actions found.</p>
+                      <p className="px-4 py-6 tf-body-muted text-center">No actions found.</p>
                     ) : (
                       Object.entries(stats.actions_by_type)
                         .sort((a, b) => b[1] - a[1])
@@ -1195,7 +1195,7 @@ export default function AuditTrailPage() {
                   )}
                   {statsPopup === 'entities' && (
                     Object.entries(stats.actions_by_entity).length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No entities found.</p>
+                      <p className="px-4 py-6 tf-body-muted text-center">No entities found.</p>
                     ) : (
                       Object.entries(stats.actions_by_entity)
                         .sort((a, b) => b[1] - a[1])
@@ -1438,16 +1438,16 @@ export default function AuditTrailPage() {
                   <tr className="bg-white dark:bg-slate-900 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
                     {/* User = name + role + user ID; Status = status + impact (error origin is
                         already in the status label, and stays in the details modal and export). */}
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Timestamp</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">User</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Action</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Details</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Status</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Error Code</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Duration</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Refund Flag</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Units</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap tf-sticky-col">Actions</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Timestamp</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">User</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Action</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Details</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Status</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Error Code</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Duration</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Refund Flag</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Units</th>
+                    <th className="px-4 py-4 text-center tf-th whitespace-nowrap tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1461,7 +1461,7 @@ export default function AuditTrailPage() {
                         className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                          <div className="flex items-center gap-2 tf-card-desc">
                             <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             <span>{formatDate(log.created_at)}</span>
                           </div>
@@ -1476,7 +1476,7 @@ export default function AuditTrailPage() {
                               >
                                 {log.user_name || 'Unknown'}
                               </p>
-                              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                              <p className="mt-0.5 flex items-center gap-1.5 tf-meta">
                                 {isCandidateActor(log) ? (
                                   <span
                                     className="inline-flex rounded px-1.5 py-px text-2xs font-semibold bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/25"
@@ -1503,7 +1503,7 @@ export default function AuditTrailPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4">
-                          <span className="text-sm text-gray-700 dark:text-slate-300 max-w-[180px] truncate block" title={getDetailsSummary(log)}>
+                          <span className="tf-body max-w-[180px] truncate block" title={getDetailsSummary(log)}>
                             {getDetailsSummary(log)}
                           </span>
                         </td>
@@ -1579,11 +1579,11 @@ export default function AuditTrailPage() {
           {filteredLogs.length > 0 && (
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50/50 dark:bg-slate-800/50">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="tf-card-desc">
                   Showing <span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900 dark:text-slate-50">{total}</span>
                 </p>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Rows per page</span>
+                  <span className="tf-body-muted whitespace-nowrap">Rows per page</span>
                   <FilterSelect
                     ariaLabel="Rows per page"
                     value={String(pageSize)}
@@ -1595,7 +1595,7 @@ export default function AuditTrailPage() {
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
                 <div className="flex items-center gap-1.5">
-                  <span className="hidden sm:inline text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="hidden sm:inline tf-body-muted whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -1656,7 +1656,7 @@ export default function AuditTrailPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 dark:text-slate-50">Audit Log Details</h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-500">Complete event information</p>
+                  <p className="tf-meta">Complete event information</p>
                 </div>
               </div>
               <button
@@ -1675,9 +1675,9 @@ export default function AuditTrailPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
                   {isCandidateActor(selectedLog) ? (
-                    <p className="text-sm text-gray-500 dark:text-slate-500">Candidate · name masked for privacy</p>
+                    <p className="tf-body-muted">Candidate · name masked for privacy</p>
                   ) : selectedLog.actor_role && (
-                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate capitalize">
+                    <p className="tf-body-muted truncate capitalize">
                       {formatRole(selectedLog.actor_role)}{selectedLog.user_display_id ? ` · ${selectedLog.user_display_id}` : ''}
                     </p>
                   )}
@@ -1744,7 +1744,7 @@ export default function AuditTrailPage() {
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                         <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-sm text-gray-500 dark:text-slate-500">{modalBalanceBefore}</span>
+                          <span className="tf-body-muted">{modalBalanceBefore}</span>
                           <span className="text-gray-300 dark:text-slate-500">→</span>
                           <span className="text-lg font-bold text-gray-900 dark:text-slate-50">{modalBalanceAfter ?? 0}</span>
                         </div>
@@ -1762,7 +1762,7 @@ export default function AuditTrailPage() {
               {selectedLog.entity_id && (
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                   <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
-                  <p className="text-sm font-mono text-gray-700 dark:text-slate-300 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
+                  <p className="tf-body font-mono truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
                 </div>
               )}
 
@@ -1798,7 +1798,7 @@ export default function AuditTrailPage() {
                     {selectedLog.total_session_duration != null && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{formatSessionDuration(selectedLog.total_session_duration)}</span>
+                        <span className="tf-cell-name">{formatSessionDuration(selectedLog.total_session_duration)}</span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
@@ -1824,7 +1824,7 @@ export default function AuditTrailPage() {
                     {selectedLog.error_origin !== 'NONE' && (selectedLog.units_consumed ?? 0) > 0 && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
-                        <span className="text-sm text-gray-700 dark:text-slate-300 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
+                        <span className="tf-body break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
                       </div>
                     )}
                   </div>
@@ -1893,7 +1893,7 @@ export default function AuditTrailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{aiAuditData.ai_model_version || 'N/A'}</p>
+                    <p className="tf-cell-name">{aiAuditData.ai_model_version || 'N/A'}</p>
                   </div>
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
@@ -1941,7 +1941,7 @@ export default function AuditTrailPage() {
                     </>
                   ) : (
                     <div className="px-3 sm:px-4 py-2 sm:py-3">
-                      <span className="text-sm text-gray-500 dark:text-slate-500">No input parameters recorded</span>
+                      <span className="tf-body-muted">No input parameters recorded</span>
                     </div>
                   )}
                 </div>
@@ -1967,7 +1967,7 @@ export default function AuditTrailPage() {
                   <h3 className="text-base font-bold text-gray-900 dark:text-slate-50">
                     Export {exportFormat === 'csv' ? 'CSV' : 'Excel'}
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-500">Configure date range and columns</p>
+                  <p className="tf-meta">Configure date range and columns</p>
                 </div>
               </div>
               <button onClick={() => setExportModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors" aria-label="Close">
@@ -2069,7 +2069,7 @@ export default function AuditTrailPage() {
                         onChange={e => setExportSelectedCols(prev => ({ ...prev, [col.key]: e.target.checked }))}
                         className="w-4 h-4 rounded border-gray-200 dark:border-slate-700 accent-brand-blue focus:ring-brand-blue/40 cursor-pointer"
                       />
-                      <span className="text-sm max-sm:text-xs text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-50">{col.label}</span>
+                      <span className="tf-body max-sm:text-xs group-hover:text-gray-900 dark:group-hover:text-slate-50">{col.label}</span>
                     </label>
                   ))}
                 </div>
@@ -2081,7 +2081,7 @@ export default function AuditTrailPage() {
 
             {/* Footer */}
             <div className="px-5 max-sm:px-4 py-4 max-sm:py-3 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/50 flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-500 dark:text-slate-500">
+              <p className="tf-meta">
                 Up to {Math.min(total, EXPORT_LIMIT).toLocaleString()} records
               </p>
               <div className="flex gap-2">

@@ -460,7 +460,7 @@ export default function GlobalScoringProgressIndicator() {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+        <div className="flex items-center justify-between mt-2 tf-meta">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-success" />
@@ -554,7 +554,7 @@ function JobProgressItem({
             <div className="text-sm font-medium text-gray-900 truncate">
               {job.jobTitle}
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="tf-meta">
               {job.completed}/{job.total} scored
               {job.failed > 0 && <span className="text-destructive ml-1">({job.failed} failed)</span>}
             </div>
@@ -593,25 +593,25 @@ function JobProgressItem({
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
             <div className="text-center">
-              <div className="text-xs text-gray-500">Queued</div>
+              <div className="tf-meta">Queued</div>
               <div className="text-sm font-medium text-gray-700">{job.queued}</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-gray-500">Processing</div>
+              <div className="tf-meta">Processing</div>
               <div className="text-sm font-medium text-gray-800">{job.processing}</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-gray-500">Done</div>
+              <div className="tf-meta">Done</div>
               <div className="text-sm font-medium text-success">{job.completed}</div>
             </div>
             <div className="text-center">
-              <div className="text-xs text-gray-500">Failed</div>
+              <div className="tf-meta">Failed</div>
               <div className="text-sm font-medium text-destructive">{job.failed}</div>
             </div>
           </div>
 
           {isComplete && job.failed > 0 && friendlyFailureReason && (
-            <div className="mb-3 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded text-xs text-destructive">
+            <div className="mb-3 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded tf-error">
               {friendlyFailureReason}
             </div>
           )}

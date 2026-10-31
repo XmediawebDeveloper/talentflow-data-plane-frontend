@@ -46,15 +46,15 @@ export function ReportView({ data }: { data: DashboardData }) {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center"><User size={20} className="text-blue-600" /></div>
               <div>
-                <div className="text-xs text-gray-500">Candidate Name</div>
+                <div className="tf-meta">Candidate Name</div>
                 <div className="text-lg font-medium">{data.candidate.name}</div>
-                {data.candidate.email && <div className="text-xs text-gray-500">{data.candidate.email}</div>}
+                {data.candidate.email && <div className="tf-meta">{data.candidate.email}</div>}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center"><Briefcase size={20} className="text-purple-600" /></div>
               <div>
-                <div className="text-xs text-gray-500">Role / Job</div>
+                <div className="tf-meta">Role / Job</div>
                 <div className="text-lg font-medium">{data.candidate.role}</div>
               </div>
             </div>
@@ -63,14 +63,14 @@ export function ReportView({ data }: { data: DashboardData }) {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><Calendar size={20} className="text-emerald-600" /></div>
               <div>
-                <div className="text-xs text-gray-500">Interview Mode</div>
+                <div className="tf-meta">Interview Mode</div>
                 <div className="text-lg font-medium">{data.interview.mode}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center"><Clock size={20} className="text-amber-600" /></div>
               <div>
-                <div className="text-xs text-gray-500">Interview Duration</div>
+                <div className="tf-meta">Interview Duration</div>
                 <div className="text-lg font-medium" style={{ fontFamily: 'var(--font-mono)' }}>{data.interview.duration}</div>
               </div>
             </div>
@@ -83,16 +83,16 @@ export function ReportView({ data }: { data: DashboardData }) {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-2xl font-bold mb-2">2. Skill-Level Breakdown</h2>
-            <p className="text-sm text-gray-500">Detailed assessment of each individual skill</p>
+            <p className="tf-body-muted">Detailed assessment of each individual skill</p>
           </div>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Skill</th>
-                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Coverage</th>
-                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
-                  <th className="text-left p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Insight</th>
+                  <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill</th>
+                  <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Coverage</th>
+                  <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
+                  <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Insight</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,7 +102,7 @@ export function ReportView({ data }: { data: DashboardData }) {
                     <tr key={idx} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/20">
                       <td className="p-4">
                         <div className="font-medium">{skill.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">{skill.clusterName}</div>
+                        <div className="tf-meta mt-1">{skill.clusterName}</div>
                       </td>
                       <td className="p-4 text-center">
                         <span className="px-3 py-1 rounded-full text-xs uppercase tracking-wider font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
@@ -114,7 +114,7 @@ export function ReportView({ data }: { data: DashboardData }) {
                           <div className="px-4 py-2 rounded-lg text-xl font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
                             {Math.round(skill.score)}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">/ 10</div>
+                          <div className="tf-meta mt-1">/ 10</div>
                         </div>
                       </td>
                       <td className="p-4"><p className="text-sm text-gray-600 dark:text-gray-400 max-w-lg">{skill.feedback}</p></td>
@@ -131,15 +131,15 @@ export function ReportView({ data }: { data: DashboardData }) {
       {allClusters.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
           <h2 className="text-2xl font-bold mb-2">3. Cluster-Level Coverage Summary</h2>
-          <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across each cluster</p>
+          <p className="tf-body-muted mb-6">Skills addressed at adequate level across each cluster</p>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
                 <tr>
-                  <th className="text-left p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
-                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Skills Included</th>
-                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Coverage %</th>
-                  <th className="text-center p-4 text-xs font-semibold text-gray-600 dark:text-slate-300" style={{ fontFamily: 'var(--font-mono)' }}>Weight</th>
+                  <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
+                  <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skills Included</th>
+                  <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Coverage %</th>
+                  <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Weight</th>
                 </tr>
               </thead>
               <tbody>
@@ -164,7 +164,7 @@ export function ReportView({ data }: { data: DashboardData }) {
                           <div className="px-4 py-2 rounded-lg text-xl font-semibold" style={{ background: ps.bg, color: ps.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ps.border}` }}>
                             {coveragePct}%
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">{coveredCount}/{totalSkills} skills</div>
+                          <div className="tf-meta mt-1">{coveredCount}/{totalSkills} skills</div>
                         </div>
                       </td>
                       <td className="p-4 text-center">
@@ -251,7 +251,7 @@ export function ReportView({ data }: { data: DashboardData }) {
             <div className="relative w-48 h-48 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${recColor} 0%, ${recColor}dd 100%)`, boxShadow: `0 8px 24px ${recColor}40` }}>
               <div className="absolute inset-2 bg-white dark:bg-gray-800 rounded-full flex flex-col items-center justify-center">
                 <div className="text-5xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(data.scores.final)}</div>
-                <div className="text-sm text-gray-500">/ 100</div>
+                <div className="tf-body-muted">/ 100</div>
               </div>
             </div>
             <div className="mt-4 px-6 py-2 rounded-full text-sm font-semibold" style={{ background: recColor, color: 'white', fontFamily: 'var(--font-mono)' }}>{rec}</div>
@@ -273,7 +273,7 @@ export function ReportView({ data }: { data: DashboardData }) {
                   <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0"></div>
                   <span className="text-sm text-emerald-900">{s}</span>
                 </li>
-              )) : <li className="text-sm text-gray-500 italic">No strengths captured.</li>}
+              )) : <li className="tf-body-muted italic">No strengths captured.</li>}
             </ul>
           </div>
 
@@ -288,7 +288,7 @@ export function ReportView({ data }: { data: DashboardData }) {
                   <div className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 flex-shrink-0"></div>
                   <span className="text-sm text-amber-900">{w}</span>
                 </li>
-              )) : <li className="text-sm text-gray-500 italic">No concerns captured.</li>}
+              )) : <li className="tf-body-muted italic">No concerns captured.</li>}
             </ul>
           </div>
         </div>
@@ -301,7 +301,7 @@ export function ReportView({ data }: { data: DashboardData }) {
             <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center"><Sparkles size={24} className="text-white" /></div>
             <div>
               <h2 className="text-2xl font-bold">AI Summary & Recommendation</h2>
-              <p className="text-sm text-gray-500">Comprehensive narrative insight</p>
+              <p className="tf-body-muted">Comprehensive narrative insight</p>
             </div>
           </div>
           <div className="p-6 rounded-xl bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800">

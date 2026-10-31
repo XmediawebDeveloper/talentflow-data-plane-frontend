@@ -365,7 +365,7 @@ export default function ExtraCandidatesInput({
     <div className="space-y-3">
       {mode === 'manual' ? (
         <>
-          <p className="text-sm text-gray-600 dark:text-slate-400">
+          <p className="tf-card-desc">
             Type a candidate&apos;s name and email, then press <b className="font-semibold text-gray-800 dark:text-slate-200">Enter</b> or <b className="font-semibold text-gray-800 dark:text-slate-200">Add Candidate</b>.
           </p>
           <div className="flex flex-wrap items-end gap-2">
@@ -406,7 +406,7 @@ export default function ExtraCandidatesInput({
               Add Candidate
             </button>
           </div>
-          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+          {error && <p role="alert" className="tf-error">{error}</p>}
         </>
       ) : (
         <>
@@ -424,8 +424,8 @@ export default function ExtraCandidatesInput({
                 <Upload className="w-4 h-4" aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-gray-900 dark:text-slate-50">Drag and drop a sheet here</span>
-                <span className="block text-xs text-gray-500 dark:text-slate-400">
+                <span className="block tf-cell-name">Drag and drop a sheet here</span>
+                <span className="block tf-meta">
                   .xlsx, .xls or .csv · needs <b className="font-semibold">Name</b> and <b className="font-semibold">Email</b> columns · up to {Math.min(maxRows, MAX_EXTRA_CANDIDATES).toLocaleString()} candidates
                 </span>
               </span>
@@ -505,7 +505,7 @@ export default function ExtraCandidatesInput({
       )}
 
       {mode === 'manual' && modeRows.length === 0 && (
-        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">
+        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center tf-body-muted">
           No one added yet. Type a name and email above.
         </p>
       )}
@@ -588,12 +588,12 @@ export default function ExtraCandidatesInput({
                             aria-label="Email address"
                             className={`${INPUT} sm:hidden mt-1.5 h-8 w-full border-gray-200 dark:border-slate-700`}
                           />
-                          {draft.error && <p role="alert" className="mt-1 text-xs text-destructive">{draft.error}</p>}
+                          {draft.error && <p role="alert" className="mt-1 tf-error">{draft.error}</p>}
                         </>
                       ) : (
                         <>
                           <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
-                          <span className="block truncate text-xs text-gray-500 dark:text-slate-400 sm:hidden">{r.email}</span>
+                          <span className="block truncate tf-meta sm:hidden">{r.email}</span>
                         </>
                       )}
                     </td>

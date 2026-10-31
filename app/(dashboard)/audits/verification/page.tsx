@@ -395,12 +395,12 @@ export default function LogVerificationPage() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-white dark:bg-slate-900">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Timestamp</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Entity Type</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">User</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"></th>
+                    <th className="px-6 py-4 text-left tf-th">Timestamp</th>
+                    <th className="px-6 py-4 text-left tf-th">Action</th>
+                    <th className="px-6 py-4 text-left tf-th">Entity Type</th>
+                    <th className="px-6 py-4 text-left tf-th">User</th>
+                    <th className="px-6 py-4 text-left tf-th">Status</th>
+                    <th className="px-6 py-4 text-left tf-th"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -414,7 +414,7 @@ export default function LogVerificationPage() {
                       <tr key={entry.id} className="group">
                         {/* Main row */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                          <div className="flex items-center gap-2 tf-card-desc">
                             <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             <span>{formatIST(entry.expected.timestamp)}</span>
                           </div>
@@ -425,7 +425,7 @@ export default function LogVerificationPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-700 dark:text-slate-300 capitalize">
+                          <span className="tf-body capitalize">
                             {entry.expected.entity_type?.replace(/_/g, ' ') || '—'}
                           </span>
                         </td>
@@ -434,7 +434,7 @@ export default function LogVerificationPage() {
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-2xs font-semibold shadow-sm">
                               {(entry.expected.user_email || 'U').charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-sm text-gray-600 dark:text-slate-400 truncate max-w-[160px]" title={entry.expected.user_email}>
+                            <span className="tf-card-desc truncate max-w-[160px]" title={entry.expected.user_email}>
                               {entry.expected.user_email || entry.expected.user_id || '—'}
                             </span>
                           </div>
@@ -537,7 +537,7 @@ export default function LogVerificationPage() {
                         ) : (
                           <div className="bg-white dark:bg-slate-900 rounded-xl border border-warning-line p-6 text-center">
                             <AlertTriangle className="w-8 h-8 text-warning mx-auto mb-2" />
-                            <p className="text-sm text-gray-600 dark:text-slate-400">
+                            <p className="tf-card-desc">
                               {entry.result.error || 'No matching audit log entry found within the search window.'}
                             </p>
                           </div>
@@ -587,7 +587,7 @@ export default function LogVerificationPage() {
         {/* Last Report Summary */}
         {lastReport && (
           <div className="mt-6 bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/60 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">Last Reconciliation Report</h3>
+            <h3 className="tf-subsection-title mb-3">Last Reconciliation Report</h3>
             <div className="flex items-center gap-6 text-sm">
               <span className="text-gray-500 dark:text-slate-500">
                 <Calendar className="w-3.5 h-3.5 inline mr-1" />

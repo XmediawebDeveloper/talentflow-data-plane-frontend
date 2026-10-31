@@ -224,7 +224,7 @@ function CreatedBy({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
-      <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
+      <span className="truncate tf-card-desc" title={name}>
         {name}
       </span>
     </span>
@@ -1390,10 +1390,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-7 h-7 text-destructive" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+      <h3 className="tf-card-title mb-1">
         Unable to load assessments
       </h3>
-      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+      <p className="tf-card-desc mb-4 max-w-md mx-auto">
         Something went wrong while loading the assessment list. Please try again.
       </p>
       <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
@@ -1416,14 +1416,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           carried over verbatim from the empty state the
           Archived tab used before it moved into this table,
           so the tab reads exactly as it did. */}
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+      <h3 className="tf-card-title mb-1">
         {isNarrowed
           ? 'No assessments found'
           : fixedStatus === 'archived'
             ? 'No archived assessments found.'
             : 'No assessments yet'}
       </h3>
-      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+      <p className="tf-card-desc mb-4 max-w-md mx-auto">
         {isNarrowed
           ? 'No assessments match your current search or filter criteria.'
           : fixedStatus === 'archived'
@@ -1512,10 +1512,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight">
+              <h1 className="tf-page-title mb-0.5">
                 {heading}
               </h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <p className="tf-card-desc">
                 {subheading}
               </p>
             </div>
@@ -1767,7 +1767,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {/* Select All — this page's rows. */}
-                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
+                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle tf-th">
                       {isLoading ? (
                         <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                       ) : (
@@ -1819,7 +1819,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     })}
                     <th
                       scope="col"
-                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right tf-th tf-sticky-col"
                     >
                       {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                     </th>
@@ -2026,7 +2026,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               disabled: bulkRunning || eligible.length === 0,
             }]}
           >
-            <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
+            <div className="space-y-3 tf-body">
               <p>
                 <span className="font-semibold">{eligible.length}</span> assessment{eligible.length === 1 ? '' : 's'} will be {copy.past}.
                 {bulkVerb === 'delete' && ' This cannot be undone.'}

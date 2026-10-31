@@ -206,7 +206,7 @@ function CreatedBy({ name }: { name: string }) {
     // instead of widening the Created column.
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
-      <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
+      <span className="truncate tf-card-desc" title={name}>
         {name}
       </span>
     </span>
@@ -1142,10 +1142,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-7 h-7 text-destructive" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+      <h3 className="tf-card-title mb-1">
         Unable to load interviews
       </h3>
-      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+      <p className="tf-card-desc mb-4 max-w-md mx-auto">
         Something went wrong while loading the interview list. Please try again.
       </p>
       <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
@@ -1158,10 +1158,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
         <Video className="w-7 h-7 text-brand-blue" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+      <h3 className="tf-card-title mb-1">
         {isNarrowed ? 'No interviews found' : 'No interviews yet'}
       </h3>
-      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+      <p className="tf-card-desc mb-4 max-w-md mx-auto">
         {isNarrowed
           ? 'No interviews match your current search or filter criteria.'
           : 'AI interviews you create will be listed here.'}
@@ -1494,7 +1494,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               <tr className="border-b border-gray-200 dark:border-slate-700">
                 {/* Select All — this page's rows. Not pinned: Job ID is the
                     pinned column, and it covers this one as the table scrolls. */}
-                <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
+                <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle tf-th">
                   {/* Loading: the header is skeleton bars too, as in the shared
                       TableSkeleton — no real labels until the rows arrive. */}
                   {isLoading ? (
@@ -1546,7 +1546,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                 })}
                 <th
                   scope="col"
-                  className="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"
+                  className="px-3 py-2.5 text-right tf-th tf-sticky-col"
                 >
                   {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                 </th>

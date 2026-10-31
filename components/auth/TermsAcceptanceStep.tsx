@@ -40,11 +40,11 @@ export default function TermsAcceptanceStep({
         </div>
         <div>
           <h2 className="text-lg font-bold text-gray-900">{terms.title}</h2>
-          <p className="text-sm text-gray-500">Version {terms.version}</p>
+          <p className="tf-body-muted">Version {terms.version}</p>
         </div>
       </div>
 
-      <p className="text-sm text-gray-600 mb-4">
+      <p className="tf-card-desc mb-4">
         Please review and accept our Terms & Conditions to complete your registration.
       </p>
 
@@ -65,7 +65,7 @@ export default function TermsAcceptanceStep({
             onChange={(e) => setCheckboxAgreed(e.target.checked)}
             className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          <span className="text-sm text-gray-600">
+          <span className="tf-card-desc">
             I have read and agree to the Terms & Conditions
           </span>
         </label>

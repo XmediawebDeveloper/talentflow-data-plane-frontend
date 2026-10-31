@@ -71,7 +71,7 @@ export default function JDHeaderCard({ jd }: { jd: JDResponse }) {
 
           {/* Row 2: Location, experience, employment type, work mode, salary,
               Posted / By / Last Updated, version */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
             {job.location && (
               <>
                 {formatLocationGroups(job.locations, job.location).map((label) => (

@@ -203,8 +203,8 @@ export default function ApiManagementPage() {
                   <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Developer access
                 </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">API Management</h1>
-                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
+                <h1 className="tf-page-title">API Management</h1>
+                <p className="mt-2 max-w-2xl tf-card-desc">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
               </div>
             </div>
             <Button
@@ -230,7 +230,7 @@ export default function ApiManagementPage() {
               <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Key className="w-6 h-6 text-brand-blue" />
               </span>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No API Keys</h3>
+              <h3 className="tf-section-title mb-2">No API Keys</h3>
               <p className="text-gray-500 dark:text-slate-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
               <Button
                 variant="primary"
@@ -277,7 +277,7 @@ export default function ApiManagementPage() {
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-slate-500">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4 text-brand-blue/70" />
                         Created: {formatISTDate(apiKey.created_at)}
@@ -333,8 +333,8 @@ export default function ApiManagementPage() {
               <BookOpen className="w-5 h-5 text-brand-blue" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">API Documentation</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+              <h3 className="tf-subsection-title">API Documentation</h3>
+              <p className="tf-card-desc mt-1">
                 Learn how to integrate TalentFlow into your applications. View our comprehensive API documentation for endpoints, authentication, and examples.
               </p>
               <button className="mt-3 text-sm font-semibold text-brand-blue hover:text-brand-blue-2">

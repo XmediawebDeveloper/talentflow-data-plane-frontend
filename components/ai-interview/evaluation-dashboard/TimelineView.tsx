@@ -42,7 +42,7 @@ export function TimelineView({ data }: { data: DashboardData }) {
       {/* Timeline */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
         <h2 className="text-2xl font-bold mb-2">Question & Response Breakdown</h2>
-        <p className="text-sm text-gray-500 mb-8">Chronological flow with skills assessed at each step</p>
+        <p className="tf-body-muted mb-8">Chronological flow with skills assessed at each step</p>
 
         <div className="space-y-6">
           {responses.map((r, idx) => (

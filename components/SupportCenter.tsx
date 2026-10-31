@@ -298,7 +298,7 @@ function ListLoadError({ message, onRetry }: { message: string; onRetry: () => v
       <AlertCircle className="h-10 w-10 text-destructive" />
       <div>
         <p className="text-sm font-medium text-gray-900 dark:text-slate-50">Couldn&apos;t load tickets</p>
-        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{message}</p>
+        <p className="mt-1 tf-meta">{message}</p>
       </div>
       <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
         <RefreshCw className="h-4 w-4" />
@@ -1225,8 +1225,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             <Headphones className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50 sm:text-xl">Support Center</h1>
-            <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}</p>
+            <h1 className="tf-page-title">Support Center</h1>
+            <p className="mt-0.5 tf-card-desc">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1342,9 +1342,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <CardIcon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-600 dark:text-slate-400">{card.label}</p>
+                      <p className="tf-card-desc">{card.label}</p>
                       <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{card.value}</p>
-                      <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{card.sub}</p>
+                      <p className="mt-0.5 tf-meta">{card.sub}</p>
                       <p className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
                         View tickets
                         <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
@@ -1366,8 +1366,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <Send className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Submit New Ticket</h3>
-                  <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Report an issue or request help from our support team</p>
+                  <h3 className="tf-card-title">Submit New Ticket</h3>
+                  <p className="mt-0.5 tf-card-desc">Report an issue or request help from our support team</p>
                 </div>
                 <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-blue/25 transition-colors group-hover:bg-brand-blue-2">
                   Submit New Ticket
@@ -1383,8 +1383,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <Ticket className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">View My Tickets</h3>
-                  <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Track and manage all your support requests</p>
+                  <h3 className="tf-card-title">View My Tickets</h3>
+                  <p className="mt-0.5 tf-card-desc">Track and manage all your support requests</p>
                 </div>
                 <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue transition-colors group-hover:bg-brand-blue/5">
                   View My Tickets
@@ -1396,7 +1396,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             {/* Recent Tickets */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Tickets</h3>
+                <h3 className="tf-card-title">Recent Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
                   className="inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:text-brand-blue/80"
@@ -1462,13 +1462,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
-                          <th className="rounded-l-lg px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket ID</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Created On</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="rounded-r-lg px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                          <th className="rounded-l-lg px-4 py-2.5 tf-th">Ticket ID</th>
+                          <th className="px-4 py-2.5 tf-th">Subject</th>
+                          <th className="px-4 py-2.5 tf-th">Category</th>
+                          <th className="px-4 py-2.5 tf-th">Priority</th>
+                          <th className="px-4 py-2.5 tf-th">Created On</th>
+                          <th className="px-4 py-2.5 tf-th">Status</th>
+                          <th className="rounded-r-lg px-4 py-2.5 text-right tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1548,7 +1548,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             {/* Contact Information */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
-              <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-50">Need Immediate Help?</h3>
+              <h3 className="mb-3 tf-card-title">Need Immediate Help?</h3>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-gray-200 dark:sm:divide-slate-700">
                 {[
                   { label: 'Email', value: 'support@talentflow.com', icon: Mail, href: 'mailto:support@talentflow.com' },
@@ -1562,7 +1562,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <ContactIcon className="h-[18px] w-[18px]" />
                       </span>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 dark:text-slate-400">{c.label}</div>
+                        <div className="tf-meta">{c.label}</div>
                         {c.href ? (
                           <a href={c.href} className="block truncate text-sm font-medium text-brand-blue hover:underline">{c.value}</a>
                         ) : (
@@ -1621,7 +1621,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               >
                 <div className="border-b border-gray-100 pb-4 dark:border-slate-700/60">
                   <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">Create Support Ticket</h2>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Tell us about your issue or request. Our support team will get back to you as soon as possible.</p>
+                  <p className="mt-1 tf-card-desc">Tell us about your issue or request. Our support team will get back to you as soon as possible.</p>
                 </div>
 
                 {/* Draft status */}
@@ -1735,7 +1735,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         options={priorities.map(p => ({ value: p.value, label: p.label }))}
                         className="w-full sm:w-full px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      <p className="mt-1 tf-meta">
                         {PRIORITY_GUIDANCE.find(g => g.label.toLowerCase() === priority)?.text}
                       </p>
                     </div>
@@ -1859,7 +1859,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
 
                     {/* Optional browser details — inserted visibly into the description */}
-                    <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                    <label className="mt-3 flex cursor-pointer items-start gap-2.5 tf-body">
                       <input
                         type="checkbox"
                         checked={envIncluded}
@@ -1868,7 +1868,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       />
                       <span>
                         Include my browser details
-                        <span className="block text-xs text-gray-500 dark:text-slate-400">Adds your browser, operating system and screen size to the description so support can reproduce the issue. You can edit it before sending.</span>
+                        <span className="block tf-meta">Adds your browser, operating system and screen size to the description so support can reproduce the issue. You can edit it before sending.</span>
                       </span>
                     </label>
                   </div>
@@ -1912,7 +1912,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <span className="font-medium text-gray-700 dark:text-slate-200">Supported formats:</span>{' '}
                           {ATTACHMENT_SHOWN_EXTS.join(', ')}
                         </span>
-                        <span className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                        <span className="mt-1 tf-meta">
                           Up to {ATTACHMENT_MAX_FILES} files per upload (10 MB in total) · {ATTACHMENT_MAX_PER_TICKET} files per ticket · no videos
                         </span>
                       </div>
@@ -1926,7 +1926,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <FileText className="h-4 w-4 flex-shrink-0 text-brand-blue" />
                               <div className="min-w-0">
                                 <div className="truncate text-sm text-gray-900 dark:text-slate-50">{file.name}</div>
-                                <div className="text-xs text-gray-500 dark:text-slate-400">
+                                <div className="tf-meta">
                                   {(file.size / 1024).toFixed(1)} KB
                                 </div>
                               </div>
@@ -1985,8 +1985,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <Lightbulb className="h-5 w-5" />
                   </span>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Tips for a better response</h3>
-                    <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">Follow these guidelines to help us resolve your issue faster.</p>
+                    <h3 className="tf-card-title">Tips for a better response</h3>
+                    <p className="mt-0.5 tf-body-muted">Follow these guidelines to help us resolve your issue faster.</p>
                   </div>
                 </div>
                 <ul className="mt-4 space-y-4">
@@ -2002,7 +2002,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <Check className="h-3.5 w-3.5" strokeWidth={3} />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{tip.title}</p>
+                        <p className="tf-cell-name">{tip.title}</p>
                         <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 sm:text-sm">{tip.desc}</p>
                       </div>
                     </li>
@@ -2092,7 +2092,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Active filters — each removable, plus clear all */}
                   {(filterStatus !== 'all' || filterPriority !== 'all' || myCategoryFilter !== 'all' || searchQuery) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
+                      <span className="tf-meta">Filters:</span>
                       {searchQuery && (
                         <button type="button" onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
                           &ldquo;{searchQuery}&rdquo; <X className="h-3 w-3" />
@@ -2155,7 +2155,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
-                              <span className="text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
+                              <span className="tf-meta-strong block mb-0.5">{ticket.ticketNumber}</span>
                               <h4 className="text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1">
@@ -2166,10 +2166,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
                             <div className="flex items-center gap-1 min-w-0">
                               <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                              <span className="text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
+                              <span className="tf-meta-strong truncate">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
+                            <span className="tf-meta-strong">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -2181,13 +2181,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <table className="w-full">
                       <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Title</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                          <th className="px-6 py-4 text-left tf-th">Ticket #</th>
+                          <th className="px-6 py-4 text-left tf-th">Title</th>
+                          <th className="px-6 py-4 text-left tf-th">Category</th>
+                          <th className="px-6 py-4 text-left tf-th">Priority</th>
+                          <th className="px-6 py-4 text-left tf-th">Status</th>
+                          <th className="px-6 py-4 text-left tf-th">Updated</th>
+                          <th className="px-6 py-4 text-left tf-th tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -2204,7 +2204,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <CategoryIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
+                                  <span className="tf-card-desc truncate">{getCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4">
@@ -2217,7 +2217,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 </div>
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
+                                <span className="tf-card-desc">{formatISTDate(ticket.updatedAt)}</span>
                               </td>
                               <td className="px-6 py-4 tf-sticky-col">
                                 <button
@@ -2377,7 +2377,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
             <div className="flex items-center gap-3 py-2">
               <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
-              <span className="w-24 shrink-0 text-sm text-gray-500 dark:text-slate-400">{label}</span>
+              <span className="w-24 shrink-0 tf-body-muted">{label}</span>
               <div className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{value}</div>
             </div>
           );
@@ -2445,7 +2445,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Ticket Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5 tf-meta">
                       <span>{selectedTicket.ticketNumber}</span>
                       <button type="button" onClick={copyTicketId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
@@ -2546,7 +2546,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <>
                     <div className="mt-4 space-y-3">
                       {thread.length === 0 && (
-                        <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No messages yet.</p>
+                        <p className="py-6 text-center tf-body-muted">No messages yet.</p>
                       )}
                       {thread.map((response) => (
                         <div
@@ -2562,7 +2562,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <div className="min-w-0 flex-1">
                               <div className="mb-1 flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{authorName(response)}</span>
+                                  <span className="truncate tf-cell-name">{authorName(response)}</span>
                                   {response.from === 'user' ? (
                                     <span className="rounded-full bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue">You</span>
                                   ) : (
@@ -2571,7 +2571,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 </div>
                                 <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-slate-400">{formatIST(response.timestamp)}</span>
                               </div>
-                              <div className="space-y-1 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{renderFormattedMessage(response.message)}</div>
+                              <div className="space-y-1 tf-body leading-relaxed">{renderFormattedMessage(response.message)}</div>
                             </div>
                           </div>
                         </div>
@@ -2746,10 +2746,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <ItemIcon className="h-3.5 w-3.5" />
                           </span>
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                            <p className="tf-cell-name">{item.title}</p>
                             {item.time && <span className="text-[11px] text-gray-500 dark:text-slate-400">{formatIST(item.time)}</span>}
                           </div>
-                          {item.detail && <p className="mt-0.5 break-words text-xs text-gray-600 dark:text-slate-400">{item.detail}</p>}
+                          {item.detail && <p className="mt-0.5 break-words tf-meta-strong">{item.detail}</p>}
                         </li>
                       );
                     })}
@@ -2759,14 +2759,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {detailTab === 'attachments' && (
                   <div className="mt-4">
                     {attachments.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No attachments on this ticket.</p>
+                      <p className="py-6 text-center tf-body-muted">No attachments on this ticket.</p>
                     ) : (
                       <ul className="space-y-2">
                         {attachments.map(file => (
                           <li key={file.id} className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 dark:border-slate-700">
                             <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
                             <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-slate-100" title={file.name}>{file.name}</span>
-                            <span className="shrink-0 text-xs text-gray-500 dark:text-slate-400">{file.size}</span>
+                            <span className="shrink-0 tf-meta">{file.size}</span>
                             <button
                               type="button"
                               onClick={() => downloadAttachment(selectedTicket.id, file)}
@@ -2787,7 +2787,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4">
                 {/* Ticket Info */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-1 flex items-center gap-2 tf-subsection-title">
                     <Ticket className="h-4 w-4 text-brand-blue" />
                     Ticket Information
                   </h4>
@@ -2814,7 +2814,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(MessageSquare, 'Responses', `${responseCount} message${responseCount === 1 ? '' : 's'}`)}
                   </div>
                   {selectedTicket.status !== 'closed' && selectedTicket.status !== 'resolved' && (
-                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 text-xs text-gray-600 dark:bg-slate-800/60 dark:text-slate-400">
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 tf-meta-strong dark:bg-slate-800/60">
                       <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
                       <span>
                         Typical first response within <strong className="font-semibold text-gray-900 dark:text-slate-100">24 hours</strong>.
@@ -2829,7 +2829,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
                   <div className={`${cardCls} p-4`}>
-                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="mb-3 flex items-center gap-2 tf-subsection-title">
                       <Flag className="h-4 w-4 text-brand-blue" />
                       Update Priority
                     </h4>
@@ -2853,7 +2853,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Actions */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-3 flex items-center gap-2 tf-subsection-title">
                     <Settings2 className="h-4 w-4 text-brand-blue" />
                     Actions
                   </h4>
@@ -2891,7 +2891,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Related Articles */}
                 <div className={`${cardCls} p-4`}>
                   <div className="mb-3 flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="flex items-center gap-2 tf-subsection-title">
                       <Book className="h-4 w-4 text-brand-blue" />
                       Related Help Articles
                     </h4>
@@ -2900,7 +2900,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="flex items-start gap-2 text-sm text-gray-500 dark:text-slate-400">
+                  <p className="flex items-start gap-2 tf-body-muted">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                     Articles for this topic are coming soon.
                   </p>
@@ -2936,7 +2936,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     >
                       <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
                       <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">{cat.label}</h4>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
+                      <p className="tf-card-desc">Articles coming soon</p>
                     </div>
                   );
                 })}
@@ -2976,13 +2976,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">{card.label}</p>
+                        <p className="tf-card-desc">{card.label}</p>
                         {card.attention && (
                           <span className="rounded-full bg-brand-orange/15 px-1.5 py-px text-[10px] font-semibold text-brand-orange-deep">Needs attention</span>
                         )}
                       </div>
                       <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{card.value}</p>
-                      <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-slate-400">{card.sub}</p>
+                      <p className="mt-0.5 truncate tf-meta">{card.sub}</p>
                       <p className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
                         View tickets
                         <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
@@ -2996,7 +2996,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             {/* Category Breakdown */}
             {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
               <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-50">Tickets by Category</h3>
+                <h3 className="mb-3 tf-card-title">Tickets by Category</h3>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
                     const CategoryIcon = getInternalCategoryIcon(cat);
@@ -3042,8 +3042,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <ActionIcon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{action.title}</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">{action.desc}</p>
+                      <h3 className="tf-card-title">{action.title}</h3>
+                      <p className="tf-card-desc">{action.desc}</p>
                     </div>
                     <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </button>
@@ -3054,7 +3054,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             {/* Recent Team Tickets */}
             <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Team Tickets</h3>
+                <h3 className="tf-card-title">Recent Team Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
                   className="inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:text-brand-blue/80"
@@ -3071,7 +3071,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : internalTickets.length === 0 ? (
                 <div className="text-center py-8 sm:py-12">
                   <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                  <p className="text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
+                  <p className="tf-card-desc">No team tickets yet</p>
                 </div>
               ) : (() => {
                 const openInternal = (ticket: InternalTicket) => {
@@ -3116,13 +3116,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
-                          <th className="rounded-l-lg px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket ID</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Created</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="rounded-r-lg px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                          <th className="rounded-l-lg px-4 py-2.5 tf-th">Ticket ID</th>
+                          <th className="px-4 py-2.5 tf-th">Subject</th>
+                          <th className="px-4 py-2.5 tf-th">Category</th>
+                          <th className="px-4 py-2.5 tf-th">Priority</th>
+                          <th className="px-4 py-2.5 tf-th">Created</th>
+                          <th className="px-4 py-2.5 tf-th">Status</th>
+                          <th className="rounded-r-lg px-4 py-2.5 text-right tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -3259,7 +3259,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Active filters — each removable, plus clear all */}
                   {(teamFilterStatus !== 'all' || teamFilterPriority !== 'all' || internalFilterAssignment !== 'all' || teamCategoryFilter !== 'all' || teamSearchQuery) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
+                      <span className="tf-meta">Filters:</span>
                       {teamSearchQuery && (
                         <button type="button" onClick={() => setTeamSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
                           &ldquo;{teamSearchQuery}&rdquo; <X className="h-3 w-3" />
@@ -3367,15 +3367,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket #</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">From</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Assigned</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Updated</th>
-                          <th className="px-4 py-3 text-right tf-sticky-col text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                          <th className="px-4 py-3 tf-th">Ticket #</th>
+                          <th className="px-4 py-3 tf-th">Subject</th>
+                          <th className="px-4 py-3 tf-th">From</th>
+                          <th className="px-4 py-3 tf-th">Category</th>
+                          <th className="px-4 py-3 tf-th">Priority</th>
+                          <th className="px-4 py-3 tf-th">Status</th>
+                          <th className="px-4 py-3 tf-th">Assigned</th>
+                          <th className="px-4 py-3 tf-th">Updated</th>
+                          <th className="px-4 py-3 text-right tf-sticky-col tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -3462,7 +3462,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             ? 'Nothing is assigned to you right now'
                             : 'No tickets match these filters'}
                       </p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      <p className="mt-1 tf-meta">
                         {internalFilterAssignment === 'unassigned' || internalFilterAssignment === 'mine'
                           ? 'New requests from your team will show up here.'
                           : 'Try changing or clearing the filters above.'}
@@ -3590,7 +3590,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
             <div className="flex items-center gap-3 py-2">
               <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
-              <span className="w-24 shrink-0 text-sm text-gray-500 dark:text-slate-400">{label}</span>
+              <span className="w-24 shrink-0 tf-body-muted">{label}</span>
               <div className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{value}</div>
             </div>
           );
@@ -3636,7 +3636,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Ticket Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5 tf-meta">
                       <span>{t.ticket_number}</span>
                       <button type="button" onClick={copyId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
@@ -3658,7 +3658,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <User className="h-4 w-4 shrink-0 text-brand-blue" />
                       <span>Submitted by <strong className="text-gray-900 dark:text-slate-100">{t.created_by?.name}</strong></span>
                       {t.created_by?.email && (
-                        <span className="truncate text-xs text-gray-500 dark:text-slate-500">({t.created_by.email})</span>
+                        <span className="truncate tf-meta">({t.created_by.email})</span>
                       )}
                     </div>
                   </div>
@@ -3709,7 +3709,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <>
                     <div className="mt-4 space-y-3">
                       {thread.length === 0 && (
-                        <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No messages yet.</p>
+                        <p className="py-6 text-center tf-body-muted">No messages yet.</p>
                       )}
                       {thread.map((response) => {
                         const fromAdmin = response.user_role === 'admin';
@@ -3731,7 +3731,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <div className="min-w-0 flex-1">
                                 <div className="mb-1 flex items-center justify-between gap-2">
                                   <div className="flex min-w-0 items-center gap-2">
-                                    <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{nameOf(response)}</span>
+                                    <span className="truncate tf-cell-name">{nameOf(response)}</span>
                                     {fromAdmin ? (
                                       <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:bg-slate-700 dark:text-slate-300">Admin</span>
                                     ) : (
@@ -3740,7 +3740,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                   </div>
                                   <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-slate-400">{formatIST(response.created_at)}</span>
                                 </div>
-                                <div className="space-y-1 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{renderFormattedMessage(response.message)}</div>
+                                <div className="space-y-1 tf-body leading-relaxed">{renderFormattedMessage(response.message)}</div>
                               </div>
                             </div>
                           </div>
@@ -3863,10 +3863,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <ItemIcon className="h-3.5 w-3.5" />
                           </span>
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
+                            <p className="tf-cell-name">{item.title}</p>
                             {item.time && <span className="text-[11px] text-gray-500 dark:text-slate-400">{formatIST(item.time)}</span>}
                           </div>
-                          {item.detail && <p className="mt-0.5 break-words text-xs text-gray-600 dark:text-slate-400">{item.detail}</p>}
+                          {item.detail && <p className="mt-0.5 break-words tf-meta-strong">{item.detail}</p>}
                         </li>
                       );
                     })}
@@ -3878,7 +3878,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4">
                 {/* Ticket Info */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-1 flex items-center gap-2 tf-subsection-title">
                     <Ticket className="h-4 w-4 text-brand-blue" />
                     Ticket Information
                   </h4>
@@ -3911,7 +3911,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Update Priority — saves on change, as before */}
                 {t.status !== 'closed' && (
                   <div className={`${cardCls} p-4`}>
-                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="mb-3 flex items-center gap-2 tf-subsection-title">
                       <Flag className="h-4 w-4 text-brand-blue" />
                       Update Priority
                     </h4>
@@ -3926,7 +3926,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Actions — same actions and conditions as before */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-3 flex items-center gap-2 tf-subsection-title">
                     <Settings2 className="h-4 w-4 text-brand-blue" />
                     Actions
                   </h4>

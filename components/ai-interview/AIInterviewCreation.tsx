@@ -343,7 +343,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
           </div>
           <div>
             <h1 className="text-gray-900 text-xl font-semibold tracking-tight">AI Interview Configuration</h1>
-            <p className="text-sm text-gray-500">
+            <p className="tf-body-muted">
               {step === 'select-jd' && 'Step 1: Select a published Job Description'}
               {step === 'configure' && 'Step 2: Configure interview rounds'}
             </p>
@@ -448,7 +448,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                           <h3 className="font-semibold tracking-tight text-gray-900 truncate min-w-0" title={jd.title}>{jd.title}</h3>
                           <span className="px-2 py-0.5 text-xs bg-success-subtle text-success rounded-full">Published</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 tf-body-muted">
                           {jd.department && <span>{jd.department}</span>}
                           {jd.job_level && <span className="capitalize">{jd.job_level}</span>}
                           {jd.location && <span>{jd.location}</span>}
@@ -489,7 +489,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Selected Job Description</div>
+                    <div className="tf-meta mb-1">Selected Job Description</div>
                     <div className="font-semibold tracking-tight text-gray-900">{selectedJd.title}</div>
                     {selectedJd.must_have_skills.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
@@ -731,7 +731,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 {/* Add round button */}
                 {availableRoundTypes.length > 0 && (
                   <div className="mt-3">
-                    <div className="text-xs text-gray-500 mb-2">Add another round:</div>
+                    <div className="tf-meta mb-2">Add another round:</div>
                     <div className="flex flex-wrap gap-2">
                       {availableRoundTypes.map(rt => {
                         const Icon = rt.icon;
@@ -772,7 +772,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   onChange={e => setRecordingEnabled(e.target.checked)}
                   className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                 />
-                <span className="text-sm text-gray-700">Auto-record interview</span>
+                <span className="tf-body">Auto-record interview</span>
               </label>
 
               {/* Introduction Video (Optional) */}
@@ -804,7 +804,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 ) : (
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-brand-blue/30 rounded-lg cursor-pointer hover:border-brand-blue hover:bg-brand-blue/5 transition-colors">
                     <Upload className="w-4 h-4 text-brand-blue" />
-                    <span className="text-sm text-gray-600">Click to upload an introduction video</span>
+                    <span className="tf-card-desc">Click to upload an introduction video</span>
                     <input
                       type="file"
                       accept="video/*"
@@ -853,7 +853,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                       }}
                       className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-center text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     />
-                    <span className="text-sm text-gray-500">min</span>
+                    <span className="tf-body-muted">min</span>
                   </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">Time is split across rounds based on percentage</p>
@@ -884,20 +884,20 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   </div>
 
                   {!percentageValid && (
-                    <div className="bg-destructive-subtle border border-destructive-line rounded-md p-2 text-xs text-destructive">
+                    <div className="bg-destructive-subtle border border-destructive-line rounded-md p-2 tf-error">
                       Enabled round percentages must total 100%. Currently: {totalPercentage}%
                     </div>
                   )}
 
                   <div className="border-t border-gray-100 pt-3">
-                    <div className="text-xs text-gray-500 mb-2">Time Allocation:</div>
+                    <div className="tf-meta mb-2">Time Allocation:</div>
                     {enabledRounds.map(r => {
                       const info = getRoundInfo(r.type);
                       const roundMin = getRoundDuration(r.percentage);
                       return (
                         <div key={r.type} className="py-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-600">{info?.label || r.type}</span>
+                            <span className="tf-meta-strong">{info?.label || r.type}</span>
                             <span className="text-xs font-medium text-gray-900">{r.percentage}% &rarr; {roundMin} min</span>
                           </div>
                           {r.topics.length > 0 && (

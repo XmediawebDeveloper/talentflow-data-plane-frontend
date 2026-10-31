@@ -1116,14 +1116,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <Briefcase className="h-4 w-4 text-brand-blue" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 tracking-tight">Job Openings</h1>
-                <p className="text-sm text-gray-600">Create and manage your job postings</p>
+                <h1 className="tf-page-title mb-1">Job Openings</h1>
+                <p className="tf-card-desc">Create and manage your job postings</p>
               </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
               {/* Quota limit warning */}
               {quotaInfo && quotaInfo.remaining <= 0 && (
-                <div className="flex items-start gap-2 px-3 py-1.5 bg-destructive-subtle border border-destructive-line rounded-lg text-destructive text-xs">
+                <div className="flex items-start gap-2 px-3 py-1.5 bg-destructive-subtle border border-destructive-line rounded-lg tf-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
@@ -1255,7 +1255,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             afterFiltersActions={
             sortedJobs.length > 0 ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-700">Sort by</span>
+                <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
                     the sort control belongs to the same pill system. One size at
                     every width (36px, 14px text) — the toolbar type standard. */}
@@ -1310,7 +1310,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     toolbar's leadingActions above). Department was removed. */}
                 {uniqueEmploymentTypes.length > 0 && (
                   <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
+                    <label className="block tf-label mb-1.5">Job Type</label>
                     <SearchableSelect
                       value={employmentTypeFilter === 'all' ? '' : employmentTypeFilter}
                       onChange={(v) => search.setFilter('employmentType', v || 'all')}
@@ -1323,7 +1323,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Experience</label>
+                  <label className="block tf-label mb-1.5">Experience</label>
                   <SearchableSelect
                     value={experienceFilter === 'all' ? '' : experienceFilter}
                     onChange={(v) => search.setFilter('experience', v || 'all')}
@@ -1342,7 +1342,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
+                  <label className="block tf-label mb-1.5">Posted From</label>
                   {/* No className override — uses DateField's shared chrome, the
                       same as Search and the SearchableSelect filters. */}
                   <DateField
@@ -1352,7 +1352,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted To</label>
+                  <label className="block tf-label mb-1.5">Posted To</label>
                   <DateField
                     value={datePostedToFilter}
                     onChange={(v) => search.setFilter('datePostedTo', v)}
@@ -2311,10 +2311,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <Briefcase className="w-5 h-5 text-brand-blue" />
                 )}
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">
+              <h3 className="tf-section-title mb-2">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              <p className="tf-card-desc mb-4 leading-relaxed">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -2340,7 +2340,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               {/* Left: Items per page selector and showing info */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Show:</span>
+                  <span className="tf-card-desc">Show:</span>
                   <FilterSelect
                     value={String(itemsPerPage)}
                     onChange={(v) => handleItemsPerPageChange(Number(v))}
@@ -2348,12 +2348,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
                     options={[5, 10, 20, 40, 100].map((n) => ({ value: String(n), label: String(n) }))}
                   />
-                  <span className="text-sm text-gray-600">per page</span>
+                  <span className="tf-card-desc">per page</span>
                 </div>
 
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
-                <span className="text-sm text-gray-600">
+                <span className="tf-card-desc">
                   Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
                 </span>
               </div>
@@ -2362,7 +2362,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
                 {/* Go to page */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -2465,7 +2465,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Insufficient Units</h3>
+              <h3 className="tf-section-title">Insufficient Units</h3>
               <button
                 onClick={() => setShowQuotaModal(false)}
                 className="text-gray-400 hover:text-gray-600 p-1"
@@ -2481,7 +2481,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
                   <Briefcase className="w-5 h-5 text-destructive" />
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-card-desc">
                   You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
                 </p>
               </div>

@@ -432,8 +432,8 @@ export default function BillingHistoryPage() {
         {/* Header — title + actions (matches Dispute History) */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Billing History</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+            <h1 className="tf-page-title">Billing History</h1>
+            <p className="mt-1 tf-body-muted">
               View and download your invoices, track payments, and review your add-on purchase history.
             </p>
           </div>
@@ -461,7 +461,7 @@ export default function BillingHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Amount</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-gray-900 dark:text-slate-50">{formatAmount(stats.total_amount)}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{stats.total_invoices} invoices</p>
+                  <p className="mt-1 tf-meta">{stats.total_invoices} invoices</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                   <Receipt className="h-5 w-5 text-brand-blue" />
@@ -477,7 +477,7 @@ export default function BillingHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Paid</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.paid_count}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Completed payments</p>
+                  <p className="mt-1 tf-meta">Completed payments</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                   <CheckCircle2 className="h-5 w-5 text-brand-teal" />
@@ -493,7 +493,7 @@ export default function BillingHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Open / Pending</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.open_count}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Awaiting payment</p>
+                  <p className="mt-1 tf-meta">Awaiting payment</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Clock className="h-5 w-5 text-brand-orange-deep" />
@@ -510,7 +510,7 @@ export default function BillingHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Invoices</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-blue">{stats.total_invoices}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">All time · View reports</p>
+                  <p className="mt-1 tf-meta">All time · View reports</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 shadow-sm shadow-brand-cyan/10">
                   <FileText className="h-5 w-5 text-brand-cyan" />
@@ -605,7 +605,7 @@ export default function BillingHistoryPage() {
 
             {/* Active filter chip — so a status picked from a stat card is never hidden */}
             {statusFilter !== 'all' && (
-              <div className="-mt-2 mb-4 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+              <div className="-mt-2 mb-4 flex items-center gap-2 tf-meta">
                 Showing:
                 <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 py-1 pl-2.5 pr-1 font-medium text-brand-blue ring-1 ring-brand-blue/15">
                   {activeStatusFilter.label}
@@ -685,10 +685,10 @@ export default function BillingHistoryPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Receipt className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <h3 className="tf-section-title">
               {hasInvoiceFilters ? 'No matching invoices' : 'No Billing History'}
             </h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
+            <p className="mx-auto mt-1 max-w-md tf-body-muted">
               {hasInvoiceFilters
                 ? 'No invoices match the current search, status or date filters.'
                 : 'Your billing history will appear here once you make a subscription or addon purchase.'}
@@ -710,7 +710,7 @@ export default function BillingHistoryPage() {
                 <li key={inv.id} className="space-y-2 px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{inv.invoice_number}</span>
+                      <span className="min-w-0 truncate tf-cell-name">{inv.invoice_number}</span>
                       <button type="button" onClick={() => copyInvoiceNumber(inv.invoice_number)} aria-label="Copy invoice number" className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
                       </button>
@@ -720,16 +720,16 @@ export default function BillingHistoryPage() {
                       {inv.status}
                     </Badge>
                   </div>
-                  <p className="truncate text-sm text-gray-700 dark:text-slate-300">{getDescription(inv)}</p>
+                  <p className="truncate tf-body">{getDescription(inv)}</p>
                   <div className="flex items-end justify-between gap-3">
-                    <div className="min-w-0 text-xs text-gray-500 dark:text-slate-500">
+                    <div className="min-w-0 tf-meta">
                       <p>{formatIST(inv.issue_date)}</p>
                       <p className="truncate" title={getPaymentTitle(inv)}>{getPaymentLabel(inv)}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{formatAmount(inv.total_amount_inr || 0)}</p>
+                      <p className="tf-cell-name">{formatAmount(inv.total_amount_inr || 0)}</p>
                       {(inv.tax_amount_inr || 0) > 0 && (
-                        <p className="text-xs text-gray-500 dark:text-slate-500">incl. {formatAmount(inv.tax_amount_inr)} tax</p>
+                        <p className="tf-meta">incl. {formatAmount(inv.tax_amount_inr)} tax</p>
                       )}
                     </div>
                   </div>
@@ -750,21 +750,21 @@ export default function BillingHistoryPage() {
               <table className="w-full min-w-[800px] tf-premium-table">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[200px]">Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]" aria-sort={invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <th className="px-5 py-4 tf-th w-[200px]">Invoice</th>
+                    <th className="px-5 py-4 tf-th w-[160px]" aria-sort={invoiceSort?.key === 'date' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" onClick={() => toggleSort('date')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                         Date
                       </button>
                     </th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Payment</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]" aria-sort={invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <th className="px-5 py-4 tf-th">Description</th>
+                    <th className="px-5 py-4 tf-th w-[160px]">Payment</th>
+                    <th className="px-5 py-4 text-right tf-th w-[130px]" aria-sort={invoiceSort?.key === 'amount' ? (invoiceSort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" onClick={() => toggleSort('amount')} className="inline-flex items-center gap-1 hover:text-brand-blue">
                         Amount
                       </button>
                     </th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px]">Status</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 text-center tf-th w-[100px]">Status</th>
+                    <th className="px-5 py-4 text-right tf-th w-[100px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -775,7 +775,7 @@ export default function BillingHistoryPage() {
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                             <FileText className="h-4 w-4 text-brand-blue" />
                           </span>
-                          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={inv.invoice_number}>
+                          <span className="min-w-0 truncate tf-cell-name" title={inv.invoice_number}>
                             {inv.invoice_number}
                           </span>
                           <button
@@ -789,7 +789,7 @@ export default function BillingHistoryPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="whitespace-nowrap px-5 py-5 tf-td">
                         {formatIST(inv.issue_date)}
                       </td>
                       <td className="px-5 py-5">
@@ -797,7 +797,7 @@ export default function BillingHistoryPage() {
                           {getDescription(inv)}
                         </div>
                         {inv.plan_name && (
-                          <div className="mt-0.5 truncate text-xs text-gray-500 dark:text-slate-500">{inv.plan_name.trim()}</div>
+                          <div className="mt-0.5 truncate tf-meta">{inv.plan_name.trim()}</div>
                         )}
                         {inv.subscription_start_date && (
                           <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-400 dark:text-slate-500">
@@ -809,17 +809,17 @@ export default function BillingHistoryPage() {
                       <td className="px-5 py-5">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
-                          <span className="min-w-0 truncate text-sm text-gray-700 dark:text-slate-300" title={getPaymentTitle(inv)}>
+                          <span className="min-w-0 truncate tf-body" title={getPaymentTitle(inv)}>
                             {getPaymentLabel(inv)}
                           </span>
                         </div>
                       </td>
                       <td className="px-5 py-5 text-right">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                        <span className="tf-cell-name">
                           {formatAmount(inv.total_amount_inr || 0)}
                         </span>
                         {(inv.tax_amount_inr || 0) > 0 && (
-                          <div className="text-xs text-gray-500 dark:text-slate-500">incl. {formatAmount(inv.tax_amount_inr)} tax</div>
+                          <div className="tf-meta">incl. {formatAmount(inv.tax_amount_inr)} tax</div>
                         )}
                       </td>
                       <td className="px-5 py-5 text-center">
@@ -882,12 +882,12 @@ export default function BillingHistoryPage() {
               <table className="w-full min-w-[750px] tf-premium-table">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Date</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Amount</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]">Activation</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[120px] tf-sticky-col">Action</th>
+                    <th className="px-5 py-4 tf-th">Invoice</th>
+                    <th className="px-5 py-4 tf-th">Date</th>
+                    <th className="px-5 py-4 tf-th">Description</th>
+                    <th className="px-5 py-4 text-right tf-th w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center tf-th w-[130px]">Activation</th>
+                    <th className="px-5 py-4 text-center tf-th w-[120px] tf-sticky-col">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -903,7 +903,7 @@ export default function BillingHistoryPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-600 dark:text-slate-400">
+                      <td className="whitespace-nowrap px-5 py-5 tf-card-desc">
                         {txn.transaction_date ? formatISTDate(txn.transaction_date) : '-'}
                       </td>
                       <td className="px-5 py-5">
@@ -912,7 +912,7 @@ export default function BillingHistoryPage() {
                         </span>
                       </td>
                       <td className="px-5 py-5 text-right">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                        <span className="tf-cell-name">
                           ₹{Math.abs(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
@@ -973,8 +973,8 @@ export default function BillingHistoryPage() {
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-gray-100 dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700">
                   <Search className="h-7 w-7 text-gray-400 dark:text-slate-500" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No matching purchases</h3>
-                <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
+                <h3 className="tf-section-title">No matching purchases</h3>
+                <p className="mx-auto mt-1 max-w-md tf-body-muted">
                   No add-on purchases match your search. Try a different invoice number or add-on name.
                 </p>
               </div>
@@ -985,8 +985,8 @@ export default function BillingHistoryPage() {
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15">
                     <Package className="h-7 w-7 text-brand-orange-deep" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No Add-on Purchases</h3>
-                  <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
+                  <h3 className="tf-section-title">No Add-on Purchases</h3>
+                  <p className="mx-auto mt-1 max-w-md tf-body-muted">
                     Add-ons, seats and one-time purchases will appear here once you buy them.
                   </p>
                 </div>

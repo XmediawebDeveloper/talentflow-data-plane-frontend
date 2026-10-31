@@ -66,7 +66,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
     <div className="mb-4 sm:mb-5">
       <div className="flex items-center gap-2 mb-2">
         <Layers className="w-4 h-4 text-brand-blue" />
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Candidate &amp; Resume Version</h3>
+        <h3 className="tf-subsection-title">Candidate &amp; Resume Version</h3>
       </div>
 
       <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
@@ -75,7 +75,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
           <NameAvatar name={resume.name} fallback={resume.email || resume.candidate_email} size="md" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{name}</p>
-            <p className="text-xs text-gray-500 dark:text-slate-400">
+            <p className="tf-meta">
               {versions ? `${total} resume version${total === 1 ? '' : 's'} · latest selected by default` : 'Loading versions…'}
             </p>
           </div>
@@ -83,7 +83,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
 
         {/* Versions */}
         {!versions ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-xs text-gray-500 dark:text-slate-400">
+          <div className="flex items-center justify-center gap-2 py-6 tf-meta">
             <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
             Loading resume versions…
           </div>

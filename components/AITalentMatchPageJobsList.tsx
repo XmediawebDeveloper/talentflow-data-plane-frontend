@@ -102,7 +102,7 @@ export default function AITalentMatchPageJobsList({
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 truncate tracking-tight">AI Talent Match - Select Job</h1>
-            <p className="text-sm text-gray-600 truncate">Choose a job to find the best matching candidates using AI</p>
+            <p className="tf-card-desc truncate">Choose a job to find the best matching candidates using AI</p>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function AITalentMatchPageJobsList({
           matched resumes are submitted for scoring. */}
       <div className="mb-4 sm:mb-6 flex items-start gap-2.5 rounded-xl border border-brand-blue/15 bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 px-3 sm:px-4 py-3 ring-1 ring-black/[0.02]">
         <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-blue" />
-        <p className="min-w-0 text-sm text-gray-700 dark:text-slate-300">
+        <p className="min-w-0 tf-body">
           <span className="font-semibold text-gray-900 dark:text-slate-50">Note:</span>{' '}
           Running AI Talent Match uses no units. Units are used only when you score matched resumes — 1 unit per resume.
         </p>

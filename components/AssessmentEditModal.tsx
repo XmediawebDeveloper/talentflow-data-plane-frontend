@@ -181,8 +181,8 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               <Edit2 className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Edit Assessment</h2>
-              <p className="text-gray-600 dark:text-slate-400 text-sm">
+              <h2 className="tf-section-title truncate">Edit Assessment</h2>
+              <p className="tf-card-desc">
                 Modify assessment details and configuration
               </p>
             </div>
@@ -209,7 +209,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             <div className="space-y-4">
               {/* Title */}
               <div>
-                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-body mb-2">
                   Assessment Title <span className="text-destructive">*</span>
                 </label>
                 <input
@@ -235,7 +235,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               {/* Duration and Questions */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-body mb-2">
                     Duration <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
@@ -259,7 +259,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 </div>
 
                 <div>
-                  <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-body mb-2">
                     Total Questions
                   </label>
                   <input
@@ -275,7 +275,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               {/* Type and Status */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Type</label>
+                  <label className="block tf-body mb-2">Type</label>
                   <FilterSelect
                     value={editedAssessment.type}
                     onChange={(v) => setEditedAssessment({ ...editedAssessment, type: v })}
@@ -292,7 +292,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 </div>
 
                 <div>
-                  <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Status</label>
+                  <label className="block tf-body mb-2">Status</label>
                   <FilterSelect
                     value={editedAssessment.status}
                     onChange={(v) => setEditedAssessment({ ...editedAssessment, status: v })}
@@ -353,7 +353,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                                 className="w-full min-w-0 h-[38px] px-3 pr-8 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                                 placeholder="Weight"
                               />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-slate-500">%</span>
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 tf-body-muted">%</span>
                             </div>
                             <input
                               type="number"

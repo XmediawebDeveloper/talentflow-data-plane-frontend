@@ -2400,7 +2400,7 @@ export default function StepSystemCheck({
                     <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <Monitor className="w-5 h-5 text-brand-blue" />
                     </span>
-                    <h3 className="text-base font-semibold text-gray-900">Device Type</h3>
+                    <h3 className="tf-card-title">Device Type</h3>
                     {!deviceInfo.isMobile
                       ? <CheckCircle className="w-5 h-5 text-success" />
                       : <XCircle className="w-5 h-5 text-destructive" />}
@@ -2421,7 +2421,7 @@ export default function StepSystemCheck({
                   {deviceInfo.isMobile && (
                     <div className="mx-5 mb-4 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
                       <p className="text-sm text-destructive font-medium">Mobile devices are not supported</p>
-                      <p className="text-xs text-destructive mt-0.5">
+                      <p className="tf-error mt-0.5">
                         AI interviews must be completed on a desktop or laptop computer. Switching to &quot;Desktop Mode&quot; in your mobile browser does not bypass this restriction.
                       </p>
                     </div>
@@ -2436,7 +2436,7 @@ export default function StepSystemCheck({
                     <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <Globe className="w-5 h-5 text-brand-blue" />
                     </span>
-                    <h3 className="text-base font-semibold text-gray-900">Browser Compatibility</h3>
+                    <h3 className="tf-card-title">Browser Compatibility</h3>
                     {deviceInfo.browser.supported
                       ? <CheckCircle className="w-5 h-5 text-success" />
                       : <XCircle className="w-5 h-5 text-destructive" />}
@@ -2451,7 +2451,7 @@ export default function StepSystemCheck({
                         <span className="truncate">{deviceInfo.browser.name} {deviceInfo.browser.version}</span>
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500">Supported Browsers</p>
+                    <p className="tf-body-muted">Supported Browsers</p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       {SUPPORTED_BROWSERS.map((b) => {
                         const isCurrent = deviceInfo.browser.name === b.name;
@@ -2464,8 +2464,8 @@ export default function StepSystemCheck({
                           >
                             <Image src={BROWSER_LOGOS[b.name]} alt="" width={36} height={36} unoptimized className="flex-shrink-0" />
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-gray-900 truncate">{b.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{b.minVersion}</p>
+                              <p className="tf-cell-name truncate">{b.name}</p>
+                              <p className="tf-meta truncate">{b.minVersion}</p>
                             </div>
                           </div>
                         );
@@ -2474,7 +2474,7 @@ export default function StepSystemCheck({
                     {blockedBrowserName === 'Brave' && (
                       <div className="p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
                         <p className="text-sm text-destructive-strong font-medium">Brave browser is blocked for AI interviews.</p>
-                        <p className="text-xs text-destructive mt-1">
+                        <p className="tf-error mt-1">
                           Please open this interview link in Chrome, Edge, or Safari.
                         </p>
                       </div>
@@ -2495,12 +2495,12 @@ export default function StepSystemCheck({
                     {deviceAllPass ? (
                       <>
                         <p className="text-lg font-bold text-success-strong leading-tight">All Requirements Met!</p>
-                        <p className="text-sm text-gray-600 mt-0.5">Your device and browser are compatible for the interview.</p>
+                        <p className="tf-card-desc mt-0.5">Your device and browser are compatible for the interview.</p>
                       </>
                     ) : (
                       <>
                         <p className="text-lg font-bold text-destructive-strong leading-tight">Requirements Not Met</p>
-                        <p className="text-sm text-gray-600 mt-0.5">Fix the items marked above to continue with the interview.</p>
+                        <p className="tf-card-desc mt-0.5">Fix the items marked above to continue with the interview.</p>
                       </>
                     )}
                   </div>
@@ -2631,7 +2631,7 @@ export default function StepSystemCheck({
                         <span className="relative w-4 h-4 rounded-full bg-destructive animate-pulse" />
                       </span>
                     </FadePresence>
-                    <p className="text-sm font-semibold text-gray-900 text-center inline-flex items-center justify-center gap-2">
+                    <p className="tf-cell-name text-center inline-flex items-center justify-center gap-2">
                       {voiceEnrollStatus === 'verifying' && <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />}
                       {voiceEnrollStatus === 'recording' ? 'Recording — keep speaking…'
                         : voiceEnrollStatus === 'verifying' ? 'Checking your voice sample…'
@@ -2660,7 +2660,7 @@ export default function StepSystemCheck({
                         );
                       })}
                     </div>
-                    <span className="text-sm tabular-nums text-gray-600 whitespace-nowrap">
+                    <span className="tf-card-desc tabular-nums whitespace-nowrap">
                       {/* During playback the clock counts up from 0:00 with the playhead. */}
                       {fmtClock(voicePlaying
                         ? Math.floor(voicePlayProgress * (voiceDurationRef.current || VOICE_CAPTURE_SECONDS))
@@ -2884,7 +2884,7 @@ export default function StepSystemCheck({
                 <div className="rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-100">
                     <Settings className="w-5 h-5 text-brand-blue" />
-                    <h3 className="text-base font-semibold text-gray-900">Device Settings</h3>
+                    <h3 className="tf-card-title">Device Settings</h3>
                     {isSwitchingDevice && <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />}
                   </div>
                   <div className="p-4 space-y-5">
@@ -2933,7 +2933,7 @@ export default function StepSystemCheck({
                             count. Some browsers won't list real devices until
                             mic permission has been granted once, hence the hint. */}
                         {micDevices.length === 0 ? (
-                          <p className="mt-1 text-xs text-gray-500">
+                          <p className="mt-1 tf-meta">
                             No microphones detected yet — {onEnrollVoice
                               ? <>click <strong>Start recording</strong> above to allow microphone access</>
                               : <>click <strong>Run Check</strong> below to detect your connected microphone(s)</>}, then select one here.
@@ -2946,7 +2946,7 @@ export default function StepSystemCheck({
                       </div>
                     </div>
 
-                    <p className="text-xs text-gray-500">
+                    <p className="tf-meta">
                       Not seeing the right device? Choose a different one above, then click Retry on the affected checks.
                     </p>
                   </div>
@@ -2960,7 +2960,7 @@ export default function StepSystemCheck({
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-success-strong leading-tight">Everything Looks Good</p>
-                          <p className="text-xs text-gray-600 leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
+                          <p className="tf-meta-strong leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
                         </div>
                       </div>
                     )}
@@ -2971,7 +2971,7 @@ export default function StepSystemCheck({
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-destructive leading-tight">Some checks failed</p>
-                          <p className="text-xs text-gray-600 leading-snug">
+                          <p className="tf-meta-strong leading-snug">
                             {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
                               ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
                               : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
@@ -3006,9 +3006,9 @@ export default function StepSystemCheck({
                       {/* Label + detail (the "Pending..." placeholder stays
                           hidden until a check actually runs) */}
                       <div className="flex-1 min-w-[8rem]">
-                        <p className="text-sm font-semibold text-gray-900">{check.label}</p>
+                        <p className="tf-cell-name">{check.label}</p>
                         {check.detail && check.detail !== 'Pending...' && (
-                          <p className="text-xs text-gray-500 line-clamp-2 break-words sm:line-clamp-1" title={check.detail}>{check.detail}</p>
+                          <p className="tf-meta line-clamp-2 break-words sm:line-clamp-1" title={check.detail}>{check.detail}</p>
                         )}
                       </div>
 
@@ -3116,8 +3116,8 @@ export default function StepSystemCheck({
                 <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">No microphone detected.</h3>
-                <p className="text-gray-500 text-xs leading-relaxed">
+                <h3 className="tf-subsection-title mb-0.5">No microphone detected.</h3>
+                <p className="tf-meta leading-relaxed">
                   Please connect a microphone. This is detected automatically — if it&apos;s a
                   different device, you can also select it from Device Settings.
                 </p>
@@ -3138,8 +3138,8 @@ export default function StepSystemCheck({
                 <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Your device removed</h3>
-                <p className="text-gray-500 text-xs leading-relaxed">
+                <h3 className="tf-subsection-title mb-0.5">Your device removed</h3>
+                <p className="tf-meta leading-relaxed">
                   Your microphone device was removed — switched to your system&apos;s default
                   microphone automatically. You can keep going.
                 </p>

@@ -57,7 +57,7 @@ export default function BulkActionProgress({
             )}
             <div>
               <p className="text-sm text-gray-900">{title}</p>
-              <p className="text-xs text-gray-600">
+              <p className="tf-meta-strong">
                 {successCount} completed, {errorCount} failed
               </p>
             </div>
@@ -106,7 +106,7 @@ export default function BulkActionProgress({
         {/* Progress Bar */}
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">
+            <span className="tf-card-desc">
               {successCount + errorCount} of {items.length} processed
             </span>
             <span className="text-sm text-gray-900">{Math.round(progress)}%</span>
@@ -176,7 +176,7 @@ export default function BulkActionProgress({
                     <p className="text-xs text-gray-800 mt-0.5">Processing...</p>
                   )}
                   {item.status === 'pending' && (
-                    <p className="text-xs text-gray-500 mt-0.5">Waiting...</p>
+                    <p className="tf-meta mt-0.5">Waiting...</p>
                   )}
                 </div>
               </div>

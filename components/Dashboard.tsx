@@ -384,7 +384,7 @@ export default function Dashboard({
               </span>
             </div>
             <div className="text-3xl text-gray-900 mb-1">1,247</div>
-            <div className="text-sm text-gray-600">Total Candidates</div>
+            <div className="tf-card-desc">Total Candidates</div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
@@ -398,7 +398,7 @@ export default function Dashboard({
               </span>
             </div>
             <div className="text-3xl text-gray-900 mb-1">42</div>
-            <div className="text-sm text-gray-600">Active Jobs</div>
+            <div className="tf-card-desc">Active Jobs</div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
@@ -412,7 +412,7 @@ export default function Dashboard({
               </span>
             </div>
             <div className="text-3xl text-gray-900 mb-1">24</div>
-            <div className="text-sm text-gray-600">Scheduled Interviews</div>
+            <div className="tf-card-desc">Scheduled Interviews</div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
@@ -422,7 +422,7 @@ export default function Dashboard({
               </div>
             </div>
             <div className="text-3xl text-gray-900 mb-1">{assessmentStats.active_assessments}</div>
-            <div className="text-sm text-gray-600">Active Assessments</div>
+            <div className="tf-card-desc">Active Assessments</div>
           </div>
         </div>
 
@@ -434,14 +434,14 @@ export default function Dashboard({
                 <Crown className="w-6 h-6 text-gray-800" />
                 <h2 className="text-gray-900 text-2xl">{subscription?.planName || '-'}</h2>
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="tf-card-desc">
                 {subscription?.status === 'active'
                   ? 'Your subscription is active and running smoothly'
                   : `Subscription ${subscription?.status || 'status unknown'}`}
               </p>
             </div>
             <div className="text-right bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <div className="text-xs text-gray-600 mb-1">Renews on</div>
+              <div className="tf-meta-strong mb-1">Renews on</div>
               <div className="text-gray-900 mb-2">
                 {subscription?.renewalDate
                   ? formatISTDate(subscription.renewalDate)
@@ -455,7 +455,7 @@ export default function Dashboard({
                   Upgrade Plan
                 </button>
               ) : (
-                <p className="text-xs text-gray-500 italic">
+                <p className="tf-meta italic">
                   Contact admin to upgrade plan
                 </p>
               )}
@@ -472,7 +472,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
-              <div className="text-xs text-gray-600 mb-2 sm:mb-3">Resume Storage</div>
+              <div className="tf-meta-strong mb-2 sm:mb-3">Resume Storage</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -480,11 +480,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%` }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="tf-meta-strong w-8 sm:w-10 text-right">
                   {limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="tf-meta">
                 {usage?.resumeUploads?.toLocaleString() || '1,593'} used of {limits?.resumeUploads?.toLocaleString() || '2,450'}
               </div>
             </div>}</PlanLockedOverlay>}
@@ -497,7 +497,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.jobPostings || '100'}</div>
-              <div className="text-xs text-gray-600 mb-2 sm:mb-3">Job Postings</div>
+              <div className="tf-meta-strong mb-2 sm:mb-3">Job Postings</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -505,11 +505,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%` }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="tf-meta-strong w-8 sm:w-10 text-right">
                   {limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="tf-meta">
                 {usage?.jobPostings || '42'} used of {limits?.jobPostings || '100'}
               </div>
             </div>
@@ -522,7 +522,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
-              <div className="text-xs text-gray-600 mb-2 sm:mb-3">Assessment Units</div>
+              <div className="tf-meta-strong mb-2 sm:mb-3">Assessment Units</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -530,11 +530,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%` }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="tf-meta-strong w-8 sm:w-10 text-right">
                   {limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="tf-meta">
                 {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
             </div>}</PlanLockedOverlay>}
@@ -549,7 +549,7 @@ export default function Dashboard({
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">
                 {limits?.aiInterviews === 'unlimited' ? 'Unlimited' : limits?.aiInterviews || 'Unlimited'}
               </div>
-              <div className="text-xs text-gray-600 mb-2 sm:mb-3">AI Interviews</div>
+              <div className="tf-meta-strong mb-2 sm:mb-3">AI Interviews</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -561,12 +561,12 @@ export default function Dashboard({
                     }}
                   ></div>
                 </div>
-                <span className="text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="tf-meta-strong w-8 sm:w-10 text-right">
                   {limits?.aiInterviews === 'unlimited' ? '∞' :
                     typeof limits?.aiInterviews === 'number' ? `${Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100)}%` : '∞'}
                 </span>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="tf-meta">
                 {limits?.aiInterviews === 'unlimited'
                   ? `${usage?.aiInterviews || '87'} conducted this month`
                   : `${usage?.aiInterviews || '87'} used of ${limits?.aiInterviews || 'Unlimited'}`}
@@ -603,7 +603,7 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-gray-900 text-2xl mb-2">Published Job Descriptions</h2>
-                <p className="text-sm text-gray-600">Active job postings accepting applications</p>
+                <p className="tf-card-desc">Active job postings accepting applications</p>
               </div>
               {canCreateJD && (
                 <Button
@@ -648,7 +648,7 @@ export default function Dashboard({
               <div className="text-center py-12">
                 <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No published jobs yet</h3>
-                <p className="text-sm text-gray-600 mb-4">Create your first job description to start recruiting!</p>
+                <p className="tf-card-desc mb-4">Create your first job description to start recruiting!</p>
                 {canCreateJD && (
                   <Button
                     variant="primary"
@@ -675,7 +675,7 @@ export default function Dashboard({
                             Published
                           </span>
                         </div>
-                        <div className="flex items-center gap-5 text-sm text-gray-600 mb-3">
+                        <div className="flex items-center gap-5 tf-card-desc mb-3">
                           {jd.department && (
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-gray-400" />
@@ -695,7 +695,7 @@ export default function Dashboard({
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-4 tf-card-desc">
                           <div className="flex items-center gap-1">
                             <Users className="w-4 h-4 text-gray-400" />
                             <span>{jd.applicants_count || 0} applicants</span>
@@ -730,7 +730,7 @@ export default function Dashboard({
           {publishedJDs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
               <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">Showing {publishedJDs.length} published job{publishedJDs.length !== 1 ? 's' : ''}</div>
+                <div className="tf-card-desc">Showing {publishedJDs.length} published job{publishedJDs.length !== 1 ? 's' : ''}</div>
                 <button
                   onClick={onNavigateToJobs}
                   className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors font-medium"
@@ -749,7 +749,7 @@ export default function Dashboard({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-gray-900 text-2xl mb-2">Draft Job Descriptions</h2>
-                <p className="text-sm text-gray-600">Incomplete job postings waiting to be published</p>
+                <p className="tf-card-desc">Incomplete job postings waiting to be published</p>
               </div>
             </div>
           </div>
@@ -782,7 +782,7 @@ export default function Dashboard({
               <div className="text-center py-12">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No drafts saved</h3>
-                <p className="text-sm text-gray-600">All your job descriptions are published or you haven't started any drafts yet.</p>
+                <p className="tf-card-desc">All your job descriptions are published or you haven't started any drafts yet.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -799,12 +799,12 @@ export default function Dashboard({
                             Draft
                           </span>
                           {jd.creation_stage && (
-                            <span className="text-xs text-gray-500">
+                            <span className="tf-meta">
                               Stage: {jd.creation_stage}
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-5 text-sm text-gray-600 mb-3">
+                        <div className="flex items-center gap-5 tf-card-desc mb-3">
                           {jd.department && (
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-gray-400" />
@@ -846,7 +846,7 @@ export default function Dashboard({
           {draftJDs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
               <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">Showing {draftJDs.length} draft{draftJDs.length !== 1 ? 's' : ''}</div>
+                <div className="tf-card-desc">Showing {draftJDs.length} draft{draftJDs.length !== 1 ? 's' : ''}</div>
                 <button
                   onClick={onNavigateToJobs}
                   className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors font-medium"
@@ -905,17 +905,17 @@ export default function Dashboard({
               ) : recentActivities.length === 0 ? (
                 <div className="text-center py-8">
                   <Activity className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm">No recent activity</p>
+                  <p className="tf-body-muted">No recent activity</p>
                 </div>
               ) : (
                 <div className="tf-table-shell">
                   <table className="w-full">
                     <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Details</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">User</th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Time</th>
+                        <th className="px-6 py-3 text-left tf-th">Action</th>
+                        <th className="px-6 py-3 text-left tf-th">Details</th>
+                        <th className="px-6 py-3 text-left tf-th">User</th>
+                        <th className="px-6 py-3 text-left tf-th">Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -935,13 +935,13 @@ export default function Dashboard({
                               </div>
                             </td>
                             <td className="px-6 py-4">
-                              <span className="text-sm text-gray-600">{details}</span>
+                              <span className="tf-card-desc">{details}</span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className="text-sm text-gray-900">{log.user_name}</span>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-500">{getRelativeTime(log.created_at)}</span>
+                              <span className="tf-body-muted">{getRelativeTime(log.created_at)}</span>
                             </td>
                           </tr>
                         );
@@ -1029,7 +1029,7 @@ export default function Dashboard({
                 <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div>
                     <div className="text-sm text-gray-900 mb-1">{job.title}</div>
-                    <div className="text-xs text-gray-600">{job.applicants} applicants</div>
+                    <div className="tf-meta-strong">{job.applicants} applicants</div>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs ${
                     job.color === 'red' ? 'bg-destructive-subtle text-destructive' :

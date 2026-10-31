@@ -68,7 +68,7 @@ export default function CreateInviteTargetModal({
               <h3 id="create-invite-target-title" className="text-base sm:text-lg font-bold text-gray-900 break-words">
                 No {what} for this job yet
               </h3>
-              <p className="text-sm text-gray-500 mt-1 break-words">
+              <p className="tf-body-muted mt-1 break-words">
                 {jdCode ? `${jdCode} · ` : ''}{jdTitle}
               </p>
             </div>
@@ -79,7 +79,7 @@ export default function CreateInviteTargetModal({
         </div>
 
         <div className="p-4 sm:p-6 min-h-0 overflow-y-auto flex-1 space-y-4">
-          <p className="text-sm text-gray-700">
+          <p className="tf-body">
             To invite candidates to an {what}, the job needs a published one first. Here is how it goes:
           </p>
 
@@ -95,11 +95,11 @@ export default function CreateInviteTargetModal({
                   )}
                 </span>
                 <span className="min-w-0 pt-0.5">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                  <span className="flex items-center gap-1.5 tf-cell-name">
                     <step.icon className="w-4 h-4 text-brand-blue" />
                     {step.title}
                   </span>
-                  <span className="block text-sm text-gray-500 mt-0.5">{step.text}</span>
+                  <span className="block tf-body-muted mt-0.5">{step.text}</span>
                 </span>
               </li>
             ))}
@@ -107,11 +107,11 @@ export default function CreateInviteTargetModal({
 
           <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl flex items-start gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-gray-700">
+            <p className="tf-body">
               Your view, filters and the {people} you selected are kept while you're away.
             </p>
           </div>
-          <p className="flex items-start gap-2 text-xs text-gray-500">
+          <p className="flex items-start gap-2 tf-meta">
             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
             Changed your mind? Use “{sourceLabel}” in the breadcrumb at any step to come back.
           </p>

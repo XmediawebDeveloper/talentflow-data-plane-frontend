@@ -271,11 +271,11 @@ export default function AssessmentVersionHistoryModal({
                 <ClipboardList className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <h2 id="asmt-history-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Assessment Version History</h2>
+                <h2 id="asmt-history-title" className="tf-section-title">Assessment Version History</h2>
                 {/* JD ID · job name · job version */}
                 <div className="flex items-center gap-2 mt-0.5 min-w-0 flex-wrap">
                   {jobShortId && <JobIdBadge>{jobShortId}</JobIdBadge>}
-                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{jobTitle || 'This job'}</span>
+                  <span className="tf-card-desc truncate">{jobTitle || 'This job'}</span>
                   {jobVersion != null && (
                     <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">V{jobVersion}</span>
                   )}
@@ -311,7 +311,7 @@ export default function AssessmentVersionHistoryModal({
                 <div key={label} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-4 py-2.5 flex items-center gap-3 min-w-0">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${tile}`}><Icon className="w-4 h-4" /></div>
                   <div className="min-w-0">
-                    <div className="text-xs text-gray-500 dark:text-slate-400 truncate">{label}</div>
+                    <div className="tf-meta truncate">{label}</div>
                     <div className={`text-xl font-bold tabular-nums leading-tight flex items-center gap-1.5 ${text}`}>
                       {value}
                       {hint && <span title={hint}><Info className="w-3.5 h-3.5 text-gray-400" /></span>}
@@ -378,7 +378,7 @@ export default function AssessmentVersionHistoryModal({
             {loading && versions.length === 0 ? (
               <div className="py-16 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>
             ) : versions.length === 0 ? (
-              <div className="py-14 text-center text-sm text-gray-500">No assessment has been created for this job yet.</div>
+              <div className="py-14 text-center tf-body-muted">No assessment has been created for this job yet.</div>
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-stretch">
                 {/* Left column: versions table, then the rate bars under it */}
@@ -500,7 +500,7 @@ export default function AssessmentVersionHistoryModal({
                     Version Wise Results (a row click picks it too). */}
                 {sel && (
                   <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4">
-                    <div className="text-xs text-gray-500 dark:text-slate-400 mb-3">
+                    <div className="tf-meta mb-3">
                       Rates for <span className="font-semibold text-gray-700 dark:text-slate-300">{showAll ? 'All Versions' : selected ? labelOf(selected) : ''}</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
@@ -516,7 +516,7 @@ export default function AssessmentVersionHistoryModal({
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 inline-flex items-center gap-1">
+                            <span className="tf-cell-name inline-flex items-center gap-1">
                               {r.label}<span title={r.hint}><Info className="w-3.5 h-3.5 text-gray-400" /></span>
                             </span>
                             <span className={`text-base font-bold tabular-nums ${r.text}`}>{r.value}%</span>
@@ -524,7 +524,7 @@ export default function AssessmentVersionHistoryModal({
                           <div className="mt-1.5 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                             <div className={`h-full rounded-full ${r.bar}`} style={{ width: `${Math.min(100, r.value)}%` }} />
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">{r.sub}</div>
+                          <div className="tf-meta mt-1">{r.sub}</div>
                         </div>
                       ))}
                     </div>
@@ -537,7 +537,7 @@ export default function AssessmentVersionHistoryModal({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center"><BarChart3 className="w-4 h-4" /></div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Version Wise Results</span>
+                      <span className="tf-cell-name">Version Wise Results</span>
                     </div>
                     <FilterSelect
                       value={showAll ? ALL_VERSIONS : String(selected?.id || '')}
@@ -590,7 +590,7 @@ export default function AssessmentVersionHistoryModal({
                           )}
                           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                             <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{donutTotal}</span>
-                            <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
+                            <span className="tf-meta mt-1 leading-tight">Total<br />Candidates</span>
                           </div>
                         </div>
                         {/* Legend: names in the left half, values in the right half,
@@ -608,7 +608,7 @@ export default function AssessmentVersionHistoryModal({
                               </span>
                               <span className="flex items-baseline gap-1.5 pl-3 pr-1">
                                 <span className="tabular-nums font-semibold text-gray-900 dark:text-slate-100">{sel[seg.key]}</span>
-                                <span className="tabular-nums text-xs text-gray-500 dark:text-slate-400">({pct(sel[seg.key], donutTotal)}%)</span>
+                                <span className="tabular-nums tf-meta">({pct(sel[seg.key], donutTotal)}%)</span>
                               </span>
                             </li>
                           ))}

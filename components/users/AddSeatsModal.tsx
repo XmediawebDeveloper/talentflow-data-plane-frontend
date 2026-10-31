@@ -290,7 +290,7 @@ export default function AddSeatsModal({
       subtitle="Add seats to your team capacity"
       bodyClassName="bg-white dark:bg-slate-900"
       footerStart={
-        <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+        <span className="flex items-center gap-1.5 tf-meta">
           <ShieldCheck className="w-3 h-3 text-brand-cyan" />
           Secured by Razorpay · 256-bit SSL encryption
         </span>
@@ -388,7 +388,7 @@ export default function AddSeatsModal({
                     </div>
                     <div className="min-w-0">
                       <p className="font-semibold text-destructive-strong text-sm max-sm:text-[13px]">Purchase Failed</p>
-                      <p className="text-xs text-destructive mt-0.5">{error}</p>
+                      <p className="tf-error mt-0.5">{error}</p>
                     </div>
                   </div>
                 )}
@@ -403,14 +403,14 @@ export default function AddSeatsModal({
                           <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-base max-sm:text-sm leading-tight truncate">
+                          <h3 className="tf-card-title max-sm:text-sm leading-tight truncate">
                             {addonDisplayName}
                           </h3>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
+                          <p className="tf-meta mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs text-gray-500 dark:text-slate-500">Per pack</p>
+                        <p className="tf-meta">Per pack</p>
                         <p className="text-xl max-sm:text-lg font-bold text-brand-blue">₹{pricePerPack}</p>
                       </div>
                     </div>
@@ -492,8 +492,8 @@ export default function AddSeatsModal({
                       </div>
                       <div className="mt-1 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Total Amount</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500">Incl. all taxes</p>
+                          <p className="tf-cell-name max-sm:text-[13px]">Total Amount</p>
+                          <p className="tf-meta">Incl. all taxes</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xl max-sm:text-lg font-bold text-brand-blue">₹{total.toFixed(2)}</p>

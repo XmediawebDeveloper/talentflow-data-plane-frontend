@@ -181,7 +181,7 @@ export default function ResumeVersionsModal({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                <h2 className="tf-section-title">
                   {selectionMode ? 'Select Resume Version' : 'Version History'}
                 </h2>
                 {!selectionMode && versions.length > 0 && (
@@ -190,7 +190,7 @@ export default function ResumeVersionsModal({
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{candidate.name}</p>
+              <p className="tf-card-desc truncate">{candidate.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -255,7 +255,7 @@ export default function ResumeVersionsModal({
               {canChoose && (
                 <div className="flex items-start gap-2 rounded-lg bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2">
                   <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-700 dark:text-slate-300">
+                  <p className="tf-body">
                     <span className="font-semibold">Tip:</span> The latest version is selected by default. Choose
                     another version if needed.
                   </p>
@@ -309,9 +309,9 @@ export default function ResumeVersionsModal({
                           )}
                         </div>
                         {version.file_name && (
-                          <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{version.file_name}</p>
+                          <p className="tf-card-desc truncate">{version.file_name}</p>
                         )}
-                        <div className="flex items-center gap-x-3 gap-y-1 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
+                        <div className="flex items-center gap-x-3 gap-y-1 tf-card-desc mt-1 flex-wrap">
                           <span className="flex items-center gap-1 whitespace-nowrap">
                             <Calendar className="w-3.5 h-3.5" />
                             {formatISTDate(version.created_at)}
@@ -438,7 +438,7 @@ export default function ResumeVersionsModal({
                 <FileText className="w-8 h-8 text-gray-400 dark:text-slate-500" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Versions Found</h3>
-              <p className="text-sm text-gray-500 dark:text-slate-500 text-center">
+              <p className="tf-body-muted text-center">
                 No version history available for this resume.
               </p>
             </div>
@@ -448,7 +448,7 @@ export default function ResumeVersionsModal({
         {/* Footer */}
         <div className="border-t border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-center gap-3">
-            <p className="text-sm text-gray-600 dark:text-slate-400">
+            <p className="tf-card-desc">
               {!selectionMode && versions.length > 1 && compareChecked.length > 0
                 ? `${compareChecked.length} of 2 selected to compare`
                 : `${versions.length} version${versions.length !== 1 ? 's' : ''}`}

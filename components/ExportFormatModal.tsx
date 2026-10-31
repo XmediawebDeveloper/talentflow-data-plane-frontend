@@ -192,7 +192,7 @@ export default function ExportFormatModal({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-gray-900 dark:text-slate-100">{option.label}</div>
-                    <div className="text-sm text-gray-500 dark:text-slate-400">{option.hint}</div>
+                    <div className="tf-body-muted">{option.hint}</div>
                   </div>
                   <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${active ? 'border-blue-600' : 'border-gray-300 dark:border-slate-600'}`}>
                     {active && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
@@ -220,7 +220,7 @@ export default function ExportFormatModal({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
                 {columns!.map(col => (
-                  <label key={col} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer min-w-0">
+                  <label key={col} className="flex items-center gap-2 tf-body cursor-pointer min-w-0">
                     <input
                       type="checkbox"
                       checked={!!picks[col]}

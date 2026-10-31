@@ -1073,8 +1073,8 @@ export default function TeamManagementPage() {
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                           <UserCheck className="h-6 w-6 text-brand-blue" />
                         </div>
-                        <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No members found</h3>
-                        <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
+                        <h3 className="tf-card-title max-sm:text-sm">No members found</h3>
+                        <p className="mt-1 tf-body-muted max-sm:text-[13px]">Try a different search query or assign users to a team.</p>
                       </div>
                     ) : (
                       <>
@@ -1089,8 +1089,8 @@ export default function TeamManagementPage() {
                             >
                               <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="sm" />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{row.name}</p>
-                                <p className="truncate text-xs text-gray-500 dark:text-slate-500">{row.email}</p>
+                                <p className="truncate tf-cell-name max-sm:text-[13px]">{row.name}</p>
+                                <p className="truncate tf-meta">{row.email}</p>
                                 <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
                                   {row.teamName}
                                   {row.role && <span className="capitalize"> · {formatRole(row.role)}</span>}
@@ -1109,16 +1109,16 @@ export default function TeamManagementPage() {
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-white dark:bg-slate-900">
                             <tr className="text-left">
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(memberSort, 'name')}>
+                              <th className="px-6 py-4 tf-th" aria-sort={ariaSort(memberSort, 'name')}>
                                 <SortableHeader label="Member" column="name" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(memberSort, 'team')}>
+                              <th className="px-6 py-4 tf-th" aria-sort={ariaSort(memberSort, 'team')}>
                                 <SortableHeader label="Team" column="team" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(memberSort, 'role')}>
+                              <th className="px-6 py-4 tf-th" aria-sort={ariaSort(memberSort, 'role')}>
                                 <SortableHeader label="Role" column="role" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 text-right" aria-sort={ariaSort(memberSort, 'lead')}>
+                              <th className="px-6 py-4 tf-th text-right" aria-sort={ariaSort(memberSort, 'lead')}>
                                 <SortableHeader label="Lead" column="lead" sort={memberSort} align="right" />
                               </th>
                             </tr>
@@ -1135,13 +1135,13 @@ export default function TeamManagementPage() {
                                   <div className="flex items-center gap-3">
                                     <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="md" />
                                     <div className="min-w-0">
-                                      <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 truncate">{row.name}</p>
-                                      <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</p>
+                                      <p className="tf-cell-name max-sm:text-[13px] truncate">{row.name}</p>
+                                      <p className="tf-meta truncate">{row.email}</p>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{row.teamName}</td>
-                                <td className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
+                                <td className="px-6 py-4 tf-td max-sm:text-[13px]">{row.teamName}</td>
+                                <td className="px-6 py-4 tf-card-desc max-sm:text-[13px]">
                                   {row.role ? (
                                     <span className="capitalize">{formatRole(row.role)}</span>
                                   ) : (
@@ -1176,10 +1176,10 @@ export default function TeamManagementPage() {
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                           <UserMinus className="h-6 w-6 text-brand-blue" />
                         </div>
-                        <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+                        <h3 className="tf-card-title max-sm:text-sm">
                           {searchQuery ? 'No matching users' : 'Everyone is in a team'}
                         </h3>
-                        <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">
+                        <p className="mt-1 tf-body-muted max-sm:text-[13px]">
                           {searchQuery ? 'Try a different search query.' : 'Every active user already belongs to a team.'}
                         </p>
                       </div>
@@ -1190,8 +1190,8 @@ export default function TeamManagementPage() {
                             <li key={u.id} className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3.5">
                               <NameAvatar name={u.name} fallback={u.email} src={u.avatar_url} userId={u.id} size="md" />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{u.name}</p>
-                                <p className="truncate text-xs text-gray-500 dark:text-slate-500">{u.email}</p>
+                                <p className="truncate tf-cell-name max-sm:text-[13px]">{u.name}</p>
+                                <p className="truncate tf-meta">{u.email}</p>
                               </div>
                               {u.role && (
                                 <span className="hidden shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs capitalize text-gray-700 dark:bg-slate-800 dark:text-slate-300 sm:inline">

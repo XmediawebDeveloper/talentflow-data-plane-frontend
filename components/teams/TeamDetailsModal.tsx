@@ -92,8 +92,8 @@ export default function TeamDetailsModal({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <h3 className="truncate text-base max-sm:text-sm font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
-            {team.description && <p className="mt-1 whitespace-pre-line break-words text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{team.description}</p>}
-            <p className="mt-2 flex items-center gap-1.5 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
+            {team.description && <p className="mt-1 whitespace-pre-line break-words tf-card-desc max-sm:text-[13px]">{team.description}</p>}
+            <p className="mt-2 flex items-center gap-1.5 tf-body-muted max-sm:text-[13px]">
               <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
               {team.team_lead ? (
                 <>
@@ -143,7 +143,7 @@ export default function TeamDetailsModal({
                   <NameAvatar name={member.name} fallback={member.email} src={member.avatar_url} userId={member.id} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
-                    <p className="truncate text-xs text-gray-500 dark:text-slate-500">{member.email}</p>
+                    <p className="truncate tf-meta">{member.email}</p>
                   </div>
                   {team.team_lead?.id === member.id ? (
                     <span className="shrink-0 rounded-full bg-brand-blue px-2 py-0.5 text-xs font-medium text-white">Lead</span>

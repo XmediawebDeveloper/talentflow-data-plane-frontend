@@ -104,8 +104,8 @@ export default function ActivityLogsPage() {
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
-                <p className="text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
+                <h1 className="tf-page-title">Activity Logs</h1>
+                <p className="tf-card-desc">Track all activities across your organization</p>
               </div>
             </div>
             <button
@@ -159,10 +159,10 @@ export default function ActivityLogsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{log.action}</p>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
+                        <p className="tf-body-muted truncate">{log.details}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
+                        <p className="tf-body-muted whitespace-nowrap">{log.timestamp}</p>
                         <p className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
@@ -177,7 +177,7 @@ export default function ActivityLogsPage() {
           <div className="text-center py-12">
             <BarChart3 className="w-12 h-12 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No activities found</h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400">Try adjusting your search or filters.</p>
+            <p className="tf-body-muted">Try adjusting your search or filters.</p>
           </div>
         )}
       </div>

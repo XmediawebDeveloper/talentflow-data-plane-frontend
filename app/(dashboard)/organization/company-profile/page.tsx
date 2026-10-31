@@ -532,7 +532,7 @@ export default function CompanyProfilePage() {
         {/* Title row */}
         <div className="mb-4 flex items-center justify-between gap-3 sm:mb-5">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl dark:text-slate-50">Company Profile</h1>
+            <h1 className="tf-page-title">Company Profile</h1>
             <p className="mt-0.5 text-xs text-gray-500 sm:text-sm dark:text-slate-400">
               {isEditing
                 ? 'Update your organization’s details, then save.'
@@ -768,7 +768,7 @@ export default function CompanyProfilePage() {
 
             {/* Form actions — part of the page, not a card */}
             <div className="flex items-center justify-between gap-3 pt-1">
-              <p className="hidden text-xs text-gray-500 sm:block dark:text-slate-400">
+              <p className="hidden tf-meta sm:block">
                 Fields marked <span className="text-destructive">*</span> are required.
               </p>
               <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -960,7 +960,7 @@ export default function CompanyProfilePage() {
                   </span>
                   <address className="min-w-0 space-y-1 break-words text-xs not-italic text-gray-600 dark:text-slate-300">
                     {companyData.address && (
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{companyData.address}</p>
+                      <p className="tf-cell-name">{companyData.address}</p>
                     )}
                     {(cityLine || companyData.zipCode) && (
                       <p>{[cityLine, companyData.zipCode].filter(Boolean).join(' ')}</p>
@@ -1070,8 +1070,8 @@ function Section({
             <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
-            {subtitle && <p className="text-xs text-gray-500 dark:text-slate-400">{subtitle}</p>}
+            <h3 className="tf-subsection-title">{title}</h3>
+            {subtitle && <p className="tf-meta">{subtitle}</p>}
           </div>
         </div>
         {action}

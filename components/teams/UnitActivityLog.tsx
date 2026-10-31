@@ -137,11 +137,11 @@ export default function UnitActivityLog({
 
       {/* Body */}
       {loading ? (
-        <div className="flex items-center gap-2 py-3 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 py-3 tf-meta">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading unit activity…
         </div>
       ) : error && items.length === 0 ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2 text-xs text-destructive">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2 tf-error">
           {error}
           <button type="button" onClick={() => setReloadKey(k => k + 1)} className="inline-flex items-center gap-1 font-medium hover:underline">
             <RefreshCw className="h-3 w-3" /> Retry
@@ -177,7 +177,7 @@ export default function UnitActivityLog({
                       <span className="ml-1.5 font-normal text-gray-500 dark:text-slate-400 break-all">· {item.entity_name}</span>
                     )}
                   </p>
-                  <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                  <p className="mt-0.5 tf-meta">
                     {UNIT_NAMES[item.unit_type] ?? item.unit_type}
                     {item.created_at && <> · {formatIST(item.created_at)}</>}
                   </p>

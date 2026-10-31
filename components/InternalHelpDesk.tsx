@@ -274,8 +274,8 @@ export default function InternalHelpDesk() {
                 <Headphones className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Help Desk</h1>
-                <p className="text-sm text-gray-600">Request help from your administrator</p>
+                <h1 className="tf-page-title">Help Desk</h1>
+                <p className="tf-card-desc">Request help from your administrator</p>
               </div>
             </div>
 
@@ -301,38 +301,38 @@ export default function InternalHelpDesk() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Open Requests</span>
+                  <span className="tf-card-desc">Open Requests</span>
                   <Circle className="w-5 h-5 text-gray-800" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{openTickets}</div>
-                <div className="text-xs text-gray-500">Awaiting response</div>
+                <div className="tf-meta">Awaiting response</div>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">In Progress</span>
+                  <span className="tf-card-desc">In Progress</span>
                   <Clock3 className="w-5 h-5 text-yellow-600" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{inProgressTickets}</div>
-                <div className="text-xs text-gray-500">Being reviewed</div>
+                <div className="tf-meta">Being reviewed</div>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Resolved</span>
+                  <span className="tf-card-desc">Resolved</span>
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{resolvedTickets}</div>
-                <div className="text-xs text-gray-500">Successfully handled</div>
+                <div className="tf-meta">Successfully handled</div>
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Total Requests</span>
+                  <span className="tf-card-desc">Total Requests</span>
                   <Ticket className="w-5 h-5 text-gray-600" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{totalTickets}</div>
-                <div className="text-xs text-gray-500">All time</div>
+                <div className="tf-meta">All time</div>
               </div>
             </div>
 
@@ -354,8 +354,8 @@ export default function InternalHelpDesk() {
                 className="bg-white border-2 border-gray-200 rounded-xl shadow-sm p-8 text-left hover:border-indigo-300 hover:shadow-md transition-all"
               >
                 <Ticket className="w-8 h-8 text-indigo-600 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">View My Requests</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="tf-section-title mb-2">View My Requests</h3>
+                <p className="tf-card-desc">
                   Track the status of your help requests
                 </p>
               </button>
@@ -380,7 +380,7 @@ export default function InternalHelpDesk() {
               ) : tickets.length === 0 ? (
                 <div className="text-center py-12">
                   <Ticket className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-sm text-gray-600">No requests yet</p>
+                  <p className="tf-card-desc">No requests yet</p>
                   <button
                     onClick={() => setView('submit')}
                     className="mt-4 text-sm text-indigo-600 hover:text-indigo-700"
@@ -402,12 +402,12 @@ export default function InternalHelpDesk() {
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <span className="text-xs text-gray-600 block mb-1">{ticket.ticket_number}</span>
+                          <span className="tf-meta-strong block mb-1">{ticket.ticket_number}</span>
                           <h4 className="text-sm font-medium text-gray-900">{ticket.title}</h4>
                         </div>
                         {getStatusBadge(ticket.status)}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600">
+                      <div className="flex items-center gap-3 tf-meta-strong">
                         <span>{getCategoryLabel(ticket.category)}</span>
                         <span>-</span>
                         {getPriorityBadge(ticket.priority)}
@@ -452,11 +452,11 @@ export default function InternalHelpDesk() {
             </button>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">Submit Help Request</h2>
+              <h2 className="tf-section-title mb-6">Submit Help Request</h2>
 
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block tf-label mb-2">
                     Title <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -470,7 +470,7 @@ export default function InternalHelpDesk() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block tf-label mb-2">
                       Category <span className="text-red-500">*</span>
                     </label>
                     <FilterSelect
@@ -482,7 +482,7 @@ export default function InternalHelpDesk() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block tf-label mb-2">
                       Priority <span className="text-red-500">*</span>
                     </label>
                     <FilterSelect
@@ -495,7 +495,7 @@ export default function InternalHelpDesk() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block tf-label mb-2">
                     Description <span className="text-red-500">*</span>
                   </label>
                   <textarea
@@ -596,13 +596,13 @@ export default function InternalHelpDesk() {
                   <table className="w-full">
                     <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Request #</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Title</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Category</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Priority</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Updated</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
+                        <th className="px-6 py-4 text-left tf-th">Request #</th>
+                        <th className="px-6 py-4 text-left tf-th">Title</th>
+                        <th className="px-6 py-4 text-left tf-th">Category</th>
+                        <th className="px-6 py-4 text-left tf-th">Priority</th>
+                        <th className="px-6 py-4 text-left tf-th">Status</th>
+                        <th className="px-6 py-4 text-left tf-th">Updated</th>
+                        <th className="px-6 py-4 text-left tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -619,7 +619,7 @@ export default function InternalHelpDesk() {
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                <span className="text-sm text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                                <span className="tf-card-desc">{getCategoryLabel(ticket.category)}</span>
                               </div>
                             </td>
                             <td className="px-6 py-4">
@@ -629,7 +629,7 @@ export default function InternalHelpDesk() {
                               {getStatusBadge(ticket.status)}
                             </td>
                             <td className="px-6 py-4">
-                              <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                              <span className="tf-card-desc">{formatISTDate(ticket.updated_at)}</span>
                             </td>
                             <td className="px-6 py-4 tf-sticky-col">
                               <button
@@ -652,7 +652,7 @@ export default function InternalHelpDesk() {
                   {filteredTickets.length === 0 && (
                     <div className="text-center py-12">
                       <Ticket className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                      <p className="text-sm text-gray-600">No requests found</p>
+                      <p className="tf-card-desc">No requests found</p>
                     </div>
                   )}
                 </div>
@@ -679,12 +679,12 @@ export default function InternalHelpDesk() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <span className="text-xs text-gray-600 block mb-2">{selectedTicket.ticket_number}</span>
-                      <h2 className="text-lg font-semibold text-gray-900 mb-3">{selectedTicket.title}</h2>
+                      <span className="tf-meta-strong block mb-2">{selectedTicket.ticket_number}</span>
+                      <h2 className="tf-section-title mb-3">{selectedTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-3">
                         {getStatusBadge(selectedTicket.status)}
                         {getPriorityBadge(selectedTicket.priority)}
-                        <span className="text-xs text-gray-600">
+                        <span className="tf-meta-strong">
                           {getCategoryLabel(selectedTicket.category)}
                         </span>
                       </div>
@@ -721,9 +721,9 @@ export default function InternalHelpDesk() {
                               <span className="text-sm font-medium text-gray-900">
                                 {response.user_role === 'user' ? (response.user_name || 'You') : 'Administrator'}
                               </span>
-                              <span className="text-xs text-gray-500">{formatIST(response.created_at)}</span>
+                              <span className="tf-meta">{formatIST(response.created_at)}</span>
                             </div>
-                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
+                            <p className="tf-body leading-relaxed whitespace-pre-wrap">{response.message}</p>
                           </div>
                         </div>
                       </div>
@@ -733,7 +733,7 @@ export default function InternalHelpDesk() {
                   {/* Reply Box */}
                   {selectedTicket.status !== 'closed' && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Add Reply</label>
+                      <label className="block tf-label mb-2">Add Reply</label>
                       <textarea
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
@@ -760,22 +760,22 @@ export default function InternalHelpDesk() {
               <div className="space-y-6">
                 {/* Ticket Info */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Request Information</h4>
+                  <h4 className="tf-subsection-title mb-4">Request Information</h4>
 
                   <div className="space-y-4">
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Created</div>
+                      <div className="tf-meta-strong mb-1">Created</div>
                       <div className="text-sm text-gray-900">{formatIST(selectedTicket.created_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Last Updated</div>
+                      <div className="tf-meta-strong mb-1">Last Updated</div>
                       <div className="text-sm text-gray-900">{formatIST(selectedTicket.updated_at)}</div>
                     </div>
 
                     {selectedTicket.assigned_to && (
                       <div>
-                        <div className="text-xs text-gray-600 mb-1">Assigned To</div>
+                        <div className="tf-meta-strong mb-1">Assigned To</div>
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs">
                             {selectedTicket.assigned_to.name.charAt(0)}
@@ -786,7 +786,7 @@ export default function InternalHelpDesk() {
                     )}
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Responses</div>
+                      <div className="tf-meta-strong mb-1">Responses</div>
                       <div className="text-sm text-gray-900">{selectedTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
@@ -794,8 +794,8 @@ export default function InternalHelpDesk() {
 
                 {/* Status Info */}
                 <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-6">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Status Information</h4>
-                  <p className="text-sm text-gray-600">
+                  <h4 className="tf-subsection-title mb-3">Status Information</h4>
+                  <p className="tf-card-desc">
                     {selectedTicket.status === 'open' && 'Your request is awaiting review by an administrator.'}
                     {selectedTicket.status === 'in-progress' && 'An administrator is currently working on your request.'}
                     {selectedTicket.status === 'resolved' && 'Your request has been resolved. If you need further assistance, please reply.'}

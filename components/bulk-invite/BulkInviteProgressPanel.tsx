@@ -196,7 +196,7 @@ export default function BulkInviteProgressPanel({
 
   if (!job) {
     return (
-      <div className="flex items-center justify-center py-10 text-sm text-gray-600 dark:text-slate-400">
+      <div className="flex items-center justify-center py-10 tf-card-desc">
         {loadError ? loadError : <><Loader2 className="w-4 h-4 animate-spin mr-2 text-brand-blue" /> Loading…</>}
       </div>
     );
@@ -242,7 +242,7 @@ export default function BulkInviteProgressPanel({
         <div className="mt-2.5 h-2 w-full rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
           <div className={`h-full rounded-full transition-[width] duration-500 ${job.status === 'failed' ? 'bg-destructive' : job.status === 'cancelled' ? 'bg-warning-strong' : 'bg-brand-blue'}`} style={{ width: `${pct}%` }} />
         </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-slate-400 tabular-nums">
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 tf-meta-strong tabular-nums">
           <span><span className="font-semibold text-success">{job.sent}</span> sent</span>
           <span><span className="font-semibold text-warning-strong">{job.skipped}</span> skipped</span>
           <span><span className="font-semibold text-destructive">{job.failed}</span> failed</span>
@@ -250,7 +250,7 @@ export default function BulkInviteProgressPanel({
           {job.version_label && <span className="min-w-0 truncate">· {job.version_label}</span>}
         </div>
         {active && (
-          <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">
+          <p className="mt-2 tf-meta">
             You can close this popup — the send carries on in the background and the progress card bottom-left follows it.
           </p>
         )}
@@ -288,7 +288,7 @@ export default function BulkInviteProgressPanel({
 
       <ul className={`rounded-xl border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 overflow-y-auto ${compact ? 'max-h-72' : 'max-h-[50vh]'}`}>
         {rows.length === 0 && !loadingRows && (
-          <li className="px-3 py-6 text-center text-sm text-gray-500 dark:text-slate-400">
+          <li className="px-3 py-6 text-center tf-body-muted">
             {tab === 'all' ? 'No candidates in this send.' : `No ${tab} candidates${search ? ' match' : ''}.`}
           </li>
         )}
@@ -298,8 +298,8 @@ export default function BulkInviteProgressPanel({
             <li key={r.id} className="flex items-center gap-3 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{r.name || '—'}</p>
-                <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{r.email || 'No email'}</p>
-                {r.reason && <p className="text-xs text-gray-600 dark:text-slate-400 mt-0.5 [overflow-wrap:anywhere]">{r.reason}</p>}
+                <p className="tf-meta truncate">{r.email || 'No email'}</p>
+                {r.reason && <p className="tf-meta-strong mt-0.5 [overflow-wrap:anywhere]">{r.reason}</p>}
               </div>
               {r.link && r.status === 'sent' && (
                 <button

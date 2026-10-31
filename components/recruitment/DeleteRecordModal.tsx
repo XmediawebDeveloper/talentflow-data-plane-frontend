@@ -92,7 +92,7 @@ export default function DeleteRecordModal({
               <p className="mt-0.5 text-sm sm:text-base font-bold text-gray-900 dark:text-slate-100 uppercase break-words" title={heading}>
                 {heading}
               </p>
-              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400 flex flex-wrap items-center gap-y-0.5">
+              <p className="mt-1 tf-body-muted flex flex-wrap items-center gap-y-0.5">
                 {metaParts.map((part, i) => (
                   <span key={part} className="inline-flex items-center">
                     {i > 0 && <span className="mx-1.5 sm:mx-2 text-gray-300 dark:text-slate-600">|</span>}

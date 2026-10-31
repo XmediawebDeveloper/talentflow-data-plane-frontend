@@ -1172,7 +1172,7 @@ export default function CandidateResultDetails({
               <NameAvatar name={candidateData?.name} fallback={candidateData?.email} size="xl" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <h1 className="min-w-0 text-lg sm:text-xl text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
+                  <h1 className="min-w-0 tf-page-title truncate">{candidateData?.name || 'Unknown'}</h1>
                   {/* `shrink-0` so a long name truncates, not the badge. */}
                   {(() => {
                     const displayStatus = resultStatusOf(detailedResult)
@@ -1215,7 +1215,7 @@ export default function CandidateResultDetails({
                     </Link>
                   ) : <span key="job" className="inline-flex items-center gap-1.5 text-gray-700">{jobLabel}</span>);
                   return (
-                    <div className="flex items-center gap-2 flex-wrap mt-1 text-sm text-gray-500 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mt-1 tf-body-muted min-w-0">
                       {parts.map((part, i) => (
                         <span key={i} className="inline-flex items-center gap-2 min-w-0">
                           {i > 0 && <span className="text-gray-300" aria-hidden>|</span>}
@@ -1225,7 +1225,7 @@ export default function CandidateResultDetails({
                     </div>
                   );
                 })()}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted mt-2">
                   <span className="flex items-center gap-1" title="Start time">
                     <Clock className="w-3.5 h-3.5" />
                     Started {detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
@@ -1579,7 +1579,7 @@ export default function CandidateResultDetails({
                 {!assessmentMeta.jd_id ? (
                   <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
                     <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 dark:text-slate-400">No linked job description found</p>
+                    <p className="tf-body-muted">No linked job description found</p>
                   </div>
                 ) : jdError ? (
                   <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
@@ -1630,7 +1630,7 @@ export default function CandidateResultDetails({
                   <h2 className="text-gray-900 flex items-center gap-2 text-sm sm:text-base tracking-tight font-semibold">
                     AI-Generated Candidate Insights
                   </h2>
-                  <p className="text-gray-600 text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                  <p className="tf-card-desc mt-1">Advanced automated analysis for Technical & Coding rounds</p>
                 </div>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
@@ -1757,11 +1757,11 @@ export default function CandidateResultDetails({
                   <Info className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0 [overflow-wrap:anywhere]">
                     <h3 className="text-sm font-medium text-brand-orange-deep mb-2">Score Calculation Note</h3>
-                    <p className="text-sm text-gray-700 mb-3">
+                    <p className="tf-body mb-3">
                       The assessment score is calculated using weighted section scores.
                       Individual section scores may show 0% if questions are not yet scored or if there's a scoring status mismatch.
                     </p>
-                    <div className="text-xs text-gray-600 space-y-1">
+                    <div className="tf-meta-strong space-y-1">
                       <div><strong>Scoring Status:</strong> {detailedResult.scoring_status}</div>
                       <div className="mt-2 mb-1"><strong>Score Breakdown:</strong></div>
                       {detailedResult.round_scores.map((round, idx) => (
@@ -1848,7 +1848,7 @@ export default function CandidateResultDetails({
                                 </span>
                               )}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="tf-body-muted">
                               {scoringDone || isHR ? (
                                 <>
                                   {section.score}/{section.totalScore} correct
@@ -1933,7 +1933,7 @@ export default function CandidateResultDetails({
             </div>
             <div className="flex-1">
               <h2 className="text-gray-900 mb-1">Assessment Scoring Rules</h2>
-              <p className="text-sm text-gray-600">Critical Evaluation Logic for PASS/FAIL determination</p>
+              <p className="tf-card-desc">Critical Evaluation Logic for PASS/FAIL determination</p>
             </div>
           </div>
 
@@ -2000,7 +2000,7 @@ export default function CandidateResultDetails({
                   <span className="text-gray-800 font-bold flex-shrink-0">1.</span>
                   <span className="text-gray-700">At least <strong>70% of questions</strong> score ≥7</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <div className="flex items-center gap-2 tf-meta">
                   <span className="px-2 py-0.5 bg-gray-200 rounded">Example:</span>
                   <span>10 questions → 7+ questions must score ≥7</span>
                 </div>
@@ -2013,7 +2013,7 @@ export default function CandidateResultDetails({
                   <span className="text-gray-800 font-bold flex-shrink-0">2.</span>
                   <span className="text-gray-700">Overall average score ≥7</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <div className="flex items-center gap-2 tf-meta">
                   <span className="px-2 py-0.5 bg-gray-200 rounded">Example:</span>
                   <span>Total score: 75/100 → Average: 7.5 ≥ 7 → PASS</span>
                 </div>
@@ -2027,7 +2027,7 @@ export default function CandidateResultDetails({
               <Award className="w-5 h-5 text-success" />
               <h3 className="text-gray-900">Final Assessment Result</h3>
             </div>
-            <div className="text-sm text-gray-700">
+            <div className="tf-body">
               <strong>PASS</strong> if <strong>ALL</strong> evaluated sections (Technical + Coding) pass
             </div>
             <div className="mt-2 flex items-center gap-2 text-xs text-warning bg-warning-subtle border border-warning-line rounded px-3 py-2">
@@ -2122,7 +2122,7 @@ export default function CandidateResultDetails({
                             })() : null;
                             const codingLanguageLabel = codingLanguage ? logoLabelForId(codingLanguage) : null;
                             return (
-                              <p className="text-sm text-gray-600 mt-1">
+                              <p className="tf-card-desc mt-1">
                                 {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''}
                                 {showBreakdown && (
                                   <span className="text-gray-500"> (MCQ - {mcqCount}, Text Input - {textCount})</span>
@@ -2149,7 +2149,7 @@ export default function CandidateResultDetails({
                           })()}
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
-                          <div className="text-sm text-gray-600 mb-0.5 sm:mb-1">
+                          <div className="tf-card-desc mb-0.5 sm:mb-1">
                             {isHRRound ? 'Section Type' : 'Section Score'}
                           </div>
                           <div className={`text-xl sm:text-3xl font-bold tracking-tight ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
@@ -2249,7 +2249,7 @@ export default function CandidateResultDetails({
                                       // Example Input / Expected Output blocks.
                                       <div className="space-y-4">
                                         <div>
-                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">
+                                          <h3 className="tf-section-title mb-2">
                                             {q.problem_title || 'Coding Problem'}
                                           </h3>
                                           <div className="prose prose-sm max-w-none text-gray-700">
@@ -2262,7 +2262,7 @@ export default function CandidateResultDetails({
                                         {q.input_format && (
                                           <div>
                                             <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Input Format</h4>
-                                            <div className="text-sm text-gray-700 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
+                                            <div className="tf-body bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
                                               {q.input_format}
                                             </div>
                                           </div>
@@ -2271,7 +2271,7 @@ export default function CandidateResultDetails({
                                         {q.output_format && (
                                           <div>
                                             <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Output Format</h4>
-                                            <div className="text-sm text-gray-700 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
+                                            <div className="tf-body bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
                                               {q.output_format}
                                             </div>
                                           </div>
@@ -2326,7 +2326,7 @@ export default function CandidateResultDetails({
                                   </div>
                                   {!isHRRound && (
                                     <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
-                                      <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
+                                      <div className="tf-meta-strong mb-0.5 sm:mb-1">Score</div>
                                       <div className="flex items-center gap-2">
                                         {(() => {
                                           const normalizedEarned = getDisplayedQuestionEarnedPoints(q);
@@ -2513,7 +2513,7 @@ export default function CandidateResultDetails({
                                             );
                                           })}
                                           {selectedSet.size === 0 && (
-                                            <p className="text-xs text-gray-500 italic mt-1">No answer provided</p>
+                                            <p className="tf-meta italic mt-1">No answer provided</p>
                                           )}
                                         </div>
                                       </div>
@@ -2607,7 +2607,7 @@ export default function CandidateResultDetails({
                                           Final: {formatMark(q.points_earned)}/{formatMark(q.points_possible)} ({formatMark(q.score)}%)
                                         </div>
                                         {q.candidate_test_results.marks_breakdown.pass_requirement && (
-                                          <div className="text-xs text-gray-600">
+                                          <div className="tf-meta-strong">
                                             {q.candidate_test_results.marks_breakdown.pass_requirement}
                                           </div>
                                         )}
@@ -2856,12 +2856,12 @@ export default function CandidateResultDetails({
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
                       <div className="min-w-0">
                         <h3 className="text-base sm:text-xl text-gray-900 tracking-tight font-semibold">Proctoring Violations</h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="tf-card-desc mt-1">
                           {detailedResult.proctoring_stats.total_violations} total violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's' : ''} detected during the assessment
                         </p>
                       </div>
                       <div className="shrink-0 text-left sm:text-right">
-                        <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
+                        <div className="tf-card-desc mb-1">Integrity Status</div>
                         <span className={`inline-flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
                             ? 'bg-success-subtle text-success-strong ring-success-line'
@@ -2900,7 +2900,7 @@ export default function CandidateResultDetails({
                               <ShieldAlert className={`w-5 h-5 ${hasViolations ? 'text-destructive' : 'text-success'}`} />
                             </div>
                             <div>
-                              <div className="text-xs text-gray-600">Total Violations</div>
+                              <div className="tf-meta-strong">Total Violations</div>
                               <div className={`text-3xl font-bold tracking-tight ${hasViolations ? 'text-destructive' : 'text-success'}`}>
                                 {ps.total_violations}
                               </div>
@@ -2954,7 +2954,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.window_blur_count}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -2986,7 +2986,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.mouse_movement_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -3018,7 +3018,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.tab_switch_count}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -3050,7 +3050,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.copy_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Attempts</div>
+                          <div className="tf-meta">Attempts</div>
                         </div>
                       </div>
 
@@ -3082,7 +3082,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.paste_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Attempts</div>
+                          <div className="tf-meta">Attempts</div>
                         </div>
                       </div>
 
@@ -3114,7 +3114,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.camera_obstructed_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Detections</div>
+                          <div className="tf-meta">Detections</div>
                         </div>
                       </div>
 
@@ -3146,7 +3146,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.face_not_visible_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Detections</div>
+                          <div className="tf-meta">Detections</div>
                         </div>
                       </div>
 
@@ -3178,7 +3178,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.voice_violation_count}
                           </div>
-                          <div className="text-xs text-gray-500">Occurrences</div>
+                          <div className="tf-meta">Occurrences</div>
                         </div>
                       </div>
 
@@ -3210,7 +3210,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.multiple_faces_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Detections</div>
+                          <div className="tf-meta">Detections</div>
                         </div>
                       </div>
 
@@ -3242,7 +3242,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -3274,7 +3274,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.screen_capture_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Attempts</div>
+                          <div className="tf-meta">Attempts</div>
                         </div>
                       </div>
 
@@ -3284,11 +3284,11 @@ export default function CandidateResultDetails({
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3 bg-gray-200">
                             <AlertCircle className="w-6 h-6 text-gray-600" />
                           </div>
-                          <div className="text-sm text-gray-600 mb-1">Other</div>
+                          <div className="tf-card-desc mb-1">Other</div>
                           <div className="text-3xl font-bold text-gray-600">
                             {detailedResult.proctoring_stats.other_violation_count}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">events</div>
+                          <div className="tf-meta mt-1">events</div>
                         </div>
                       )} */}
 
@@ -3431,7 +3431,7 @@ export default function CandidateResultDetails({
                                   </div>
 
                                   {/* Timestamp — minute only */}
-                                  <span className="text-gray-600 text-xs font-mono">{timeStr}</span>
+                                  <span className="tf-meta-strong font-mono">{timeStr}</span>
 
                                   {/* Video Time — where this sits in the
                                       recording. Clickable only when we can
@@ -3479,12 +3479,12 @@ export default function CandidateResultDetails({
                           {/* Pagination footer */}
                           {eventsTotalPages > 1 && (
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-gray-100">
-                              <span className="text-xs text-gray-500">
+                              <span className="tf-meta">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
                               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-xs text-gray-600 whitespace-nowrap">Go to</span>
+                                  <span className="tf-meta-strong whitespace-nowrap">Go to</span>
                                   <input
                                     type="number"
                                     min={1}
@@ -3543,7 +3543,7 @@ export default function CandidateResultDetails({
                           <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-brand-orange-deep flex-shrink-0" />
                           <div className="min-w-0">
                             <h4 className="text-base sm:text-lg font-medium text-brand-orange-deep mb-1 tracking-tight">Violations Summary</h4>
-                            <p className="text-sm text-gray-700">
+                            <p className="tf-body">
                               {detailedResult.proctoring_stats.total_violations} violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's were' : ' was'} detected during this assessment.
                               Please review the candidate's responses and consider these violations when making your hiring decision.
                             </p>
@@ -3600,7 +3600,7 @@ function AssessmentViolationEvidence({ attemptId }: { attemptId: string | null |
   return (
     <div>
       <h4 className="text-base font-semibold text-gray-900 tracking-tight mb-1">Violation Evidence</h4>
-      <p className="text-xs text-gray-500 mb-3">One captured frame per flagged item. Click a thumbnail to enlarge.</p>
+      <p className="tf-meta mb-3">One captured frame per flagged item. Click a thumbnail to enlarge.</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {events.map(e => <AssessmentEvidenceCard key={e.id} event={e} />)}
       </div>
@@ -3627,7 +3627,7 @@ function AssessmentShareBarChecks({ attemptId }: { attemptId: string | null | un
   return (
     <div>
       <h4 className="text-base font-semibold text-gray-900 tracking-tight mb-1">Screen-share Verification</h4>
-      <p className="text-xs text-gray-500 mb-3">
+      <p className="tf-meta mb-3">
         Images from the check that the sharing bar was hidden before the assessment started. Click a thumbnail to enlarge.
       </p>
       <div className="space-y-4">

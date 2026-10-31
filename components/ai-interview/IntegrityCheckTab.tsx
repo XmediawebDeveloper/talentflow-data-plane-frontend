@@ -396,7 +396,7 @@ export default function IntegrityCheckTab({
           </div>
           <div className="min-w-0">
             <h2 className={`text-base font-semibold tracking-tight ${verdict.title}`}>{verdict.headline}</h2>
-            <p className="text-sm text-gray-600 mt-1 max-w-3xl">{verdict.body}</p>
+            <p className="tf-card-desc mt-1 max-w-3xl">{verdict.body}</p>
             {verdict.recommendation && (
               <span className={`inline-flex items-center gap-1.5 mt-3 text-xs font-semibold px-2.5 py-1 rounded-lg ${SEV_PILL[verdict.tone === 'clean' ? 'clean' : verdict.tone]}`}>
                 <ShieldAlert className="w-3.5 h-3.5" />
@@ -439,7 +439,7 @@ export default function IntegrityCheckTab({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 tracking-tight">{def.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{def.description}</p>
+                    <p className="tf-meta mt-0.5">{def.description}</p>
                   </div>
                   <div className="text-right flex-none">
                     <div className={`text-xl font-bold leading-none ${tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep' : tone === 'info' ? 'text-brand-blue' : 'text-slate-400'}`}>{count}</div>
@@ -464,7 +464,7 @@ export default function IntegrityCheckTab({
                 <div className="flex flex-wrap gap-2 px-4 pb-3.5 pl-16">
                   {cg.map(g => key === 'advisory' ? (
                     // No Advisory filter in the Event log, so nothing to jump to.
-                    <span key={g.key} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100">
+                    <span key={g.key} className="inline-flex items-center gap-2 tf-meta-strong px-2.5 py-1.5 rounded-lg bg-slate-50 ring-1 ring-gray-100">
                       <span className="font-semibold text-gray-800">{g.label}</span>
                       <span className="tabular-nums text-gray-500">{g.count}×</span>
                       <ConfidenceTag record={g.records[0]} />
@@ -530,7 +530,7 @@ export default function IntegrityCheckTab({
               <span>0:00</span>
               <span>{formatOffset(durationSec)} · end</span>
             </div>
-            <div className="flex flex-wrap gap-5 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+            <div className="flex flex-wrap gap-5 tf-meta mt-3 pt-3 border-t border-gray-100">
               <LegendDot tone="critical" label="Serious" />
               <LegendDot tone="warning" label="Moderate" />
               <LegendDot tone="info" label="Minor" />
@@ -584,12 +584,12 @@ export default function IntegrityCheckTab({
             {(logView === 'type' ? shownGroups.length > 0 : chronoRows.length > 0) && (
             <thead className="bg-white border-b border-gray-100">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-8"></th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">What happened</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">What we saw</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">When</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Severity</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600">{logView === 'type' ? 'Times' : ''}</th>
+                <th className="px-4 py-2.5 text-left tf-th w-8"></th>
+                <th className="px-4 py-2.5 text-left tf-th">What happened</th>
+                <th className="px-4 py-2.5 text-left tf-th">What we saw</th>
+                <th className="px-4 py-2.5 text-left tf-th">When</th>
+                <th className="px-4 py-2.5 text-left tf-th">Severity</th>
+                <th className="px-4 py-2.5 text-right tf-th">{logView === 'type' ? 'Times' : ''}</th>
               </tr>
             </thead>
             )}
@@ -623,7 +623,7 @@ export default function IntegrityCheckTab({
                           <Play className="w-3 h-3" />{formatOffset(off)}
                         </button>
                       ) : (
-                        <span className="text-xs font-mono text-gray-500">{formatOffset(off)}</span>
+                        <span className="tf-meta font-mono">{formatOffset(off)}</span>
                       )}
                       <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(r.timestamp)}</div>
                     </td>
@@ -672,7 +672,7 @@ export default function IntegrityCheckTab({
                             <Play className="w-3 h-3" />{formatOffset(firstOff)}
                           </button>
                         ) : (
-                          <span className="text-xs font-mono text-gray-500">{formatOffset(firstOff)}</span>
+                          <span className="tf-meta font-mono">{formatOffset(firstOff)}</span>
                         )}
                         <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(g.firstTs)}</div>
                       </td>
@@ -856,7 +856,7 @@ function VoiceEnrollmentSection({ interviewId }: { interviewId: string }) {
         What the candidate said before the interview. This voiceprint is compared with the voice heard during the interview.
       </p>
       {data.expired ? (
-        <p className="text-sm text-gray-500">
+        <p className="tf-body-muted">
           Audio can be played for {data.view_days} days after the interview.
           {data.view_until ? ` It expired on ${formatISTDate(data.view_until)}.` : ''}
         </p>

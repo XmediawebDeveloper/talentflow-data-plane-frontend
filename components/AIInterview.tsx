@@ -2949,10 +2949,10 @@ export default function AIInterview() {
               <Video className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
+              <h1 className="tf-page-title break-words">
                 AI Interview Management
               </h1>
-              <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 max-w-xl">
+              <p className="tf-body-muted mt-0.5 max-w-xl">
                 Run live AI-powered interviews where candidates answer in real time
               </p>
             </div>
@@ -3380,7 +3380,7 @@ export default function AIInterview() {
           {(isConfigListTab || activeTab === 'all-interviews' || dateOnlySort) && (() => {
             const sortControl = (
             <div className="flex items-center gap-2">
-              <label htmlFor="ai-interview-sort" className="text-sm text-gray-700 dark:text-slate-300 font-medium whitespace-nowrap">Sort by</label>
+              <label htmlFor="ai-interview-sort" className="tf-label whitespace-nowrap">Sort by</label>
               <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                 <Dropdown
                   id="ai-interview-sort"
@@ -3495,7 +3495,7 @@ export default function AIInterview() {
                   <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1.5 tracking-tight">
                     {searchQuery ? 'No matches found' : 'No AI interviews yet'}
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mb-6 max-w-sm mx-auto">
+                  <p className="tf-body-muted mb-6 max-w-sm mx-auto">
                     {searchQuery
                       ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
                       : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
@@ -3669,7 +3669,7 @@ export default function AIInterview() {
                               >
                                 <div className="flex items-center gap-1.5">
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
+                                  <span className="tf-cell-name">{value}</span>
                                 </div>
                                 <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                               </div>
@@ -3849,7 +3849,7 @@ export default function AIInterview() {
                                 const source = configsByJobVersionId.get(child.jd_id || '')
                                   ?.find((candidate) => candidate.id === child.id);
                                 if (!source) {
-                                  return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+                                  return <span className="tf-body-muted">&mdash;</span>;
                                 }
                                 const mode = modeFromConfig(source.special_instructions, source.duration_minutes);
                                 return (
@@ -3864,7 +3864,7 @@ export default function AIInterview() {
                                 const rounds = (source?.rounds_config || [])
                                   .filter((round) => round.enabled !== false);
                                 if (rounds.length === 0) {
-                                  return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+                                  return <span className="tf-body-muted">&mdash;</span>;
                                 }
                                 return (
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -3926,7 +3926,7 @@ export default function AIInterview() {
               ) : processingSessions.length === 0 ? (
                 <div className="text-center py-12">
                   <Play className="w-10 h-10 mx-auto mb-3 text-brand-blue/30" />
-                  <p className="text-gray-500 dark:text-slate-500 text-sm">No interviews currently in progress</p>
+                  <p className="tf-body-muted">No interviews currently in progress</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -3938,7 +3938,7 @@ export default function AIInterview() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-medium text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
-                          <div className="text-sm text-gray-500 dark:text-slate-500 truncate">{session.jd_title || session.position}</div>
+                          <div className="tf-body-muted truncate">{session.jd_title || session.position}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-sm pl-10 sm:pl-0">
@@ -4027,7 +4027,7 @@ export default function AIInterview() {
                         <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr>
                             {['Select', 'Candidate', 'Timeline', 'Status', 'Score', 'Invite Source', 'CID', 'JD ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
-                              <th key={c} className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                              <th key={c} className="px-4 py-3 tf-th"><Skeleton className="h-3 w-20" /></th>
                             ))}
                           </tr>
                         </thead>
@@ -4079,8 +4079,8 @@ export default function AIInterview() {
                   <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                     <Mail className="w-7 h-7 text-brand-blue" />
                   </div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">No invitations sent yet</h3>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 max-w-md mx-auto">
+                  <h3 className="tf-card-title mb-1">No invitations sent yet</h3>
+                  <p className="tf-body-muted max-w-md mx-auto">
                     Invite candidates to an AI interview and their status appears here.
                   </p>
                 </div>
@@ -4555,13 +4555,13 @@ export default function AIInterview() {
 
                       <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
                         <div className="flex items-center gap-2.5 sm:gap-3">
-                          <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                          <span className="tf-card-desc whitespace-nowrap">Completion rate</span>
                           <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
                             <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
                           </div>
-                          <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{completionRate}%</span>
+                          <span className="tf-cell-name tabular-nums">{completionRate}%</span>
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
+                        <span className="tf-meta whitespace-nowrap">
                           {completedCount.toLocaleString()} of {totalInvites.toLocaleString()} completed
                         </span>
                       </div>
@@ -4717,7 +4717,7 @@ export default function AIInterview() {
 
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
+                        <label className="block tf-body mb-2">
                           Default Interview Duration
                         </label>
                         <Dropdown
@@ -4734,7 +4734,7 @@ export default function AIInterview() {
                       </div>
 
                       <div>
-                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
+                        <label className="block tf-body mb-2">
                           AI Voice Language
                         </label>
                         <Dropdown
@@ -4754,7 +4754,7 @@ export default function AIInterview() {
                           onChange={(e) => setSettingsAutoRecord(e.target.checked)}
                           className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                         />
-                        <label htmlFor="auto-record" className="text-sm text-gray-700 dark:text-slate-300">
+                        <label htmlFor="auto-record" className="tf-body">
                           Automatically record all interviews
                         </label>
                       </div>
@@ -4767,7 +4767,7 @@ export default function AIInterview() {
                           onChange={(e) => setSettingsReminders(e.target.checked)}
                           className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                         />
-                        <label htmlFor="send-reminders" className="text-sm text-gray-700 dark:text-slate-300">
+                        <label htmlFor="send-reminders" className="tf-body">
                           Send reminder emails to candidates
                         </label>
                       </div>
@@ -4780,7 +4780,7 @@ export default function AIInterview() {
                           onChange={(e) => setSettingsSentiment(e.target.checked)}
                           className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                         />
-                        <label htmlFor="ai-analysis" className="text-sm text-gray-700 dark:text-slate-300">
+                        <label htmlFor="ai-analysis" className="tf-body">
                           Enable AI-powered sentiment analysis
                         </label>
                       </div>
@@ -4808,12 +4808,12 @@ export default function AIInterview() {
                         <div className="flex items-center justify-between mb-4">
                           <div>
                             <h3 className="text-gray-900 dark:text-slate-50 font-medium">Proctoring Settings</h3>
-                            <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-body-muted mt-1">
                               Configure security monitoring for AI interview sessions
                             </p>
                           </div>
                           <label className="flex items-center gap-3 cursor-pointer">
-                            <span className="text-sm text-gray-600 dark:text-slate-400">Master Toggle</span>
+                            <span className="tf-card-desc">Master Toggle</span>
                             <div className="relative">
                               <input
                                 type="checkbox"
@@ -4844,7 +4844,7 @@ export default function AIInterview() {
                                   <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                                   <div className="min-w-0">
                                     <div className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
-                                    <div className="text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
+                                    <div className="tf-meta hidden sm:block">{desc}</div>
                                   </div>
                                 </div>
                                 <input
@@ -4882,7 +4882,7 @@ export default function AIInterview() {
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Recording retention</label>
-                                <div className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300 bg-gray-50 dark:bg-slate-800">
+                                <div className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg tf-body bg-gray-50 dark:bg-slate-800">
                                   Viewable {proctoringSettings.view_days} days · Deleted after {proctoringSettings.retention_days} days
                                 </div>
                                 <p className="text-2xs text-gray-500 dark:text-slate-500 mt-1">Set by the platform; applies to all recordings.</p>
@@ -5056,7 +5056,7 @@ export default function AIInterview() {
                         <span className="sm:hidden">Invite Status</span>
                       </h2>
                       {/* JD ID, then the job title. */}
-                      <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                      <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
                         {viewInvitationsConfig.jd_short_id && (
                           <JobIdBadge className="flex-shrink-0">{viewInvitationsConfig.jd_short_id}</JobIdBadge>
                         )}
@@ -5305,14 +5305,14 @@ export default function AIInterview() {
                   Invite More and Close overflowed a 320px row. First/Last drop out
                   below sm — Prev/Next and the indicator are enough there. */}
               <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+                <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
                   {invitationResultsLabel}
                 </p>
                 <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                   {invitationTotalPages > 1 && (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                        <span className="tf-card-desc whitespace-nowrap">Go to</span>
                         <input
                           type="number"
                           min={1}
@@ -5333,7 +5333,7 @@ export default function AIInterview() {
                       <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
                         Prev
                       </button>
-                      <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                      <span className="px-1 sm:px-2 tf-card-desc whitespace-nowrap">
                         Page {invitationPage} of {invitationTotalPages}
                       </span>
                       <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>
@@ -5453,7 +5453,7 @@ export default function AIInterview() {
               disabled: bulkRunning,
             }]}
           >
-            <p className="text-sm text-gray-700 dark:text-slate-300">
+            <p className="tf-body">
               {n} {noun} will be {verb}.
               {kind === 'unarchive' && ' Each returns to Draft or Active, as it was before it was archived.'}
               {kind === 'delete' && ' This cannot be undone.'}
@@ -5624,13 +5624,13 @@ export default function AIInterview() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+              <h3 className="tf-section-title">Edit Invitation</h3>
               <Button variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} aria-label="Close" className="px-2">
                 <X className="w-5 h-5" />
               </Button>
             </div>
             <div className="px-5 sm:px-6 py-4 space-y-4">
-              <p className="text-sm text-gray-500 dark:text-slate-500">
+              <p className="tf-body-muted">
                 Update the candidate's details below. Saving will send them a fresh invitation link automatically.
               </p>
               <div>
@@ -5647,7 +5647,7 @@ export default function AIInterview() {
                   }`}
                 />
                 {editInviteNameError && (
-                  <p className="mt-1 text-xs text-destructive">{editInviteNameError}</p>
+                  <p className="mt-1 tf-error">{editInviteNameError}</p>
                 )}
               </div>
               <div>
@@ -5664,7 +5664,7 @@ export default function AIInterview() {
                   }`}
                 />
                 {editInviteEmailError && (
-                  <p className="mt-1 text-xs text-destructive">{editInviteEmailError}</p>
+                  <p className="mt-1 tf-error">{editInviteEmailError}</p>
                 )}
               </div>
             </div>
