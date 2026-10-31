@@ -20,6 +20,7 @@ import {
   matchesStatusFilter,
   collapseToLatestVersions,
   groupByLineage,
+  lineageKey,
   sortJobs,
   type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
@@ -312,6 +313,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const [sortBy, setSortBy] = useState<JobSortBy>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  /* Per-version ticks from the View Versions table, by version id: true =
+     ticked, false = unticked. A version with no entry follows its job row's
+     checkbox. */
+  const [versionPicks, setVersionPicks] = useState<Map<string, boolean>>(new Map());
   const [showBulkActions, setShowBulkActions] = useState(false);
   // Dropdown for the single Select All control (current page / all pages / clear).
   const [showSelectMenu, setShowSelectMenu] = useState(false);
@@ -586,27 +591,61 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   );
 
   // Bulk action handlers
-  /* The single Select All control offers both scopes through its dropdown:
+  /* The single Select All control offers these scopes through its dropdown:
      - current page: add the jobs visible on the active page (count tracks the
        Show: N per-page value);
      - all pages: select the whole filtered list across every page;
-     - clear: empty the selection. */
-  const selectCurrentPage = () =>
+     - all versions: every version of every listed job, not just the row's own;
+     - clear: empty the selection.
+     A job row's checkbox selects that row's own version only; other versions
+     are ticked in View Versions or through "Select all versions". */
+  const rowVersionsOf = (row: Job) =>
+    (allVersionGroups.get(lineageKey(row)) ?? [row]).filter(version =>
+      !deletedVersionIds?.has(version.id) &&
+      (statusFilter === 'all' || matchesStatusFilter(version, statusFilter))
+    );
+  /* Drop per-version ticks: the rows' own versions only, or every version of
+     those jobs. */
+  const resetVersionPicks = (rows: Job[], wholeJob = false) => {
+    const ids = wholeJob ? rows.flatMap(rowVersionsOf).map(version => version.id) : rows.map(row => row.id);
+    setVersionPicks(prev => {
+      const next = new Map(prev);
+      ids.forEach(id => next.delete(id));
+      return next;
+    });
+  };
+  const selectCurrentPage = () => {
+    resetVersionPicks(currentJobs);
     setSelectedJobs(prev => {
       const next = new Set(prev);
       currentJobs.forEach(job => next.add(job.id));
       return next;
     });
-  const deselectCurrentPage = () =>
+  };
+  const deselectCurrentPage = () => {
+    resetVersionPicks(currentJobs, true);
     setSelectedJobs(prev => {
       const next = new Set(prev);
       currentJobs.forEach(job => next.delete(job.id));
       return next;
     });
-  const selectAllPages = () => setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
-  const clearSelection = () => setSelectedJobs(new Set());
+  };
+  const selectAllPages = () => {
+    setVersionPicks(new Map());
+    setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+  };
+  const clearSelection = () => {
+    setVersionPicks(new Map());
+    setSelectedJobs(new Set());
+  };
+  const selectAllVersions = () => {
+    setVersionPicks(new Map(sortedJobs.flatMap(rowVersionsOf).map(version => [version.id, true])));
+    setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+  };
 
   const handleSelectJob = (jobId: string) => {
+    const row = sortedJobs.find(job => job.id === jobId);
+    if (row) resetVersionPicks([row]);
     const newSelected = new Set(selectedJobs);
     if (newSelected.has(jobId)) {
       newSelected.delete(jobId);
@@ -624,12 +663,24 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   if (selectionTab !== statusFilter) {
     setSelectionTab(statusFilter);
     setSelectedJobs(new Set());
+    setVersionPicks(new Map());
     setShowBulkActions(false);
   }
 
   /* The selected jobs on screen, and the ones each bulk action applies to —
      the same eligibility rules as each job's three-dot menu. */
-  const selectedVisibleJobs = sortedJobs.filter(job => selectedJobs.has(job.id));
+  /* A version is selected when ticked in View Versions (or by "Select all
+     versions"); with no tick of its own, the row's own version follows the
+     row checkbox. On a status tab only the versions with that tab's status. */
+  const allRowVersions = sortedJobs.flatMap(rowVersionsOf);
+  const selectedVisibleJobs = allRowVersions.filter(version =>
+    versionPicks.get(version.id) ?? selectedJobs.has(version.id)
+  );
+  const allVersionsSelected = allRowVersions.length > 0 && selectedVisibleJobs.length === allRowVersions.length;
+  const checkedVersionIds = new Set(selectedVisibleJobs.map(job => job.id));
+  const hasSelection = selectedJobs.size > 0 || selectedVisibleJobs.length > 0;
+  const toggleVersionChecked = (versionJob: Job) =>
+    setVersionPicks(prev => new Map(prev).set(versionJob.id, !checkedVersionIds.has(versionJob.id)));
   const bulkDisableJobs = selectedVisibleJobs.filter(job => job.status === 'Published');
   const bulkReenableJobs = selectedVisibleJobs.filter(job => job.status === 'Disabled');
   const bulkArchiveJobs = selectedVisibleJobs.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
@@ -642,7 +693,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     setBulkStatusBusy(true);
     try {
       await onBulkStatusChange(targets, action);
-      setSelectedJobs(new Set());
+      clearSelection();
     } finally {
       setBulkStatusBusy(false);
     }
@@ -751,7 +802,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     setBulkDeleting(true);
     try {
       await onBulkDelete(bulkDeleteTargets);
-      setSelectedJobs(new Set());
+      clearSelection();
     } finally {
       setBulkDeleting(false);
       setBulkDeleteOpen(false);
@@ -762,7 +813,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const handleBulkExport = () => setShowExportModal(true);
 
   const runBulkExport = async (format: ExportFileFormat) => {
-    const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
+    const selectedJobsData = selectedVisibleJobs;
     const rows = selectedJobsData.map(job => [
       (job as any).job_id || '',
       job.title,
@@ -1317,7 +1368,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               The row itself always renders (so the status tabs stay reachable even
               when a filter yields no rows); Select all and Sort render only when
               there are jobs to act on. */}
-          <div className="flex items-center gap-2 flex-wrap pt-3 border-t border-gray-200 mb-3">
+          <div className="flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
             {/* Select all + Bulk Actions — sits at the head of the row, where the
                 "Show:" label used to be. */}
             {sortedJobs.length > 0 && (
@@ -1330,16 +1381,16 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     onClick={() => setShowSelectMenu((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={showSelectMenu}
-                    className={`${tabPill(selectedJobs.size > 0)} h-9`}
+                    className={`${tabPill(hasSelection)} h-9`}
                   >
                     {allPagesSelected ? (
                       <CheckSquare className="w-3.5 h-3.5" />
-                    ) : selectedJobs.size > 0 ? (
+                    ) : hasSelection ? (
                       <span className="h-2 w-2 rounded-full bg-current" />
                     ) : (
                       <Square className="w-3.5 h-3.5" />
                     )}
-                    <span>{selectedJobs.size > 0 ? `${selectedJobs.size} Selected` : 'Select All'}</span>
+                    <span>{hasSelection ? `${selectedVisibleJobs.length} Selected` : 'Select All'}</span>
                     <ChevronDown className="w-4 h-4" />
                   </button>
 
@@ -1387,10 +1438,28 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           )}
                           Select all jobs ({sortedJobs.length})
                         </button>
+                        <button
+                          type="button"
+                          role="menuitemcheckbox"
+                          aria-checked={allVersionsSelected}
+                          onClick={() => {
+                            if (allVersionsSelected) clearSelection();
+                            else selectAllVersions();
+                            setShowSelectMenu(false);
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
+                        >
+                          {allVersionsSelected ? (
+                            <CheckSquare className="w-4 h-4 text-brand-blue" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-500" />
+                          )}
+                          Select all versions ({allRowVersions.length})
+                        </button>
                         <div className="border-t border-gray-200 my-1" />
                         <button
                           onClick={() => { clearSelection(); setShowSelectMenu(false); }}
-                          disabled={selectedJobs.size === 0}
+                          disabled={!hasSelection}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <X className="w-4 h-4 text-gray-500" />
@@ -1407,23 +1476,23 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 button (not inline beside it), matching the Resume Scoring toolbar.
                 `basis-full order-last` drops this group onto its own line at the
                 bottom of the wrap-row. */}
-            {sortedJobs.length > 0 && selectedJobs.size > 0 && (
+            {sortedJobs.length > 0 && hasSelection && (
               <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
 
                 {/* Actions Dropdown — shown whenever at least one job is selected. */}
-                {selectedJobs.size > 0 && (
+                {hasSelection && (
                   <div className="relative" ref={bulkActionsRef}>
                     <button
                       type="button"
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      aria-label={`Actions for ${selectedJobs.size} selected`}
+                      aria-label={`Actions for ${selectedVisibleJobs.length} selected`}
                       className={`relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 shadow-sm animate-in fade-in zoom-in-95 duration-300 ${showBulkActions ? 'bg-gray-200' : ''}`}
                     >
                       <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
                         <span className="absolute inline-flex h-full w-full rounded-full bg-brand-orange opacity-75 animate-ping [animation-iteration-count:4]" />
                         <span className="relative inline-flex h-3 w-3 rounded-full bg-brand-orange ring-2 ring-white" />
                       </span>
-                      Actions ({selectedJobs.size})
+                      Actions ({selectedVisibleJobs.length})
                       <ChevronDown className="w-4 h-4" />
                     </button>
 
@@ -1519,7 +1588,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
                 {/* Clear — a standalone button beside Actions, matching the
                     Resume Scoring selection toolbar. */}
-                {selectedJobs.size > 0 && (
+                {hasSelection && (
                   <button
                     type="button"
                     onClick={clearSelection}
@@ -1551,7 +1620,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 Phones: the toggle takes the full row, each option sized to its
                 label + count plus an even share of the rest (Manual is widest),
                 no icons, tighter badge gap. From sm: the inline toggle as before. */}
-            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
+            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
               <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
@@ -2053,6 +2122,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           versionDetails={versionLineage.versionDetails}
                           versionApplicants={versionLineage.versionApplicants}
                           statusOverrides={versionStatusOverrides}
+                          checkedVersionIds={checkedVersionIds}
+                          onToggleVersionChecked={toggleVersionChecked}
                           onRowClick={(versionId) => {
                             // A Draft version opens in the JD editor — blocked without Edit permission.
                             const clicked = versionLineage.lineages[versionKey]?.find((v) => v.id === versionId);
@@ -2437,7 +2508,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         open={showExportModal}
         onClose={() => setShowExportModal(false)}
         title="Export Job Openings"
-        recordCount={selectedJobs.size}
+        recordCount={selectedVisibleJobs.length}
         selected
         columns={JOBS_EXPORT_HEADERS}
         onExport={runBulkExport}
