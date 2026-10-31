@@ -13,7 +13,8 @@ import {
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { jdActionLockReason } from '@/lib/services/aiInterviewService';
+import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import {
   KIND_LABEL,
   MAX_VERSIONS,
@@ -82,6 +83,13 @@ export function VersionTitle({ version: v, spansJobVersions = false, compact = f
       <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.name}</span>
       {spansJobVersions && v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} label="Job" /> : null}
       <VersionPill kind="assessment" version={v.version} />
+      {/* An AI interview's linked job version Disabled / Archived / Draft —
+          the AI Interview list's badge. (Assessments carry theirs in the
+          popup header.) */}
+      {(() => {
+        const jdKind = v.kind === 'interview' ? jobStatusBadgeKind(v.config?.jd_status) : null;
+        return jdKind ? <JobStatusBadge kind={jdKind} title={jdActionLockReason(v.config?.jd_status) ?? undefined} /> : null;
+      })()}
     </>
   );
 }
@@ -223,8 +231,8 @@ export default function VersionList({
               ? undefined
               : v.revoked
                 ? 'Invites for this version have been revoked. Create a new version to start fresh.'
-                : v.kind === 'interview' && isJdDisabled(v.config?.jd_status)
-                  ? JD_DISABLED_ACTION_MESSAGE
+                : v.kind === 'interview' && jdActionLockReason(v.config?.jd_status)
+                  ? jdActionLockReason(v.config?.jd_status)!
                 : v.status === 'draft' ? 'Publish this version to send it' : `${v.statusLabel} versions cannot be sent`;
             const pick = () => { if (v.sendable) onSelect(selected ? null : v.id); };
             const actions = versionActions(v, poolFor(v), perms).filter((a) => !(hideDuplicate && a.action === 'duplicate'));

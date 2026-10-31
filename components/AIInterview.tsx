@@ -92,6 +92,7 @@ import AllInterviewsTable, { VersionPill, AIInterviewJobStatusBadge, type BulkAc
 import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
 /* The version panel's 3-dot menu trigger — the 32px bordered square matched to
@@ -765,6 +766,17 @@ export default function AIInterview() {
       }
     }
   }, [loadAllConfigs, loadArchivedConfigs, remembered]);
+
+  /* The job badge reads each config's `jd_status`, which only arrives with the
+     config list — so a job disabled / archived / re-enabled anywhere (this
+     tab, another tab, focus back on the window, or every 30s for another
+     user's change) quietly re-reads the list. The All Interviews table owns
+     its rows and keeps them live itself. */
+  useJobStatusRefresh(() => {
+    if (!hasLoadedRef.current) return;
+    loadData();
+    loadArchivedConfigs();
+  }, { pollMs: 30_000 });
 
   const loadSettings = useCallback(async () => {
     try {

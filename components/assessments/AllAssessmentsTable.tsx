@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, ASSESSMENT_JOB_DISABLED_MESSAGE, ASSESSMENT_JOB_ARCHIVED_MESSAGE } from '@/lib/utils/assessmentJobLock';
 import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import {
   DropdownMenu,
@@ -458,6 +459,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
+  /* Keep those statuses live — a job disabled / archived / re-enabled
+     anywhere re-reads every row's job at once (see useJobStatusRefresh). */
+  useJobStatusRefresh(() => {
+    const ids = Array.from(new Set(rows.map((r) => r.jdId).filter((id): id is string => !!id)));
+    if (ids.length === 0) return;
+    loadJobVersionLineages(ids, { fresh: true })
+      .then((lineages) => {
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+        setJobLineageById((prev) => ({ ...prev, ...lineages }));
+      })
+      .catch(() => { /* keep what is shown; the next trigger tries again */ });
+  });
   /** The row's job badge: its linked job version's status, judged on the whole
    *  job. Nothing until that status has loaded. */
   const jobBadge = (row: AssessmentRow) => {
