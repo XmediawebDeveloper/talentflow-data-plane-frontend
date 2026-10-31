@@ -4265,10 +4265,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  /* Unarchive — the All Assessments table's and the details page's, as is: no
-     dedicated endpoint, a status write back to `published`, gated on the
-     Archive permission, same toast. Archived rows get this instead of
-     Activate. */
+  /* Unarchive — the All Assessments table's and the details page's, as is:
+     the dedicated /{id}/unarchive endpoint, which restores the status the
+     assessment held right before it was archived, gated on the Archive
+     permission, same toast. Archived rows get this instead of Activate. */
   const handleUnarchiveAssessment = async (assessmentId: string) => {
     if (!canDeleteAssessment) {
       toast.error('You do not have permission to unarchive assessments');
@@ -4281,7 +4281,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     try {
-      const updated = await assessmentService.update(assessmentId, { status: 'published' });
+      const updated = await assessmentService.unarchive(assessmentId);
       toast.success('Assessment restored to Active');
       setOpenMenuId(null);
       await syncAssessmentAfterStatusChange(assessmentId, updated);
@@ -4308,7 +4308,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     })) return;
 
     try {
-      const updated = await assessmentService.update(assessmentId, { status: 'archived' as any });
+      const updated = await assessmentService.archive(assessmentId);
       setOpenMenuId(null);
       await syncAssessmentAfterStatusChange(assessmentId, updated);
     } catch (error) {
@@ -5555,19 +5555,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             const invitationsSent =
               assessment.invitations_count ?? assessment.candidates ?? 0;
             const hasBeenShared = invitationsSent > 0;
-            const reason = hasBeenShared
+            /* Gated on the JOB's completed candidates (`getJobCompletedCandidates`,
+               the same figure the row's own Completed tile shows), not on
+               invitations: a job can be fully shared with nobody having
+               finished it yet, in which case the results page is still empty. */
+            const completedCount = getJobCompletedCandidates(assessment);
+            const hasCompleted = (completedCount ?? 0) > 0;
+            const reason = hasCompleted
               ? 'View results'
-              : assessment.status === 'Draft'
-                ? 'Publish the assessment to view results'
-                : 'Share the assessment to view results';
+              : hasBeenShared
+                ? 'No candidates have completed this assessment yet'
+                : assessment.status === 'Draft'
+                  ? 'Publish the assessment to view results'
+                  : 'Share the assessment to view results';
             return (
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={!hasBeenShared}
+                disabled={!hasCompleted}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!hasBeenShared) return;
+                  if (!hasCompleted) return;
                   /* The JOB's results: every job version of it and every
                      assessment revision within them, combined. BOTH scopes are
                      named explicitly rather than left to the results page's
@@ -5579,7 +5587,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   openJobResults(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all&view=total`);
                 }}
                 /* Same rule, with the version panel's Result colour. */
-                icon={<BarChart className={`w-3.5 h-3.5${hasBeenShared ? ' text-menu-icon-score' : ''}`} />}
+                icon={<BarChart className={`w-3.5 h-3.5${hasCompleted ? ' text-menu-icon-score' : ''}`} />}
                 aria-label={reason}
                 title={reason}
               >
@@ -6460,8 +6468,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const trackReason = hasBeenShared
       ? `Track invitation status (${invitationsSent})`
       : 'Share the assessment to track invitations';
-    const resultReason = hasBeenShared
+    /* View Results is gated on the COMPLETED count, not invitations: an
+       assessment can be shared with candidates who haven't finished it yet,
+       in which case there's still nothing to show on the results page. */
+    const hasCompleted = (assessment.completed_count ?? 0) > 0;
+    const resultReason = hasCompleted
       ? 'View results'
+      : hasBeenShared
+      ? 'No candidates have completed this assessment yet'
       : assessment.status === 'Draft'
       ? 'Publish the assessment to view results'
       : 'Share the assessment to view results';
@@ -6570,12 +6584,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <span className={MENU_ITEM_SCALE_CLASS}>Track</span>
         </button>
 
-        {/* View Results — also gated on having been shared: with no invitation
-            sent there is no attempt to score, so the results page would open
-            empty. */}
+        {/* View Results — gated on the completed count: with nobody finished
+            yet (whether or not anyone has been invited) the results page
+            would open empty. */}
         <button
           onClick={() => {
-            if (!hasBeenShared || assessment.status === 'Draft') return;
+            if (!hasCompleted || assessment.status === 'Draft') return;
             setOpenMenuId(null);
             /* Opened on the row's own coordinates: the JOB VERSION it sits
                under (the JD row the assessment points at) AND the ASSESSMENT
@@ -6586,11 +6600,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             const versionScope = typeof assessment.version === 'number' ? assessment.version : 'all';
             openJobResults(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}&view=total`);
           }}
-          disabled={!hasBeenShared}
+          disabled={!hasCompleted}
           title={resultReason}
-          className={itemClass(!hasBeenShared)}
+          className={itemClass(!hasCompleted)}
         >
-          <BarChart className={iconClass(!hasBeenShared, 'text-menu-icon-score')} />
+          <BarChart className={iconClass(!hasCompleted, 'text-menu-icon-score')} />
           <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
         </button>
       </>
@@ -9600,7 +9614,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <div className="flex items-start gap-1.5 sm:gap-2 p-2 sm:p-3 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
                             <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                             <p className="text-xs text-gray-700 dark:text-slate-300">
-                              <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings stored for {proctoringSettings.recording_retention_days} days.
+                              <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings viewable for {proctoringSettings.recording_view_days ?? 7} days and deleted after {proctoringSettings.recording_retention_days} days.
                             </p>
                           </div>
                         )}
@@ -9715,16 +9729,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1.5">Recording Retention (Days)</label>
-                          <input
-                            type="number"
-                            value={proctoringSettings.recording_retention_days}
-                            onChange={(e) => updateProctoringSettings({ recording_retention_days: parseInt(e.target.value) || 90 })}
-                            disabled={savingProctoringKeys.has('recording_retention_days') || !proctoringSettings.proctoring_enabled}
-                            className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
-                            min="7"
-                            max="365"
-                          />
+                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1.5">Recording Retention</label>
+                          {/* Platform policy from the backend .env; not editable per tenant. */}
+                          <div className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300">
+                            Viewable {proctoringSettings.recording_view_days ?? 7} days · Deleted after {proctoringSettings.recording_retention_days} days
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -555,7 +555,8 @@ export default function AIInterview() {
     max_violations: 5,
     violation_low_threshold: 3,
     violation_medium_threshold: 8,
-    retention_days: 90,
+    retention_days: 30,
+    view_days: 7,
   });
   const [proctoringLoading, setProctoringLoading] = useState(false);
 
@@ -1231,7 +1232,9 @@ export default function AIInterview() {
         max_violations: settings.max_violations_before_flag ?? 5,
         violation_low_threshold: settings.violation_low_threshold ?? 3,
         violation_medium_threshold: settings.violation_medium_threshold ?? 8,
-        retention_days: settings.recording_retention_days ?? 90,
+        // Platform policy from the backend .env (read-only here).
+        retention_days: settings.recording_retention_days ?? 30,
+        view_days: settings.recording_view_days ?? 7,
       });
     } catch (error) {
       console.error('Failed to load proctoring settings:', error);
@@ -1779,7 +1782,6 @@ export default function AIInterview() {
         max_violations_before_flag: proctoringSettings.max_violations,
         violation_low_threshold: proctoringSettings.violation_low_threshold,
         violation_medium_threshold: proctoringSettings.violation_medium_threshold,
-        recording_retention_days: proctoringSettings.retention_days,
       });
       toast.success('Proctoring settings saved!');
     } catch (error) {
@@ -2411,11 +2413,20 @@ export default function AIInterview() {
    * top of the panel is one of these same interviews, and a shared key would
    * open both dropdowns at once.
    */
-  const renderInterviewVersionActions = (config: AIInterviewResponse) => {
+  const renderInterviewVersionActions = (config: AIInterviewResponse, completedOverride?: number) => {
     const normalizedStatus = normalizeConfigStatus(config.status);
     const isPublished = normalizedStatus === 'published';
     const invitations = config.invitations_count ?? 0;
     const hasBeenShared = invitations > 0;
+    /* View Results is gated on the COMPLETED count, not invitations: an
+       interview can be shared with candidates who haven't finished it yet, in
+       which case there's still nothing to show on the results page.
+       `completedOverride` is the flat list's own per-row count (fetched
+       separately — see AllInterviewsTable's `getInvitationCounts`);
+       `completedCounts[config.id]` is the version panel's lazy count; either
+       falls back to `config.completed_count` when set. */
+    const completedCount = completedOverride ?? completedCounts[config.id] ?? config.completed_count ?? 0;
+    const hasCompletedSessions = completedCount > 0;
     const menuKey = `version:${config.id}`;
     // Disabled or Archived job: the view items stay, every action is listed but inert.
     const jdLockReason = jdActionLockReason(config.jd_status) ?? '';
@@ -2557,18 +2568,20 @@ export default function AIInterview() {
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
               <button
-                onClick={() => { if (!hasBeenShared) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
-                disabled={!hasBeenShared}
+                onClick={() => { if (!hasCompletedSessions) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
+                disabled={!hasCompletedSessions}
                 title={
-                  hasBeenShared
+                  hasCompletedSessions
                     ? 'View interview results'
-                    : isPublished
-                      ? 'Share the interview to view results'
-                      : 'Publish the interview to view results'
+                    : hasBeenShared
+                      ? 'No candidates have completed this interview yet'
+                      : isPublished
+                        ? 'Share the interview to view results'
+                        : 'Publish the interview to view results'
                 }
-                className={hasBeenShared ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
+                className={hasCompletedSessions ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
               >
-                <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
+                <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasCompletedSessions ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
               {/* Duplicate — creates the next version. Disabled (reason in the
@@ -3562,11 +3575,19 @@ export default function AIInterview() {
                     /* Result, like Track, covers every interview of the job, so
                        it opens once any of them has been shared. */
                     const hasBeenShared = jobInvitations > 0 || (config.invitations_count ?? 0) > 0;
-                    const resultReason = hasBeenShared
+                    /* Gated on the job's COMPLETED count (`totals.completed`,
+                       the same figure the Completed tile above shows), not on
+                       invitations: a job can be fully shared with nobody
+                       having finished an interview yet, in which case the
+                       results page is still empty. */
+                    const hasCompleted = totals.completedKnown && totals.completed > 0;
+                    const resultReason = hasCompleted
                       ? 'View results'
-                      : normalizedStatus === 'draft'
-                        ? 'Publish the interview to view results'
-                        : 'Share the interview to view results';
+                      : hasBeenShared
+                        ? 'No candidates have completed an interview for this job yet'
+                        : normalizedStatus === 'draft'
+                          ? 'Publish the interview to view results'
+                          : 'Share the interview to view results';
 
                     return (
                       <div
@@ -3709,15 +3730,15 @@ export default function AIInterview() {
 
                             <button
                               type="button"
-                              disabled={!hasBeenShared}
+                              disabled={!hasCompleted}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (!hasBeenShared) return;
+                                if (!hasCompleted) return;
                                 // Every interview version of this job, as Track lists them.
                                 router.push(`/recruitment/ai-interviews/${config.id}/results?scope=job`);
                               }}
                               className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                                hasBeenShared
+                                hasCompleted
                                   ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
                                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
                               }`}
@@ -4848,15 +4869,11 @@ export default function AIInterview() {
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Retention (days)</label>
-                                <input
-                                  type="number"
-                                  value={proctoringSettings.retention_days}
-                                  onChange={(e) => setProctoringSettings(prev => ({ ...prev, retention_days: parseInt(e.target.value) || 90 }))}
-                                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                                  min={7}
-                                  max={365}
-                                />
+                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Recording retention</label>
+                                <div className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300 bg-gray-50 dark:bg-slate-800">
+                                  Viewable {proctoringSettings.view_days} days · Deleted after {proctoringSettings.retention_days} days
+                                </div>
+                                <p className="text-2xs text-gray-500 dark:text-slate-500 mt-1">Set by the platform; applies to all recordings.</p>
                               </div>
                             </div>
 

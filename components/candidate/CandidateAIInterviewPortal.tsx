@@ -4064,6 +4064,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           interviewMode={interview.interview_mode}
           totalQuestions={interview.total_questions}
           environmentVerificationEnabled={Boolean((interview as { environment_verification_enabled?: boolean }).environment_verification_enabled)}
+          recordingStorageDays={(interview as { recording_storage_days?: number }).recording_storage_days}
         />
       </PreInterviewLayout>
     );

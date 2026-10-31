@@ -340,6 +340,11 @@ export interface AIInterviewResponse {
   identity_photo_path?: string;
   screen_recording_file_path?: string;
   screen_recording_url?: string;
+  /** Recruiter viewing window (RECORDING_VIEW_DAYS in backend .env). Once
+   *  expired the backend blanks the recording paths/URLs. */
+  recording_view_days?: number | null;
+  recording_view_until?: string | null;
+  recording_view_expired?: boolean;
   invitation_sent: boolean;
   /** Last invite send (resend included); null on rows created before the column. */
   invitation_sent_at?: string | null;
