@@ -509,9 +509,9 @@ export async function runVersionAction(v: InviteVersion, action: 'publish' | 'pa
   if (v.kind === 'assessment') {
     if (action === 'publish') await assessmentService.publish(v.id);
     else if (action === 'pause') await assessmentService.update(v.id, { status: 'closed' as never });
-    else if (action === 'archive') await assessmentService.update(v.id, { status: 'archived' as never });
-    // The Assessments page's Unarchive: straight back to published.
-    else if (action === 'unarchive') await assessmentService.update(v.id, { status: 'published' });
+    else if (action === 'archive') await assessmentService.archive(v.id);
+    // The Assessments page's Unarchive: restores the status it held before archiving.
+    else if (action === 'unarchive') await assessmentService.unarchive(v.id);
     return;
   }
   if (action === 'publish') await aiInterviewService.publishConfig(v.id);

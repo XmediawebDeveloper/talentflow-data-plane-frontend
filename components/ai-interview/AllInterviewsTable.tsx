@@ -335,7 +335,7 @@ export interface AllInterviewsTableProps {
    * same actions (Share, Track, View Results, Archive, Delete …) wired to the
    * same handlers. Omitted, the table falls back to its own View / Edit menu.
    */
-  renderRowActions?: (config: AIInterviewResponse) => React.ReactNode;
+  renderRowActions?: (config: AIInterviewResponse, completed?: number) => React.ReactNode;
   /** List (the table) or Card (a grid of cards) — owned by the host so every
    *  AI Interview tab shares one choice. */
   displayMode?: ListDisplayMode;
@@ -965,7 +965,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   /* The Actions control for one row — the host's menu when given, else this
      table's own View / Edit menu. Shared by the table row and the card. */
   const actionsCell = (row: InterviewRow) => renderRowActions ? (
-  renderRowActions(row.config)
+  renderRowActions(row.config, row.completed)
 ) : (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

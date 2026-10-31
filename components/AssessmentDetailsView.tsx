@@ -176,6 +176,22 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
   );
 }
 
+/* A tab's page heading — icon-tile + title, the same shape the AI Interview
+   Details page's View JD tab opens with (`TabHeading` in
+   AIInterviewDetailsView.tsx), so the two View JD tabs read as one screen. */
+function TabHeading({ icon: Icon, title }: { icon: (props: { className?: string }) => JSX.Element; title: string }) {
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+          <Icon className="w-4 h-4 text-brand-blue" />
+        </div>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
+      </div>
+    </div>
+  );
+}
+
 interface Section {
   name: string;
   type: 'hr' | 'technical' | 'coding';
@@ -334,15 +350,16 @@ export default function AssessmentDetailsView({
   const canUnarchiveAssessments = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const isArchivedAssessment = assessment.status === 'Archived';
   const [isUnarchiving, setIsUnarchiving] = useState(false);
-  /* The All Assessments table's Unarchive, as is: no dedicated endpoint, a
-     status write back to `published` on this assessment's id, same toast. The
-     route refetches, so the header and every tab redraw off the record the API
-     now returns rather than a local patch. */
+  /* The All Assessments table's Unarchive, as is: the dedicated
+     /{id}/unarchive endpoint, which restores the status the assessment held
+     right before it was archived. The route refetches, so the header and
+     every tab redraw off the record the API now returns rather than a local
+     patch. */
   const [isArchiving, setIsArchiving] = useState(false);
   /* The All Assessments table's / Assessments page's Archive, as is: same
-     confirm, same status write to `archived`, same permission and toast, then
-     the route refetches - so the header swaps to Unarchive off the record the
-     API returns. */
+     confirm, same dedicated /{id}/archive call, same permission and toast,
+     then the route refetches - so the header swaps to Unarchive off the
+     record the API returns. */
   const handleArchive = async () => {
     if (!canUnarchiveAssessments) {
       toast.error('You do not have permission to archive assessments');
@@ -356,7 +373,7 @@ export default function AssessmentDetailsView({
     })) return;
     setIsArchiving(true);
     try {
-      await assessmentService.update(assessment.id, { status: 'archived' });
+      await assessmentService.archive(assessment.id);
       toast.success('Assessment archived');
       await onRefresh?.();
     } catch (err) {
@@ -373,7 +390,7 @@ export default function AssessmentDetailsView({
     }
     setIsUnarchiving(true);
     try {
-      await assessmentService.update(assessment.id, { status: 'published' });
+      await assessmentService.unarchive(assessment.id);
       toast.success('Assessment restored to Active');
       await onRefresh?.();
     } catch (err) {
@@ -381,6 +398,34 @@ export default function AssessmentDetailsView({
       toast.error(`Couldn't unarchive assessment. ${friendlyErrorMessage(err, 'Please try again.')}`);
     } finally {
       setIsUnarchiving(false);
+    }
+  };
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  /* Duplicate — the AI Interview Details header's own action, mirrored here:
+     assessmentService.clone() (already used by the Assessments list's row
+     menu) mints a new Draft version of this assessment and leaves the
+     original untouched. The recruiter lands on that new draft's own details
+     page — same pattern `handleJobVersionSelect`/version-switching already
+     uses to move between assessment records on this route. */
+  const handleDuplicate = async () => {
+    if (!canCreateAssessments) {
+      toast.error('You do not have permission to duplicate assessments');
+      return;
+    }
+    setIsDuplicating(true);
+    try {
+      const response = await assessmentService.clone(assessment.id);
+      toast.success(`Assessment duplicated: "${response.cloned_title}"`);
+      router.push(`/recruitment/assessments/${response.cloned_id}${originQuery}`, { scroll: false });
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail?.message ||
+        err?.response?.data?.message ||
+        (typeof err?.response?.data?.detail === 'string' ? err.response.data.detail : null) ||
+        friendlyErrorMessage(err, 'Failed to duplicate assessment. Please try again.');
+      toast.error(msg);
+    } finally {
+      setIsDuplicating(false);
     }
   };
   /* Read the same way the results ROUTE reads them, so a recruiter who can
@@ -1649,6 +1694,7 @@ export default function AssessmentDetailsView({
                   { key: 'duration', icon: Clock, label: formattedDuration },
                   { key: 'created-at', icon: Calendar, label: assessment.created_at ? `Created ${formatIST(assessment.created_at)}` : null },
                   { key: 'created-by', icon: User, label: assessment.created_by_name ? `By ${assessment.created_by_name}` : null },
+                  { key: 'updated-at', icon: Calendar, label: assessment.updated_at ? `Last Updated ${formatIST(assessment.updated_at)}` : null },
                 ] as { key: string; icon: typeof Clock; label: string | null | undefined }[])
                   .filter((fact) => !!fact.label)
                   .map((fact, i) => (
@@ -2094,6 +2140,26 @@ export default function AssessmentDetailsView({
                   className={`h-8 w-8 px-0 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />}
+                </Button>
+              )}
+              {/* Duplicate, icon-only — the AI Interview Details header's own
+                  action (there a labelled button; here the icon-only shape
+                  every other action on this header already uses). Active only:
+                  a draft has nothing published yet to duplicate, and an
+                  archived record is restored, not duplicated. */}
+              {assessment.status === 'Active' && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={canCreateAssessments ? handleDuplicate : undefined}
+                  disabled={isDuplicating}
+                  aria-disabled={!canCreateAssessments}
+                  aria-label="Duplicate assessment"
+                  title={canCreateAssessments ? 'Duplicate as a new version' : 'You do not have permission to duplicate assessments'}
+                  className={`h-8 w-8 px-0 flex-shrink-0 ${canCreateAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
+                >
+                  {isDuplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 text-menu-icon-download" />}
                 </Button>
               )}
               {onEdit && !isArchivedAssessment && (() => {
@@ -3647,6 +3713,7 @@ export default function AssessmentDetailsView({
           describes the version the page header names and nothing else. */}
       {activeTab === 'viewjd' && (
         <div className="space-y-4 sm:space-y-5">
+          <TabHeading icon={Briefcase} title="View JD" />
           {/* "No linked job description" is a property of the ASSESSMENT — it
               has no job behind it — so it is asked first, off `jd_id`. Asking
               it off `jdData` instead meant the empty state also covered the

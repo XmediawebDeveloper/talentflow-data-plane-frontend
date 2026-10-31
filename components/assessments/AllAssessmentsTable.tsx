@@ -912,12 +912,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       version: row.assessmentVersion,
       createdAt: row.createdAt,
     })) return;
-    void runStatusAction(row, 'archive', () => assessmentService.update(row.id, { status: 'archived' }), 'Assessment archived');
+    void runStatusAction(row, 'archive', () => assessmentService.archive(row.id), 'Assessment archived');
   };
 
-  /* No dedicated unarchive endpoint exists for assessments: Archive is a
-     status write through PUT /assessments/{id}, so Unarchive is the same
-     write back to `published` — the Active status Archive is offered from. */
+  /* The dedicated /{id}/unarchive endpoint — restores the status the
+     assessment held right before it was archived, rather than hardcoding one. */
   const unarchiveRow = async (row: AssessmentRow) => {
     if (!canDeleteAssessment) return;
     const jobLock = await checkAssessmentJobLock(row.jdId);
@@ -925,7 +924,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       toast.error(jobLock);
       return;
     }
-    void runStatusAction(row, 'unarchive', () => assessmentService.update(row.id, { status: 'published' }), 'Assessment restored to Active');
+    void runStatusAction(row, 'unarchive', () => assessmentService.unarchive(row.id), 'Assessment restored to Active');
   };
 
   /* The page's own delete rules: drafts only (the endpoint's), and never once
@@ -995,8 +994,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     const verb = bulkVerb;
     const { eligible, skippedCount } = bulkPlan(verb);
     const call = (row: AssessmentRow) =>
-      verb === 'archive' ? assessmentService.update(row.id, { status: 'archived' })
-        : verb === 'unarchive' ? assessmentService.update(row.id, { status: 'published' })
+      verb === 'archive' ? assessmentService.archive(row.id)
+        : verb === 'unarchive' ? assessmentService.unarchive(row.id)
           : assessmentService.delete(row.id);
     setBulkRunning(true);
     let done = 0;
@@ -1207,6 +1206,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       key: 'results', label: 'View Results', icon: BarChart, iconClassName: 'text-menu-icon-score',
       run: () => router.push(`/recruitment/assessments/${row.id}/results`),
     };
+    /* View Results is gated on the COMPLETED count, not invitations: with
+       nobody invited there's nothing to score either, so that case is folded
+       into the same disabled state with its own reason. */
+    const hasCompleted = row.completed > 0;
+    const resultsReason = hasCompleted
+      ? 'View results'
+      : row.invitations > 0
+        ? 'No candidates have completed this assessment yet'
+        : row.rawStatus === 'draft'
+          ? 'Publish the assessment to view results'
+          : 'Share the assessment to view results';
+    const gatedResults: RowAction = { ...results, disabled: !hasCompleted, title: resultsReason };
 
     /* With the host's extras (every tab on the Assessments page), the Total
        Jobs menu for the row's status, in its order: View, Edit, Share/Invite,
@@ -1214,14 +1225,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
        Unarchive, then Delete. Without them, the menu as it was, below. */
     const extra = extraRowActions?.(row.raw);
     if (extra) {
-      const shared = row.invitations > 0;
-      const gatedResults: RowAction = {
-        ...results,
-        disabled: !shared,
-        title: shared ? 'View results'
-          : row.rawStatus === 'draft' ? 'Publish the assessment to view results'
-          : 'Share the assessment to view results',
-      };
       const archive: RowAction = {
         key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
         disabled: !canDeleteAssessment || !!jobLock,
@@ -1272,7 +1275,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             : jobLock ?? undefined,
           run: () => void archiveRow(row),
         };
-        actions.push(archive, view, results);
+        actions.push(archive, view, gatedResults);
         break;
       }
       case 'draft':
@@ -1306,13 +1309,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             run: () => void unarchiveRow(row),
           },
           view,
+          gatedResults,
         );
-        if (row.completed > 0) actions.push(results);
         break;
       default:
         // Completed (`closed`): nothing to change, only to read.
-        actions.push(view);
-        if (row.completed > 0) actions.push(results);
+        actions.push(view, gatedResults);
     }
     /* All tab: Edit on every row, following Track — the invitations sent
        (`invitations_count`) are what enable Track, so while none have gone
