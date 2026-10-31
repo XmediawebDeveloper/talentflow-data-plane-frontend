@@ -539,6 +539,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   // Files chosen in the reply box; uploaded to the ticket after the message.
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Data states. `tickets` / `internalTickets` hold only the current page; the
   // server does filtering, search, sort and paging and reports the total.
@@ -1883,6 +1884,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       className="block cursor-pointer rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/60 p-5 text-center transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] dark:border-slate-700 dark:bg-slate-800/30 sm:p-6"
                     >
                       <input
+                        ref={fileInputRef}
                         type="file"
                         id="file-upload"
                         multiple
@@ -1893,7 +1895,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <div className="flex flex-col items-center">
                         <UploadCloud className="mb-2 h-9 w-9 text-brand-blue/60" />
                         <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Click to attach files</span>
-                        <span className="mt-2 text-xs text-gray-600 dark:text-slate-300">
+                        {/* Explicit control: opens the picker directly, not via the label. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-blue px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-brand-blue/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                          Browse files
+                        </button>
+                        <span className="mt-3 text-xs text-gray-600 dark:text-slate-300">
                           <span className="font-medium text-gray-700 dark:text-slate-200">Supported formats:</span>{' '}
                           {ATTACHMENT_SHOWN_EXTS.join(', ')}
                         </span>
