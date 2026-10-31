@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
 import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput, { type ExtraCounts } from './ExtraCandidatesInput';
+import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type ExtraCounts } from './ExtraCandidatesInput';
 import { SOURCE_META, SOURCE_ORDER, SourceIcon, type InviteSourceKey } from './inviteSources';
 import type { InviteCandidateSourceTab } from '@/lib/services/bulkInviteService';
 import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
@@ -381,6 +381,13 @@ export default function VersionInviteDialog({
   // What will be sent: the review's count once it has one, else everyone added.
   const willInvite = reviewCounts && (current === 'review' || current === 'send') ? reviewCounts.invite : recipientCount;
   const quotaShort = quotaAvailable !== null && willInvite > quotaAvailable;
+  /* How many typed-in / Excel rows fit: the units available (or the backend's
+     per-send cap on unlimited plans), less everyone already picked elsewhere. */
+  const extraLimitByUnits = !quotaUnlimited && quotaAvailable !== null && quotaAvailable < MAX_EXTRA_CANDIDATES;
+  const extraMaxRows = Math.max(
+    0,
+    (extraLimitByUnits ? quotaAvailable! : MAX_EXTRA_CANDIDATES) - recipients.length - selectionCount(serverSelection),
+  );
 
   /* Closing with candidates added asks first — they would be lost. */
   const requestClose = () => {
@@ -960,7 +967,7 @@ export default function VersionInviteDialog({
                   </p>
                 )}
                 <section aria-label="Add people directly" className={BLOCK}>
-                  <ExtraCandidatesInput onChange={setExtras} onCounts={setExtraCounts} disabled={pickingOff} onCopyLink={copyLinkFor} takenEmail={takenEmail} />
+                  <ExtraCandidatesInput onChange={setExtras} onCounts={setExtraCounts} disabled={pickingOff} onCopyLink={copyLinkFor} takenEmail={takenEmail} maxRows={extraMaxRows} limitByUnits={extraLimitByUnits} />
                 </section>
                 <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500" aria-hidden="true">
                   <span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />or<span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />
