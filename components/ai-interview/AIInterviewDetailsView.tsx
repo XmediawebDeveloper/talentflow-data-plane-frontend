@@ -1588,37 +1588,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   the next version. */}
               {config.status === 'published' && config.jd_id && (
                 <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={editBlockedReason ? undefined : () => router.push(withOrigin(aiInterviewConfigureHref(config.id, config.jd_id || '')))}
-                    disabled={!!editBlockedReason && canUpdateAIInterviews}
-                    aria-disabled={!!editBlockedReason}
-                    aria-label="Edit AI interview"
-                    title={editBlockedReason || 'Edit this version'}
-                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <Pencil className="w-4 h-4 text-menu-icon-edit" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
-                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
-                    aria-disabled={!!duplicateBlockedReason}
-                    aria-label="Duplicate as a new version"
-                    title={duplicateBlockedReason || 'Duplicate as a new version'}
-                    className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
-                    icon={<Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-download" />}
-                  >
-                    Duplicate
-                  </Button>
                   {/* Archive, icon-only — the Assessment Details header's own
-                      Archive button (same glyph, same shape), offered here for
-                      the first time: archiving a live AI interview used to be
-                      reachable only from the list page's row menu. */}
+                      Archive button (same glyph, same shape, same place in
+                      the row), offered here for the first time: archiving a
+                      live AI interview used to be reachable only from the
+                      list page's row menu. */}
                   <Button
                     type="button"
                     variant="secondary"
@@ -1631,6 +1605,34 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     className={`h-8 w-8 px-0 flex-shrink-0 ${canArchiveAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
                   >
                     <Archive className="w-4 h-4 text-menu-icon-archive" />
+                  </Button>
+                  {/* Duplicate, icon-only — no label, same icon-only shape as
+                      Archive and Edit either side of it. */}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
+                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
+                    aria-disabled={!!duplicateBlockedReason}
+                    aria-label="Duplicate as a new version"
+                    title={duplicateBlockedReason || 'Duplicate as a new version'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Copy className="w-4 h-4 text-menu-icon-download" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={editBlockedReason ? undefined : () => router.push(withOrigin(aiInterviewConfigureHref(config.id, config.jd_id || '')))}
+                    disabled={!!editBlockedReason && canUpdateAIInterviews}
+                    aria-disabled={!!editBlockedReason}
+                    aria-label="Edit AI interview"
+                    title={editBlockedReason || 'Edit this version'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Pencil className="w-4 h-4 text-menu-icon-edit" />
                   </Button>
                 </>
               )}
