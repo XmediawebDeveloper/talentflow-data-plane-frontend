@@ -1014,6 +1014,31 @@ export const assessmentService = {
   },
 
   /**
+   * Archive an assessment. The backend records the status it held right
+   * before archiving, so unarchive() can restore it exactly.
+   */
+  async archive(assessmentId: string): Promise<AssessmentResponse> {
+    try {
+      const response = await api.post<AssessmentResponse>(`/assessments/${assessmentId}/archive`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Unarchive an assessment (restores its pre-archive status).
+   */
+  async unarchive(assessmentId: string): Promise<AssessmentResponse> {
+    try {
+      const response = await api.post<AssessmentResponse>(`/assessments/${assessmentId}/unarchive`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Count of pending/sent invitations that the revoke action would
    * invalidate right now. Used by the confirmation modal.
    */

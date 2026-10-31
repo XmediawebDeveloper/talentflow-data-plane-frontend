@@ -850,6 +850,7 @@ function JobDetailsContent() {
       <DisableJobModal
         isOpen={showDisableModal}
         jobLabel={jobToDisable ? formatJobVersionLabel(jobToDisable) : ''}
+        job={jobToDisable}
         onConfirm={confirmDisable}
         onCancel={() => {
           setShowDisableModal(false);

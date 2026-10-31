@@ -961,6 +961,12 @@ export default function ResumeTable({
                         {openActionMenu === resume.id && typeof document !== 'undefined' && createPortal(
                           <div
                             ref={actionMenuRef}
+                            /* Tells TableScrollbars a popover is open so it
+                               hides the table's custom bars. Without it, the
+                               bar's occlusion probe hits this menu, reads its
+                               top as the table's visible bottom, and drags the
+                               horizontal bar + trough up over the rows. */
+                            data-tf-popover
                             /* `fixed` + portal: outside `.tf-table-shell`'s
                                `overflow-auto` box, so the menu is never clipped
                                regardless of z-index — overflow clipping isn't
@@ -972,6 +978,15 @@ export default function ResumeTable({
                                readable at the top of the overlay however little
                                room the menu was given. */
                             className="fixed w-52 flex flex-col bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] overflow-hidden"
+                            /* Tells TableScrollbars.tsx this is an open popover
+                               sitting over `.tf-table-shell`. Without it, that
+                               file's occlusion probe (sampled at the shell's
+                               right edge, which this end-aligned menu covers)
+                               reads the menu's top as the bottom of the visible
+                               table and drags the custom horizontal scrollbar
+                               up onto the first row(s) instead of standing the
+                               bar down the way it does for every other popup. */
+                            data-tf-popover
                             style={{
                               // Measured before paint by the layout effect;
                               // until then the panel sits at the origin with

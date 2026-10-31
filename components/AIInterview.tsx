@@ -2411,11 +2411,20 @@ export default function AIInterview() {
    * top of the panel is one of these same interviews, and a shared key would
    * open both dropdowns at once.
    */
-  const renderInterviewVersionActions = (config: AIInterviewResponse) => {
+  const renderInterviewVersionActions = (config: AIInterviewResponse, completedOverride?: number) => {
     const normalizedStatus = normalizeConfigStatus(config.status);
     const isPublished = normalizedStatus === 'published';
     const invitations = config.invitations_count ?? 0;
     const hasBeenShared = invitations > 0;
+    /* View Results is gated on the COMPLETED count, not invitations: an
+       interview can be shared with candidates who haven't finished it yet, in
+       which case there's still nothing to show on the results page.
+       `completedOverride` is the flat list's own per-row count (fetched
+       separately — see AllInterviewsTable's `getInvitationCounts`);
+       `completedCounts[config.id]` is the version panel's lazy count; either
+       falls back to `config.completed_count` when set. */
+    const completedCount = completedOverride ?? completedCounts[config.id] ?? config.completed_count ?? 0;
+    const hasCompletedSessions = completedCount > 0;
     const menuKey = `version:${config.id}`;
     // Disabled or Archived job: the view items stay, every action is listed but inert.
     const jdLockReason = jdActionLockReason(config.jd_status) ?? '';
@@ -2557,18 +2566,20 @@ export default function AIInterview() {
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
               <button
-                onClick={() => { if (!hasBeenShared) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
-                disabled={!hasBeenShared}
+                onClick={() => { if (!hasCompletedSessions) return; router.push(interviewDetailsHref(config.id, 'results')); setOpenMenuId(null); }}
+                disabled={!hasCompletedSessions}
                 title={
-                  hasBeenShared
+                  hasCompletedSessions
                     ? 'View interview results'
-                    : isPublished
-                      ? 'Share the interview to view results'
-                      : 'Publish the interview to view results'
+                    : hasBeenShared
+                      ? 'No candidates have completed this interview yet'
+                      : isPublished
+                        ? 'Share the interview to view results'
+                        : 'Publish the interview to view results'
                 }
-                className={hasBeenShared ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
+                className={hasCompletedSessions ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
               >
-                <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
+                <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasCompletedSessions ? 'text-menu-icon-view' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
               </button>
               {/* Duplicate — creates the next version. Disabled (reason in the
@@ -3562,11 +3573,19 @@ export default function AIInterview() {
                     /* Result, like Track, covers every interview of the job, so
                        it opens once any of them has been shared. */
                     const hasBeenShared = jobInvitations > 0 || (config.invitations_count ?? 0) > 0;
-                    const resultReason = hasBeenShared
+                    /* Gated on the job's COMPLETED count (`totals.completed`,
+                       the same figure the Completed tile above shows), not on
+                       invitations: a job can be fully shared with nobody
+                       having finished an interview yet, in which case the
+                       results page is still empty. */
+                    const hasCompleted = totals.completedKnown && totals.completed > 0;
+                    const resultReason = hasCompleted
                       ? 'View results'
-                      : normalizedStatus === 'draft'
-                        ? 'Publish the interview to view results'
-                        : 'Share the interview to view results';
+                      : hasBeenShared
+                        ? 'No candidates have completed an interview for this job yet'
+                        : normalizedStatus === 'draft'
+                          ? 'Publish the interview to view results'
+                          : 'Share the interview to view results';
 
                     return (
                       <div
@@ -3709,15 +3728,15 @@ export default function AIInterview() {
 
                             <button
                               type="button"
-                              disabled={!hasBeenShared}
+                              disabled={!hasCompleted}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (!hasBeenShared) return;
+                                if (!hasCompleted) return;
                                 // Every interview version of this job, as Track lists them.
                                 router.push(`/recruitment/ai-interviews/${config.id}/results?scope=job`);
                               }}
                               className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                                hasBeenShared
+                                hasCompleted
                                   ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
                                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
                               }`}

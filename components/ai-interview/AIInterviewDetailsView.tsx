@@ -49,6 +49,7 @@ import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrum
 import RecordPager from '@/components/RecordPager';
 import { Skeleton } from '@/components/ui/skeleton';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
+import ArchiveAIInterviewModal from './ArchiveAIInterviewModal';
 
 /* The Version History tab's eye opens a version's configuration in the same
    read-only dialog used elsewhere. Loaded lazily: that dialog renders this
@@ -246,6 +247,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
      metadata about the same interview, just read-only). */
   const [detailsSubTab, setDetailsSubTab] = useUrlTab<'configure' | 'info'>('detailSubTab', ['configure', 'info'], 'configure', !configureOnly);
   const [actionLoading, setActionLoading] = useState(false);
+  // Archive confirm — the Assessment Details header's own confirm-before-write
+  // shape, using the same dedicated modal the AI Interviews list already
+  // shows for this action (`ArchiveAIInterviewModal`), so the warning cannot
+  // drift between the two surfaces.
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   // Invite — THE invite popup (the one Assessments uses), for this job and
   // this interview version (its version cards are left out).
   const { open: openInvite } = useInviteDialog();
@@ -1582,6 +1588,39 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   the next version. */}
               {config.status === 'published' && config.jd_id && (
                 <>
+                  {/* Archive, icon-only — the Assessment Details header's own
+                      Archive button (same glyph, same shape, same place in
+                      the row), offered here for the first time: archiving a
+                      live AI interview used to be reachable only from the
+                      list page's row menu. */}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={canArchiveAIInterviews ? () => setShowArchiveConfirm(true) : undefined}
+                    disabled={actionLoading}
+                    aria-disabled={!canArchiveAIInterviews}
+                    aria-label="Archive AI interview"
+                    title={canArchiveAIInterviews ? 'Archive this AI interview' : 'You do not have permission to archive AI interviews'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${canArchiveAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
+                  >
+                    <Archive className="w-4 h-4 text-menu-icon-archive" />
+                  </Button>
+                  {/* Duplicate, icon-only — no label, same icon-only shape as
+                      Archive and Edit either side of it. */}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
+                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
+                    aria-disabled={!!duplicateBlockedReason}
+                    aria-label="Duplicate as a new version"
+                    title={duplicateBlockedReason || 'Duplicate as a new version'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Copy className="w-4 h-4 text-menu-icon-download" />
+                  </Button>
                   <Button
                     type="button"
                     variant="secondary"
@@ -1594,20 +1633,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <Pencil className="w-4 h-4 text-menu-icon-edit" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
-                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
-                    aria-disabled={!!duplicateBlockedReason}
-                    aria-label="Duplicate as a new version"
-                    title={duplicateBlockedReason || 'Duplicate as a new version'}
-                    className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
-                    icon={<Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-download" />}
-                  >
-                    Duplicate
                   </Button>
                 </>
               )}
@@ -2436,6 +2461,25 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           </div>
         </div>
       )}
+
+      {/* Archive confirm — the same dedicated component the AI Interviews
+          list uses for this action, so the warning cannot drift between the
+          two surfaces. */}
+      <ArchiveAIInterviewModal
+        isOpen={showArchiveConfirm}
+        title={`${config.jd_title || config.position || 'Untitled'} - AI Interview`}
+        version={interviewVersionOrdinal}
+        createdAt={config.created_at}
+        totalQuestions={config.total_questions}
+        durationMinutes={config.duration_minutes}
+        isLoading={actionLoading}
+        jdDisabled={jdDisabled}
+        onConfirm={async () => {
+          await handleArchive();
+          setShowArchiveConfirm(false);
+        }}
+        onCancel={() => setShowArchiveConfirm(false)}
+      />
         </div>
       </div>
     </main>
