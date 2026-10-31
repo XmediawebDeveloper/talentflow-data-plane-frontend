@@ -15,7 +15,8 @@ import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { isJdDisabled } from '@/lib/services/aiInterviewService';
+import { jdActionLockReason } from '@/lib/services/aiInterviewService';
+import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
 
@@ -210,10 +211,17 @@ export default function AIInterviewPicker({
   /* Active interview versions, newest first, searchable by job title, Job ID
      or interview ID. */
   const q = search.trim().toLowerCase();
-  // A disabled job's interviews can't take invites until it is enabled again.
+  // A disabled or archived job's interviews can't take invites until the job
+  // is enabled / unarchived again.
   const activeConfigs = configs
-    .filter((c) => normalizeConfigStatus(c.status) === 'published' && !isJdDisabled(c.jd_status))
+    .filter((c) => normalizeConfigStatus(c.status) === 'published' && !jdActionLockReason(c.jd_status))
     .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
+  /* The linked job version's Disabled / Archived / Draft badge beside the job
+     name — the AI Interview list's badge, so the picker reads the same. */
+  const jobBadge = (c: AIInterviewResponse) => {
+    const kind = jobStatusBadgeKind(c.jd_status);
+    return kind ? <JobStatusBadge kind={kind} title={jdActionLockReason(c.jd_status) ?? undefined} /> : null;
+  };
   const pickerRows = activeConfigs.filter((c) =>
     !q ||
     `${c.jd_title || ''} ${c.position || ''} ${c.display_id || ''} ${c.jd_short_id || ''}`
@@ -465,9 +473,12 @@ export default function AIInterviewPicker({
                           {config.jd_short_id ? <JobIdBadge>{config.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 align-middle max-w-[16rem]">
-                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
-                            {config.jd_title || config.position || 'Untitled'}
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
+                              {config.jd_title || config.position || 'Untitled'}
+                            </span>
+                            {jobBadge(config)}
+                          </div>
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-blue bg-brand-blue/10 ring-brand-blue/20">
@@ -568,6 +579,7 @@ export default function AIInterviewPicker({
                     <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0" title={config.jd_title || config.position || 'Untitled'}>
                       {config.jd_title || config.position || 'Untitled'}
                     </h3>
+                    {jobBadge(config)}
                   </div>
 
                   {/* Status */}

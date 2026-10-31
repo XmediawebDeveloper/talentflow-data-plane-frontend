@@ -120,6 +120,7 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import { jobLockBadgeFor } from '@/components/jobs/JobStatusBadge';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
@@ -838,6 +839,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiAssessments]);
+  /* Keep those statuses live: a job disabled / archived (or re-enabled) on
+     Job Openings — this tab, another tab, or another user — re-reads every
+     linked job at once, so the badge and the locks follow without a reload. */
+  useJobStatusRefresh(() => {
+    const ids = Array.from(new Set(apiAssessments.map((a: any) => a?.jd_id).filter(Boolean))) as string[];
+    if (ids.length === 0) return;
+    loadJobVersionLineages(ids, { fresh: true })
+      .then((lineages) => {
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+        setJobLineageById((prev) => ({ ...prev, ...lineages }));
+      })
+      .catch(() => { /* keep what is shown; the next trigger tries again */ });
+  });
   /** Why Duplicate / Share / Revoke / Archive is off for this assessment's
    *  job version, or null. */
   const jobLockReason = (assessment: { jd_id?: string } | null | undefined): string | null =>
