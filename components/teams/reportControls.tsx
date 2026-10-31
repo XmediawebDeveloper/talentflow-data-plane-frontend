@@ -229,3 +229,52 @@ export function UnitRulesHelp({ className = '' }: { className?: string }) {
   );
 }
 
+
+// ─── Reporting scope badge ────────────────────────────────────────────────────
+
+/**
+ * Says whose usage the tab is showing, so nobody mistakes their own team's
+ * numbers for the whole tenant's (or the reverse). Tenant admins get every
+ * team (tenant-level); everyone else gets only the teams they belong to
+ * (team-level). Follows the same `isTenantAdmin` gate that picks the endpoint.
+ */
+export function ReportScopeBadge({
+  isTenantAdmin,
+  teamNames,
+  loading = false,
+  className = '',
+}: {
+  isTenantAdmin: boolean;
+  /** Names of the teams in the loaded report. */
+  teamNames: string[];
+  loading?: boolean;
+  className?: string;
+}) {
+  const count = teamNames.length;
+  let detail: string;
+  if (loading) detail = 'Loading…';
+  else if (isTenantAdmin) detail = count === 1 ? 'All teams (1 team)' : `All teams (${count} teams)`;
+  else if (count === 0) detail = 'No team assigned';
+  else if (count === 1) detail = teamNames[0];
+  else detail = `Your ${count} teams`;
+
+  const title = isTenantAdmin
+    ? 'Tenant-level report: usage for every team in your organization.'
+    : `Team-level report: usage for only the team${count === 1 ? '' : 's'} you belong to${count > 1 ? ` (${teamNames.join(', ')})` : ''}. Other teams' usage is not shown.`;
+
+  return (
+    <div
+      className={`inline-flex max-w-full items-center gap-2 rounded-lg px-2.5 py-1 text-xs ring-1 ${
+        isTenantAdmin
+          ? 'bg-brand-blue/[0.06] text-brand-blue ring-brand-blue/20 dark:bg-brand-blue/10'
+          : 'bg-gray-100 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700'
+      } ${className}`}
+      title={title}
+      aria-label={`Reporting scope: ${isTenantAdmin ? 'Tenant-level' : 'Team-level'} — ${detail}`}
+    >
+      <span className="shrink-0 font-semibold">{isTenantAdmin ? 'Tenant-level' : 'Team-level'}</span>
+      <span aria-hidden className="shrink-0 opacity-50">·</span>
+      <span className="min-w-0 truncate">{detail}</span>
+    </div>
+  );
+}

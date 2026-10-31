@@ -2621,6 +2621,23 @@ export default function ResumeScoringPage({
           { publishedOnly: true, versionApplicants: versionLineage.versionApplicants },
         )
       : [];
+    /* This job's JD status, read the same way the job list reads it for its
+       Disabled / Archived badge. A Disabled or Archived JD can't be scored or
+       invited to — the scores already there stay viewable and exportable. */
+    const capitalizeStatus = (raw?: string | null) =>
+      raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : undefined;
+    const detailsJobStatus = capitalizeStatus(
+      jobRecordsById.get(selectedHistoryItem.jobId)?.status
+        || (selectedHistoryItem.jdStatus === 'active' ? 'published' : selectedHistoryItem.jdStatus)
+        || 'published',
+    )!;
+    const detailsJobLocked = detailsJobStatus === 'Disabled' || detailsJobStatus === 'Archived';
+    const detailsJobLockReason = detailsJobStatus === 'Archived' ? 'JD is archived' : 'JD is disabled';
+    /** Any version's status — rows under "Show All Versions" belong to several. */
+    const detailsStatusOf = (jdId: string): string | undefined => {
+      if (jdId === selectedHistoryItem.jobId) return detailsJobStatus;
+      return capitalizeStatus(detailsFilterLineage?.find(v => v.id === jdId)?.status || jobRecordsById.get(jdId)?.status);
+    };
     const versionNumberOf = (item: ScoredResumeData) =>
       resolveHistoryLineageEntry(item)?.version_number ?? item.jdVersionNumber;
     /* Every scored version of this job, newest version first. selectedHistoryItem
@@ -2731,6 +2748,16 @@ export default function ResumeScoringPage({
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0 max-w-[9rem] sm:max-w-none truncate" title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
                     )}
                     <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
+                    {/* Disabled / Archived — same badge as the job list row. */}
+                    {detailsJobLocked && (() => {
+                      const tone = getStatusConfig(detailsJobStatus);
+                      return (
+                        <span className={`inline-flex h-6 items-center gap-1.5 px-2 rounded-full text-xs font-medium border ${tone.bg} ${tone.text} ${tone.border} flex-shrink-0`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+                          {detailsJobStatus}
+                        </span>
+                      );
+                    })()}
                     {detailsVersionNumber && detailsVersionNumber >= 1 && (
                       detailsVersionRows.length > 1 ? (
                         <DropdownMenu>
@@ -2842,7 +2869,7 @@ export default function ResumeScoringPage({
                 <Button
                   variant="primary"
                   onClick={() => {
-                    if (!canRunScoring) {
+                    if (!canRunScoring || detailsJobLocked) {
                       return;
                     }
                     /* Already on this job's own page — skip the job
@@ -2875,15 +2902,28 @@ export default function ResumeScoringPage({
                     handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
                     setShowResumeSelectionModal(true);
                   }}
-                  aria-disabled={!canRunScoring}
-                  title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
-                  className={`w-full sm:w-auto ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  aria-disabled={!canRunScoring || detailsJobLocked}
+                  title={
+                    detailsJobLocked
+                      ? `${detailsJobLockReason} — new resumes can't be scored against it`
+                      : !canRunScoring ? 'You do not have permission to score resumes' : ''
+                  }
+                  className={`w-full sm:w-auto ${!canRunScoring || detailsJobLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <ClipboardList className="w-4 h-4" />
                   Score New Resumes
                 </Button>
               </div>
             </div>
+            {detailsJobLocked && (
+              <div role="status" className="mt-3 flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2 text-xs text-warning-strong ring-1 ring-warning-line">
+                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  This job is <strong>{detailsJobStatus.toLowerCase()}</strong>. Its scored resumes can still be viewed and exported,
+                  but scoring new resumes and sending assessments or AI interviews are turned off.
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2920,11 +2960,10 @@ export default function ResumeScoringPage({
           /* Archived/Disabled → both invites below grey out with that as
              the reason, same as the job-list's own Actions menu — this
              single-job drill-down sits outside Job Details' JobActionLock. */
-          jobStatus={(() => {
-            const record = jobRecordsById.get(selectedHistoryItem.jobId);
-            const raw = record?.status || (selectedHistoryItem.jdStatus === 'active' ? 'published' : selectedHistoryItem.jdStatus) || 'published';
-            return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-          })()}
+          jobStatus={detailsJobStatus}
+          /* Under "Show All Versions" rows come from several versions — each
+             row's invites follow its own version's status. */
+          jobStatusOf={detailsStatusOf}
           initialScoredDate={selectedHistoryItem.scoredDateFilter ?? ''}
           availableUnits={availableASUnits ?? 10}
           /* Nothing published on this JD → nothing to invite to, so the row's
@@ -2941,7 +2980,7 @@ export default function ResumeScoringPage({
              button) so this doesn't also add a redundant button once
              resumes exist — the header above already has one. */
           onScoreResumesFromEmptyState={() => {
-            if (!canRunScoring) {
+            if (!canRunScoring || detailsJobLocked) {
               return;
             }
             const jobForPicker: LineageJob = {
@@ -2964,7 +3003,8 @@ export default function ResumeScoringPage({
             handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
             setShowResumeSelectionModal(true);
           }}
-          scoreResumesDisabled={!canRunScoring}
+          scoreResumesDisabled={!canRunScoring || detailsJobLocked}
+          scoreResumesDisabledReason={detailsJobLocked ? detailsJobLockReason : undefined}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');
@@ -4050,6 +4090,55 @@ export default function ResumeScoringPage({
                   setLoadingProgressJobId(null);
                 }
               };
+              /* Opens the job's details page — every version's candidates
+                 ("Show All Versions" on). The per-version rows open their own. */
+              const openJobDetails = () => {
+                setSelectedHistoryItem(item);
+                setViewMode('details');
+                onLoadJdScores?.(item.jobId, item.jobTitle);
+                showAllVersionsFor(item);
+                try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch { /* storage blocked */ }
+                router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+              };
+              const isLoadingProgress = loadingProgressJobId === item.jobId;
+              /* One ⋮ menu per job row: View Details, View Progress and
+                 Scoring History (which used to sit beside the job title). */
+              const renderJobActionsMenu = (sizeClass: string) => (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`More actions for ${item.jobTitle}`}
+                      title="More actions"
+                      className={`${sizeClass} p-0`}
+                    >
+                      {isLoadingProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <MoreVertical className="w-4 h-4" />}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem className="group" onSelect={openJobDetails}>
+                      <FileText className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="group"
+                      disabled={isLoadingProgress}
+                      onSelect={() => { void openWholeJobProgress(); }}
+                      title="Every version of this job"
+                    >
+                      <WorkInProgressIcon className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="group" onSelect={() => setHistoryModalItem(item)}>
+                      <History className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>Scoring History</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
               /* ---- Inline candidates (replaces "View Versions") ----
                  Every score of THIS job, across all its versions, narrowed by
                  the verdict filter; version chips narrow further to one. */
@@ -4268,16 +4357,7 @@ export default function ResumeScoringPage({
                               </>
                             );
                           })()}
-                          {/* History icon button */}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                            className="h-7 w-7 p-0 flex-shrink-0"
-                            aria-label="Scoring History" title="Scoring History"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                          </Button>
+                          {/* Scoring History moved into the row's ⋮ menu. */}
                         </div>
 
                         {/* Info row — this page's scoring facts only. The JD's
@@ -4399,45 +4479,7 @@ export default function ResumeScoringPage({
                             box at all, keeping the footer row as it was. */}
                         <div className={jobListDisplayMode === 'grid' ? 'contents' : 'flex flex-row-reverse items-center gap-2 sm:flex-col sm:items-stretch'}>
                         <div className={`flex items-center gap-1.5 ${jobListDisplayMode === 'grid' ? 'flex-shrink-0' : 'sm:self-end'}`}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedHistoryItem(item);
-                              setViewMode('details');
-                              onLoadJdScores?.(item.jobId, item.jobTitle);
-                              /* Arriving from the job row opens the job as a
-                                 whole: "Show All Versions" starts on, so the
-                                 table lists every version's candidates (and
-                                 the sibling versions' scores are pulled in).
-                                 The per-version rows below still open their
-                                 own single version. */
-                              showAllVersionsFor(item);
-                              try {
-                                localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                              } catch (e) {}
-                              router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                            }}
-                            aria-label="View Details"
-                            title="View Details"
-                            className="h-9 w-9 p-0"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
-                            disabled={loadingProgressJobId === item.jobId}
-                            aria-label="View Progress"
-                            title="View Progress (every version of this job)"
-                            className="h-9 w-9 p-0"
-                          >
-                            {loadingProgressJobId === item.jobId
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <WorkInProgressIcon className="w-4 h-4" />}
-                          </Button>
+                          {renderJobActionsMenu('h-9 w-9')}
                         </div>
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
@@ -4523,15 +4565,7 @@ export default function ResumeScoringPage({
                               </span>
                             );
                           })()}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                            className="h-6 w-6 p-0 flex-shrink-0"
-                            aria-label="Scoring History" title="Scoring History"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                          </Button>
+                          {/* Scoring History moved into the row's ⋮ menu. */}
                         </div>
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
@@ -4548,59 +4582,33 @@ export default function ResumeScoringPage({
                           {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                        {!globalLoaded ? (
+                      {/* Result: one column per match type (Exact / Partial / No Match). */}
+                      {!globalLoaded ? (
+                        <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                             <FileText className="w-3.5 h-3.5" />
                             {scoredCountValue(item.totalScored, verdictTally)}
                           </span>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            {([
-                              { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
-                              { id: 'Partial Match' as const, count: verdictTally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
-                              { id: 'No Match' as const, count: verdictTally.none, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
-                            ]).map(({ id, count, Icon, cls }) => {
-                              const muted = !!matchFilter && id !== matchFilter;
-                              return (
-                                <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={id}>
-                                  <Icon className="w-3.5 h-3.5" />
-                                  <span className="tabular-nums">{count}</span>
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </td>
+                        </td>
+                      ) : (
+                        ([
+                          { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                          { id: 'Partial Match' as const, count: verdictTally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                          { id: 'No Match' as const, count: verdictTally.none, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                        ]).map(({ id, count, Icon, cls }) => {
+                          const muted = !!matchFilter && id !== matchFilter;
+                          return (
+                            <td key={id} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={id}>
+                                <Icon className="w-3.5 h-3.5" />
+                                <span className="tabular-nums">{count}</span>
+                              </span>
+                            </td>
+                          );
+                        })
+                      )}
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
                         <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedHistoryItem(item);
-                              setViewMode('details');
-                              onLoadJdScores?.(item.jobId, item.jobTitle);
-                              showAllVersionsFor(item);
-                              try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch (e) {}
-                              router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                            }}
-                            aria-label="View Details" title="View Details"
-                            className="h-8 w-8 p-0"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
-                            disabled={loadingProgressJobId === item.jobId}
-                            aria-label="View Progress" title="View Progress (every version of this job)"
-                            className="h-8 w-8 p-0"
-                          >
-                            {loadingProgressJobId === item.jobId ? <Loader2 className="w-4 h-4 animate-spin" /> : <WorkInProgressIcon className="w-4 h-4" />}
-                          </Button>
                           <Button
                             variant="secondary"
                             size="sm"
@@ -4611,12 +4619,13 @@ export default function ResumeScoringPage({
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                           </Button>
+                          {renderJobActionsMenu('h-8 w-8')}
                         </div>
                       </td>
                     </tr>
                     {isJobExpanded && (
                       <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                        <td colSpan={8} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">
+                        <td colSpan={10} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">
                           {inlineCandidatesPanel}
                         </td>
                       </tr>
@@ -4647,12 +4656,14 @@ export default function ResumeScoringPage({
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job ID</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Date &amp; Time</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Count</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Verdict</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Exact Match</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Partial Match</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">No Match</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>

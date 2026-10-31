@@ -312,6 +312,10 @@ interface ScoredResumesTableProps {
    *  (e.g. this page's own per-job "Scoring History" view). Unset on the
    *  global cross-job list, which has no single host job to check. */
   jobStatus?: string;
+  /** Status of any JD version by id ('Disabled', 'Archived', …) — for hosts
+   *  whose rows span several versions ("Show All Versions"), so each row's
+   *  invites follow its OWN version. Falls back to `jobStatus` for the host job. */
+  jobStatusOf?: (jdId: string) => string | undefined;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -688,6 +692,7 @@ export default function ScoredResumesTable({
   jobCode,
   jobVersion: hostJobVersion,
   jobStatus,
+  jobStatusOf,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -1217,6 +1222,12 @@ Best regards`);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
 
+  /** A row's JD status: the host's lookup when it has one (rows spanning several
+   *  versions), else `jobStatus` — which only speaks for this table's own host
+   *  job, never for another JD a row in the global cross-job list points at. */
+  const statusOfRowJob = (rowJdId: string | undefined, id: string): string | undefined =>
+    jobStatusOf?.(id) ?? (rowJdId && rowJdId !== jobId ? undefined : jobStatus);
+
   /* The jobs the ticked rows belong to — a row's own JD, or this table's
      one job on a single-job host. */
   const selectionJobs = useMemo((): InviteTargetJob[] => {
@@ -1224,14 +1235,11 @@ Best regards`);
     for (const r of effectiveSelectedRows) {
       const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
       if (!id || byId.has(id)) continue;
-      // A row's own `jdId` only appears in the global cross-job list, whose
-      // rows carry no job-status field; this table's one host job (when
-      // there is one) is the only case `jobStatus` can speak for.
-      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: r.jdId ? undefined : jobStatus });
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: statusOfRowJob(r.jdId, id) });
     }
     return Array.from(byId.values());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus]);
+  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus, jobStatusOf]);
 
   /** A scored row as THE invite popup lists it. */
   const toInvitee = (r: ScoredResume): InviteCandidate => ({
@@ -1832,8 +1840,15 @@ Best regards`);
        "none configured" no longer greys it out. An archived resume is the
        one thing that overrides all of that — same rule every other resume
        action (Score, AI Talent Match, resume-view's Invite) follows. */
-    const rowCanInviteAssessment = !resume.isArchived && canCreateAssessments;
-    const rowCanInviteAIInterview = !resume.isArchived && mayInviteAIInterview;
+    /* A Disabled / Archived JD blocks the row's invites too — on hosts with no
+       JobActionLock around them (Resume Scoring's job drill-down) this is the
+       only thing that knows. */
+    const rowJobId = resume.jdId || (jobId && jobId !== 'global' ? jobId : '');
+    const rowJobLock = rowJobId
+      ? resolveSelectionJobLock([{ jdId: rowJobId, jdTitle: resume.jobTitle || jobTitle || '', status: statusOfRowJob(resume.jdId, rowJobId) }])
+      : null;
+    const rowCanInviteAssessment = !resume.isArchived && !rowJobLock && canCreateAssessments;
+    const rowCanInviteAIInterview = !resume.isArchived && !rowJobLock && mayInviteAIInterview;
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
@@ -1842,6 +1857,8 @@ Best regards`);
       // reason, rather than disappearing outright.
       rowInviteDisabledTitle: resume.isArchived
         ? ARCHIVED_RESUME_MESSAGE
+        : rowJobLock
+        ? rowJobLock
         : jobLockReason
         ? jobLockReason
         : !(canCreateAssessments || mayInviteAIInterview)

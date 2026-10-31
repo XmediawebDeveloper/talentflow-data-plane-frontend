@@ -332,15 +332,21 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // With the host's Create / Send popup, nothing published yet is no block —
   // the popup offers Create.
   const viaInviteDialog = !!onOpenInviteDialog;
+  /* The JD this score belongs to (loaded below for the Overview tab). A Disabled
+     or Archived JD can't be invited to — same rule as the job's scored-resumes list. */
+  const [jdDetails, setJdDetails] = useState<any>(null);
+  const jdStatusLower = String(jdDetails?.status || '').toLowerCase();
+  const jdLocked = jdStatusLower === 'disabled' || jdStatusLower === 'archived';
+  const jdLockReason = jdStatusLower === 'archived' ? 'JD is archived' : 'JD is disabled';
   const canInviteAssessment =
-    mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
+    !jdLocked && mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
   const canInviteAIInterview =
-    mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
+    !jdLocked && mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
   /* Permitted, in the plan, and the job settled as having none yet -> the
      entry greys out with "+ Create ..." under it (Resume Scoring hosts only). */
   const inviteTargetsSettled = inviteTargets.known && !inviteTargets.loading;
-  const assessmentMissing = !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
-  const aiInterviewMissing = !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
+  const assessmentMissing = !jdLocked && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
+  const aiInterviewMissing = !jdLocked && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
   // Every option the user is permitted to pick is outside the plan.
   const invitePlanLocked = canInvite &&
     (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
@@ -352,7 +358,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
      and why it is disabled, as a tooltip. */
   const flatHeaderActions = inlineHeaderActions && viaInviteDialog;
   const inviteBlockedReason = (may: boolean, planLocked: boolean) =>
-    !may ? 'You do not have permission to invite candidates' : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
+    !may ? 'You do not have permission to invite candidates' : jdLocked ? jdLockReason : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -420,7 +426,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
   const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
-  const [jdDetails, setJdDetails] = useState<any>(null);
   // Upload history for the Version History section. Kept separate from
   // `fullResumeData` because it comes from its own endpoint — the resume record
   // carries only a count, not the per-version rows.
@@ -1689,6 +1694,8 @@ Best regards`);
                     inviteDisabled
                       ? (!canInvite
                           ? 'You do not have permission to invite candidates'
+                          : jdLocked
+                            ? jdLockReason
                           : invitePlanLocked
                             ? PLAN_LOCKED_MESSAGE
                             : 'No published assessment or AI interview for this job yet')
@@ -1854,6 +1861,16 @@ Best regards`);
                 {(resume.jobVersion ?? jdDetails?.version_number) != null && (
                   <span className="inline-flex items-center px-2.5 py-0.5 ml-1.5 bg-brand-orange-deep text-white rounded-full text-xs font-medium align-middle whitespace-nowrap">
                     v{resume.jobVersion ?? jdDetails?.version_number}.0
+                  </span>
+                )}
+                {/* Disabled / Archived JD — say so next to the job it was scored against. */}
+                {jdLocked && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 ml-1.5 rounded-full text-xs font-medium border align-middle whitespace-nowrap ${jdStatusBadgeClass(jdStatusLower)}`}
+                    title={`${jdLockReason} — invites are turned off for this job`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {jdStatusLower === 'archived' ? 'Archived' : 'Disabled'}
                   </span>
                 )}
               </span>
