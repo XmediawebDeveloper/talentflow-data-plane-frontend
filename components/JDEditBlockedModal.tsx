@@ -103,11 +103,11 @@ export default function JDEditBlockedModal({
           <div className="min-w-0 flex-1">
             <h3
               id="jd-edit-blocked-title"
-              className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50"
+              className="tf-section-title"
             >
               Cannot Edit Job Description
             </h3>
-            <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed mt-1">
+            <p className="tf-meta-strong leading-relaxed mt-1">
               This job description is actively used in one or more modules and cannot be
               modified to maintain data integrity.
             </p>
@@ -137,7 +137,7 @@ export default function JDEditBlockedModal({
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-warning">
                     Active in ({modules.length})
                   </h4>
-                  <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed mt-0.5">
+                  <p className="tf-meta-strong leading-relaxed mt-0.5">
                     This JD is currently linked to the following active modules.
                   </p>
                 </div>
@@ -160,7 +160,7 @@ export default function JDEditBlockedModal({
                             {module.count}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed truncate">
+                        <p className="tf-meta leading-relaxed truncate">
                           {module.description}
                         </p>
                       </div>
@@ -216,7 +216,7 @@ export default function JDEditBlockedModal({
                 <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-400">
                   Why can&apos;t I edit?
                 </h4>
-                <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed mt-0.5">
+                <p className="tf-meta-strong leading-relaxed mt-0.5">
                   Editing is disabled to prevent issues in active processes and ensure
                   consistency across modules.
                 </p>
@@ -234,7 +234,7 @@ export default function JDEditBlockedModal({
                   <h4 className="text-xs font-semibold text-red-700 dark:text-red-400">
                     Maximum versions reached
                   </h4>
-                  <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed mt-0.5">
+                  <p className="tf-meta-strong leading-relaxed mt-0.5">
                     This JD already has 5 versions, the maximum allowed. &quot;Create New
                     Version&quot; is unavailable for it — use &quot;Create New JD&quot; instead
                     to start an independent one.

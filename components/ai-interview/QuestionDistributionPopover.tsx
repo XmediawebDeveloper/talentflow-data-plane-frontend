@@ -263,7 +263,7 @@ export function QuestionDistributionPopover({
         className={`${hrQuestions.length > 0 ? POPOVER_WIDTH[2] : POPOVER_WIDTH[1]} max-h-[75dvh] overflow-y-auto p-0`}
       >
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
+          <div className="tf-cell-name">Question Distribution</div>
           <div className="text-2xs text-gray-500">
             {totalQ + hrQuestions.length} questions · {totalSkillsCovered} skills covered
           </div>

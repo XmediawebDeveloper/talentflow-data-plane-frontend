@@ -143,7 +143,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
 
           {/* Row 2: Location + Experience + Employment Type + Work Mode +
               Salary + Posted Date + Posted By + Version */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
             {jd.location && (
               <>
                 {formatLocationGroups(jd.locations, jd.location).map((label) => (

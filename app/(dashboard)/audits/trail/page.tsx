@@ -56,6 +56,8 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import NameAvatar from '@/components/ui/name-avatar';
+import { exportRows } from '@/lib/utils/exportUtils';
+import { toast } from '@/components/ui/enhanced-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -208,6 +210,51 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   candidate_count: 'Candidate Count',
 };
 
+// Logout details only carry a raw reason code ("manual", "timeout", …).
+const LOGOUT_REASON_LABELS: Record<string, string> = {
+  manual: 'Signed out manually',
+  user: 'Signed out manually',
+  timeout: 'Session timed out',
+  idle: 'Signed out after inactivity',
+  inactivity: 'Signed out after inactivity',
+  expired: 'Session expired',
+  token_expired: 'Session expired',
+  session_expired: 'Session expired',
+  forced: 'Signed out by an admin',
+  admin: 'Signed out by an admin',
+};
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+/** The list endpoint returns at most this many rows in one request. */
+const EXPORT_LIMIT = 1000;
+/** Rows per request while exporting — the list's own page sizes go up to 100. */
+const EXPORT_PAGE_SIZE = 100;
+
+/** Candidates act without a tenant account: no user ID, and the API masks their name. */
+const isCandidateActor = (log: Pick<AuditLog, 'actor_role' | 'user_display_id' | 'user_name'>) =>
+  log.actor_role?.toLowerCase() === 'candidate' ||
+  (!log.user_display_id && !!log.user_name && log.user_name.includes('*'));
+
+const formatRole = (role: string | null) => (role ? role.replace(/_/g, ' ').toLowerCase() : '');
+
+/** 'YYYY-MM-DD' (local day) → that day's first / last instant, as ISO strings. */
+const dayStartISO = (day: string) => new Date(`${day}T00:00:00`).toISOString();
+const dayEndISO = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
+const localDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const daysAgoLocal = (n: number) => localDay(new Date(Date.now() - n * 86_400_000));
+
+const formatAgo = (ms: number) => {
+  const s = Math.round(ms / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  return `${Math.round(m / 60)} hr ago`;
+};
+
+const ORIGIN_FILTER_LABELS: Record<string, string> = { TENANT: 'Tenant', SYSTEM: 'System', NONE: 'Normal' };
+
 const entityIcons: Record<string, React.ElementType> = {
   user: Users,
   job_description: Briefcase,
@@ -239,6 +286,11 @@ export default function AuditTrailPage() {
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
   const [dateRange, setDateRange] = useState('30');
+  // Used when dateRange === 'custom' (local YYYY-MM-DD days, both inclusive).
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const isCustomRange = dateRange === 'custom';
+  const customRangeReady = !!customFrom && !!customTo && customFrom <= customTo;
   const [errorOriginFilter, setErrorOriginFilter] = useState<'' | ErrorOrigin>('');
   // user_id selected from the Active Users popup; sent to the API as user_id.
   const [userFilter, setUserFilter] = useState('');
@@ -248,7 +300,14 @@ export default function AuditTrailPage() {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
+  // When the list last loaded, for the "Updated … ago" note by Refresh.
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   // Text typed into the "jump to page" box; kept separate from `page` so the
@@ -279,6 +338,26 @@ export default function AuditTrailPage() {
     setSearchQuery('');
     setPage(1);
   };
+  const anyFilterActive = !!(actionFilter || entityFilter || userFilter || errorOriginFilter || searchQuery);
+
+  /** Adds the list's date window to a request: a preset ("last N days") or the custom range. */
+  const appendListDateRange = (params: URLSearchParams) => {
+    if (isCustomRange) {
+      if (customRangeReady) {
+        params.append('start_date', dayStartISO(customFrom));
+        params.append('end_date', dayEndISO(customTo));
+      }
+      return;
+    }
+    if (dateRange) {
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - parseInt(dateRange));
+      params.append('start_date', startDate.toISOString());
+      params.append('end_date', endDate.toISOString());
+    }
+  };
+
 
   // Detail modal
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
@@ -316,7 +395,7 @@ export default function AuditTrailPage() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
-  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter });
+  const prevFilters = useRef({ page, pageSize, actionFilter, entityFilter, dateRange, customFrom, customTo, errorOriginFilter, userFilter });
   /* Bumped by every fetchAuditLogs / fetchStats run, so only the latest
      request applies. The mount fetch runs with default filters before the
      saved ones are restored, then again with them; whichever landed last
@@ -331,13 +410,16 @@ export default function AuditTrailPage() {
   const rootRef = useScrollRestoration<HTMLElement>('audits-trail', !loading, [pageView]);
   useListStatePersistence(
     'audits-trail',
-    { pageView, searchQuery, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter, page },
+    { pageView, searchQuery, actionFilter, entityFilter, dateRange, customFrom, customTo, errorOriginFilter, userFilter, page, pageSize },
     (s) => {
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.actionFilter === 'string') setActionFilter(s.actionFilter);
       if (typeof s.entityFilter === 'string') setEntityFilter(s.entityFilter);
+      if (typeof s.customFrom === 'string') setCustomFrom(s.customFrom);
+      if (typeof s.customTo === 'string') setCustomTo(s.customTo);
       if (typeof s.dateRange === 'string') setDateRange(s.dateRange);
+      if (typeof s.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(s.pageSize)) setPageSize(s.pageSize);
       if (typeof s.errorOriginFilter === 'string') setErrorOriginFilter(s.errorOriginFilter as '' | ErrorOrigin);
       if (typeof s.userFilter === 'string') setUserFilter(s.userFilter);
       if (typeof s.page === 'number') setPage(s.page);
@@ -345,6 +427,8 @@ export default function AuditTrailPage() {
   );
 
   const fetchAuditLogs = useCallback(async () => {
+    // A half-picked custom range would fetch everything — wait for both days.
+    if (isCustomRange && !customRangeReady) return;
     const seq = ++logsFetchSeqRef.current;
     const isStale = () => seq !== logsFetchSeqRef.current;
     setLoading(true);
@@ -374,14 +458,7 @@ export default function AuditTrailPage() {
         params.append('error_origin', errorOriginFilter);
       }
 
-      // Calculate date range
-      if (dateRange) {
-        const endDate = new Date();
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - parseInt(dateRange));
-        params.append('start_date', startDate.toISOString());
-        params.append('end_date', endDate.toISOString());
-      }
+      appendListDateRange(params);
 
       if (!token) {
         throw new Error('Session expired. Please log in again.');
@@ -415,6 +492,8 @@ export default function AuditTrailPage() {
       setAuditLogs(data.items || []);
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 1);
+      setLastUpdated(Date.now());
+      setNow(Date.now());
     } catch (err: any) {
       if (isStale()) return;
       console.error('Error fetching audit logs:', err);
@@ -422,14 +501,20 @@ export default function AuditTrailPage() {
     } finally {
       if (!isStale()) setLoading(false);
     }
-  }, [page, pageSize, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- appendListDateRange reads only the range values listed here
+  }, [page, pageSize, actionFilter, entityFilter, dateRange, customFrom, customTo, errorOriginFilter, userFilter]);
 
   const fetchStats = useCallback(async () => {
+    if (isCustomRange && !customRangeReady) return;
     const seq = ++statsFetchSeqRef.current;
     const isStale = () => seq !== statsFetchSeqRef.current;
+    // The stats endpoint only takes "last N days"; a custom range maps to its start → today.
+    const statsDays = isCustomRange
+      ? String(Math.max(1, Math.ceil((Date.now() - new Date(`${customFrom}T00:00:00`).getTime()) / 86_400_000)))
+      : dateRange;
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/audits/stats?days=${dateRange}`, {
+      const response = await fetch(`${API_URL}/audits/stats?days=${statsDays}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -449,7 +534,7 @@ export default function AuditTrailPage() {
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
-  }, [dateRange]);
+  }, [dateRange, customFrom, isCustomRange, customRangeReady]);
 
   const fetchFilters = useCallback(async () => {
     try {
@@ -526,18 +611,21 @@ export default function AuditTrailPage() {
     const prev = prevFilters.current;
     const filtersChanged =
       prev.page !== page ||
+      prev.pageSize !== pageSize ||
       prev.actionFilter !== actionFilter ||
       prev.entityFilter !== entityFilter ||
       prev.dateRange !== dateRange ||
+      prev.customFrom !== customFrom ||
+      prev.customTo !== customTo ||
       prev.errorOriginFilter !== errorOriginFilter ||
       prev.userFilter !== userFilter;
 
     if (filtersChanged && hasFetched.current) {
-      prevFilters.current = { page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter };
+      prevFilters.current = { page, pageSize, actionFilter, entityFilter, dateRange, customFrom, customTo, errorOriginFilter, userFilter };
       fetchAuditLogs();
       fetchStats();
     }
-  }, [page, actionFilter, entityFilter, dateRange, errorOriginFilter, userFilter]);
+  }, [page, pageSize, actionFilter, entityFilter, dateRange, customFrom, customTo, errorOriginFilter, userFilter]);
 
   // Fetch AI generation audit data when an assessment-related log is selected
   useEffect(() => {
@@ -607,10 +695,18 @@ export default function AuditTrailPage() {
   const openExportModal = (format: 'csv' | 'excel') => {
     setExportFormat(format);
     setExportDropdownOpen(false);
-    setExportPresetDays(dateRange);
-    setExportDateMode('preset');
-    setExportStartDate('');
-    setExportEndDate('');
+    // Start from the range the list is showing.
+    if (isCustomRange && customRangeReady) {
+      setExportDateMode('custom');
+      setExportStartDate(customFrom);
+      setExportEndDate(customTo);
+      setExportPresetDays('30');
+    } else {
+      setExportPresetDays(isCustomRange ? '30' : dateRange);
+      setExportDateMode('preset');
+      setExportStartDate('');
+      setExportEndDate('');
+    }
     setExportSelectedCols(Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, true])));
     setExportModalOpen(true);
   };
@@ -672,8 +768,11 @@ export default function AuditTrailPage() {
     setExportLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const exportPageSize = Math.min(total || 1000, 1000);
-      const params = new URLSearchParams({ page: '1', page_size: exportPageSize.toString() });
+      if (!token) {
+        handleUnauthorized();
+        return;
+      }
+      const params = new URLSearchParams();
 
       if (actionFilter) params.append('action', actionFilter);
       if (entityFilter) params.append('entity_type', entityFilter);
@@ -687,33 +786,54 @@ export default function AuditTrailPage() {
         params.append('start_date', startDate.toISOString());
         params.append('end_date', endDate.toISOString());
       } else if (exportDateMode === 'custom' && exportStartDate && exportEndDate) {
-        params.append('start_date', new Date(exportStartDate).toISOString());
-        params.append('end_date', new Date(exportEndDate).toISOString());
+        // Whole days, end day included (midnight-UTC of the end day used to drop it).
+        params.append('start_date', dayStartISO(exportStartDate));
+        params.append('end_date', dayEndISO(exportEndDate));
       }
 
-      const response = await fetch(`${API_URL}/audits?${params}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      // Pages of EXPORT_PAGE_SIZE: one big page_size=1000 request can be refused by
+      // the API's page-size cap, and that failure used to be swallowed silently.
+      const logs: AuditLog[] = [];
+      for (let p = 1; logs.length < EXPORT_LIMIT; p++) {
+        params.set('page', String(p));
+        params.set('page_size', String(EXPORT_PAGE_SIZE));
+        const response = await fetch(`${API_URL}/audits?${params}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (response.status === 401) {
+          handleUnauthorized();
+          return;
+        }
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          const detail = Array.isArray(body.detail)
+            ? body.detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join(', ')
+            : body.detail;
+          throw new Error(detail || `Server returned ${response.status}`);
+        }
+        const data = await response.json();
+        const items = (data.items || []) as AuditLog[];
+        logs.push(...items);
+        if (items.length < EXPORT_PAGE_SIZE || p >= (data.total_pages || 1)) break;
+      }
 
-      if (response.status === 401) {
-        handleUnauthorized();
+      // Same rule as the list: the error-origin filter is also applied here.
+      const exported = (errorOriginFilter ? logs.filter(l => l.error_origin === errorOriginFilter) : logs).slice(0, EXPORT_LIMIT);
+      if (exported.length === 0) {
+        toast.error({ title: 'Nothing to export', description: 'No audit records match this date range and filters.' });
         return;
       }
 
-      if (response.ok) {
-        const data = await response.json();
-        const selectedKeys = EXPORT_COLUMNS.map(c => c.key).filter(k => exportSelectedCols[k]) as ExportColumnKey[];
-        if (exportFormat === 'csv') {
-          const csv = convertToCSV(data.items, selectedKeys);
-          downloadFile(csv, 'audit-trail.csv', 'text/csv');
-        } else {
-          const xls = convertToExcel(data.items, selectedKeys);
-          downloadFile(xls, 'audit-trail.xls', 'application/vnd.ms-excel');
-        }
-        setExportModalOpen(false);
-      }
+      const selectedKeys = EXPORT_COLUMNS.map(c => c.key).filter(k => exportSelectedCols[k]) as ExportColumnKey[];
+      const headers = selectedKeys.map(k => EXPORT_COLUMNS.find(c => c.key === k)!.label);
+      const rows = exported.map(log => selectedKeys.map(k => getColumnValue(log, k)));
+      // Real .xlsx (was HTML saved as .xls, which Excel warns about) / UTF-8 CSV.
+      await exportRows(exportFormat === 'csv' ? 'csv' : 'xlsx', headers, rows, 'audit-trail', { sheetName: 'Audit Trail' });
+      toast.success({ title: 'Export ready', description: `${exported.length.toLocaleString()} audit records downloaded.` });
+      setExportModalOpen(false);
     } catch (err) {
       console.error('Export failed:', err);
+      toast.error({ title: 'Export failed', description: err instanceof Error ? err.message : 'Please try again.' });
     } finally {
       setExportLoading(false);
     }
@@ -735,8 +855,15 @@ export default function AuditTrailPage() {
     return { label: 'Success', color: 'bg-success-subtle text-success-strong border border-success-line' };
   };
 
-  // Get brief details summary from details JSONB
+  // Brief details summary; a logout's raw reason code becomes a sentence.
   const getDetailsSummary = (log: AuditLog): string => {
+    const summary = getRawDetailsSummary(log);
+    if (log.action.includes('logout')) return LOGOUT_REASON_LABELS[summary.toLowerCase()] ?? summary;
+    return summary;
+  };
+
+  // Get brief details summary from details JSONB
+  const getRawDetailsSummary = (log: AuditLog): string => {
     if (!log.details || Object.keys(log.details).length === 0) return '—';
     const d = log.details;
     // Show most relevant field based on context
@@ -793,31 +920,6 @@ export default function AuditTrailPage() {
     return { text: '—', negative: false };
   };
 
-  const convertToCSV = (logs: AuditLog[], keys: ExportColumnKey[]): string => {
-    const headers = keys.map(k => EXPORT_COLUMNS.find(c => c.key === k)!.label);
-    const rows = logs.map(log => keys.map(k => getColumnValue(log, k)));
-    return [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-  };
-
-  const convertToExcel = (logs: AuditLog[], keys: ExportColumnKey[]): string => {
-    const headers = keys.map(k => EXPORT_COLUMNS.find(c => c.key === k)!.label);
-    const rows = logs.map(log => keys.map(k => getColumnValue(log, k)));
-    const esc = (v: string) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Audit Trail</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><meta charset="UTF-8"></head><body><div className="tf-table-shell">
-      <table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>
-    </div></body></html>`;
-  };
-
-  const downloadFile = (content: string, filename: string, mimeType: string) => {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const filteredLogs = auditLogs.filter(log => {
     // Error origin filter (applied client-side; the list endpoint ignores it)
     if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
@@ -837,6 +939,21 @@ export default function AuditTrailPage() {
     );
   });
 
+  // One removable chip per active filter (the date range isn't one — it always has a value).
+  const optionLabel = (list: Array<{ value: string; label: string }>, v: string) =>
+    list.find(o => o.value === v)?.label ?? v.replace(/_/g, ' ');
+  const filterChips = [
+    searchQuery && { key: 'search', name: 'Search', value: searchQuery, clear: () => setSearchQuery('') },
+    actionFilter && { key: 'action', name: 'Action', value: optionLabel(availableActions, actionFilter), clear: () => { setActionFilter(''); setPage(1); } },
+    entityFilter && { key: 'entity', name: 'Entity', value: optionLabel(availableEntities, entityFilter), clear: () => { setEntityFilter(''); setPage(1); } },
+    userFilter && {
+      key: 'user', name: 'User',
+      value: stats?.top_active_users.find(u => u.user_id === userFilter)?.user_name || 'Selected user',
+      clear: () => { setUserFilter(''); setPage(1); },
+    },
+    errorOriginFilter && { key: 'origin', name: 'Origin', value: ORIGIN_FILTER_LABELS[errorOriginFilter] ?? errorOriginFilter, clear: () => { setErrorOriginFilter(''); setPage(1); } },
+  ].filter(Boolean) as Array<{ key: string; name: string; value: string; clear: () => void }>;
+
   return (
     <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
@@ -845,9 +962,15 @@ export default function AuditTrailPage() {
         <PageHeader
           icon={<ScrollText className="h-5 w-5" />}
           title="Audit Trail"
-          description="Track every system activity and change in real-time."
+          description="Track every system activity and change across your organization."
           actions={
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* The list loads on demand (Refresh), so say how fresh it is. */}
+              {lastUpdated !== null && (
+                <span className="hidden md:inline tf-meta whitespace-nowrap" title={formatIST(new Date(lastUpdated).toISOString())}>
+                  Updated {formatAgo(now - lastUpdated)}
+                </span>
+              )}
               <Button
                 variant="secondary"
                 onClick={() => { fetchAuditLogs(); fetchStats(); }}
@@ -897,15 +1020,23 @@ export default function AuditTrailPage() {
               <button
                 type="button"
                 onClick={() => { setStatsPopup(null); clearAllFilters(); openListView(); }}
-                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-4 max-sm:p-3 sm:p-6 hover:shadow-md transition-all ${pageView === 'list' && !statsPopup ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
+                title="Show all records (clears filters)"
+                // Highlighted only while the list really shows everything.
+                className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-4 max-sm:p-3 sm:p-6 hover:shadow-md transition-all ${pageView === 'list' && !statsPopup && !anyFilterActive ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-100 dark:border-slate-700/60'}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p
+                      className="tf-meta mt-1 sm:mt-2 flex items-center gap-1"
+                      title={isCustomRange && customFrom ? `Summary counts cover ${customFrom} to today` : undefined}
+                    >
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                      Last {stats.period_days} days
+                      <span>
+                        {isCustomRange && customFrom ? `Since ${customFrom}` : `Last ${stats.period_days} days`}
+                        <span className="text-gray-400 dark:text-slate-500"> · {anyFilterActive ? 'Click to clear filters' : 'Click to view all'}</span>
+                      </span>
                     </p>
                   </div>
                   <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
@@ -922,7 +1053,7 @@ export default function AuditTrailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Active Users</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
                     </p>
@@ -941,7 +1072,7 @@ export default function AuditTrailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Action Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
                     </p>
@@ -960,7 +1091,7 @@ export default function AuditTrailPage() {
                   <div className="min-w-0">
                     <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
                     </p>
@@ -1005,7 +1136,7 @@ export default function AuditTrailPage() {
                 <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700/60">
                   {statsPopup === 'users' && (
                     stats.top_active_users.length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No users found.</p>
+                      <p className="px-4 py-6 tf-body-muted text-center">No users found.</p>
                     ) : (
                       stats.top_active_users.map((u) => {
                         const isActive = userFilter === u.user_id;
@@ -1025,7 +1156,7 @@ export default function AuditTrailPage() {
                               <NameAvatar name={u.user_name} fallback={u.user_email} userId={u.user_id} size="sm" />
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{u.user_name || 'Unknown'}</p>
-                                {u.user_email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{u.user_email}</p>}
+                                {u.user_email && <p className="tf-meta truncate">{u.user_email}</p>}
                               </div>
                             </div>
                             <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{u.action_count}</span>
@@ -1036,7 +1167,7 @@ export default function AuditTrailPage() {
                   )}
                   {statsPopup === 'actions' && (
                     Object.entries(stats.actions_by_type).length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No actions found.</p>
+                      <p className="px-4 py-6 tf-body-muted text-center">No actions found.</p>
                     ) : (
                       Object.entries(stats.actions_by_type)
                         .sort((a, b) => b[1] - a[1])
@@ -1064,7 +1195,7 @@ export default function AuditTrailPage() {
                   )}
                   {statsPopup === 'entities' && (
                     Object.entries(stats.actions_by_entity).length === 0 ? (
-                      <p className="px-4 py-6 text-sm text-gray-500 dark:text-slate-400 text-center">No entities found.</p>
+                      <p className="px-4 py-6 tf-body-muted text-center">No entities found.</p>
                     ) : (
                       Object.entries(stats.actions_by_entity)
                         .sort((a, b) => b[1] - a[1])
@@ -1117,7 +1248,7 @@ export default function AuditTrailPage() {
                   <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 z-10" />
                   <Input
                     type="text"
-                    placeholder="Search by user, action, or IP..."
+                    placeholder="Search this page by user, action, or IP..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9 sm:pl-11"
@@ -1141,12 +1272,21 @@ export default function AuditTrailPage() {
                   ariaLabel="Date range"
                   icon={Calendar}
                   value={dateRange}
-                  onChange={(v) => { setDateRange(v); setPage(1); }}
+                  onChange={(v) => {
+                    // Custom starts from the last 30 days, so it's usable straight away.
+                    if (v === 'custom' && !customRangeReady) {
+                      setCustomFrom(daysAgoLocal(30));
+                      setCustomTo(localDay(new Date()));
+                    }
+                    setDateRange(v);
+                    setPage(1);
+                  }}
                   options={[
                     { value: '7', label: '7 days' },
                     { value: '30', label: '30 days' },
                     { value: '90', label: '90 days' },
                     { value: '365', label: '1 year' },
+                    { value: 'custom', label: 'Custom range' },
                   ]}
                 />
                 <FilterSelect
@@ -1162,6 +1302,50 @@ export default function AuditTrailPage() {
                   ]}
                 />
               </div>
+              {isCustomRange && (
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:items-center">
+                  <DateField
+                    aria-label="From date"
+                    value={customFrom}
+                    max={customTo || localDay(new Date())}
+                    onChange={(v) => { setCustomFrom(v); setPage(1); }}
+                    className="w-full sm:w-[160px]"
+                  />
+                  <span className="text-xs font-medium text-gray-400 dark:text-slate-500">to</span>
+                  <DateField
+                    aria-label="To date"
+                    value={customTo}
+                    min={customFrom}
+                    max={localDay(new Date())}
+                    onChange={(v) => { setCustomTo(v); setPage(1); }}
+                    className="w-full sm:w-[160px]"
+                  />
+                </div>
+              )}
+              {filterChips.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {filterChips.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      onClick={c.clear}
+                      aria-label={`Remove filter ${c.name}: ${c.value}`}
+                      className="inline-flex max-w-full items-center gap-1 rounded-full bg-brand-blue/[0.06] px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15 hover:bg-brand-blue/10 transition-colors"
+                    >
+                      <span className="text-gray-500 dark:text-slate-400">{c.name}:</span>
+                      <span className="truncate max-w-[12rem]">{c.value}</span>
+                      <X className="h-3 w-3 shrink-0" />
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="px-1 text-xs font-medium text-gray-600 dark:text-slate-400 underline underline-offset-2 hover:text-brand-blue"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1200,8 +1384,12 @@ export default function AuditTrailPage() {
                       <div className="flex items-center gap-2 min-w-0">
                         <NameAvatar name={log.user_name} fallback={log.user_email} userId={log.user_id} size="sm" />
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate">{log.user_name || 'Unknown'}</p>
-                          <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">{log.user_email || ''}</p>
+                          <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate" title={isCandidateActor(log) ? 'Candidate name is masked for privacy' : undefined}>{log.user_name || 'Unknown'}</p>
+                          {isCandidateActor(log) ? (
+                            <span className="inline-flex rounded px-1.5 py-px text-2xs font-semibold bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/25">Candidate</span>
+                          ) : (
+                            <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">{log.user_email || ''}</p>
+                          )}
                         </div>
                       </div>
                       <button
@@ -1248,20 +1436,18 @@ export default function AuditTrailPage() {
               <table className="w-full">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-white dark:bg-slate-900 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Timestamp</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">User ID</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">User</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Role</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Details</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Impact</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Error Origin</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Error Code</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Duration</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Refund Flag</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Units</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                    {/* User = name + role + user ID; Status = status + impact (error origin is
+                        already in the status label, and stays in the details modal and export). */}
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Timestamp</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">User</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Action</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Details</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Status</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Error Code</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Duration</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Refund Flag</th>
+                    <th className="px-4 py-4 text-left tf-th whitespace-nowrap">Units</th>
+                    <th className="px-4 py-4 text-center tf-th whitespace-nowrap tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1275,32 +1461,41 @@ export default function AuditTrailPage() {
                         className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       >
                         <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                          <div className="flex items-center gap-2 tf-card-desc">
                             <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             <span>{formatDate(log.created_at)}</span>
                           </div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {log.user_display_id ? (
-                            <span className="text-sm font-mono text-gray-700 dark:text-slate-300">{log.user_display_id}</span>
-                          ) : log.actor_role?.toLowerCase() === 'candidate' ? (
-                            <span className="text-sm font-mono text-brand-blue">CID</span>
-                          ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <NameAvatar name={log.user_name} fallback={log.user_email} userId={log.user_id} size="md" />
-                            <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{log.user_name || 'Unknown'}</p>
+                            <div className="min-w-0">
+                              <p
+                                className="text-sm font-medium text-gray-900 dark:text-slate-50"
+                                title={isCandidateActor(log) ? 'Candidate name is masked for privacy' : log.user_email || undefined}
+                              >
+                                {log.user_name || 'Unknown'}
+                              </p>
+                              <p className="mt-0.5 flex items-center gap-1.5 tf-meta">
+                                {isCandidateActor(log) ? (
+                                  <span
+                                    className="inline-flex rounded px-1.5 py-px text-2xs font-semibold bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/25"
+                                    title="Candidates don't have a user ID"
+                                  >
+                                    Candidate
+                                  </span>
+                                ) : (
+                                  <span className="capitalize">{formatRole(log.actor_role) || '—'}</span>
+                                )}
+                                {log.user_display_id && (
+                                  <>
+                                    <span aria-hidden className="text-gray-300 dark:text-slate-600">·</span>
+                                    <span className="font-mono" title="User ID">{log.user_display_id}</span>
+                                  </>
+                                )}
+                              </p>
+                            </div>
                           </div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          {log.actor_role ? (
-                            <span className="text-sm text-gray-700 dark:text-slate-300 capitalize">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</span>
-                          ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
-                          )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold ${getActionColor(log.action)}`}>
@@ -1308,29 +1503,26 @@ export default function AuditTrailPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4">
-                          <span className="text-sm text-gray-700 dark:text-slate-300 max-w-[180px] truncate block" title={getDetailsSummary(log)}>
+                          <span className="tf-body max-w-[180px] truncate block" title={getDetailsSummary(log)}>
                             {getDetailsSummary(log)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${actionStatus.color}`}>
-                            {actionStatus.label}
                           </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {(() => {
                             const impactLevel = getImpactLevel(log);
                             return (
-                              <span className={`text-sm font-semibold ${impactLevel.color}`}>
-                                {impactLevel.label}
-                              </span>
+                              // One line, so every row keeps the same height.
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${actionStatus.color}`}>
+                                  {actionStatus.label}
+                                </span>
+                                {/* Low impact is the normal case — only call out Medium / High. */}
+                                {impactLevel.label !== 'Low' && (
+                                  <span className={`text-xs font-semibold ${impactLevel.color}`} title={`${impactLevel.label} impact`}>{impactLevel.label}</span>
+                                )}
+                              </div>
                             );
                           })()}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[log.error_origin]}`}>
-                            {ERROR_ORIGIN_LABELS[log.error_origin]}
-                          </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {log.error_code ? (
@@ -1364,13 +1556,14 @@ export default function AuditTrailPage() {
                             <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap tf-sticky-col">
+                        <td className="px-4 py-4 whitespace-nowrap text-center tf-sticky-col">
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"
+                            aria-label="View details"
+                            title="View details"
+                            className="inline-flex h-8 w-8 items-center justify-center text-gray-600 dark:text-slate-300 hover:text-brand-blue hover:bg-brand-blue/5 dark:hover:bg-slate-700 rounded-lg transition-colors"
                           >
                             <Eye className="w-4 h-4" />
-                            View
                           </button>
                         </td>
                       </tr>
@@ -1386,13 +1579,23 @@ export default function AuditTrailPage() {
           {filteredLogs.length > 0 && (
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50/50 dark:bg-slate-800/50">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="tf-card-desc">
                   Showing <span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900 dark:text-slate-50">{total}</span>
                 </p>
+                <div className="flex items-center gap-2">
+                  <span className="tf-body-muted whitespace-nowrap">Rows per page</span>
+                  <FilterSelect
+                    ariaLabel="Rows per page"
+                    value={String(pageSize)}
+                    onChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+                    options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                    className="w-auto sm:w-auto"
+                  />
+                </div>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
                 <div className="flex items-center gap-1.5">
-                  <span className="hidden sm:inline text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="hidden sm:inline tf-body-muted whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -1453,7 +1656,7 @@ export default function AuditTrailPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 dark:text-slate-50">Audit Log Details</h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-500">Complete event information</p>
+                  <p className="tf-meta">Complete event information</p>
                 </div>
               </div>
               <button
@@ -1471,8 +1674,12 @@ export default function AuditTrailPage() {
                 <NameAvatar name={selectedLog.user_name} fallback={selectedLog.user_email} userId={selectedLog.user_id} size="lg" />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
-                  {selectedLog.actor_role && (
-                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate capitalize">{selectedLog.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
+                  {isCandidateActor(selectedLog) ? (
+                    <p className="tf-body-muted">Candidate · name masked for privacy</p>
+                  ) : selectedLog.actor_role && (
+                    <p className="tf-body-muted truncate capitalize">
+                      {formatRole(selectedLog.actor_role)}{selectedLog.user_display_id ? ` · ${selectedLog.user_display_id}` : ''}
+                    </p>
                   )}
                 </div>
                 <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
@@ -1537,7 +1744,7 @@ export default function AuditTrailPage() {
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                         <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-sm text-gray-500 dark:text-slate-500">{modalBalanceBefore}</span>
+                          <span className="tf-body-muted">{modalBalanceBefore}</span>
                           <span className="text-gray-300 dark:text-slate-500">→</span>
                           <span className="text-lg font-bold text-gray-900 dark:text-slate-50">{modalBalanceAfter ?? 0}</span>
                         </div>
@@ -1555,7 +1762,7 @@ export default function AuditTrailPage() {
               {selectedLog.entity_id && (
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
                   <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
-                  <p className="text-sm font-mono text-gray-700 dark:text-slate-300 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
+                  <p className="tf-body font-mono truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
                 </div>
               )}
 
@@ -1591,7 +1798,7 @@ export default function AuditTrailPage() {
                     {selectedLog.total_session_duration != null && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{formatSessionDuration(selectedLog.total_session_duration)}</span>
+                        <span className="tf-cell-name">{formatSessionDuration(selectedLog.total_session_duration)}</span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
@@ -1617,7 +1824,7 @@ export default function AuditTrailPage() {
                     {selectedLog.error_origin !== 'NONE' && (selectedLog.units_consumed ?? 0) > 0 && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
-                        <span className="text-sm text-gray-700 dark:text-slate-300 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
+                        <span className="tf-body break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
                       </div>
                     )}
                   </div>
@@ -1686,7 +1893,7 @@ export default function AuditTrailPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{aiAuditData.ai_model_version || 'N/A'}</p>
+                    <p className="tf-cell-name">{aiAuditData.ai_model_version || 'N/A'}</p>
                   </div>
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
                     <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
@@ -1734,7 +1941,7 @@ export default function AuditTrailPage() {
                     </>
                   ) : (
                     <div className="px-3 sm:px-4 py-2 sm:py-3">
-                      <span className="text-sm text-gray-500 dark:text-slate-500">No input parameters recorded</span>
+                      <span className="tf-body-muted">No input parameters recorded</span>
                     </div>
                   )}
                 </div>
@@ -1760,7 +1967,7 @@ export default function AuditTrailPage() {
                   <h3 className="text-base font-bold text-gray-900 dark:text-slate-50">
                     Export {exportFormat === 'csv' ? 'CSV' : 'Excel'}
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-500">Configure date range and columns</p>
+                  <p className="tf-meta">Configure date range and columns</p>
                 </div>
               </div>
               <button onClick={() => setExportModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors" aria-label="Close">
@@ -1770,6 +1977,16 @@ export default function AuditTrailPage() {
 
             {/* Body */}
             <div className="overflow-y-auto flex-1 p-5 max-sm:p-4 space-y-5 max-sm:space-y-4">
+              {/* The list endpoint returns at most EXPORT_LIMIT rows per request — say so instead of cutting silently. */}
+              {total > EXPORT_LIMIT && (
+                <div className="flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2.5 text-xs text-warning-strong ring-1 ring-warning-line">
+                  <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Exports are limited to the latest <strong>{EXPORT_LIMIT.toLocaleString()}</strong> records. The current view has{' '}
+                    <strong>{total.toLocaleString()}</strong> — narrow the date range or filters to export the rest.
+                  </span>
+                </div>
+              )}
               {/* Date Range */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-3">Date Range</p>
@@ -1852,7 +2069,7 @@ export default function AuditTrailPage() {
                         onChange={e => setExportSelectedCols(prev => ({ ...prev, [col.key]: e.target.checked }))}
                         className="w-4 h-4 rounded border-gray-200 dark:border-slate-700 accent-brand-blue focus:ring-brand-blue/40 cursor-pointer"
                       />
-                      <span className="text-sm max-sm:text-xs text-gray-700 dark:text-slate-300 group-hover:text-gray-900 dark:group-hover:text-slate-50">{col.label}</span>
+                      <span className="tf-body max-sm:text-xs group-hover:text-gray-900 dark:group-hover:text-slate-50">{col.label}</span>
                     </label>
                   ))}
                 </div>
@@ -1864,8 +2081,8 @@ export default function AuditTrailPage() {
 
             {/* Footer */}
             <div className="px-5 max-sm:px-4 py-4 max-sm:py-3 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/50 flex items-center justify-between gap-3">
-              <p className="text-xs text-gray-500 dark:text-slate-500">
-                Up to {Math.min(total, 1000).toLocaleString()} records
+              <p className="tf-meta">
+                Up to {Math.min(total, EXPORT_LIMIT).toLocaleString()} records
               </p>
               <div className="flex gap-2">
                 <Button

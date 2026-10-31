@@ -193,7 +193,7 @@ export default function ApplyToJobModal({
               <Briefcase className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{modalTitle}</h2>
+              <h2 className="tf-section-title">{modalTitle}</h2>
               {fixedJob && !description ? (
                 /* The fixed job, as every other page shows a job: the JD ID
                    badge, the title, then the version pill. */
@@ -207,7 +207,7 @@ export default function ApplyToJobModal({
                   </span>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{modalDescription}</p>
+                <p className="tf-meta mt-0.5">{modalDescription}</p>
               )}
             </div>
           </div>
@@ -273,7 +273,7 @@ export default function ApplyToJobModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
+                  <h4 className="tf-subsection-title mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     {nextSteps ? (
                       <>
@@ -307,7 +307,7 @@ export default function ApplyToJobModal({
 
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
-          <div className="text-sm text-gray-700 dark:text-slate-300">
+          <div className="tf-body">
             {jobOnly
               ? !selection
                 ? 'Select one job to continue'

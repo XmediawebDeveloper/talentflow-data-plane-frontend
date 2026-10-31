@@ -14,7 +14,7 @@ export default function NotFound() {
         <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">
           We can&apos;t find that page
         </h1>
-        <p className="mx-auto max-w-md text-sm text-gray-600 mb-6">
+        <p className="mx-auto max-w-md tf-card-desc mb-6">
           The page you&apos;re looking for has moved, was renamed, or never existed. Try heading back to your dashboard.
         </p>
         <div className="flex flex-col-reverse sm:flex-row sm:justify-center gap-3">

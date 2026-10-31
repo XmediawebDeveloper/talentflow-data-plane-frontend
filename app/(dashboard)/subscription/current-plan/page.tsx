@@ -799,9 +799,6 @@ function CurrentPlanContent() {
   const [selectedQueuedUpgrade, setSelectedQueuedUpgrade] = useState<QueuedUpgrade | null>(null);
   const [tcAccepted, setTcAccepted] = useState(false);
   const [isApplyingUpgrade, setIsApplyingUpgrade] = useState(false);
-  const [isCancellingUpgrade, setIsCancellingUpgrade] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
   const [expandedFeaturesPlan, setExpandedFeaturesPlan] = useState<string | null>(null);
   const [showAllModalFeatures, setShowAllModalFeatures] = useState(false);
   const paymentModalRef = useRef<HTMLDivElement>(null);
@@ -1419,61 +1416,6 @@ function CurrentPlanContent() {
   };
 
   // Cancel queued upgrade (called from Cancel Modal)
-  const handleCancelUpgrade = async () => {
-    if (!selectedQueuedUpgrade) return;
-
-    try {
-      setIsCancellingUpgrade(true);
-      setError(null);
-
-      const token = localStorage.getItem('accessToken');
-      const reasonParam = encodeURIComponent(cancelReason.trim() || 'Cancelled by user');
-      const userIdParam = user?.id ? `&user_id=${encodeURIComponent(user.id)}` : '';
-      const userEmailParam = user?.email ? `&user_email=${encodeURIComponent(user.email)}` : '';
-      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}${userIdParam}${userEmailParam}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // Handle 401 - logout and redirect
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-
-      const data = await response.json();
-
-      if (response.ok && data.status === 'success') {
-        const cancelledPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
-        const isCancellingDowngrade = comparePlanTiers(
-          currentPlan?.tier, cancelledPlan?.tier,
-          currentPlanBillingPeriod,
-          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
-        ) === -1;
-        setSuccessMessage(`Queued ${isCancellingDowngrade ? 'downgrade' : 'upgrade'} to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
-        setShowCancelModal(false);
-        setSelectedQueuedUpgrade(null);
-        setCancelReason('');
-        await fetchQueuedUpgrades();
-      } else {
-        // Handle both string and object error formats
-        const errorDetail = data.detail;
-        const errorMsg = typeof errorDetail === 'string'
-          ? errorDetail
-          : errorDetail?.message || 'Failed to cancel upgrade';
-        setError(errorMsg);
-      }
-    } catch (err) {
-      console.error('[CurrentPlan] Error cancelling upgrade:', err);
-      setError(err instanceof Error ? err.message : 'Failed to cancel upgrade');
-    } finally {
-      setIsCancellingUpgrade(false);
-    }
-  };
-
   useEffect(() => {
     // Wait for shared quota data to be loaded before fetching other data
     if (quotaLoading) return;
@@ -2297,7 +2239,7 @@ function CurrentPlanContent() {
                 ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
                   <>
                     <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlanPrice, currentPlanCurrency)}</span>
-                    <span className="text-sm text-gray-500 dark:text-slate-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
+                    <span className="tf-body-muted">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
                   </>
                 ) : currentPlan?.price ? (
                   <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlan.price, currentPlan.currency)}</span>
@@ -2680,7 +2622,7 @@ function CurrentPlanContent() {
             </span>
             <div className="flex-1">
               <p className="text-sm font-semibold text-brand-orange-deep">Plan Changes Pending</p>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">
+              <p className="mt-0.5 tf-card-desc">
                 {daysRemaining !== null && (
                   <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
                 )}
@@ -2776,7 +2718,7 @@ function CurrentPlanContent() {
                 {purchaseHold.message}
               </p>
               {purchaseHold.paymentReference && (
-                <p className="text-xs text-gray-600 dark:text-slate-400 mt-2">
+                <p className="tf-meta-strong mt-2">
                   Payment reference: <span className="font-mono">{purchaseHold.paymentReference}</span>
                 </p>
               )}
@@ -2803,7 +2745,7 @@ function CurrentPlanContent() {
               <div className="min-w-0">
                 <h3 className="text-sm sm:text-base font-semibold text-warning-strong">Pending Plan Changes</h3>
                 <p className="mt-0.5 text-sm text-warning">
-                  You have {queuedUpgrades.length} queued plan change{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
+                  Your purchased plan is queued. It activates automatically when your current plan ends, or you can apply it now. You can buy a different plan only after it is active.
                 </p>
               </div>
             </div>
@@ -2870,7 +2812,7 @@ function CurrentPlanContent() {
                         const correctedReason = fromPlan
                           ? `User ${direction} from ${fromPlan}${fromPeriod ? ` (${fromPeriod})` : ''} to ${upgrade.new_plan_name}${toPeriod ? ` (${toPeriod})` : ''}`
                           : upgrade.reason.replace(/\b(upgrade|downgrade)\b/gi, (m: string) => m[0] === m[0].toUpperCase() ? (isQueuedDowngrade ? 'Downgrade' : 'Upgrade') : direction);
-                        return <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Reason: {correctedReason}</p>;
+                        return <p className="tf-meta mt-2">Reason: {correctedReason}</p>;
                       })()}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -2885,20 +2827,6 @@ function CurrentPlanContent() {
                         <Zap className="h-4 w-4" />
                         Apply Now
                       </button>
-                      {upgrade.can_cancel !== false && (
-                        <button
-                          onClick={() => {
-                            setSelectedQueuedUpgrade(upgrade);
-                            setCancelReason('');
-                            setShowCancelModal(true);
-                          }}
-                          disabled={isCancellingUpgrade}
-                          className="flex items-center gap-1.5 rounded-lg border border-destructive-line bg-destructive-subtle px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive-subtle disabled:opacity-50"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          Cancel
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -2906,8 +2834,8 @@ function CurrentPlanContent() {
             </div>
 
             <p className="text-xs text-warning mt-4">
-              Queued plan changes will automatically apply when your current plan expires.
-              Click "Apply Now" to apply immediately (remaining credits will be forfeited).
+              A purchased plan cannot be cancelled. It applies automatically when your current plan expires,
+              or click "Apply Now" to switch immediately (remaining credits on your current plan will be forfeited).
             </p>
           </div>
         )}
@@ -2925,9 +2853,7 @@ function CurrentPlanContent() {
                 </p>
                 {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
                   <p className="mt-1.5 text-sm text-warning">
-                    You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
-                      ? 'Cancel it above or apply it now to select a different plan.'
-                      : 'Apply it now to select a different plan.'}
+                    You have a purchased plan queued. Apply it now, or wait until it activates, before choosing a different plan.
                   </p>
                 )}
               </div>
@@ -3040,7 +2966,7 @@ function CurrentPlanContent() {
                                 plan.currency
                               )}
                             </span>
-                            <span className="text-gray-500 dark:text-slate-500 text-sm">
+                            <span className="tf-body-muted">
                               {/* Show correct billing period based on what's available */}
                               {isYearly
                                 ? (plan.annualPrice ? '/year' : '/month')
@@ -3074,13 +3000,13 @@ function CurrentPlanContent() {
                           )}
                           {/* Show monthly equivalent hint when viewing yearly and both exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-meta mt-1">
                               {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
                             </p>
                           )}
                           {/* Show yearly option hint when viewing monthly and both exist */}
                           {!isYearly && plan.annualPrice && plan.monthlyPrice && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-meta mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
                                 <span className="text-brand-teal font-semibold"> (Save {Math.round(plan.discountPercentage)}%)</span>
@@ -3274,7 +3200,7 @@ function CurrentPlanContent() {
                           </span>
                           <div className="min-w-0">
                             <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-base">{section.label}</h3>
-                            <p className="text-xs text-gray-500 dark:text-slate-400">{section.description}</p>
+                            <p className="tf-meta">{section.description}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -3351,7 +3277,7 @@ function CurrentPlanContent() {
                         )}
                       </div>
                       {modalStep !== 'result' && selectedPlanForPayment.description && (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-slate-500">{selectedPlanForPayment.description}</p>
+                        <p className="mt-0.5 line-clamp-1 tf-meta">{selectedPlanForPayment.description}</p>
                       )}
                     </div>
                   </div>
@@ -3420,7 +3346,7 @@ function CurrentPlanContent() {
                       {/* Left: billing summary + add-on */}
                       <div className="flex min-w-0 flex-col gap-3">
                         <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
-                          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-slate-50">Billing Summary</h3>
+                          <h3 className="mb-1 tf-subsection-title">Billing Summary</h3>
                           <div className="divide-y divide-gray-100 text-[13px] dark:divide-slate-700/60">
                             <div className="flex items-center justify-between gap-3 py-1.5">
                               <span className="text-gray-600 dark:text-slate-400">Plan</span>
@@ -3467,7 +3393,7 @@ function CurrentPlanContent() {
                           {/* Total */}
                           <div className="mt-2 flex flex-col gap-1.5 rounded-xl bg-brand-blue/[0.05] px-3 py-2.5 ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:ring-slate-700 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Total (incl. GST)</p>
+                              <p className="tf-cell-name">Total (incl. GST)</p>
                               <p className="text-[11px] text-gray-500 dark:text-slate-400">
                                 {(isYearly && plan.annualPrice) || (!plan.monthlyPrice && plan.annualPrice)
                                   ? 'Billed annually (12× quotas)'
@@ -3511,7 +3437,7 @@ function CurrentPlanContent() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Dedicated Database</span>
+                                <span className="tf-cell-name">Dedicated Database</span>
                                 <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-semibold text-brand-blue">Add-on</span>
                                 {hasDedicatedDatabase && (
                                   <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-[11px] font-semibold text-warning">Active</span>
@@ -3523,7 +3449,7 @@ function CurrentPlanContent() {
                                 </span>
                               )}
                             </div>
-                            <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                            <p className="mt-0.5 tf-meta">
                               {hasDedicatedDatabase
                                 ? 'Your organization already uses a dedicated database. This cannot be changed.'
                                 : 'Get your own dedicated database for enhanced isolation and performance'}
@@ -3551,7 +3477,7 @@ function CurrentPlanContent() {
 
                       {/* Right: what's included */}
                       <div className="flex min-w-0 flex-col rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">What&apos;s included</h3>
+                        <h3 className="tf-subsection-title">What&apos;s included</h3>
                         <p className="text-[11px] text-gray-500 dark:text-slate-400">Everything you need to scale your hiring.</p>
 
                         {includedRows.length > 0 && (
@@ -3862,7 +3788,7 @@ function CurrentPlanContent() {
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">
                     {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     {isQueuedDowngrade ? 'Downgrade' : 'Upgrade'} to {selectedQueuedUpgrade.new_plan_name}
                   </p>
                 </div>
@@ -3922,7 +3848,7 @@ function CurrentPlanContent() {
               {/* Terms & Conditions */}
               <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 dark:text-slate-50 mb-3">Terms & Conditions</h4>
-                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 text-sm text-gray-600 dark:text-slate-400 space-y-2 max-h-40 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 tf-card-desc space-y-2 max-h-40 overflow-y-auto">
                   <p>1. Any unused credits, quotas, or features from your current subscription will be immediately terminated and cannot be recovered.</p>
                   <p>2. Your new plan will start immediately upon confirmation and will be valid for the billing period you selected ({selectedQueuedUpgrade.billing_interval}).</p>
                   <p>3. No prorated refunds will be issued for the remaining period of your current plan.</p>
@@ -3943,7 +3869,7 @@ function CurrentPlanContent() {
                 />
                 <div className="flex-1">
                   <span className="font-medium text-gray-900 dark:text-slate-50">I accept the terms and conditions</span>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     I understand that remaining credits on my current plan will be forfeited and my new plan will start immediately.
                   </p>
                 </div>
@@ -3968,136 +3894,6 @@ function CurrentPlanContent() {
                     </>
                   )}
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-
-      {/* Cancel Queued Upgrade Modal */}
-      {showCancelModal && selectedQueuedUpgrade && (() => {
-        const cancelQueuedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
-        const isCancelDowngrade = comparePlanTiers(
-          currentPlan?.tier,
-          cancelQueuedPlan?.tier,
-          currentPlanBillingPeriod,
-          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
-        ) === -1;
-        const changeLabel = isCancelDowngrade ? 'Downgrade' : 'Upgrade';
-        return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex-shrink-0 p-6 border-b border-gray-200 dark:border-slate-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-destructive-subtle rounded-full flex items-center justify-center">
-                    <XCircle className="w-6 h-6 text-destructive" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Cancel {changeLabel}</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Cancel queued plan {changeLabel.toLowerCase()}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowCancelModal(false);
-                    setSelectedQueuedUpgrade(null);
-                    setCancelReason('');
-                  }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                 aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
-              {/* Warning */}
-              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-destructive-strong mb-1">Are you sure?</h4>
-                    <p className="text-sm text-destructive">
-                      You are about to cancel the queued {changeLabel.toLowerCase()} to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
-                      If you paid for this {changeLabel.toLowerCase()}, you may need to request a refund separately.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Plan Change Details */}
-              <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
-                <h4 className="font-medium text-gray-900 dark:text-slate-50 text-sm">{changeLabel} Details</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-slate-500">New Plan:</span>
-                    <span className="font-medium text-gray-900 dark:text-slate-50">{selectedQueuedUpgrade.new_plan_name}</span>
-                  </div>
-                  {(selectedQueuedUpgrade.payment_amount !== undefined || selectedQueuedUpgrade.breakdown) && (
-                    <QueuedAmountBreakdown upgrade={selectedQueuedUpgrade} />
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-slate-500">Scheduled for:</span>
-                    <span className="font-medium text-gray-900 dark:text-slate-50">
-                      {selectedQueuedUpgrade.auto_apply_date ? formatISTDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
-                    </span>
-                  </div>
-                  {selectedQueuedUpgrade.days_until_activation !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-slate-500">Days until activation:</span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">
-                        {selectedQueuedUpgrade.days_until_activation} day{selectedQueuedUpgrade.days_until_activation !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-slate-500">Queued on:</span>
-                    <span className="font-medium text-gray-900 dark:text-slate-50">
-                      {selectedQueuedUpgrade.created_at ? formatISTDate(selectedQueuedUpgrade.created_at) : '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cancellation Reason */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                  Reason for cancellation (optional)
-                </label>
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Please let us know why you're cancelling..."
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-destructive-line focus:border-destructive-line resize-none"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowCancelModal(false);
-                    setSelectedQueuedUpgrade(null);
-                    setCancelReason('');
-                  }}
-                >
-                  Keep {changeLabel}
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="flex-1"
-                  onClick={handleCancelUpgrade}
-                  disabled={isCancellingUpgrade}
-                  icon={isCancellingUpgrade ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
-                >
-                  {isCancellingUpgrade ? 'Cancelling...' : `Cancel ${changeLabel}`}
-                </Button>
               </div>
             </div>
           </div>

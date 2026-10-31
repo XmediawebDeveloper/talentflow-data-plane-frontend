@@ -119,7 +119,7 @@ export default function AccessRestrictedModal() {
             Access Restricted
           </h2>
 
-          <p className="text-gray-600 dark:text-slate-400 text-sm">
+          <p className="tf-card-desc">
             Your access has been restricted by your organization administrator.
           </p>
         </div>
@@ -128,7 +128,7 @@ export default function AccessRestrictedModal() {
         <div className="px-6 sm:px-8 pb-6 flex-1 overflow-y-auto">
 
           {/* Explanation */}
-          <p id="access-restricted-desc" className="mt-4 text-sm text-gray-600 dark:text-slate-400 leading-relaxed text-center">
+          <p id="access-restricted-desc" className="mt-4 tf-card-desc leading-relaxed text-center">
             Your current session has ended and you can no longer access the application.
             If you believe this restriction was made in error, please contact your administrator.
           </p>

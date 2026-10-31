@@ -22,6 +22,7 @@ export interface ProctoringSettings {
   violation_low_threshold: number;
   violation_medium_threshold: number;
   recording_retention_days: number;
+  recording_view_days?: number;
   email_masking_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -128,6 +129,18 @@ export interface GetEventsParams {
 }
 
 // Service
+export interface AssessmentShareBarCheck {
+  index: number;
+  checked_at: string | null;
+  hidden: boolean | null;
+  pip_detected: boolean | null;
+  recorder_overlay_detected: boolean | null;
+  foreign_app_detected: boolean | null;
+  foreign_app_label: string | null;
+  has_original: boolean;
+  has_enhanced: boolean;
+}
+
 export const proctoringService = {
   /**
    * Get proctoring settings for the current tenant
@@ -151,6 +164,37 @@ export const proctoringService = {
   async getEvents(params?: GetEventsParams): Promise<ProctoringEventsListResponse> {
     const response = await api.get<ProctoringEventsListResponse>('/proctoring/events', { params });
     return response.data;
+  },
+
+  /** Evidence screenshot for one event (object-detection violations). Null when none / purged. */
+  async getShareBarChecks(attemptId: string): Promise<AssessmentShareBarCheck[]> {
+    try {
+      const response = await api.get(`/proctoring/attempts/${attemptId}/share-bar-checks`);
+      return (response.data?.checks || []) as AssessmentShareBarCheck[];
+    } catch {
+      return [];
+    }
+  },
+
+  async getShareBarScreenshot(attemptId: string, index: number, which: 'original' | 'enhanced'): Promise<Blob | null> {
+    try {
+      const response = await api.get(`/proctoring/attempts/${attemptId}/share-bar-screenshot`, {
+        params: { index, which },
+        responseType: 'blob',
+      });
+      return response.data as Blob;
+    } catch {
+      return null;
+    }
+  },
+
+  async getEventScreenshot(eventId: string): Promise<Blob | null> {
+    try {
+      const response = await api.get(`/proctoring/events/${eventId}/screenshot`, { responseType: 'blob' });
+      return response.data as Blob;
+    } catch {
+      return null;
+    }
   },
 
   /**

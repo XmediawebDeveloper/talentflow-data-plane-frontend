@@ -99,7 +99,7 @@ function FullResumeContent({ text }: { text: string }) {
         <div className="flex items-center gap-3">
           <FileText className="w-5 h-5 text-gray-500" />
           <h3 className="text-lg font-semibold text-gray-800">Full Resume Content</h3>
-          <div className="flex items-center gap-3 text-xs text-gray-500 ml-2">
+          <div className="flex items-center gap-3 tf-meta ml-2">
             <span className="flex items-center gap-1">
               <Hash className="w-3 h-3" />
               {wordCount.toLocaleString()} words
@@ -159,7 +159,7 @@ function FullResumeContent({ text }: { text: string }) {
                 <div className="p-4">
                   {section.content.map((line, lineIdx) => (
                     line ? (
-                      <p key={lineIdx} className="text-sm text-gray-700 mb-2 last:mb-0 leading-relaxed">
+                      <p key={lineIdx} className="tf-body mb-2 last:mb-0 leading-relaxed">
                         {line}
                       </p>
                     ) : (
@@ -441,10 +441,36 @@ export default function ResumeViewPage() {
   const isArchived = !!(resume?.is_archived ?? resume?.isArchived);
   const ARCHIVED_ACTION_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 
+  /* Opened for ONE job (AI Talent Match, or Job Details): Score and Invite here
+     act on that job alone. A Disabled / Archived JD can't be scored or invited
+     to — same rule as Resume Scoring / AI Talent Match — so both lock, with
+     "JD is disabled" as the reason. Opened from a resume pool (no job), the
+     job picker already keeps such JDs out, so nothing changes there. */
+  const contextJobId = viewSource === 'ai-talent-match' ? aiMatchJobId
+    : viewSource === 'job-details' ? jobDetailsJobId
+    : null;
+  const [contextJob, setContextJob] = useState<{ id: string; status: string } | null>(null);
+  useEffect(() => {
+    if (!contextJobId) return;
+    let cancelled = false;
+    jdService.get(contextJobId)
+      .then((jd) => {
+        if (cancelled) return;
+        setContextJob({ id: contextJobId, status: String(jd?.status || mapJDToJob(jd).status || '') });
+      })
+      .catch(() => { /* status unknown: leave the actions as they are */ });
+    return () => { cancelled = true; };
+  }, [contextJobId]);
+  const contextJobStatus = contextJobId && contextJob?.id === contextJobId ? contextJob.status.toLowerCase() : '';
+  const contextJobLock = contextJobStatus === 'disabled' ? 'JD is disabled'
+    : contextJobStatus === 'archived' ? 'JD is archived'
+    : null;
+
   // Plan gates DISABLE (hover explains), they never hide: permission decides
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
     !isArchived &&
+    !contextJobLock &&
     (isTenantAdmin ||
     (hasPermission('canRunScoring') &&
       hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score')));
@@ -465,6 +491,7 @@ export default function ResumeViewPage() {
   // job context here, so the user picks the JD first.
   const canInviteAssessment =
     !isArchived &&
+    !contextJobLock &&
     (isTenantAdmin || (
       hasPermission('canCreateAssessments') && hasPermissionCode(
         viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
@@ -474,6 +501,7 @@ export default function ResumeViewPage() {
   // Resumes / Shared Database), plus AI Interview's own Invite.
   const canInviteAIInterview =
     !isArchived &&
+    !contextJobLock &&
     (isTenantAdmin ||
     (hasPermission('canInviteAIInterviews') &&
       (viewSource === 'resume-database'
@@ -1070,6 +1098,11 @@ Best regards`);
     /* The match's own job — from the AI Talent Match page or a job's AI
        Talent Match Result tab. */
     const scopedJobId = viewSource === 'ai-talent-match' ? aiMatchJobId : fromJobAIMatch ? jobDetailsJobId : null;
+    // Safety net behind the greyed-out button: never score against a Disabled / Archived JD.
+    if (scopedJobId && contextJobLock) {
+      toast.error(`${contextJobLock} — resumes can't be scored against it`);
+      return;
+    }
     if (scopedJobId) {
       try {
         const [jd, lineage] = await Promise.all([
@@ -1513,7 +1546,7 @@ Best regards`);
                         onClick={() => { if (!canInviteAssessment) return; openCreateSend('assessment'); }}
                         disabled={!jobForInvite || assessmentPlanLocked}
                         aria-disabled={!canInviteAssessment}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                         className={canInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <ClipboardList className="w-4 h-4" />
@@ -1525,7 +1558,7 @@ Best regards`);
                         onClick={() => { if (!canInviteAIInterview) return; openCreateSend('interview'); }}
                         disabled={!jobForInvite || aiInterviewPlanLocked}
                         aria-disabled={!canInviteAIInterview}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                         className={canInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <Video className="w-4 h-4" />
@@ -1541,6 +1574,8 @@ Best regards`);
                           title={
                             isArchived
                               ? ARCHIVED_ACTION_MESSAGE
+                              : contextJobLock
+                                ? contextJobLock
                               : assessmentPlanLocked && aiInterviewPlanLocked
                                 ? PLAN_LOCKED_MESSAGE
                                 : !canInvite
@@ -1567,7 +1602,7 @@ Best regards`);
                               onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
                               disabled={assessmentPlanLocked}
                               aria-disabled={!canInviteAssessment}
-                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                               }`}
@@ -1582,7 +1617,7 @@ Best regards`);
                               onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
                               disabled={aiInterviewPlanLocked}
                               aria-disabled={!canInviteAIInterview}
-                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                               }`}
@@ -1651,7 +1686,7 @@ Best regards`);
                         onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                         disabled={applyPlanLocked || jobScoreStatus === 'checking'}
                         aria-disabled={!canApplyResumeToJob}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
                         className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
                           applyPlanLocked || jobScoreStatus === 'checking' || !canApplyResumeToJob
                             ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
@@ -1675,7 +1710,7 @@ Best regards`);
                       onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                       disabled={applyPlanLocked}
                       aria-disabled={!canApplyResumeToJob}
-                      title={isArchived ? ARCHIVED_ACTION_MESSAGE : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
+                      title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
                       className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
                         applyPlanLocked || !canApplyResumeToJob
                           ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
@@ -1699,9 +1734,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
+                <h3 className="tf-section-title">Professional Summary</h3>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
+              <p className="tf-body leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
             </div>
           )}
 
@@ -1712,7 +1747,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
+                <h3 className="tf-section-title">Work Experience</h3>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
@@ -1722,11 +1757,11 @@ Best regards`);
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{exp.title}</h4>
-                          <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                          <div className="flex items-center gap-2 tf-body mb-1">
                             <Building2 className="w-4 h-4" />
                             <span>{exp.company}</span>
                           </div>
-                          <div className="flex items-center gap-4 text-xs text-gray-600">
+                          <div className="flex items-center gap-4 tf-meta-strong">
                             {exp.location && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
@@ -1752,7 +1787,7 @@ Best regards`);
                             .map((point: string) => point.trim())
                             .filter((point: string) => point.length > 0)
                             .map((point: string, pointIndex: number) => (
-                              <div key={pointIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                              <div key={pointIndex} className="flex items-start gap-2 tf-body">
                                 <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                                 <span>{point}</span>
                               </div>
@@ -1762,7 +1797,7 @@ Best regards`);
                       {exp.achievements && exp.achievements.length > 0 && (
                         <div className="space-y-1.5">
                           {exp.achievements.map((achievement, achIndex) => (
-                            <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                            <div key={achIndex} className="flex items-start gap-2 tf-body">
                               <ChevronRight className="w-4 h-4 text-brand-cyan flex-shrink-0 mt-0.5" />
                               <span>{achievement}</span>
                             </div>
@@ -1788,7 +1823,7 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
+                  <h3 className="tf-section-title">Education</h3>
                 </div>
                 <div className="space-y-4">
                   {detailedResume.education.map((edu, index) => (
@@ -1797,9 +1832,9 @@ Best regards`);
                         {edu.degree}
                         {edu.field && ` in ${edu.field}`}
                       </h4>
-                      {edu.school && <div className="text-sm text-gray-700 mb-1">{edu.school}</div>}
-                      {edu.institution && !edu.school && <div className="text-sm text-gray-700 mb-1">{edu.institution}</div>}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                      {edu.school && <div className="tf-body mb-1">{edu.school}</div>}
+                      {edu.institution && !edu.school && <div className="tf-body mb-1">{edu.institution}</div>}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
                         {edu.location && (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
@@ -1834,7 +1869,7 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Code className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                  <h3 className="tf-section-title">Skills</h3>
                 </div>
 
                 {/* Technical Skills */}
@@ -1883,7 +1918,7 @@ Best regards`);
                   <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                     <Award className="w-4 h-4 text-brand-orange" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
+                  <h3 className="tf-section-title">Certifications</h3>
                 </div>
                 <div className={`space-y-2.5 ${detailedResume.certifications.length > 3 ? 'max-h-[15rem] overflow-y-auto pr-1' : ''}`}>
                   {detailedResume.certifications.map((cert, index) => (
@@ -1891,8 +1926,8 @@ Best regards`);
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 [overflow-wrap:anywhere]">
                           <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5">{cert.name}</h4>
-                          {cert.issuer && <div className="text-sm text-gray-700 mb-0.5">{cert.issuer}</div>}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                          {cert.issuer && <div className="tf-body mb-0.5">{cert.issuer}</div>}
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
                             {cert.date && (
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
@@ -1920,13 +1955,13 @@ Best regards`);
                       <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <Languages className="w-4 h-4 text-brand-cyan" />
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
+                      <h3 className="tf-section-title">Languages</h3>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {detailedResume.languages.map((lang, index) => (
                     <div key={index} className="px-3 py-2 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate" title={lang.name}>{lang.name}</div>
-                      <div className="text-xs text-gray-600 truncate">{lang.proficiency}</div>
+                      <div className="tf-meta-strong truncate">{lang.proficiency}</div>
                     </div>
                   ))}
                     </div>
@@ -1936,7 +1971,7 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Globe className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
+                    <h3 className="tf-section-title">Social &amp; Portfolio Links</h3>
                   </div>
                 )}
 
@@ -1988,7 +2023,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
+                <h3 className="tf-section-title">Projects</h3>
               </div>
               <div className="space-y-4">
                 {resume.projects.map((project: any, index: number) => (
@@ -2002,9 +2037,9 @@ Best regards`);
                       )}
                     </div>
                     {project.description && (
-                      <p className="text-gray-700 text-sm mb-2">{project.description}</p>
+                      <p className="tf-body mb-2">{project.description}</p>
                     )}
-                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                    <div className="flex flex-wrap gap-2 tf-meta-strong">
                       {project.duration && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
@@ -2028,7 +2063,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
+                <h3 className="tf-section-title">Awards & Honors</h3>
               </div>
               <div className="space-y-4">
                 {resume.awards.map((award: any, index: number) => (
@@ -2036,15 +2071,15 @@ Best regards`);
                     <div className="flex items-start justify-between">
                       <div>
                         <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{award.name}</h4>
-                        {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
+                        {award.issuer && <div className="tf-body">{award.issuer}</div>}
                         {award.date && (
-                          <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                          <div className="tf-meta-strong flex items-center gap-1 mt-1">
                             <Calendar className="w-3 h-3" />
                             {award.date}
                           </div>
                         )}
                         {award.description && (
-                          <p className="text-sm text-gray-600 mt-2">{award.description}</p>
+                          <p className="tf-card-desc mt-2">{award.description}</p>
                         )}
                       </div>
                       <Award className="w-6 h-6 text-brand-orange" />
@@ -2062,7 +2097,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
+                <h3 className="tf-section-title">Achievements</h3>
               </div>
               <div className="space-y-2">
                 {/* param is not just `string`: the render below branches on the object form
@@ -2085,20 +2120,20 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand-cyan" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
+                <h3 className="tf-section-title">Volunteer Experience</h3>
               </div>
               <div className="space-y-4">
                 {resume.volunteerExperience.map((vol: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
-                    {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
+                    {vol.organization && <div className="tf-body mb-1">{vol.organization}</div>}
                     {vol.duration && (
-                      <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                      <div className="tf-meta-strong flex items-center gap-1 mb-2">
                         <Calendar className="w-3 h-3" />
                         {vol.duration}
                       </div>
                     )}
-                    {vol.description && <p className="text-sm text-gray-600">{vol.description}</p>}
+                    {vol.description && <p className="tf-card-desc">{vol.description}</p>}
                   </div>
                 ))}
               </div>
@@ -2112,7 +2147,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
+                <h3 className="tf-section-title">Hobbies & Interests</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {resume.hobbies.map((hobby: string | { name?: string }, index: number) => (
@@ -2131,9 +2166,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
+                <h3 className="tf-section-title">Career Objective</h3>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">{resume.objective}</p>
+              <p className="tf-body leading-relaxed">{resume.objective}</p>
             </div>
           )}
 
@@ -2144,9 +2179,9 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
+                <h3 className="tf-section-title">Additional Information</h3>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
+              <p className="tf-body leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
             </div>
           )}
 
@@ -2162,7 +2197,7 @@ Best regards`);
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
                   <History className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
+                <h3 className="tf-section-title whitespace-nowrap">Version History</h3>
                 <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
@@ -2234,8 +2269,8 @@ Best regards`);
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-xs text-gray-500 mb-1 truncate">{version.name}</div>
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-600">
+                                <div className="tf-meta mb-1 truncate">{version.name}</div>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 tf-meta-strong">
                                   <span className="flex items-center gap-1 whitespace-nowrap">
                                     <Clock className="w-3 h-3 shrink-0" />
                                     {formatIST(version.uploadDate)}
@@ -2378,7 +2413,7 @@ Best regards`);
                   {/* min-w-0 + anywhere-wrap: a long underscore-joined file
                       name has no break points and ran out of the drawer. */}
                   <div className="min-w-0">
-                    <div className="text-xs text-gray-500 mb-1">File Name</div>
+                    <div className="tf-meta mb-1">File Name</div>
                     <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{resume.fileName || `${resume.name.replace(' ', '_')}_Resume.pdf`}</div>
                   </div>
                 </div>
@@ -2387,7 +2422,7 @@ Best regards`);
                     <HardDrive className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">File Size</div>
+                    <div className="tf-meta mb-1">File Size</div>
                     <div className="text-sm text-gray-900">
                       {resume.fileSizeKb ? `${resume.fileSizeKb} KB` :
                         (resume.versions && resume.versions.length > 0
@@ -2401,7 +2436,7 @@ Best regards`);
                     <File className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">File Type</div>
+                    <div className="tf-meta mb-1">File Type</div>
                     <div className="text-sm text-gray-900">{resume.fileType?.toUpperCase() || 'PDF'} Document</div>
                   </div>
                 </div>
@@ -2410,7 +2445,7 @@ Best regards`);
                     <Calendar className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Upload Date</div>
+                    <div className="tf-meta mb-1">Upload Date</div>
                     <div className="text-sm text-gray-900">
                       {formatIST(resume.uploadDate)}
                     </div>
@@ -2423,7 +2458,7 @@ Best regards`);
                     <Clock className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Last Modified</div>
+                    <div className="tf-meta mb-1">Last Modified</div>
                     <div className="text-sm text-gray-900">
                       {resume.lastUpdated
                         ? formatIST(resume.lastUpdated)
@@ -2436,7 +2471,7 @@ Best regards`);
                     <User className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
+                    <div className="tf-meta mb-1">Uploaded By</div>
                     <div className="text-sm text-gray-900">
                       {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}
                     </div>
@@ -2447,7 +2482,7 @@ Best regards`);
                     <FileText className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
+                    <div className="tf-meta mb-1">Total Attachments</div>
                     <div className="text-sm text-gray-900">
                       {resume.attachments} file{resume.attachments !== 1 ? 's' : ''}
                     </div>
@@ -2458,7 +2493,7 @@ Best regards`);
                     <History className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Version Count</div>
+                    <div className="tf-meta mb-1">Version Count</div>
                     <div className="text-sm text-gray-900">
                       {resume.versionCount || (resume.versions ? resume.versions.length : 1)} version{(resume.versionCount || (resume.versions ? resume.versions.length : 1)) !== 1 ? 's' : ''}
                     </div>
@@ -2523,7 +2558,7 @@ Best regards`);
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Select Resume Version</h2>
-                  <p className="text-sm text-gray-600">Choose which version to apply for the job</p>
+                  <p className="tf-card-desc">Choose which version to apply for the job</p>
                 </div>
               </div>
               <button
@@ -2561,7 +2596,7 @@ Best regards`);
                         <span className="min-w-0 font-medium text-gray-900 [overflow-wrap:anywhere]">{resume.fileName || 'Current Version'}</span>
                         <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Current</span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {resume.uploadDate ? formatISTDate(resume.uploadDate) : 'N/A'}
@@ -2603,9 +2638,9 @@ Best regards`);
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <File className="w-4 h-4 text-gray-400" />
                           <span className="whitespace-nowrap font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
-                          <span className="min-w-0 text-xs text-gray-500 [overflow-wrap:anywhere]">({version.name})</span>
+                          <span className="min-w-0 tf-meta [overflow-wrap:anywhere]">({version.name})</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {version.uploadDate ? formatISTDate(version.uploadDate) : 'N/A'}
@@ -2755,7 +2790,7 @@ Best regards`);
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                    <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                    <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
                 <button
@@ -2773,7 +2808,7 @@ Best regards`);
                 {/* What actually goes out with the email — the candidate's
                     resume file, with the eye to read it before sending. */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
+                  <label className="block tf-label mb-1">Attachment</label>
                   {(() => {
                     const row = resume as any;
                     const fileName = row?.fileName || `${resume?.name || 'resume'}.${row?.fileType || 'pdf'}`;
@@ -2788,7 +2823,7 @@ Best regards`);
                           <div className="text-sm font-medium text-gray-900 truncate" title={fileName}>
                             {fileName}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="tf-meta">
                             {resume?.name}
                             {fileType && <> &middot; {fileType}</>}
                             {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
@@ -2811,7 +2846,7 @@ Best regards`);
 
                 {/* Email Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Recipient Email <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -2825,7 +2860,7 @@ Best regards`);
 
                 {/* Subject Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Subject
                   </label>
                   <input
@@ -2839,7 +2874,7 @@ Best regards`);
 
                 {/* Message Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Message
                   </label>
                   <textarea

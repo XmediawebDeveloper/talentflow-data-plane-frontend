@@ -897,7 +897,7 @@ export const assessmentService = {
    * Get detailed results for a specific candidate
    */
   /** Presigned stream/download URL for the candidate (webcam) recording; null url when none. */
-  async getRecordingUrl(assessmentId: string, resultId: string, kind: 'candidate' | 'screen'): Promise<{ url: string | null; download_url: string | null; size: number | null } | null> {
+  async getRecordingUrl(assessmentId: string, resultId: string, kind: 'candidate' | 'screen'): Promise<{ url: string | null; download_url: string | null; size: number | null; expired?: boolean; view_days?: number; view_until?: string | null } | null> {
     try {
       const path = kind === 'screen' ? 'screen-recording-url' : 'recording-url';
       const response = await api.get(`/assessments/${assessmentId}/results/${resultId}/${path}`);
@@ -1007,6 +1007,31 @@ export const assessmentService = {
         `/assessments/${assessmentId}/clone`,
         payload
       );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Archive an assessment. The backend records the status it held right
+   * before archiving, so unarchive() can restore it exactly.
+   */
+  async archive(assessmentId: string): Promise<AssessmentResponse> {
+    try {
+      const response = await api.post<AssessmentResponse>(`/assessments/${assessmentId}/archive`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Unarchive an assessment (restores its pre-archive status).
+   */
+  async unarchive(assessmentId: string): Promise<AssessmentResponse> {
+    try {
+      const response = await api.post<AssessmentResponse>(`/assessments/${assessmentId}/unarchive`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

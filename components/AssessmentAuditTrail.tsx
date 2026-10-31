@@ -528,8 +528,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               whole of this block. */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Activity Log</h2>
-              <p className="text-sm text-gray-600 mt-0.5 sm:mt-1">
+              <h2 className="tf-section-title">Activity Log</h2>
+              <p className="tf-card-desc mt-0.5 sm:mt-1">
                 Complete activity log for assessments and candidates
               </p>
             </div>
@@ -590,7 +590,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
             <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div>
-                  <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
+                  <label htmlFor="audit-date-from" className="block tf-label mb-1.5">Date From</label>
                   <DateField
                     id="audit-date-from"
                     aria-label="Date From"
@@ -601,7 +601,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   />
                 </div>
                 <div>
-                  <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
+                  <label htmlFor="audit-date-to" className="block tf-label mb-1.5">Date To</label>
                   <DateField
                     id="audit-date-to"
                     aria-label="Date To"
@@ -678,7 +678,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
             <div className="py-10 sm:py-14 text-center">
               <AlertTriangle className="w-8 h-8 text-brand-orange-deep mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-900 mb-1">Could not load the activity log</p>
-              <p className="text-sm text-gray-600 mb-4">{loadError}</p>
+              <p className="tf-card-desc mb-4">{loadError}</p>
               <button
                 type="button"
                 onClick={() => loadAuditTrail()}
@@ -716,7 +716,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
                 </button>
-                <span className="text-xs text-gray-500">
+                <span className="tf-meta">
                   {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Select all'}
                 </span>
               </div>
@@ -771,11 +771,11 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                           </div>
                         </div>
 
-                        <p className="text-xs text-gray-600 dark:text-slate-400 line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
+                        <p className="tf-meta-strong line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
                           {activity.description}
                         </p>
 
-                        <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-slate-500">
+                        <div className="flex flex-col gap-1 tf-meta">
                           {activity.actor_name && (
                             <span className="flex items-center gap-1 min-w-0">
                               <User className="w-3 h-3 flex-shrink-0" />
@@ -885,8 +885,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-gray-600 line-clamp-2">{activity.description}</p>
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-xs text-gray-500">
+                            <p className="tf-card-desc line-clamp-2">{activity.description}</p>
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 tf-meta">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3 flex-shrink-0" />
@@ -908,7 +908,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                             </div>
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 mt-1 sm:mt-0">
-                            <p className="text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
+                            <p className="tf-body-muted">{formatTimestamp(activity.timestamp)}</p>
                             <button className="sm:mt-1 text-xs text-gray-400 hover:text-brand-blue">
                               <Eye className="w-3 h-3 inline mr-0.5 sm:mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
@@ -968,13 +968,13 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
 
         {/* Footer with Pagination */}
         <div className="p-3 sm:p-4 bg-slate-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
-          <div className="text-sm text-gray-600">
+          <div className="tf-card-desc">
             Showing {activities.length} of {total} entries
           </div>
           {total > pageSize && (
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="hidden sm:inline tf-card-desc whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -1030,7 +1030,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight truncate">Export Activity Logs</h3>
-                  <p className="text-sm text-gray-500 mt-1">Choose format</p>
+                  <p className="tf-body-muted mt-1">Choose format</p>
                 </div>
               </div>
               <button
@@ -1043,7 +1043,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
             </div>
 
             <div className="p-4 sm:p-5">
-              <p className="text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
+              <p className="tf-card-desc mb-3 sm:mb-4">Choose export format:</p>
 
               <div className="space-y-2.5 sm:space-y-3">
                 <button
@@ -1055,7 +1055,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   </div>
                   <div className="text-left flex-1 min-w-0">
                     <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
-                    <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets</div>
+                    <div className="tf-body-muted">Compatible with Excel, Google Sheets</div>
                   </div>
                 </button>
 
@@ -1068,7 +1068,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   </div>
                   <div className="text-left flex-1 min-w-0">
                     <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
-                    <div className="text-sm text-gray-500">Native Excel format with better formatting</div>
+                    <div className="tf-body-muted">Native Excel format with better formatting</div>
                   </div>
                 </button>
               </div>

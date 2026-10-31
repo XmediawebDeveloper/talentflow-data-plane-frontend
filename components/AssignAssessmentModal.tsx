@@ -65,8 +65,8 @@ export default function AssignAssessmentModal({
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Assign Assessment</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Send assessment invitations to candidates</p>
+              <h2 className="tf-section-title truncate">Assign Assessment</h2>
+              <p className="tf-meta mt-0.5">Send assessment invitations to candidates</p>
             </div>
           </div>
           <Button
@@ -109,7 +109,7 @@ export default function AssignAssessmentModal({
 
           {/* Assessment Selection */}
           <div className="mb-4 sm:mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">
+            <label className="block tf-label mb-2 sm:mb-3">
               Select Assessment to Assign
             </label>
 
@@ -181,7 +181,7 @@ export default function AssignAssessmentModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">What Happens Next?</h4>
+                  <h4 className="tf-subsection-title mb-2">What Happens Next?</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li className="flex items-start gap-2">
                       <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />

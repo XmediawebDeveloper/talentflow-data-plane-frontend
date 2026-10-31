@@ -215,9 +215,12 @@ function VideoPane({
   seekTo,
   seekKey,
   markers,
+  unavailableText,
 }: {
   label: string;
   hasFile: boolean;
+  /** Replaces "{label} not available", e.g. when the viewing window expired. */
+  unavailableText?: string | null;
   blobUrl: string | null;
   loading: boolean;
   error: boolean;
@@ -233,7 +236,7 @@ function VideoPane({
         <div className="w-12 h-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
           <VideoOff className="w-6 h-6 text-brand-blue/40" />
         </div>
-        <p className="text-gray-500 text-sm">{label} not available</p>
+        <p className="tf-body-muted">{unavailableText || `${label} not available`}</p>
       </div>
     );
   }
@@ -243,7 +246,7 @@ function VideoPane({
         <div className="w-12 h-12 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-3">
           <VideoOff className="w-6 h-6 text-destructive" />
         </div>
-        <p className="text-gray-500 text-sm">Could not load {label.toLowerCase()}</p>
+        <p className="tf-body-muted">Could not load {label.toLowerCase()}</p>
         <p className="text-xs text-gray-400 mt-1">The file may have been moved or deleted</p>
       </div>
     );
@@ -252,7 +255,7 @@ function VideoPane({
     return (
       <div className="text-center py-12">
         <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
-        <p className="text-sm text-gray-500">Loading {label.toLowerCase()}…</p>
+        <p className="tf-body-muted">Loading {label.toLowerCase()}…</p>
       </div>
     );
   }
@@ -300,7 +303,7 @@ function RecordingInfoPanel({
 }) {
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
-      <span className="text-xs text-gray-500">{label}</span>
+      <span className="tf-meta">{label}</span>
       <span className="text-sm font-medium text-gray-900">{value}</span>
     </div>
   );
@@ -382,7 +385,11 @@ function RecordingTabContent({
   const interviewDate = interview.started_at || interview.scheduled_at || interview.created_at;
   const statusLabel = interview.recording_file_path || interview.screen_recording_file_path
     ? 'Transcribed'
-    : 'Unavailable';
+    : interview.recording_view_expired ? 'Expired' : 'Unavailable';
+  const expiredText = interview.recording_view_expired
+    ? `Recordings can be viewed for ${interview.recording_view_days ?? 7} days after the interview.`
+      + (interview.recording_view_until ? ` This one expired on ${formatISTDate(interview.recording_view_until)}.` : '')
+    : null;
 
   return (
     <div className="space-y-4">
@@ -422,6 +429,7 @@ function RecordingTabContent({
           {isCandidate ? (
             <VideoPane
               label="Candidate recording"
+              unavailableText={expiredText}
               hasFile={!!interview.recording_file_path}
               blobUrl={videoBlobUrl}
               loading={videoLoading}
@@ -435,6 +443,7 @@ function RecordingTabContent({
           ) : (
             <VideoPane
               label="Screen recording"
+              unavailableText={expiredText}
               hasFile={!!interview.screen_recording_file_path}
               blobUrl={screenBlobUrl}
               loading={screenLoading}
@@ -477,14 +486,14 @@ function RecordingTabContent({
           )}
           {/* Shortcut hint for the question timeline (VideoWithDuration). */}
           {(markers ?? []).some(m => m.kind !== 'violation') && (
-            <div className="flex items-center justify-center gap-1 whitespace-nowrap text-xs text-gray-500">
+            <div className="flex items-center justify-center gap-1 whitespace-nowrap tf-meta">
               <kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">Ctrl</kbd>+<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">←</kbd>/<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">→</kbd>
               <span>jump between questions</span>
             </div>
           )}
           {/* Hint for the collapsed violation strip under the player. */}
           {(markers ?? []).some(m => m.kind === 'violation') && (
-            <div className="flex items-center justify-center gap-1 whitespace-nowrap text-xs text-gray-500">
+            <div className="flex items-center justify-center gap-1 whitespace-nowrap tf-meta">
               <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
               <span>under the video shows violations on the timeline</span>
             </div>
@@ -1792,7 +1801,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
       <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
-      <p className="text-sm text-gray-500 max-w-xs text-center">
+      <p className="tf-body-muted max-w-xs text-center">
         Please wait while the AI analyzes responses and verifies the results.
         The page will refresh automatically when ready.
       </p>
@@ -1839,7 +1848,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           Retry so a non-terminated interview never spins forever: it re-runs
           the same transcript evaluation and refreshes. */}
       {evalTriggerError && (
-        <p className="mt-4 text-xs text-destructive text-center max-w-sm">
+        <p className="mt-4 tf-error text-center max-w-sm">
           Evaluation request failed: {evalTriggerError}
         </p>
       )}
@@ -2109,7 +2118,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 <div className="mb-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
+                      <h1 className="tf-page-title">
                         {interview.candidate_name || 'Unknown Candidate'}
                       </h1>
                       <Badge variant={getStatusVariant(interview.status)}>
@@ -2170,7 +2179,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         </Link>
                       ) : <span key="job">{jobName}</span>);
                       return (
-                        <div className="flex items-center gap-2 flex-wrap mt-1 text-sm text-gray-500 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mt-1 tf-body-muted min-w-0">
                           {parts.map((part, i) => (
                             <span key={i} className="inline-flex items-center gap-2 min-w-0">
                               {i > 0 && <span className="text-gray-300" aria-hidden>|</span>}
@@ -2182,7 +2191,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     })()}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted mt-2">
                   {interview.completed_at && (
                     <span>
                       Completed {formatISTDate(interview.completed_at)}, {formatISTTime(interview.completed_at).toLowerCase()}
@@ -2601,7 +2610,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                 {!resultJdId ? (
                   <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
                     <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">No linked job description found</p>
+                    <p className="tf-body-muted">No linked job description found</p>
                   </div>
                 ) : resultJdError ? (
                   <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
@@ -2770,25 +2779,25 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className="text-lg font-semibold text-success">
                                 {(sentimentSummary.avg_confidence || 0).toFixed(1)}
                               </div>
-                              <div className="text-xs text-gray-500">Avg Confidence</div>
+                              <div className="tf-meta">Avg Confidence</div>
                             </div>
                             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
                               <div className="text-lg font-semibold text-destructive">
                                 {(sentimentSummary.avg_nervousness || 0).toFixed(1)}
                               </div>
-                              <div className="text-xs text-gray-500">Avg Nervousness</div>
+                              <div className="tf-meta">Avg Nervousness</div>
                             </div>
                             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
                               <div className="text-lg font-semibold text-brand-blue">
                                 {(sentimentSummary.avg_engagement || 0).toFixed(1)}
                               </div>
-                              <div className="text-xs text-gray-500">Avg Engagement</div>
+                              <div className="tf-meta">Avg Engagement</div>
                             </div>
                             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
                               <div className="text-lg font-semibold text-gray-900">
                                 {sentimentSummary.total_turns_analyzed}
                               </div>
-                              <div className="text-xs text-gray-500">Turns Analyzed</div>
+                              <div className="tf-meta">Turns Analyzed</div>
                             </div>
                           </div>
                         </div>
@@ -3304,7 +3313,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 Question {item.question_number ?? idx + 1}
                               </span>
                               {duration != null && (
-                                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                <span className="inline-flex items-center gap-1 tf-meta">
                                   <Clock className="w-3 h-3" />
                                   {duration} seconds
                                 </span>
@@ -3361,7 +3370,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
                                 <span className="text-xs font-semibold text-brand-blue">AI Analysis Summary</span>
                               </div>
-                              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                              <p className="tf-body leading-relaxed">{aiSummary}</p>
                             </div>
                           )}
 
@@ -3452,7 +3461,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 Question {item.question_number ?? idx + 1}
                               </span>
                               {duration != null && (
-                                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                                <span className="inline-flex items-center gap-1 tf-meta">
                                   <Clock className="w-3 h-3" />
                                   {duration} seconds
                                 </span>
@@ -3505,7 +3514,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                 const SectionHeader = ({ title, badge, badgeCls }: { title: string; badge: string; badgeCls: string }) => (
                   <div className="flex items-center gap-3 mb-3">
-                    <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+                    <h3 className="tf-card-title">{title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${badgeCls}`}>{badge}</span>
                   </div>
                 );
@@ -3663,7 +3672,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
                             <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                            <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
+                            <span className="tf-cell-name">Environment Verification</span>
                             <button
                               type="button"
                               disabled={envAvailableFrames.length === 0}
@@ -3767,11 +3776,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
                             <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
                               <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
-                              <p className="text-xs text-gray-600">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
+                              <p className="tf-meta-strong">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
                             </div>
                           ) : v.analysis_status === 'error' ? (
                             <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
-                              <p className="text-xs text-gray-600">AI analysis could not be completed for this recording — the video itself is still available above.</p>
+                              <p className="tf-meta-strong">AI analysis could not be completed for this recording — the video itself is still available above.</p>
                             </div>
                           ) : v.analysis_status === 'done' ? (
                             <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-destructive-subtle ring-destructive-line' : 'bg-success-subtle ring-success-line'}`}>
@@ -3783,7 +3792,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {v.ai_summary && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
-                              <p className="text-sm text-gray-700 leading-relaxed">{v.ai_summary}</p>
+                              <p className="tf-body leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
                           {((v.flagged_items && v.flagged_items.length > 0) || (v.voice_activity_offsets_ms && v.voice_activity_offsets_ms.length > 0)) && (() => {
@@ -3918,12 +3927,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   <table className="min-w-full text-left">
                                     <thead>
                                       <tr className="bg-white border-b border-gray-100">
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">What happened</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">What we saw</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">Segment</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">When</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">Frame</th>
-                                        <th className="px-3 py-2 text-xs font-semibold text-gray-600">Severity</th>
+                                        <th className="px-3 py-2 tf-th">What happened</th>
+                                        <th className="px-3 py-2 tf-th">What we saw</th>
+                                        <th className="px-3 py-2 tf-th">Segment</th>
+                                        <th className="px-3 py-2 tf-th">When</th>
+                                        <th className="px-3 py-2 tf-th">Frame</th>
+                                        <th className="px-3 py-2 tf-th">Severity</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -4013,7 +4022,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     <Camera className="w-3.5 h-3.5" /> Analyzed Frames
                                   </p>
                                   {frames && frames.length > 0 && (
-                                    <span className="text-xs text-gray-500">{frames.length} frames</span>
+                                    <span className="tf-meta">{frames.length} frames</span>
                                   )}
                                 </div>
                                 {loading || (!frames && !error) ? (
@@ -4467,12 +4476,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           <div className="w-7 h-7 rounded-full bg-brand-blue ring-1 ring-white/20 shadow-sm shadow-brand-blue/20 flex items-center justify-center text-white font-semibold text-2xs">
                             B
                           </div>
-                          <span className="text-xs text-gray-500">Bina (AI Interviewer)</span>
+                          <span className="tf-meta">Bina (AI Interviewer)</span>
                         </div>
                         <span className="text-gray-200">·</span>
                         <div className="flex items-center gap-2">
                           <NameAvatar name={candidateName} size="sm" />
-                          <span className="text-xs text-gray-500">{candidateName}</span>
+                          <span className="tf-meta">{candidateName}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -5392,7 +5401,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <p className={`text-sm font-semibold tracking-tight ${risk.color}`}>
                           Integrity Status: {risk.label}
                         </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
+                        <p className="tf-meta mt-0.5">
                           {totalViolations === 0
                             ? 'No violations detected during this interview.'
                             : `${totalViolations} total violation${totalViolations !== 1 ? 's' : ''} detected`}
@@ -5524,12 +5533,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <table className="w-full text-sm">
                           <thead className="bg-white border-b border-gray-100">
                             <tr>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-10">#</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Event</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Time</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Video Time</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Severity</th>
-                              <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600">Count</th>
+                              <th className="px-4 py-2.5 text-left tf-th w-10">#</th>
+                              <th className="px-4 py-2.5 text-left tf-th">Event</th>
+                              <th className="px-4 py-2.5 text-left tf-th">Time</th>
+                              <th className="px-4 py-2.5 text-left tf-th">Video Time</th>
+                              <th className="px-4 py-2.5 text-left tf-th">Severity</th>
+                              <th className="px-4 py-2.5 text-right tf-th">Count</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">

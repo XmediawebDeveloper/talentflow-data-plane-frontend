@@ -309,7 +309,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
           <User className="w-5 h-5 text-blue-600" />
           <div>
             <h3 className="font-medium text-gray-900">My Consumption</h3>
-            <p className="text-sm text-gray-500">View your personal unit usage</p>
+            <p className="tf-body-muted">View your personal unit usage</p>
           </div>
         </div>
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -400,10 +400,10 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="tf-section-title">
             {isBillingManager ? 'Billing Summary' : 'Unit Pool'}
           </h2>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <p className="tf-body-muted mt-0.5">
             {isBillingManager
               ? 'Aggregated billing and usage overview'
               : 'Track and manage your organization\'s consumption units'
@@ -476,7 +476,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   </div>
                   <div>
                     <h3 className="font-medium text-gray-900">{getUnitTypeName(type)}</h3>
-                    <p className="text-xs text-gray-500">{type}</p>
+                    <p className="tf-meta">{type}</p>
                   </div>
                 </div>
                 {status === 'critical' && (
@@ -495,7 +495,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                       : pool.available_units.toLocaleString()
                     }
                   </span>
-                  <span className="text-sm text-gray-500">
+                  <span className="tf-body-muted">
                     / {pool.total_allocated.toLocaleString()} allocated
                   </span>
                 </div>
@@ -513,14 +513,14 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   />
                 </div>
 
-                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                <div className="mt-3 flex items-center justify-between tf-meta">
                   <span>{pool.total_consumed.toLocaleString()} used</span>
                   <span>{pool.usage_percentage.toFixed(1)}% consumed</span>
                 </div>
 
                 {summaryData && (
                   <div className="mt-3 pt-3 border-t border-gray-200">
-                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                    <div className="flex items-center gap-1 tf-meta">
                       <TrendingUp className="w-3 h-3" />
                       <span>Last 30 days: {summaryData.total_consumed || 0} used</span>
                     </div>
@@ -571,12 +571,12 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
           <div className="p-4 bg-gray-50 rounded-lg flex items-center gap-3">
             <Calendar className="w-5 h-5 text-gray-400" />
             <div className="flex-1">
-              <p className="text-sm text-gray-600">
+              <p className="tf-card-desc">
                 Billing Cycle: {pools.pools.RS.billing_cycle_start
                   ? formatISTDate(pools.pools.RS.billing_cycle_start)
                   : 'N/A'} - {formatISTDate(pools.pools.RS.billing_cycle_end)}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="tf-meta mt-0.5">
                 Units will reset at the start of the next billing cycle
               </p>
             </div>
@@ -687,7 +687,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                                 );
                               }
                               return (
-                                <p className="text-sm text-gray-500 mt-0.5">
+                                <p className="tf-body-muted mt-0.5">
                                   {entityText}
                                 </p>
                               );
@@ -706,7 +706,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                       </div>
                       {/* Feature-Level Unit Deduction Recording: Display balance before/after */}
                       {(entry.balance_before != null || entry.balance_after != null) && (
-                        <div className="mt-2 flex items-center gap-4 text-xs text-gray-500 border-t border-gray-100 pt-2">
+                        <div className="mt-2 flex items-center gap-4 tf-meta border-t border-gray-100 pt-2">
                           <span className="flex items-center gap-1">
                             <span className="font-medium">Balance:</span>
                             {entry.balance_before != null && (
@@ -759,7 +759,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                 <div className="space-y-4">
                   {/* Export Type Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Export Type</label>
+                    <label className="block tf-label mb-2">Export Type</label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => setExportType('consumption')}
@@ -773,7 +773,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                           <Clock className="w-5 h-5 text-blue-600" />
                           <span className="font-medium">Consumption History</span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Detailed usage logs</p>
+                        <p className="tf-meta mt-1">Detailed usage logs</p>
                       </button>
                       <button
                         onClick={() => setExportType('summary')}
@@ -787,14 +787,14 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                           <TrendingUp className="w-5 h-5 text-purple-600" />
                           <span className="font-medium">Usage Summary</span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Aggregated statistics</p>
+                        <p className="tf-meta mt-1">Aggregated statistics</p>
                       </button>
                     </div>
                   </div>
 
                   {/* Export Format Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Format</label>
+                    <label className="block tf-label mb-2">Format</label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => setExportFormat('csv')}
@@ -826,7 +826,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                     <>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Unit Type</label>
+                          <label className="block tf-label mb-1">Unit Type</label>
                           <FilterSelect
                             value={exportUnitType}
                             onChange={(v) => setExportUnitType(v as UnitType | '')}
@@ -841,7 +841,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                          <label className="block tf-label mb-1">Status</label>
                           <FilterSelect
                             value={exportStatus}
                             onChange={(v) => setExportStatus(v)}
@@ -860,14 +860,14 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                          <label className="block tf-label mb-1">Start Date</label>
                           <DateField
                             value={exportStartDate}
                             onChange={setExportStartDate}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                          <label className="block tf-label mb-1">End Date</label>
                           <DateField
                             value={exportEndDate}
                             onChange={setExportEndDate}
@@ -880,7 +880,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   {/* Days selection for Summary */}
                   {exportType === 'summary' && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Period</label>
+                      <label className="block tf-label mb-1">Period</label>
                       <FilterSelect
                         value={String(exportDays)}
                         onChange={(v) => setExportDays(Number(v))}

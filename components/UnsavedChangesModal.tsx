@@ -80,7 +80,7 @@ export default function UnsavedChangesModal({
 
           <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-blue-100 dark:border-blue-500/25 bg-blue-50/70 dark:bg-blue-500/10 px-3.5 py-3">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-            <p className="text-sm text-gray-700 dark:text-slate-300">{infoText}</p>
+            <p className="tf-body">{infoText}</p>
           </div>
 
           <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">

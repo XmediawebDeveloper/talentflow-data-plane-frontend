@@ -167,7 +167,7 @@ export default function JDOverviewSections({
               Visible to candidates
             </span>
           </div>
-          <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">{jd.additional_details}</p>
+          <p className="tf-card-desc whitespace-pre-wrap">{jd.additional_details}</p>
         </div>
       )}
 
@@ -178,7 +178,7 @@ export default function JDOverviewSections({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className={`${CARD} p-4`}>
           <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
-          <div className="text-sm text-gray-600 dark:text-slate-400 space-y-2">
+          <div className="tf-card-desc space-y-2">
             {internalRecruiterComments.length > 0 ? (
               <ul className="list-disc list-inside space-y-1">
                 {internalRecruiterComments.map((note, index) => (
@@ -205,7 +205,7 @@ export default function JDOverviewSections({
         ) : (
           <div className={`${CARD} p-4`}>
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
-            <div className="text-sm text-gray-600 dark:text-slate-400">
+            <div className="tf-card-desc">
               {jd.assessment_guidance ? (
                 <p className="whitespace-pre-wrap">{jd.assessment_guidance}</p>
               ) : (

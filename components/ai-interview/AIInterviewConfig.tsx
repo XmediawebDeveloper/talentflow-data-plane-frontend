@@ -717,7 +717,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
         {config.skills.length > 0 && !config.skills.some(s => (s.type ?? 'Skill') === 'Skill') && (
           <div className="flex items-start gap-2 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded-lg">
             <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-destructive">
+            <p className="tf-error">
               Add at least one entry of type <strong>Skill</strong> here.
               All current entries are Commands, which can&apos;t be assessed as a standalone competency.
             </p>
@@ -3469,7 +3469,7 @@ export default function AIInterviewConfig() {
                         <span className="text-sm font-medium text-gray-900">Buffer Time</span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">+5 min</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="tf-meta mt-0.5">
                         {bufferEnabled
                           ? 'Total interview time: 35 min (30 min + 5 min buffer)'
                           : 'Total interview time: 30 min — hard stop at limit'}
@@ -3520,7 +3520,7 @@ export default function AIInterviewConfig() {
                           Recommended
                         </span>
                       )}
-                      {sel.note && <span className="text-xs text-gray-500">{sel.note}</span>}
+                      {sel.note && <span className="tf-meta">{sel.note}</span>}
                     </>
                   );
                 })()}
@@ -3579,7 +3579,7 @@ export default function AIInterviewConfig() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</div>
-                    <p className="text-xs text-gray-500 mt-0.5">Optional skills that add value to the role.</p>
+                    <p className="tf-meta mt-0.5">Optional skills that add value to the role.</p>
                   </div>
                 </div>
                 {nth.enabled && (
@@ -3701,7 +3701,7 @@ export default function AIInterviewConfig() {
 
               {additionalTab === 'video' && (
                 <div role="tabpanel" className="p-4 space-y-2">
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     Upload or record a short video introducing the role — candidates see it before the interview starts. Optional, max 1 min.
                   </p>
                   {introVideoFile || introVideoUrl ? (
@@ -3802,7 +3802,7 @@ export default function AIInterviewConfig() {
                           <span className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                             <Upload className="w-4 h-4 text-brand-blue" />
                           </span>
-                          <span className="text-sm text-gray-600">
+                          <span className="tf-card-desc">
                             Drag and drop a video here, or <span className="text-brand-blue font-medium">click to upload</span> (max 1 min)
                           </span>
                           <span className="text-xs text-gray-400">MP4, MOV or WEBM</span>
@@ -3875,7 +3875,7 @@ export default function AIInterviewConfig() {
                           {cameraError && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
                               <AlertCircle className="w-6 h-6 text-destructive mb-1" />
-                              <p className="text-xs text-destructive text-center px-4">{cameraError}</p>
+                              <p className="tf-error text-center px-4">{cameraError}</p>
                             </div>
                           )}
                         </div>
@@ -3941,7 +3941,7 @@ export default function AIInterviewConfig() {
 
               {additionalTab === 'languages' && (
                 <div role="tabpanel" className="p-4 space-y-2">
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     The language the AI conducts the interview in.
                   </p>
                   {/* One dropdown rather than a row of chips: the interview runs
@@ -3976,7 +3976,7 @@ export default function AIInterviewConfig() {
                       <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                     </label>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     Pause the interview once, after the first must-have-skills question, to verify the candidate&apos;s physical environment via a QR code and their phone&apos;s camera.
                   </p>
                 </div>
@@ -4004,12 +4004,12 @@ export default function AIInterviewConfig() {
                 </div>
                 <div className="divide-y divide-gray-50">
                   <div className="px-3 py-2 flex items-start justify-between gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
+                    <span className="tf-meta flex-shrink-0">Role Title</span>
                     <span className="text-xs font-semibold text-gray-900 text-right break-words min-w-0">{selectedJd.title}</span>
                   </div>
                   {experienceSummary && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Experience</span>
+                      <span className="tf-meta flex-shrink-0">Experience</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">
                         {experienceSummary}
                       </span>
@@ -4017,31 +4017,31 @@ export default function AIInterviewConfig() {
                   )}
                   {selectedJd.industry_type && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Industry</span>
+                      <span className="tf-meta flex-shrink-0">Industry</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">{formatIndustryType(selectedJd.industry_type)}</span>
                     </div>
                   )}
                   {selectedJd.location && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
+                      <span className="tf-meta flex-shrink-0">Location</span>
                       <SummaryLocation value={selectedJd.location} locations={selectedJdLocations} />
                     </div>
                   )}
                   {selectedJd.employment_type && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Employment Type</span>
+                      <span className="tf-meta flex-shrink-0">Employment Type</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">{formatEmploymentType(selectedJd.employment_type)}</span>
                     </div>
                   )}
                   {(selectedJd.version_number ?? selectedJd.current_version) != null && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
+                      <span className="tf-meta flex-shrink-0">JD Version</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">v{selectedJd.version_number ?? 1}</span>
                     </div>
                   )}
                   {selectedJd.domain_keywords && selectedJd.domain_keywords.length > 0 && (
                     <div className="px-3 py-2">
-                      <span className="text-xs text-gray-500 block mb-1.5">Domain Context</span>
+                      <span className="tf-meta block mb-1.5">Domain Context</span>
                       <div className="flex flex-wrap gap-1">
                         {selectedJd.domain_keywords.slice(0, 6).map(kw => (
                           <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
@@ -4053,21 +4053,21 @@ export default function AIInterviewConfig() {
                     </div>
                   )}
                   <div className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">Interview Mode</span>
+                    <span className="tf-meta flex-shrink-0">Interview Mode</span>
                     <span className="text-xs font-semibold text-gray-900 text-right">
                       {mode === 'flexible' ? 'Conversational' : 'Timed'}
                     </span>
                   </div>
                   {mode === 'flexible' && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Buffer Time</span>
+                      <span className="tf-meta flex-shrink-0">Buffer Time</span>
                       <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-400'}`}>
                         {bufferEnabled ? 'Enabled (+5 min)' : 'Disabled'}
                       </span>
                     </div>
                   )}
                   <div className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
+                    <span className="tf-meta flex-shrink-0">Total Duration</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">
                       {mode === 'flexible'
                         ? '30 min'
@@ -4089,10 +4089,10 @@ export default function AIInterviewConfig() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-100">
-                            <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Q</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
+                            <th className="px-3 py-1.5 text-left tf-th">Round</th>
+                            <th className="px-3 py-1.5 text-right tf-th">Q</th>
+                            <th className="px-3 py-1.5 text-right tf-th">Clusters</th>
+                            <th className="px-3 py-1.5 text-right tf-th">Time</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -4129,7 +4129,7 @@ export default function AIInterviewConfig() {
               {mode === 'flexible' && (
                 <div className="space-y-3 mb-4">
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex items-center justify-between tf-meta mb-1">
                       <span>Scoring Weight Distribution</span>
                       <span className={`font-semibold ${pctValid ? 'text-advice-positive' : 'text-red-500'}`}>
                         {totalPct}% / 100%
@@ -4169,9 +4169,9 @@ export default function AIInterviewConfig() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100">
-                              <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
+                              <th className="px-3 py-1.5 text-left tf-th">Round</th>
+                              <th className="px-3 py-1.5 text-right tf-th">Clusters</th>
+                              <th className="px-3 py-1.5 text-right tf-th">Time</th>
                             </tr>
                           </thead>
                           <tbody>

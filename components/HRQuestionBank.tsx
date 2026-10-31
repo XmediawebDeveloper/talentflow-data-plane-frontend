@@ -426,7 +426,7 @@ export default function HRQuestionBank() {
           />
           <div className="space-y-4 sm:space-y-6">
       {!canViewHRQuestionBank ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center tf-body-muted shadow-sm">
           You do not have permission to view the HR Question Bank.
         </div>
       ) : (
@@ -439,7 +439,7 @@ export default function HRQuestionBank() {
           </div>
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">HR Question Bank</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <p className="tf-body-muted mt-0.5">
               Manage reusable HR questions for AI Assessments and AI Interviews. The same questions can be used across both.
             </p>
           </div>
@@ -501,7 +501,7 @@ export default function HRQuestionBank() {
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 {editingId ? <Edit2 className="w-4 h-4 text-brand-blue" /> : <Plus className="w-4 h-4 text-brand-blue" />}
               </div>
-              <h3 id="hr-question-form-title" className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">
+              <h3 id="hr-question-form-title" className="tf-section-title min-w-0 truncate">
                 {editingId ? 'Edit Question' : 'Add New Question'}
               </h3>
             </div>
@@ -513,7 +513,7 @@ export default function HRQuestionBank() {
           <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-4 sm:px-6 py-4">
             {/* Question Text */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Question Text *</label>
+              <label className="block tf-label mb-1.5">Question Text *</label>
               <input
                 type="text"
                 value={formData.question_text}
@@ -526,7 +526,7 @@ export default function HRQuestionBank() {
 
             {/* Answer Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Answer Type</label>
+              <label className="block tf-label mb-1.5">Answer Type</label>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
@@ -578,7 +578,7 @@ export default function HRQuestionBank() {
           stat cards that filtered the list too but read as plain figures, so
           few people found the filter in them. */}
       <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by answer type">
-        <span className="text-sm text-gray-600">Show:</span>
+        <span className="tf-card-desc">Show:</span>
         {([
           { id: 'all', label: 'All Questions', count: questions.length },
           { id: 'text', label: 'Text Answer', count: questions.filter(q => q.answer_type !== 'yes_no').length },
@@ -641,7 +641,7 @@ export default function HRQuestionBank() {
           <p className="text-gray-700 text-sm font-medium mb-1">
             {questions.length === 0 ? 'No questions yet' : 'No matches found'}
           </p>
-          <p className="text-gray-500 text-xs text-center max-w-md">
+          <p className="tf-meta text-center max-w-md">
             {questions.length === 0 ? 'Add your first HR question to start building the bank.' : 'Try adjusting your search to find what you need.'}
           </p>
         </div>
@@ -742,7 +742,7 @@ export default function HRQuestionBank() {
                 <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 ring-1 ring-red-100 flex-shrink-0">
                   <Trash2 className="w-4 h-4 text-red-600" />
                 </div>
-                <h3 id="hr-question-delete-title" className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">
+                <h3 id="hr-question-delete-title" className="tf-section-title min-w-0 truncate">
                   Delete Question
                 </h3>
               </div>
@@ -752,8 +752,8 @@ export default function HRQuestionBank() {
             </div>
 
             <div id="hr-question-delete-desc" className="px-4 sm:px-6 py-4 space-y-2">
-              <p className="text-sm font-semibold text-gray-900 break-words">&ldquo;{deleteTarget.question_text}&rdquo;</p>
-              <p className="text-sm text-gray-500">
+              <p className="tf-cell-name break-words">&ldquo;{deleteTarget.question_text}&rdquo;</p>
+              <p className="tf-body-muted">
                 This question will be removed from the HR Question Bank. This cannot be undone.
               </p>
             </div>

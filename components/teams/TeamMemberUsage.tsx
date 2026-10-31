@@ -228,8 +228,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
             <TrendingUp className="w-5 h-5 text-brand-blue" />
           </div>
           <div className="min-w-0">
-            <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{team.name} - Member Usage</h3>
-            <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">Individual usage breakdown</p>
+            <h3 className="tf-card-title max-sm:text-sm truncate">{team.name} - Member Usage</h3>
+            <p className="tf-card-desc max-sm:text-[13px]">Individual usage breakdown</p>
           </div>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -295,37 +295,37 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
               <tr>
                 <th
                   aria-sort={ariaSort(sort, 'name')}
-                  className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"
+                  className="px-6 py-3 text-left tf-th"
                 >
                   <SortableHeader label="Member" column="name" sort={sort} />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'RS')}>
+                <th className="px-6 py-3 text-center tf-th" aria-sort={ariaSort(sort, 'RS')}>
                   <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'AS')}>
+                <th className="px-6 py-3 text-center tf-th" aria-sort={ariaSort(sort, 'AS')}>
                   <SortableHeader label="Assessment" column="AS" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'AIU')}>
+                <th className="px-6 py-3 text-center tf-th" aria-sort={ariaSort(sort, 'AIU')}>
                   <SortableHeader label="AI Interview" column="AIU" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'RU')}>
+                <th className="px-6 py-3 text-center tf-th" aria-sort={ariaSort(sort, 'RU')}>
                   <SortableHeader label="Resume Units" column="RU" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'jds')}>
+                <th className="px-6 py-3 text-center tf-th" aria-sort={ariaSort(sort, 'jds')}>
                   <SortableHeader label="JDs" column="jds" sort={sort} align="center" />
                 </th>
-                <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'assessments')}>
+                <th className="px-6 py-3 text-center tf-th" aria-sort={ariaSort(sort, 'assessments')}>
                   <SortableHeader label="Assessments" column="assessments" sort={sort} align="center" />
                 </th>
                 <th
                   aria-sort={ariaSort(sort, 'total')}
-                  className="px-6 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300"
+                  className="px-6 py-3 text-center tf-th"
                 >
                   <SortableHeader label="Total" column="total" sort={sort} align="center" />
                 </th>
                 <th
                   aria-sort={ariaSort(sort, 'recent')}
-                  className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300"
+                  className="px-6 py-3 text-right tf-th"
                 >
                   <SortableHeader label="Last Active" column="recent" sort={sort} align="right" />
                 </th>
@@ -339,7 +339,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                       <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
                       <div className="min-w-0">
                         <p className="text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50 truncate">{member.user_name}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{member.user_email}</p>
+                        <p className="tf-meta truncate">{member.user_email}</p>
                       </div>
                     </div>
                   </td>
@@ -347,7 +347,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-sm max-sm:text-[13px] font-medium text-blue-600 dark:text-blue-400 tabular-nums">
                       {Math.round(member.by_type.RS?.total_consumed || 0)}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {member.by_type.RS?.consumption_count || 0} actions
                     </div>
                     <ReturnedLine used={member.by_type.RS?.total_consumed || 0} returned={member.by_type.RS?.units_returned} net={member.by_type.RS?.net_consumed} />
@@ -356,7 +356,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-sm max-sm:text-[13px] font-medium text-success tabular-nums">
                       {(member.by_type.AS?.total_consumed || 0).toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {member.by_type.AS?.consumption_count || 0} actions
                     </div>
                   </td>
@@ -364,7 +364,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-sm max-sm:text-[13px] font-medium text-purple-600 dark:text-purple-400 tabular-nums">
                       {Math.round(member.by_type.AIU?.total_consumed || 0)}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {member.by_type.AIU?.consumption_count || 0} actions
                     </div>
                   </td>
@@ -372,7 +372,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-sm max-sm:text-[13px] font-medium text-orange-600 dark:text-orange-400 tabular-nums">
                       {Math.round(member.by_type.RU?.total_consumed || 0)}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {member.by_type.RU?.consumption_count || 0} actions
                     </div>
                     <ReturnedLine used={member.by_type.RU?.total_consumed || 0} returned={member.by_type.RU?.units_returned} net={member.by_type.RU?.net_consumed} />
@@ -381,25 +381,25 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     <div className="text-sm max-sm:text-[13px] font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">
                       {member.jds_created || 0}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">created</div>
+                    <div className="tf-meta">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm max-sm:text-[13px] font-medium text-teal-600 dark:text-teal-400 tabular-nums">
                       {member.assessments_created || 0}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">created</div>
+                    <div className="tf-meta">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 tabular-nums">
+                    <div className="tf-cell-name max-sm:text-[13px] tabular-nums">
                       {member.total_consumed.toFixed(1)}
                     </div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {member.total_actions} total
                     </div>
                     <ReturnedLine used={member.total_consumed} returned={member.total_returned} net={member.total_net} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-1 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
+                    <div className="flex items-center justify-end gap-1 tf-card-desc max-sm:text-[13px]">
                       <Clock className="w-3.5 h-3.5" />
                       {formatLastActivity(member.last_activity)}
                     </div>
@@ -413,7 +413,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
           <Users className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
           <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">No Team Members</h3>
-          <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
+          <p className="tf-card-desc max-sm:text-[13px]">
             This team has no members yet. Add members to see their usage data.
           </p>
         </div>

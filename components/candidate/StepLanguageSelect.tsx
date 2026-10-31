@@ -35,7 +35,7 @@ export default function StepLanguageSelect({
         </h2>
 
         {/* Subtitle */}
-        <p className="text-gray-600 text-sm">
+        <p className="tf-card-desc">
           Choose your preferred language for the AI interview
         </p>
       </div>
@@ -97,7 +97,7 @@ export default function StepLanguageSelect({
 
       {/* Note */}
       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <p className="text-sm text-gray-700">
+        <p className="tf-body">
           <span className="font-medium">Note:</span> The AI interviewer will
           conduct the entire interview in your selected language. You can change
           this before starting.

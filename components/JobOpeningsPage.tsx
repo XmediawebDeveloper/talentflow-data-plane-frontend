@@ -247,7 +247,7 @@ export default function JobOpeningsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Job Openings</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage and track all your job postings</p>
+            <p className="tf-body-muted mt-1">Manage and track all your job postings</p>
           </div>
           <div className="flex flex-col items-stretch md:items-end gap-1 w-full md:w-auto">
             <Button
@@ -289,7 +289,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500 leading-tight">Total Jobs</p>
+                <p className="tf-body-muted leading-tight">Total Jobs</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
                 </div>
@@ -301,7 +301,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500 leading-tight">Active</p>
+                <p className="tf-body-muted leading-tight">Active</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-success-subtle rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-success" />
                 </div>
@@ -313,7 +313,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500 leading-tight">Drafts</p>
+                <p className="tf-body-muted leading-tight">Drafts</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-warning-subtle rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-warning" />
                 </div>
@@ -325,7 +325,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500 leading-tight">Applicants</p>
+                <p className="tf-body-muted leading-tight">Applicants</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <Users className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
                 </div>
@@ -464,14 +464,14 @@ export default function JobOpeningsPage() {
               <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600">Job Title</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden sm:table-cell">Department</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 tf-th">Job Title</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 tf-th hidden sm:table-cell">Department</th>
                   {/* Location column hidden for now */}
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden md:table-cell">Experience</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600">Status</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden lg:table-cell">Applicants</th>
-                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 hidden lg:table-cell">Created</th>
-                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 tf-th hidden md:table-cell">Experience</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 tf-th">Status</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 tf-th hidden lg:table-cell">Applicants</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 tf-th hidden lg:table-cell">Created</th>
+                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 tf-th tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -485,18 +485,18 @@ export default function JobOpeningsPage() {
                         {job.title}
                       </button>
                     </td>
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-600 hidden sm:table-cell">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 tf-card-desc hidden sm:table-cell">
                       {job.department || '-'}
                     </td>
                     {/* Location column hidden for now */}
-                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-sm text-gray-600 hidden md:table-cell">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 tf-card-desc hidden md:table-cell">
                       {getExperienceText(job.experience_min, job.experience_max)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       {getStatusBadge(job.status, job.republished_at)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell">
-                      <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                      <div className="flex items-center gap-1.5 tf-card-desc">
                         <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                         <span>{job.applicants_count || 0}</span>
                       </div>
@@ -646,12 +646,12 @@ export default function JobOpeningsPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
-            <p className="text-sm text-gray-600">
+            <p className="tf-card-desc">
               Showing {(currentPage - 1) * 12 + 1} to {Math.min(currentPage * 12, total)} of {total} jobs
             </p>
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="tf-card-desc whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -786,7 +786,7 @@ export default function JobOpeningsPage() {
                       </span>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-3">
+                  <p className="tf-meta mt-3">
                     At least one unit type must have available units to create a job.
                   </p>
                 </div>

@@ -205,7 +205,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     <div>
                       <h1 className="text-gray-900 mb-2">{resume.name}</h1>
                       <p className="text-xl text-gray-700 mb-3">{resume.title}</p>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <div className="flex items-center gap-4 tf-card-desc">
                         {resume.location && (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-4 h-4" />
@@ -220,7 +220,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="text-right">
-                        <div className="text-sm text-gray-500">Source</div>
+                        <div className="tf-body-muted">Source</div>
                         <div className="text-lg text-gray-900">
                           {resume.source}
                         </div>
@@ -230,16 +230,16 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
 
                   {/* Contact Info */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <div className="flex items-center gap-2 tf-body">
                       <Mail className="w-4 h-4 text-blue-600" />
                       <a href={`mailto:${resume.email}`} className="hover:text-blue-600">{resume.email}</a>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <div className="flex items-center gap-2 tf-body">
                       <Phone className="w-4 h-4 text-blue-600" />
                       <a href={`tel:${resume.phone}`} className="hover:text-blue-600">{resume.phone}</a>
                     </div>
                     {detailedResume.links.linkedin && (
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <div className="flex items-center gap-2 tf-body">
                         <Linkedin className="w-4 h-4 text-blue-600" />
                         <a href={`https://${detailedResume.links.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
                           LinkedIn <ExternalLink className="w-3 h-3" />
@@ -247,7 +247,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       </div>
                     )}
                     {detailedResume.links.portfolio && (
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
+                      <div className="flex items-center gap-2 tf-body">
                         <Globe className="w-4 h-4 text-blue-600" />
                         <a href={`https://${detailedResume.links.portfolio}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
                           Portfolio <ExternalLink className="w-3 h-3" />
@@ -295,7 +295,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                             <Building2 className="w-4 h-4" />
                             <span>{exp.company}</span>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                          <div className="flex items-center gap-4 tf-card-desc">
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
                               {exp.location}
@@ -311,7 +311,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <p className="text-gray-700 mb-3">{exp.description}</p>
                       <div className="space-y-2">
                         {exp.achievements.map((achievement, achIndex) => (
-                          <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                          <div key={achIndex} className="flex items-start gap-2 tf-body">
                             <ChevronRight className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                             <span>{achievement}</span>
                           </div>
@@ -334,7 +334,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   <div key={index} className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
                     <h3 className="text-gray-900 mb-2">{edu.degree}</h3>
                     <div className="text-gray-700 mb-1">{edu.school}</div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-4 tf-card-desc">
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         {edu.location}
@@ -371,8 +371,8 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   {detailedResume.skills.technical.map((skill, index) => (
                     <div key={index}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-700">{skill.name}</span>
-                        <span className="text-xs text-gray-500">{skill.level}%</span>
+                        <span className="tf-body">{skill.name}</span>
+                        <span className="tf-meta">{skill.level}%</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
@@ -422,8 +422,8 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-gray-900 mb-1">{certName}</h3>
-                          {certIssuer && <div className="text-sm text-gray-700 mb-1">{certIssuer}</div>}
-                          <div className="flex items-center gap-4 text-xs text-gray-600">
+                          {certIssuer && <div className="tf-body mb-1">{certIssuer}</div>}
+                          <div className="flex items-center gap-4 tf-meta-strong">
                             {certDate && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -495,7 +495,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-600">
+                            <div className="flex items-center gap-3 tf-meta-strong">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {formatIST(version.uploadDate)}
@@ -540,7 +540,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <FileText className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">File Name</div>
+                      <div className="tf-meta mb-1">File Name</div>
                       <div className="text-sm text-gray-900">{resume.name.replace(' ', '_')}_Resume.pdf</div>
                     </div>
                   </div>
@@ -549,7 +549,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <HardDrive className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">File Size</div>
+                      <div className="tf-meta mb-1">File Size</div>
                       <div className="text-sm text-gray-900">
                         {resume.versions && resume.versions.length > 0 
                           ? resume.versions[0].size 
@@ -562,7 +562,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <File className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">File Type</div>
+                      <div className="tf-meta mb-1">File Type</div>
                       <div className="text-sm text-gray-900">PDF Document</div>
                     </div>
                   </div>
@@ -571,7 +571,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <Calendar className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Upload Date</div>
+                      <div className="tf-meta mb-1">Upload Date</div>
                       <div className="text-sm text-gray-900">
                         {formatIST(resume.uploadDate)}
                       </div>
@@ -584,7 +584,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <Clock className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Last Modified</div>
+                      <div className="tf-meta mb-1">Last Modified</div>
                       <div className="text-sm text-gray-900">
                         {resume.lastUpdated 
                           ? formatIST(resume.lastUpdated)
@@ -597,7 +597,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <User className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
+                      <div className="tf-meta mb-1">Uploaded By</div>
                       <div className="text-sm text-gray-900">
                         {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}
                       </div>
@@ -608,7 +608,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <FileText className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
+                      <div className="tf-meta mb-1">Total Attachments</div>
                       <div className="text-sm text-gray-900">
                         {resume.attachments} file{resume.attachments !== 1 ? 's' : ''}
                       </div>
@@ -619,7 +619,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <History className="w-4 h-4 text-gray-600" />
                     </div>
                     <div>
-                      <div className="text-xs text-gray-500 mb-1">Version Count</div>
+                      <div className="tf-meta mb-1">Version Count</div>
                       <div className="text-sm text-gray-900">
                         {resume.versions ? resume.versions.length : 1} version{resume.versions && resume.versions.length !== 1 ? 's' : ''}
                       </div>
@@ -661,9 +661,9 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                             <span className="text-sm text-gray-900">
                               {index === 0 ? 'Current version uploaded' : `Version ${resume.versions!.length - index} uploaded`}
                             </span>
-                            <span className="text-xs text-gray-500">{timeAgo}</span>
+                            <span className="tf-meta">{timeAgo}</span>
                           </div>
-                          <div className="text-xs text-gray-600">
+                          <div className="tf-meta-strong">
                             Uploaded by <span className="text-gray-900">{version.uploadedBy}</span> • {version.size} • {version.name}
                           </div>
                         </div>
@@ -681,11 +681,11 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-900">Resume uploaded</span>
-                        <span className="text-xs text-gray-500">
+                        <span className="tf-meta">
                           {formatISTDate(resume.uploadDate)}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-600">
+                      <div className="tf-meta-strong">
                         Uploaded by <span className="text-gray-900">{resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}</span>
                       </div>
                     </div>
@@ -701,19 +701,19 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             <div className="bg-gradient-to-r from-gray-50 to-blue-50 border-2 border-gray-300 rounded-lg p-4">
               <div className="grid grid-cols-4 gap-4 text-sm">
                 <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Document ID</div>
+                  <div className="tf-meta mb-1">Document ID</div>
                   <div className="text-gray-900">#{resume.id.substring(0, 8).toUpperCase()}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Source</div>
+                  <div className="tf-meta mb-1">Source</div>
                   <div className="text-gray-900">{resume.source}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Folder</div>
+                  <div className="tf-meta mb-1">Folder</div>
                   <div className="text-gray-900">{resume.folderId || '—'}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs text-gray-500 mb-1">Status</div>
+                  <div className="tf-meta mb-1">Status</div>
                   <div className="inline-flex items-center px-2 py-1 bg-success-subtle text-success rounded text-xs">
                     Active
                   </div>

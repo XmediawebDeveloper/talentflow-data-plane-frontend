@@ -67,8 +67,8 @@ export default function Analytics() {
               <BarChart3 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">My Recruitment Analytics</h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Track your personal recruitment performance and insights</p>
+              <h1 className="tf-page-title">My Recruitment Analytics</h1>
+              <p className="tf-card-desc">Track your personal recruitment performance and insights</p>
             </div>
           </div>
 
@@ -110,7 +110,7 @@ export default function Analytics() {
           </div>
           <div className="flex-1">
             <div className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-1">Great Performance This Month! 🎉</div>
-            <div className="text-sm text-gray-700 dark:text-slate-300">
+            <div className="tf-body">
               You've received <span className="font-semibold text-success">12.5% more applications</span> and your response time improved by <span className="font-semibold text-success">18.2%</span> compared to last month.
             </div>
           </div>
@@ -131,8 +131,8 @@ export default function Analytics() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 mb-1">{stats.myActiveJobs}</div>
-          <div className="text-sm text-gray-600 dark:text-slate-400 mb-3">My Active Jobs</div>
-          <div className="text-xs text-gray-500 dark:text-slate-500">{comparison.previousPeriod}</div>
+          <div className="tf-card-desc mb-3">My Active Jobs</div>
+          <div className="tf-meta">{comparison.previousPeriod}</div>
         </div>
 
         {/* Applicants Received */}
@@ -147,8 +147,8 @@ export default function Analytics() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 mb-1">{stats.totalApplicantsReceived}</div>
-          <div className="text-sm text-gray-600 dark:text-slate-400 mb-3">Applicants Received</div>
-          <div className="text-xs text-gray-500 dark:text-slate-500">Avg {Math.round(stats.totalApplicantsReceived / stats.myActiveJobs)} per job</div>
+          <div className="tf-card-desc mb-3">Applicants Received</div>
+          <div className="tf-meta">Avg {Math.round(stats.totalApplicantsReceived / stats.myActiveJobs)} per job</div>
         </div>
 
         {/* Avg Response Time */}
@@ -163,7 +163,7 @@ export default function Analytics() {
             </div>
           </div>
           <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 mb-1">{stats.avgResponseTime}h</div>
-          <div className="text-sm text-gray-600 dark:text-slate-400 mb-3">Avg Response Time</div>
+          <div className="tf-card-desc mb-3">Avg Response Time</div>
           <div className="text-xs text-success flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
             Faster than team avg (6.2h)
@@ -180,7 +180,7 @@ export default function Analytics() {
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 dark:text-slate-50">{stats.interviewsScheduled}</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Interviews Scheduled</div>
+              <div className="tf-card-desc">Interviews Scheduled</div>
             </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-success">
@@ -196,7 +196,7 @@ export default function Analytics() {
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 dark:text-slate-50">{stats.offersExtended}</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Offers Extended</div>
+              <div className="tf-card-desc">Offers Extended</div>
             </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-success">
@@ -212,7 +212,7 @@ export default function Analytics() {
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 dark:text-slate-50">{stats.hiredCandidates}</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Successfully Hired</div>
+              <div className="tf-card-desc">Successfully Hired</div>
             </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-success">
@@ -229,7 +229,7 @@ export default function Analytics() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">My Applications Over Time</h3>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Applications received for your jobs</p>
+              <p className="tf-meta mt-1">Applications received for your jobs</p>
             </div>
             <Button variant="secondary" size="sm" icon={<Filter className="w-4 h-4" />}>
               Filter
@@ -250,7 +250,7 @@ export default function Analytics() {
                     </div>
                   </div>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-slate-500">
+                <div className="tf-meta">
                   {['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11', 'W12'][idx]}
                 </div>
               </div>
@@ -270,7 +270,7 @@ export default function Analytics() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">My Hiring Funnel</h3>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Conversion rates at each stage</p>
+              <p className="tf-meta mt-1">Conversion rates at each stage</p>
             </div>
             <Button variant="secondary" size="sm" icon={<Eye className="w-4 h-4" />}>
               Details
@@ -291,9 +291,9 @@ export default function Analytics() {
               <div key={idx}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700 dark:text-slate-300">{stage.stage}</span>
+                    <span className="tf-body">{stage.stage}</span>
                     {stage.conversion && (
-                      <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                      <span className="tf-meta bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                         {stage.conversion}% conversion
                       </span>
                     )}
@@ -325,7 +325,7 @@ export default function Analytics() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">My Top Performing Jobs</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Jobs posted by you, ranked by success metrics</p>
+            <p className="tf-meta mt-1">Jobs posted by you, ranked by success metrics</p>
           </div>
           <button className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900">View All My Jobs</button>
         </div>
@@ -334,13 +334,13 @@ export default function Analytics() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Job Title</th>
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Applications</th>
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Interviews</th>
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Offers</th>
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Hired</th>
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Conversion</th>
-                <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 pb-3">Status</th>
+                <th className="text-left tf-th pb-3">Job Title</th>
+                <th className="text-left tf-th pb-3">Applications</th>
+                <th className="text-left tf-th pb-3">Interviews</th>
+                <th className="text-left tf-th pb-3">Offers</th>
+                <th className="text-left tf-th pb-3">Hired</th>
+                <th className="text-left tf-th pb-3">Conversion</th>
+                <th className="text-left tf-th pb-3">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -355,9 +355,9 @@ export default function Analytics() {
               ].map((job, idx) => (
                 <tr key={idx} className="border-b border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer">
                   <td className="py-4 text-sm text-gray-900 dark:text-slate-50">{job.title}</td>
-                  <td className="py-4 text-sm text-gray-700 dark:text-slate-300">{job.apps}</td>
-                  <td className="py-4 text-sm text-gray-700 dark:text-slate-300">{job.interviews}</td>
-                  <td className="py-4 text-sm text-gray-700 dark:text-slate-300">{job.offers}</td>
+                  <td className="py-4 tf-td">{job.apps}</td>
+                  <td className="py-4 tf-td">{job.interviews}</td>
+                  <td className="py-4 tf-td">{job.offers}</td>
                   <td className="py-4 text-sm font-medium text-gray-900 dark:text-slate-50">{job.hired}</td>
                   <td className="py-4">
                     <div className="flex items-center gap-2">
@@ -386,7 +386,7 @@ export default function Analytics() {
             </tbody>
           </table>
         </div>
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 text-sm text-gray-600 dark:text-slate-400">
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-slate-700 tf-card-desc">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-success" />
             <span>High performer = Conversion rate above 4%</span>
@@ -409,8 +409,8 @@ export default function Analytics() {
               <div key={idx}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700 dark:text-slate-300">{metric.timeframe}</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                    <span className="tf-body">{metric.timeframe}</span>
+                    <span className="tf-meta bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">
                       {metric.label}
                     </span>
                   </div>
@@ -448,13 +448,13 @@ export default function Analytics() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{assessment.type}</div>
-                    <div className="text-xs text-gray-600 dark:text-slate-400 mt-1">
+                    <div className="tf-meta-strong mt-1">
                       {assessment.sent} sent • {assessment.completed} completed ({Math.round((assessment.completed/assessment.sent)*100)}%) • {assessment.passed} passed
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-gray-900 dark:text-slate-50">{assessment.rate}%</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">pass rate</div>
+                    <div className="tf-meta">pass rate</div>
                   </div>
                 </div>
                 <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -480,7 +480,7 @@ export default function Analytics() {
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
           <div className="mb-6">
             <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">Application Sources</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Where candidates found your jobs</p>
+            <p className="tf-meta mt-1">Where candidates found your jobs</p>
           </div>
           <div className="space-y-4">
             {[
@@ -493,8 +493,8 @@ export default function Analytics() {
               <div key={idx}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700 dark:text-slate-300">{source.source}</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">({source.conversion}% conversion)</span>
+                    <span className="tf-body">{source.source}</span>
+                    <span className="tf-meta">({source.conversion}% conversion)</span>
                   </div>
                   <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{source.count}</span>
                 </div>
@@ -521,7 +521,7 @@ export default function Analytics() {
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 p-6">
           <div className="mb-6">
             <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">Time to Hire Breakdown</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Average days spent in each stage</p>
+            <p className="tf-meta mt-1">Average days spent in each stage</p>
           </div>
           <div className="space-y-4">
             {[
@@ -533,7 +533,7 @@ export default function Analytics() {
             ].map((stage, idx) => (
               <div key={idx}>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-700 dark:text-slate-300">{stage.stage}</span>
+                  <span className="tf-body">{stage.stage}</span>
                   <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{stage.days} days</span>
                 </div>
                 <div className="w-full h-6 bg-gray-100 dark:bg-slate-800 rounded-lg overflow-hidden">
@@ -561,7 +561,7 @@ export default function Analytics() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-lg text-gray-900 dark:text-slate-50 font-medium">My Recent Activity</h3>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Latest updates from your jobs and candidates</p>
+            <p className="tf-meta mt-1">Latest updates from your jobs and candidates</p>
           </div>
           <button className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900">View All Activity</button>
         </div>
@@ -585,7 +585,7 @@ export default function Analytics() {
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">{activity.action}</span>
                     <span className="text-xs text-gray-400 dark:text-slate-500">•</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">{activity.time}</span>
+                    <span className="tf-meta">{activity.time}</span>
                   </div>
                   <p className="text-sm text-gray-900 dark:text-slate-50">{activity.text}</p>
                 </div>

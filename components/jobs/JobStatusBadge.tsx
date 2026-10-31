@@ -1,7 +1,6 @@
 'use client';
 
 import type { JDLineageVersion } from '@/lib/services/jdService';
-import { jobVersionDisplayStatus } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 
 /* The job's own Disabled / Archived / Draft status, drawn beside a job name on
@@ -23,21 +22,17 @@ export function jobStatusBadgeKind(jdStatus: string | null | undefined): JobStat
   return status === 'disabled' || status === 'archived' || status === 'draft' ? status : null;
 }
 
-/** Which job badge (if any) to show beside a job name: the JD's own Disabled /
- *  Archived / Draft status, unless another version of the same job is still
- *  Published or Republished — one closed version does not speak for a live job.
- *  `versions` undefined (not loaded yet) falls back to the JD's own status. */
+/** Which job badge (if any) to show beside a job name: the Disabled / Archived /
+ *  Draft status of the job VERSION the assessment or interview is linked to.
+ *  Another version of the same job still being Published does not hide it —
+ *  the linked version is what locks the assessment / interview (Share, Invite,
+ *  Edit), so the badge has to say so wherever that job is listed.
+ *  `_versions` is kept for callers that still pass the lineage. */
 export function jobLockBadgeFor(
   jdStatus: string | null | undefined,
-  versions: JDLineageVersion[] | undefined,
+  _versions?: JDLineageVersion[] | undefined,
 ): JobStatusBadgeKind | null {
-  const own = jobStatusBadgeKind(jdStatus);
-  if (!own || !versions?.length) return own;
-  const anyLive = versions.some((v) => {
-    const label = jobVersionDisplayStatus(v.status, v.current_version);
-    return label === 'Published' || label === 'Republished';
-  });
-  return anyLive ? null : own;
+  return jobStatusBadgeKind(jdStatus);
 }
 
 /* The Job Openings status pill itself (getStatusConfig: same colours, border

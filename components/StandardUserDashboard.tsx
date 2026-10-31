@@ -83,8 +83,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">My tasks</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Items assigned to you</p>
+                <h2 className="tf-section-title">My tasks</h2>
+                <p className="tf-meta mt-0.5">Items assigned to you</p>
               </div>
               <span className="px-2.5 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange-deep text-xs font-medium ring-1 ring-brand-orange/15">
                 {tasks.length} open
@@ -123,8 +123,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
           {/* Today's schedule */}
           <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
             <div className="p-6 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">Today</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Your schedule</p>
+              <h2 className="tf-section-title">Today</h2>
+              <p className="tf-meta mt-0.5">Your schedule</p>
             </div>
             <div className="p-6 space-y-4">
               {schedule.map((item, i) => (
@@ -141,7 +141,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
               {schedule.length === 0 && (
                 <div className="text-center py-6">
                   <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-xs text-gray-500">No items today</p>
+                  <p className="tf-meta">No items today</p>
                 </div>
               )}
             </div>
@@ -151,7 +151,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
         {/* Quick actions (permission-aware) + Help */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick actions</h3>
+            <h3 className="tf-subsection-title mb-4">Quick actions</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {canUploadResumes && (
                 <ActionTile
@@ -209,8 +209,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
               <div className="w-10 h-10 rounded-xl bg-brand-cyan/15 ring-1 ring-brand-cyan/25 flex items-center justify-center mb-3">
                 <HelpCircle className="w-5 h-5 text-brand-cyan" />
               </div>
-              <h3 className="text-base font-semibold text-gray-900 mb-1">New to TalentFlow?</h3>
-              <p className="text-xs text-gray-600 mb-4">
+              <h3 className="tf-card-title mb-1">New to TalentFlow?</h3>
+              <p className="tf-meta-strong mb-4">
                 Walk through the basics and learn how to make the most of your account.
               </p>
               <div className="space-y-2">
@@ -244,8 +244,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
           <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Assigned JDs</h2>
-                <p className="text-xs text-gray-500 mt-0.5">JDs you collaborate on</p>
+                <h2 className="tf-section-title">Assigned JDs</h2>
+                <p className="tf-meta mt-0.5">JDs you collaborate on</p>
               </div>
               <button
                 onClick={() => router.push('/recruitment/job-openings')}
@@ -270,7 +270,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                     <div className="text-2xs text-gray-500">{jd.dept}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-semibold text-gray-900 tabular-nums">{jd.applicants}</div>
+                    <div className="tf-cell-name tabular-nums">{jd.applicants}</div>
                     <div className="text-2xs text-gray-500 uppercase tracking-wide">applicants</div>
                   </div>
                 </button>
@@ -280,8 +280,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
 
           <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
             <div className="p-6 border-b border-gray-100">
-              <h2 className="text-lg font-semibold text-gray-900">Recent activity</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Your last actions</p>
+              <h2 className="tf-section-title">Recent activity</h2>
+              <p className="tf-meta mt-0.5">Your last actions</p>
             </div>
             <div className="p-6 space-y-4">
               {recentActivity.map((a, i) => (
@@ -323,7 +323,7 @@ function MiniStat({
         <div className={`w-8 h-8 rounded-lg ring-1 flex items-center justify-center ${accent}`}>{icon}</div>
       </div>
       <div className="text-2xl font-bold text-gray-900 tabular-nums">{value}</div>
-      <div className="text-xs text-gray-600 mt-0.5">{label}</div>
+      <div className="tf-meta-strong mt-0.5">{label}</div>
     </div>
   );
 }

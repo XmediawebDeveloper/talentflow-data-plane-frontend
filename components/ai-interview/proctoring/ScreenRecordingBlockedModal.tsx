@@ -87,7 +87,7 @@ export function ScreenRecordingBlockedModal() {
           <h2 id="screen-recording-blocked-title" className="mb-2 text-xl font-bold text-gray-900">
             Screen Recording Not Allowed
           </h2>
-          <p id="screen-recording-blocked-body" className="mb-2 text-sm text-gray-600">
+          <p id="screen-recording-blocked-body" className="mb-2 tf-card-desc">
             Screen recording is not allowed during the interview.{' '}
             {wasBlocked
               ? 'The recording was blocked and did not start.'

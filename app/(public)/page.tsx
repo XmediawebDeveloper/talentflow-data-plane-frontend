@@ -105,7 +105,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12 sm:mt-16 md:mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <p className="text-center text-sm text-gray-600">
+          <p className="text-center tf-card-desc">
             © 2026 TalentFlow. All rights reserved.
           </p>
         </div>

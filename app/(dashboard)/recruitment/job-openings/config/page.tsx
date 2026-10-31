@@ -81,10 +81,10 @@ function JobOpeningsConfigContent() {
               <Settings className="h-4 w-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+              <h1 className="tf-page-title">
                 Job Description Configuration
               </h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+              <p className="tf-card-desc mt-0.5">
                 The lists every job description is built from. Pick a section to add, edit or
                 reorder its options.
               </p>

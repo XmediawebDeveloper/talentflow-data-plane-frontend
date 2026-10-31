@@ -77,7 +77,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
           <span className="text-xs font-semibold uppercase">{letter}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
+          <div className="tf-cell-name max-sm:text-[13px] flex items-center gap-1.5">
             {label}
             {isMandatory && <span className="text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>}
             {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
@@ -103,8 +103,8 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
               <div className="flex items-center gap-3">
                 <GroupCheckbox state={state} label={category.name} />
                 <div>
-                  <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{category.name}</h4>
-                  <p className="text-xs text-gray-500 dark:text-slate-500">
+                  <h4 className="tf-card-title max-sm:text-sm">{category.name}</h4>
+                  <p className="tf-meta">
                     {allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}
                   </p>
                 </div>

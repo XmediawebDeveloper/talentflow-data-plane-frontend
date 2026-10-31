@@ -898,7 +898,7 @@ export default function AIInterviewInviteTable({
                   <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={inv.candidate_name || 'Unknown'}>
                     {inv.candidate_name || 'Unknown'}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate" title={inv.candidate_email}>
+                  <p className="tf-meta truncate" title={inv.candidate_email}>
                     {inv.candidate_email || '—'}
                   </p>
                 </div>
@@ -912,7 +912,7 @@ export default function AIInterviewInviteTable({
               {showJobColumn && (inv._jd_short_id || inv._config_title) && (
                 <div className="flex items-center gap-1.5 min-w-0">
                   {inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
-                  <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={inv._config_title || ''}>
+                  <p className="tf-meta-strong truncate" title={inv._config_title || ''}>
                     {inv._config_title}
                   </p>
                 </div>
@@ -933,7 +933,7 @@ export default function AIInterviewInviteTable({
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-slate-400">
+              <div className="flex items-center justify-between gap-2 tf-meta-strong">
                 <span className="inline-flex items-center gap-1.5">
                   {score != null ? (
                     <>
@@ -1134,7 +1134,7 @@ export default function AIInterviewInviteTable({
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700">
               {selectable && (
-                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select">
+                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select">
                   {onToggleSelectAll && (
                     <button
                       type="button"
@@ -1154,7 +1154,7 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+              <th className="text-left py-3 px-4 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
               {/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
                   carries the invite time), Status, Score, Invite Source, then the job group (Job ID and Job
@@ -1163,24 +1163,24 @@ export default function AIInterviewInviteTable({
               {/* hidden md:table-cell mirrors this column's <td> — without it the
                   header carries one more cell than the body between sm and md and
                   every heading after Timeline shifts off its column. */}
-              {inRow('timeline') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
-              {inRow('status') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
-              {inRow('score') && <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
-              {inRow('inviteSource') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
-              {inRow('cid') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
+              {inRow('timeline') && <th className="text-left py-3 px-4 tf-th hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
+              {inRow('status') && <th className="text-left py-3 px-4 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
+              {inRow('score') && <th className="text-center py-3 px-4 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
+              {inRow('inviteSource') && <th className="text-left py-3 px-4 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
+              {inRow('cid') && <th className="text-left py-3 px-4 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
               {showJobColumn && (
                 <>
-                  {inRow('jobId') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
-                  {inRow('jobTitle') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
+                  {inRow('jobId') && <th className="text-left py-3 px-4 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
+                  {inRow('jobTitle') && <th className="text-left py-3 px-4 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
                 </>
               )}
               {(showJobColumn || jobVersion != null || showRowVersions) && inRow('jobVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                <th className="text-left py-3 px-4 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
               )}
               {(showJobColumn || interviewVersion != null || showRowVersions) && inRow('interviewVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                <th className="text-left py-3 px-4 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+              <th className="text-left py-3 px-4 tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1204,7 +1204,7 @@ export default function AIInterviewInviteTable({
                         <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={inv.candidate_name || 'Unknown'}>
                           {inv.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={inv.candidate_email}>
+                        <p className="tf-meta truncate" title={inv.candidate_email}>
                           {inv.candidate_email}
                         </p>
                       </div>
@@ -1216,7 +1216,7 @@ export default function AIInterviewInviteTable({
                   // the first line sits level with the other columns.
                   id: 'timeline', label: 'Timeline', className: 'py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell',
                   content: (
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {events.length > 0 ? (
                         <div className="space-y-1">
                           {events.map(({ label, at, Icon, tone }, i) => (
@@ -1278,7 +1278,7 @@ export default function AIInterviewInviteTable({
                   {
                     id: 'jobTitle' as const, label: 'Job Title', className: 'py-3 px-4 align-middle max-w-[200px]',
                     content: (
-                      <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
+                      <p className="tf-body truncate" title={inv._config_title || ''}>
                         {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
                       </p>
                     ),
@@ -1396,7 +1396,7 @@ export default function AIInterviewInviteTable({
                             <dt className="text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1">
                               {c.label}
                             </dt>
-                            <dd className="text-sm min-w-0 text-gray-600 dark:text-slate-400">{c.content}</dd>
+                            <dd className="tf-card-desc min-w-0">{c.content}</dd>
                           </div>
                         ))}
                       </dl>
@@ -1442,13 +1442,13 @@ export default function AIInterviewInviteTable({
                     </span>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
+                      <p className="tf-meta">{formatIST(entry.at)}</p>
                     </div>
                   </li>
                 ))}
               </ol>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
+              <p className="tf-body-muted py-6 text-center">No history recorded yet.</p>
             )}
           </div>
         </DialogContent>

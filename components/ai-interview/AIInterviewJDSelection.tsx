@@ -215,7 +215,7 @@ export default function AIInterviewJDSelection() {
 
           <div className="w-full">
             <div className="mb-6 sm:mb-8">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-2 tracking-tight">Create New AI Interview</h1>
+              <h1 className="tf-page-title mb-2">Create New AI Interview</h1>
               <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400">
                 Select a Job Description to create an AI-powered interview
               </p>
@@ -225,7 +225,7 @@ export default function AIInterviewJDSelection() {
               <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
               <div>
                 <div className="text-sm text-brand-blue font-medium mb-1">AI-Powered Interview</div>
-                <div className="text-sm text-gray-700 dark:text-slate-300">
+                <div className="tf-body">
                   The AI interviewer builds its rounds from the JD&apos;s must-have and nice-to-have skills, then runs a <strong>timed or conversational interview</strong> with each candidate and scores every round.
                 </div>
               </div>
@@ -235,7 +235,7 @@ export default function AIInterviewJDSelection() {
               <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                   <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Select Job Description</h2>
+                    <h2 className="tf-section-title">Select Job Description</h2>
                   </div>
                   <Button
                     variant="primary"
@@ -288,7 +288,7 @@ export default function AIInterviewJDSelection() {
                 ) : (
                   <div className="space-y-3" ref={jdListRef}>
                     <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
+                      <label className="block tf-label mb-2">Search Jobs</label>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input

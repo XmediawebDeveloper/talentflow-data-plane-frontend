@@ -194,8 +194,8 @@ export default function NotificationsPage() {
             <Bell className="w-4 h-4 text-brand-blue" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Notifications</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="tf-page-title">Notifications</h1>
+            <p className="tf-body-muted">
               {loading && total === null
                 ? 'Loading…'
                 : <>{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}{total !== null && ` · ${total} total`}</>}
@@ -305,9 +305,9 @@ export default function NotificationsPage() {
                             <span className="w-2 h-2 bg-brand-blue rounded-full flex-shrink-0"></span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
+                        <span className="tf-meta whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
+                      <p className="tf-card-desc mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">
                         {isTenantAdmin && notification.action_label && (
                           <span className="text-xs text-brand-blue font-medium hover:underline">

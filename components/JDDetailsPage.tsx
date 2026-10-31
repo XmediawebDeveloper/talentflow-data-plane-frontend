@@ -145,7 +145,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -216,25 +216,25 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-gray-900">{results.assessments_count}</div>
-          <div className="text-sm text-gray-500">Total Assessments</div>
+          <div className="tf-body-muted">Total Assessments</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-blue-600">{results.completed_count}</div>
-          <div className="text-sm text-gray-500">Completed</div>
+          <div className="tf-body-muted">Completed</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-success">{results.passed_count}</div>
-          <div className="text-sm text-gray-500">Passed</div>
+          <div className="tf-body-muted">Passed</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-destructive">{results.failed_count}</div>
-          <div className="text-sm text-gray-500">Failed</div>
+          <div className="tf-body-muted">Failed</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-2xl font-bold text-purple-600">
             {results.average_score !== null ? `${results.average_score}%` : '-'}
           </div>
-          <div className="text-sm text-gray-500">Avg Score</div>
+          <div className="tf-body-muted">Avg Score</div>
         </div>
       </div>
 
@@ -305,7 +305,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -343,31 +343,31 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Candidate
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Assessment
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-center tf-th">
                       HR
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-center tf-th">
                       Technical
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-center tf-th">
                       Coding
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-center tf-th">
                       Overall
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Duration
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Completed
                     </th>
                   </tr>
@@ -378,12 +378,12 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                       <td className="px-4 py-4">
                         <div className="flex flex-col">
                           <span className="font-medium text-gray-900">{item.candidate_name}</span>
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
+                          <span className="tf-body-muted flex items-center gap-1">
                             <Mail className="w-3 h-3" />
                             {item.candidate_email}
                           </span>
                           {item.candidate_phone && (
-                            <span className="text-sm text-gray-500 flex items-center gap-1">
+                            <span className="tf-body-muted flex items-center gap-1">
                               <Phone className="w-3 h-3" />
                               {item.candidate_phone}
                             </span>
@@ -391,7 +391,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="text-sm text-gray-700">{item.assessment_title}</span>
+                        <span className="tf-body">{item.assessment_title}</span>
                       </td>
                       <td className="px-4 py-4">
                         {getStatusBadge(item.status, item.passed)}
@@ -417,12 +417,12 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="text-sm text-gray-600">
+                        <span className="tf-card-desc">
                           {formatDuration(item.time_spent_seconds)}
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="text-sm text-gray-600">
+                        <span className="tf-card-desc">
                           {formatIST(item.completed_at)}
                         </span>
                       </td>
@@ -439,14 +439,14 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-medium text-gray-900 text-sm truncate">{item.candidate_name}</div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1 min-w-0">
+                      <div className="tf-meta flex items-center gap-1 min-w-0">
                         <Mail className="w-3 h-3 shrink-0" />
                         <span className="truncate">{item.candidate_email}</span>
                       </div>
                     </div>
                     <div className="shrink-0">{getStatusBadge(item.status, item.passed)}</div>
                   </div>
-                  <div className="text-xs text-gray-600 truncate">{item.assessment_title}</div>
+                  <div className="tf-meta-strong truncate">{item.assessment_title}</div>
                   <div className="grid grid-cols-4 gap-1.5">
                     {([['HR', item.hr_score], ['Tech', item.technical_score], ['Code', item.coding_score], ['Overall', item.overall_score]] as [string, number | null][]).map(([label, score]) => (
                       <div key={label} className="rounded-lg bg-gray-50 border border-gray-100 px-1.5 py-1 text-center">
@@ -455,7 +455,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
+                  <div className="flex items-center justify-between tf-meta">
                     <span>{formatDuration(item.time_spent_seconds)}</span>
                     <span>{formatIST(item.completed_at)}</span>
                   </div>
@@ -466,12 +466,12 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-500">
+                <div className="tf-body-muted">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, results.total)} of {results.total} results
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                    <span className="tf-card-desc whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}
@@ -589,7 +589,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -677,7 +677,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-4 py-3 text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -705,16 +705,16 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Candidate
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Match Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-center tf-th">
                       Score
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="px-4 py-3 text-left tf-th">
                       Scored At
                     </th>
                   </tr>
@@ -734,7 +734,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                         </span>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="text-sm text-gray-600">
+                        <span className="tf-card-desc">
                           {item.scored_at ? formatISTDate(item.scored_at) : '-'}
                         </span>
                       </td>
@@ -750,7 +750,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                 <div key={item.id} className="p-4 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-medium text-gray-900 text-sm truncate">{item.candidate_name || 'Unknown'}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{item.scored_at ? formatISTDate(item.scored_at) : '-'}</div>
+                    <div className="tf-meta mt-0.5">{item.scored_at ? formatISTDate(item.scored_at) : '-'}</div>
                     <div className="mt-1">{getMatchBadge(item.match_status)}</div>
                   </div>
                   <div className="shrink-0 text-right">
@@ -764,12 +764,12 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-500">
+                <div className="tf-body-muted">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, resumes.total)} of {resumes.total} results
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                    <span className="tf-card-desc whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}
@@ -1046,7 +1046,7 @@ export default function JDDetailsPage() {
                 <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{jd.title}</h1>
                 {getStatusBadge(jd.status)}
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted">
                 {jd.department && (
                   <span className="flex items-center gap-1">
                     <Building2 className="w-4 h-4" />
@@ -1142,7 +1142,7 @@ export default function JDDetailsPage() {
             >
               Scored Resumes
               {jd.scored_resumes_count > 0 && (
-                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">
+                <span className="px-2 py-0.5 bg-gray-100 tf-meta-strong rounded-full">
                   {jd.scored_resumes_count}
                 </span>
               )}
@@ -1157,7 +1157,7 @@ export default function JDDetailsPage() {
             >
               Assessment Results
               {jd.assessments_count > 0 && (
-                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">
+                <span className="px-2 py-0.5 bg-gray-100 tf-meta-strong rounded-full">
                   {jd.assessments_count}
                 </span>
               )}
@@ -1172,8 +1172,8 @@ export default function JDDetailsPage() {
             <div className="lg:col-span-2 space-y-6">
               {/* Description */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
-                <div className="markdown-content text-gray-700 text-sm leading-relaxed">
+                <h2 className="tf-section-title mb-4">Job Description</h2>
+                <div className="markdown-content tf-body leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                     {(jd.description || '')}
                   </ReactMarkdown>
@@ -1183,7 +1183,7 @@ export default function JDDetailsPage() {
               {/* Assessment Guidance */}
               {jd.assessment_guidance && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Assessment Guidance</h2>
+                  <h2 className="tf-section-title mb-4">Assessment Guidance</h2>
                   <p className="text-gray-700">{jd.assessment_guidance}</p>
                 </div>
               )}
@@ -1201,7 +1201,7 @@ export default function JDDetailsPage() {
             <div className="space-y-6">
               {/* Stats */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Statistics</h2>
+                <h2 className="tf-section-title mb-4">Statistics</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-gray-600">
@@ -1229,7 +1229,7 @@ export default function JDDetailsPage() {
 
               {/* Job Details */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Details</h2>
+                <h2 className="tf-section-title mb-4">Job Details</h2>
                 <div className="space-y-4">
                   {jd.employment_type && (
                     <div className="flex items-center justify-between">
@@ -1287,7 +1287,7 @@ export default function JDDetailsPage() {
 
               {/* Metadata */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata</h2>
+                <h2 className="tf-section-title mb-4">Metadata</h2>
                 <div className="space-y-4 text-sm">
                   <div>
                     <span className="text-gray-500 block mb-1">Posted By</span>
@@ -1362,7 +1362,7 @@ export default function JDDetailsPage() {
                               )}
                             </span>
                           </div>
-                          <div className="text-xs text-gray-500 space-y-1">
+                          <div className="tf-meta space-y-1">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {formatIST(version.published_at)}

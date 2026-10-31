@@ -104,7 +104,7 @@ export default function DowngradeWarningModal({
               <AlertTriangle className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="truncate text-base font-semibold text-gray-900 dark:text-slate-50 sm:text-lg">
+              <h2 className="truncate tf-section-title">
                 {hasOverages ? 'Downgrade with Read-Only Mode' : 'Confirm Downgrade'}
               </h2>
               <p className="truncate text-xs text-gray-500 dark:text-slate-400 sm:text-sm">
@@ -122,7 +122,7 @@ export default function DowngradeWarningModal({
               <div className="flex items-start gap-3 rounded-xl bg-warning-subtle/60 p-3 sm:p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h3 className="tf-subsection-title">
                     Current Usage Exceeds Target Plan Limits
                   </h3>
                   <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
@@ -144,7 +144,7 @@ export default function DowngradeWarningModal({
                       <span className="mt-0.5 text-gray-500 dark:text-slate-400">{getQuotaIcon(overage.quotaType)}</span>
                       <div className="min-w-0">
                         <h5 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{overage.quotaLabel}</h5>
-                        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                        <p className="mt-0.5 tf-meta">
                           You need to reduce your usage to fit within the new plan limit
                         </p>
                       </div>
@@ -186,7 +186,7 @@ export default function DowngradeWarningModal({
                 <div className="flex items-start gap-3">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-slate-400" />
                   <div className="min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="tf-subsection-title">
                       Read-Only Mode Will Be Activated
                     </h4>
                     <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
@@ -206,7 +206,7 @@ export default function DowngradeWarningModal({
 
               {/* Action Steps */}
               <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
-                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                <h4 className="mb-2 flex items-center gap-2 tf-subsection-title">
                   <Info className="h-4 w-4 text-brand-blue" />
                   Steps to Restore Full Access After Downgrading
                 </h4>
@@ -239,7 +239,7 @@ export default function DowngradeWarningModal({
               <div className="flex items-start gap-3 rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
                 <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h3 className="tf-subsection-title">
                     Confirm Plan Downgrade
                   </h3>
                   <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
@@ -269,7 +269,7 @@ export default function DowngradeWarningModal({
                   <div className="mb-3 flex items-start gap-3">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                     <div className="min-w-0">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                      <h4 className="tf-subsection-title">
                         Limited Storage Remaining
                       </h4>
                       <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
@@ -282,7 +282,7 @@ export default function DowngradeWarningModal({
                     {nearLimitQuotas.map((quota, index) => (
                       <div key={index} className="rounded-lg bg-gray-50 p-3 dark:bg-slate-800/50">
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{quota.quotaLabel}</span>
+                          <span className="truncate tf-cell-name">{quota.quotaLabel}</span>
                           <span className="shrink-0 rounded bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
                             {quota.percentageUsed.toFixed(0)}% Used
                           </span>
@@ -304,7 +304,7 @@ export default function DowngradeWarningModal({
                           />
                         </div>
 
-                        <p className="mt-2 text-xs text-gray-600 dark:text-slate-400">
+                        <p className="mt-2 tf-meta-strong">
                           <strong className="font-semibold text-gray-900 dark:text-slate-100">Warning:</strong> You have only{' '}
                           <strong className="font-semibold text-gray-900 dark:text-slate-100">{quota.remaining.toLocaleString()} {quota.unit}</strong> left to upload.
                           Consider deleting old data before adding new items.

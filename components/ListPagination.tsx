@@ -183,7 +183,7 @@ export default function ListPagination({
           <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
           {minimalOnMobile && (
-            <span className="text-xs text-gray-600 sm:hidden">
+            <span className="tf-meta-strong sm:hidden">
               <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
               <span className="font-medium text-gray-900">{totalItems}</span>
             </span>

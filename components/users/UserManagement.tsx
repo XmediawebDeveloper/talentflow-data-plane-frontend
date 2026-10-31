@@ -1819,7 +1819,7 @@ export default function UserManagement() {
   // Created + Last Login as two lines — icon-only in the xl+ table column
   // (the header names them), labelled under the email / on the phone cards.
   const renderUserDates = (user: (typeof users)[number], labels = true) => (
-    <div className="space-y-0.5 text-xs text-gray-500 dark:text-slate-400">
+    <div className="space-y-0.5 tf-meta">
       <div className="flex items-center gap-1.5" title="Created">
         <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
         {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Created</span>}
@@ -3011,11 +3011,11 @@ export default function UserManagement() {
                     style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
                   />
                 </div>
-                <span className="text-sm max-sm:text-[13px] font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                <span className="tf-cell-name max-sm:text-[13px] tabular-nums">
                   {Math.min(limits.usage_percentage, 100)}%
                 </span>
               </div>
-              <span className="hidden text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap sm:inline">
+              <span className="hidden tf-meta whitespace-nowrap sm:inline">
                 Plan{' '}
                 <span className="font-semibold text-gray-700 dark:text-slate-300">
                   {(() => {
@@ -3167,25 +3167,25 @@ export default function UserManagement() {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 hidden 2xl:table-cell whitespace-nowrap" aria-sort={ariaSort(userSort, 'id')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th hidden 2xl:table-cell whitespace-nowrap" aria-sort={ariaSort(userSort, 'id')}>
                     <SortableHeader label="User ID" column="id" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(userSort, 'user')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th" aria-sort={ariaSort(userSort, 'user')}>
                     <SortableHeader label="User" column="user" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(userSort, 'role')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th" aria-sort={ariaSort(userSort, 'role')}>
                     <SortableHeader label="Role" column="role" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
                     <SortableHeader label="Permissions" column="permissions" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(userSort, 'status')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th" aria-sort={ariaSort(userSort, 'status')}>
                     <SortableHeader label="Status" column="status" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
                     <SortableHeader label="Created / Last Login" column="created" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">
+                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center tf-th tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -3213,7 +3213,7 @@ export default function UserManagement() {
                         <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
                         <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
+                            <span className="truncate tf-cell-name max-sm:text-[13px]" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
                             {renderYouTag(user)}
                           </div>
                           {user.email && (
@@ -3326,7 +3326,7 @@ export default function UserManagement() {
                   <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" className="sm:h-9 sm:w-9 sm:text-sm" />
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-                      <span className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</span>
+                      <span className="truncate tf-cell-name max-sm:text-[13px]">{user.name || user.email || 'Unknown'}</span>
                       {renderYouTag(user)}
                       {user.user_display_id && (
                         <button
@@ -3468,7 +3468,7 @@ export default function UserManagement() {
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
-                  <div className="mt-2 flex items-center gap-2 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">
+                  <div className="mt-2 flex items-center gap-2 tf-body-muted max-sm:text-[13px]">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     <span>Validating email...</span>
                   </div>
@@ -3539,7 +3539,7 @@ export default function UserManagement() {
                           )}
                         </div>
                         {role.description && (
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1 line-clamp-1">{role.description}</p>
+                          <p className="tf-meta mt-1 line-clamp-1">{role.description}</p>
                         )}
                         {/* span, not <button>: a button inside the role-card <button> is
                             invalid HTML and raised a hydration error. */}
@@ -3563,7 +3563,7 @@ export default function UserManagement() {
                   })}
                 </div>
                 {availableRoles.length === 0 && (
-                  <div className="text-center py-6 px-4 text-gray-500 dark:text-slate-500 text-sm max-sm:text-[13px] border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <div className="text-center py-6 px-4 tf-body-muted max-sm:text-[13px] border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                     No roles available. Create roles in Role Management first.
                   </div>
                 )}
@@ -3573,21 +3573,21 @@ export default function UserManagement() {
               {false && selectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
+                    <label className="block tf-label max-sm:text-[13px]">
                       Role Permissions
                     </label>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">
+                    <span className="tf-meta">
                       {selectedPermissionCodes.size} permissions assigned
                     </span>
                   </div>
                   {isLoadingPermissions ? (
                     <div className="flex items-center justify-center py-3 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-800/50">
                       <Loader2 className="w-4 h-4 animate-spin text-gray-500 dark:text-slate-500" />
-                      <span className="ml-2 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">Loading...</span>
+                      <span className="ml-2 tf-body-muted max-sm:text-[13px]">Loading...</span>
                     </div>
                   ) : (
                     selectedPermissionCodes.size === 0 ? (
-                      <div className="text-center py-4 text-gray-500 dark:text-slate-500 text-sm max-sm:text-[13px]">
+                      <div className="text-center py-4 tf-body-muted max-sm:text-[13px]">
                         No permissions assigned to this role yet.
                         <br />
                         <span className="text-xs">Configure permissions in Role Management.</span>
@@ -3644,7 +3644,7 @@ export default function UserManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Name</label>
+                    <label className="block tf-label max-sm:text-[13px]">Name</label>
                     <span className={`text-xs tabular-nums ${editingUser.name.length >= 50 ? 'text-brand-orange' : 'text-gray-400'}`}>
                       {editingUser.name.length}/50
                     </span>
@@ -3657,7 +3657,7 @@ export default function UserManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Email</label>
+                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Email</label>
                   <Input
                     type="email"
                     value={editingUser.email}
@@ -3669,7 +3669,7 @@ export default function UserManagement() {
               {identityChanges.length > 0 ? (
                 <div className="flex gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3 sm:p-4">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
-                  <div className="space-y-1 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
+                  <div className="space-y-1 tf-body max-sm:text-[13px]">
                     <p className="font-semibold text-gray-900 dark:text-slate-50">
                       Changing the {identityChanges.map(c => c.field.toLowerCase()).join(' and ')}{' '}needs the user&apos;s confirmation
                     </p>
@@ -3681,7 +3681,7 @@ export default function UserManagement() {
                   </div>
                 </div>
               ) : (
-                <p className="-mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                <p className="-mt-2 flex items-center gap-1.5 tf-meta">
                   <Info className="h-3.5 w-3.5 shrink-0" />
                   Changing the name or email needs a verification code sent to the user&apos;s current email.
                 </p>
@@ -3689,7 +3689,7 @@ export default function UserManagement() {
 
               {/* Role Selection - Compact Pills */}
               <div>
-                <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-2">Role</label>
+                <label className="block tf-label max-sm:text-[13px] mb-2">Role</label>
                 <div className="flex flex-wrap gap-2">
                   {availableRoles.map(role => {
                     const isSelected = editSelectedRoleId === role.id;
@@ -3913,10 +3913,10 @@ export default function UserManagement() {
                                   />
                                 )}
                                 <div>
-                                  <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+                                  <h4 className="tf-card-title max-sm:text-sm">
                                     {category.name}
                                   </h4>
-                                  <p className="text-xs text-gray-500 dark:text-slate-500">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
+                                  <p className="tf-meta">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
                                 </div>
                                 {category.isMenuToggle && selectedCount > 0 && (
                                   <span className="text-xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
@@ -3963,7 +3963,7 @@ export default function UserManagement() {
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">
+                                      <div className="tf-cell-name max-sm:text-[13px]">
                                         View {category.name}
                                         {isMandatory && (
                                           <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
@@ -3991,7 +3991,7 @@ export default function UserManagement() {
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5">
+                                      <div className="tf-cell-name max-sm:text-[13px] flex items-center gap-1.5">
                                         {action.label}
                                         {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
                                       </div>
@@ -4118,7 +4118,7 @@ export default function UserManagement() {
                                             <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">View {sub.name}</div>
+                                            <div className="tf-cell-name max-sm:text-[13px]">View {sub.name}</div>
                                           </div>
                                         </div>
                                       );
@@ -4166,7 +4166,7 @@ export default function UserManagement() {
                                             <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{action.label}</div>
+                                            <div className="tf-cell-name max-sm:text-[13px]">{action.label}</div>
                                           </div>
                                         </div>
                                       );
@@ -4237,7 +4237,7 @@ export default function UserManagement() {
                       <Mail className="w-5 h-5 text-warning flex-shrink-0" />
                       <div>
                         <p className="font-medium text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Email a temporary password</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Sends a temp password to the user and forces a reset on next login. You never see it.</p>
+                        <p className="tf-meta mt-0.5">Sends a temp password to the user and forces a reset on next login. You never see it.</p>
                       </div>
                     </div>
                   </button>
@@ -4251,7 +4251,7 @@ export default function UserManagement() {
                       <KeyRound className="w-5 h-5 text-brand-blue flex-shrink-0" />
                       <div>
                         <p className="font-medium text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Set a password directly</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">You type a new password and hand it to the user. No email, no OTP.</p>
+                        <p className="tf-meta mt-0.5">You type a new password and hand it to the user. No email, no OTP.</p>
                       </div>
                     </div>
                   </button>
@@ -4259,7 +4259,7 @@ export default function UserManagement() {
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1">New password</label>
+                    <label className="block tf-label max-sm:text-[13px] mb-1">New password</label>
                     <div className="relative">
                       <Input
                         type={directPwShow ? 'text' : 'password'}
@@ -4275,7 +4275,7 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm password</label>
+                    <label className="block tf-label max-sm:text-[13px] mb-1">Confirm password</label>
                     <Input
                       type={directPwShow ? 'text' : 'password'}
                       value={directPwConfirm}
@@ -4290,7 +4290,7 @@ export default function UserManagement() {
                       onCheckedChange={(v) => setDirectPwForceChange(!!v)}
                       className="mt-0.5"
                     />
-                    <span className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">Require the user to change this password on next login</span>
+                    <span className="tf-card-desc max-sm:text-[13px]">Require the user to change this password on next login</span>
                   </label>
                 </>
               )}
@@ -4403,7 +4403,7 @@ export default function UserManagement() {
           },
         ]}
       >
-        <div className="space-y-4 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
+        <div className="space-y-4 tf-body max-sm:text-[13px]">
           {identityChanges.length > 0 && (
             <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
@@ -4441,7 +4441,7 @@ export default function UserManagement() {
           </ol>
 
           <div>
-            <label className="mb-1.5 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">6-digit code</label>
+            <label className="mb-1.5 block tf-label max-sm:text-[13px]">6-digit code</label>
             <Input
               autoFocus
               inputMode="numeric"
@@ -4460,7 +4460,7 @@ export default function UserManagement() {
             {identityOtpError && <p className="mt-1.5 text-xs font-medium text-red-600 dark:text-red-400">{identityOtpError}</p>}
           </div>
 
-          <p className="text-xs text-gray-500 dark:text-slate-400">
+          <p className="tf-meta">
             Nothing is saved until the code is verified. The code works for 10 minutes — if it didn&apos;t arrive, ask the
             user to check spam, or click <span className="font-semibold">Send new code</span>. <span className="font-semibold">Cancel change</span> keeps the old {identityChanges.length === 1 ? identityChanges[0].field.toLowerCase() : 'name and email'}.
           </p>

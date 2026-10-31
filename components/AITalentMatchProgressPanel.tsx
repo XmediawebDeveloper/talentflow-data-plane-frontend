@@ -93,8 +93,8 @@ export default function AITalentMatchProgressPanel({
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive" />
             </div>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching Failed</h2>
-            <p className="text-sm text-gray-600 mb-4">{error}</p>
+            <h2 className="tf-section-title mb-2">Matching Failed</h2>
+            <p className="tf-card-desc mb-4">{error}</p>
             <Button
               variant="primary"
               onClick={() => window.location.reload()}
@@ -121,7 +121,7 @@ export default function AITalentMatchProgressPanel({
           </div>
           <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1">AI Matching in Progress</h2>
           <p className="text-sm sm:text-base font-semibold text-gray-500 truncate px-2 sm:px-4 mb-1">{jobTitle}</p>
-          <p className="text-sm text-gray-500 px-2 sm:px-6">
+          <p className="tf-body-muted px-2 sm:px-6">
             Our AI is analyzing the job and candidate details to find the best match for you.
           </p>
         </div>
@@ -178,7 +178,7 @@ export default function AITalentMatchProgressPanel({
                   }`}>
                     {step.title}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">{step.description}</p>
+                  <p className="tf-meta truncate">{step.description}</p>
                 </div>
                 <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${
                   isCurrent ? 'bg-brand-blue/10 text-brand-blue' :
@@ -193,7 +193,7 @@ export default function AITalentMatchProgressPanel({
         </div>
 
         {/* Footer note */}
-        <div className="flex items-center justify-center gap-2 mt-3 sm:mt-4 text-sm text-gray-500">
+        <div className="flex items-center justify-center gap-2 mt-3 sm:mt-4 tf-body-muted">
           <Lightbulb className="w-4 h-4 text-brand-blue flex-shrink-0" />
           <span>This may take a few moments. Please don&apos;t close this window.</span>
         </div>

@@ -114,14 +114,14 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+                <h2 className="tf-section-title">
                   Select Resume Version
                 </h2>
                 <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
                   {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+              <p className="tf-body-muted mt-0.5 truncate">
                 Which version of {resume.name}&apos;s resume to use
               </p>
             </div>
@@ -155,7 +155,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
 
         {/* One line where a four-line notice used to sit — the default is
             already visible in the list, so it only needs saying once. */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 text-xs text-gray-600 dark:text-slate-400">
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta-strong">
           <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
           <span>
             The latest version is selected by default
@@ -227,7 +227,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                       )}
                     </div>
                     {version.name && (
-                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate mt-0.5">{version.name}</p>
+                      <p className="tf-meta-strong truncate mt-0.5">{version.name}</p>
                     )}
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-gray-500 dark:text-slate-400">
                       <span className="flex items-center gap-1">
@@ -290,7 +290,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
 
         {/* Footer */}
         <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
-          <p className="text-sm text-gray-600 dark:text-slate-400">
+          <p className="tf-card-desc">
             {compareChecked.length > 0
               ? `${compareChecked.length} of 2 selected to compare`
               : `Version ${numberFor(selectedVersionId) ?? '-'} will be used`}

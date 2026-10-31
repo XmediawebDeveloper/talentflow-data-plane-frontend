@@ -105,7 +105,7 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
         <div className="space-y-5">
           {/* Email Address */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="email" className="block tf-label mb-2">
               Email Address <span className="text-destructive">*</span>
             </label>
             <div className="relative">
@@ -124,7 +124,7 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
                 autoFocus
               />
             </div>
-            <p className="mt-1.5 text-xs text-gray-500">
+            <p className="mt-1.5 tf-meta">
               Use the email address where you received the invitation
             </p>
           </div>
@@ -155,7 +155,7 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
             <Shield className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-medium text-gray-900 mb-1">Security Notice</p>
-              <p className="text-xs text-gray-600">
+              <p className="tf-meta-strong">
                 This verification ensures that only the invited candidate can access this assessment.
                 Your email must match the address where you received the invitation.
               </p>

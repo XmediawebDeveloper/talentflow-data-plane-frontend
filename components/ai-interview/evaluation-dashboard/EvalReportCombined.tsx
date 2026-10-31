@@ -854,7 +854,7 @@ function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${iconTone}`}><Icon className="w-4 h-4" /></div>
       {/* Wraps on a phone, where the label column is ~120px and truncating
           left "Must-Have…" / "Nice-to-H…"; one truncated line from sm. */}
-      <div className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100 [overflow-wrap:anywhere] sm:truncate">{label}</div>
+      <div className="min-w-0 tf-cell-name [overflow-wrap:anywhere] sm:truncate">{label}</div>
     </div>
     <div className="relative col-span-2 sm:col-span-1 order-last sm:order-none">
       <div className="h-2.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
@@ -881,7 +881,7 @@ function CoverageBlock({ label, cov, tone, Icon }: {
       <div className="flex items-center gap-2 min-w-0">
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tone.icon}`}><Icon className="w-3.5 h-3.5" /></div>
         {/* Same as SectionRow: wrap on a phone rather than truncate to "…-Have …". */}
-        <div className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100 [overflow-wrap:anywhere] sm:truncate">{label}</div>
+        <div className="min-w-0 tf-cell-name [overflow-wrap:anywhere] sm:truncate">{label}</div>
       </div>
       <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${
         cov.pct === 100 ? 'bg-success-subtle text-success-strong ring-success-line'
@@ -893,7 +893,7 @@ function CoverageBlock({ label, cov, tone, Icon }: {
     <div className="h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden mb-1.5">
       <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${cov.pct}%` }} />
     </div>
-    <div className="text-xs text-gray-500 dark:text-slate-400">
+    <div className="tf-meta">
       {cov.covered} of {cov.total} skills asked · <span className="font-semibold text-gray-700 dark:text-slate-300">{cov.demonstrated} demonstrated</span> (score ≥ 5)
     </div>
   </div>
@@ -915,16 +915,16 @@ function SkillTable({ title, rows, wide = false }: {
 }) {
   return (
   <div className="rounded-xl border border-gray-200 dark:border-slate-600/70 overflow-hidden min-w-0">
-    <div className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</div>
+    <div className="px-4 py-3 tf-cell-name">{title}</div>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-white dark:bg-slate-900 text-xs text-gray-600 dark:text-slate-300">
-            <th className="text-left font-semibold px-4 py-2 text-xs text-gray-600 dark:text-slate-300">Skill</th>
-            {wide && <th className="text-left font-semibold px-2 py-2 hidden md:table-cell text-xs text-gray-600 dark:text-slate-300">Cluster</th>}
-            <th className="text-center font-semibold px-2 py-2 w-16 text-xs text-gray-600 dark:text-slate-300">Weight</th>
+            <th className="text-left tf-th px-4 py-2">Skill</th>
+            {wide && <th className="text-left tf-th px-2 py-2 hidden md:table-cell">Cluster</th>}
+            <th className="text-center tf-th px-2 py-2 w-16">Weight</th>
             <th className={`font-semibold px-4 py-2 text-xs text-gray-600 dark:text-slate-300 ${wide ? 'text-left w-56' : 'text-right w-16'}`}>Score</th>
-            {wide && <th className="text-left font-semibold px-4 py-2 w-40 hidden sm:table-cell text-xs text-gray-600 dark:text-slate-300">Status</th>}
+            {wide && <th className="text-left tf-th px-4 py-2 w-40 hidden sm:table-cell">Status</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
@@ -1063,7 +1063,7 @@ export function EvalReportCombined({
               {isPartialEvaluation ? (
                 <>
                   <div className={`text-lg font-bold ${verdictTone.text}`}>Partial Evaluation</div>
-                  <div className="text-xs text-gray-600 dark:text-slate-400 mt-1 max-w-xl">
+                  <div className="tf-meta-strong mt-1 max-w-xl">
                     This interview ended before completion. The AI evaluated only the questions the candidate attended, so no final pass/fail or match score is generated.
                   </div>
                 </>
@@ -1076,7 +1076,7 @@ export function EvalReportCombined({
                     <span className="text-lg font-bold">{finalResultLabel}</span>
                     <span className="text-sm font-medium">· {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}</span>
                   </div>
-                  <div className="text-xs text-gray-600 dark:text-slate-400 mt-1.5 tabular-nums">
+                  <div className="tf-meta-strong mt-1.5 tabular-nums">
                     Must-Have {formatScore1(scores.mustHave)} / Threshold {MHS_THRESHOLD.toFixed(1)}
                     {isPassed
                       ? ` · +${formatScore1((scores.mustHave - MHS_THRESHOLD))} above`
@@ -1156,7 +1156,7 @@ export function EvalReportCombined({
           <span title={`Must-Have drives Pass/Fail at ${MHS_THRESHOLD.toFixed(1)}; Nice-to-Have is informational.`}>
             <Info className="w-4 h-4 text-gray-400" />
           </span>
-          <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+          <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
             <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-brand-blue" />Score Achieved</span>
             <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t-2 border-dashed border-gray-400" />Required Threshold</span>
             <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-success" />Pass</span>
@@ -1210,7 +1210,7 @@ export function EvalReportCombined({
                   tone={{ icon: 'bg-brand-orange/10 text-brand-orange-deep', bar: 'bg-brand-orange' }} />
               )}
             </div>
-            <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-blue/5 border border-brand-blue/25 px-4 py-3 text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-blue/5 border border-brand-blue/25 px-4 py-3 tf-meta-strong leading-relaxed">
               <Info className="w-4 h-4 text-brand-blue shrink-0 mt-px" />
               <span><strong className="text-gray-800 dark:text-slate-200">Question Coverage</strong> reflects how much of the planned skill set was actually probed — not how well the candidate answered (that&apos;s the Section Score above).</span>
             </div>
@@ -1223,7 +1223,7 @@ export function EvalReportCombined({
         <div className={`${cardHeader} flex-wrap`}>
           <div className={headerIcon}><ListChecks className="w-4 h-4" /></div>
           <div className={cardTitle}>Skills Assessment Summary</div>
-          <div className="ml-auto flex items-center gap-4 text-xs text-gray-500 dark:text-slate-400">
+          <div className="ml-auto flex items-center gap-4 tf-meta">
             {showMustHaveTable && <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-blue" />Must-Have</span>}
             {showNiceToHaveTable && <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-orange" />Nice-to-Have</span>}
           </div>
@@ -1298,7 +1298,7 @@ export function EvalReportCombined({
                     {/* Same pill + section tag as Question Analysis (All view). */}
                     <span className="text-xs font-semibold text-white bg-brand-blue px-2 py-0.5 rounded-full">Question {i + 1}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionClass}`}>{sectionLabel} · Q{q.qNum}</span>
-                    {skillsText && <span className="text-xs text-gray-500 dark:text-slate-400 truncate min-w-0 flex-1">{skillsText}</span>}
+                    {skillsText && <span className="tf-meta truncate min-w-0 flex-1">{skillsText}</span>}
                     <span className="ml-auto text-right">
                       {isHR
                         ? <span className="text-xs font-medium text-gray-400 italic">Review only</span>
@@ -1313,7 +1313,7 @@ export function EvalReportCombined({
                   {/* Formatted as in Question Analysis: bold text, no "Q:" prefix,
                       ending in a question mark. */}
                   {q.question && q.question.trim() && (
-                    <div className="text-sm font-semibold text-gray-900 dark:text-slate-100 leading-relaxed">
+                    <div className="tf-cell-name leading-relaxed">
                       {/[?!.]$/.test(q.question.trim()) ? q.question.trim() : `${q.question.trim()}?`}
                     </div>
                   )}
@@ -1423,7 +1423,7 @@ export function EvalReportCombined({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm italic text-gray-500 dark:text-slate-400">No notable strengths were identified in this interview.</p>
+              <p className="tf-body-muted italic">No notable strengths were identified in this interview.</p>
             )}
           </div>
 
@@ -1440,7 +1440,7 @@ export function EvalReportCombined({
                 ))}
               </ul>
             ) : (
-              <p className="text-sm italic text-gray-500 dark:text-slate-400">No significant concerns were identified in this interview.</p>
+              <p className="tf-body-muted italic">No significant concerns were identified in this interview.</p>
             )}
           </div>
         </div>
@@ -1475,7 +1475,7 @@ export function EvalReportCombined({
       {/* 9. Methodology + confidentiality */}
       <div className="rounded-2xl bg-brand-blue/5 border border-brand-blue/25 px-4 sm:px-5 py-4 flex items-start gap-3" style={{ pageBreakInside: 'avoid' }}>
         <Info className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
-        <div className="text-xs leading-relaxed text-gray-600 dark:text-slate-400 space-y-1.5">
+        <div className="tf-meta-strong leading-relaxed space-y-1.5">
           <p>
             <strong className="text-brand-blue">Evaluation Methodology:</strong> This report was generated using AI-powered automated assessment.
             Must-Have Section Score = Average of Must-Have question scores (Pass threshold ≥ {MHS_THRESHOLD.toFixed(1)}).

@@ -1,7 +1,7 @@
 /**
  * One colour per unit type, shared by the Team Usage and Team Analytics tabs —
  * they used to disagree (AS was purple in one, teal and green in the other).
- * Same hues as Team Usage's dots: blue-500, purple-500, success, orange-500.
+ * Same hues as Team Usage's dots: blue-500, brand cyan (AI Assessment), success, orange-500.
  */
 import { Upload, FileSearch, ClipboardCheck, Video, BarChart3, type LucideIcon } from 'lucide-react';
 
@@ -20,7 +20,7 @@ export const UNIT_LABELS: Record<UnitKey, string> = {
 /** Fill colour for charts (CSS colour values, so they work as SVG fills). */
 export const UNIT_CHART_COLOR: Record<UnitKey, string> = {
   RS: 'var(--raw-3b82f6)',
-  AS: '#a855f7',
+  AS: 'var(--brand-cyan)',
   AIU: 'var(--success)',
   RU: 'var(--raw-f97316)',
 };
@@ -37,7 +37,7 @@ export const TOTAL_UNITS_ICON: LucideIcon = BarChart3;
 /** Text colour classes for the same hues. */
 export const UNIT_TEXT_CLASS: Record<UnitKey, string> = {
   RS: 'text-blue-600 dark:text-blue-400',
-  AS: 'text-purple-600 dark:text-purple-400',
+  AS: 'text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan',
   AIU: 'text-success',
   RU: 'text-orange-600 dark:text-orange-400',
 };

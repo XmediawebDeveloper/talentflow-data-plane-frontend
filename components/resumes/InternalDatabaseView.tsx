@@ -1052,7 +1052,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Shared Resume Database</h1>
+              <h1 className="tf-page-title">Shared Resume Database</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
                 {/* The same rows the table lists (search applied). The
                     versions note is a server total for the whole list, so it
@@ -1063,7 +1063,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 )}
               </span>
             </div>
-            <p className="text-sm text-gray-600 dark:text-slate-400">
+            <p className="tf-card-desc">
               Search and filter resumes shared across your organization
             </p>
           </div>
@@ -1138,7 +1138,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           <div className="py-3 border-b border-gray-100 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-brand-blue" />
-              <span className="text-sm text-gray-700 dark:text-slate-300">
+              <span className="tf-body">
                 Found <span className="font-semibold">{filteredAndSortedResumes.length.toLocaleString()}</span> matching resume{filteredAndSortedResumes.length !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
@@ -1326,7 +1326,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               </div>
             </div>
             <AlertDialogDescription asChild>
-              <p className="mt-2 text-sm text-gray-700">
+              <p className="mt-2 tf-body">
                 {deleteConfirm && deleteConfirm.ids.length > 1
                   ? <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteConfirm.ids.length} resumes</span>? Once deleted, they will be permanently removed and cannot be recovered.</>
                   : 'Are you sure you want to delete this resume? Once deleted, the resume will be permanently removed and cannot be recovered.'
@@ -1373,7 +1373,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 tracking-tight">Download as ZIP</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Multiple files selected</p>
+                    <p className="tf-body-muted mt-0.5">Multiple files selected</p>
                   </div>
                 </div>
               </div>
@@ -1388,7 +1388,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                     {selectedResumes.length}
                     <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     All selected resumes will be downloaded and packed in a ZIP file.
                   </p>
                 </div>
@@ -1399,7 +1399,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Info className="w-4 h-4 text-brand-blue" />
                 </div>
-                <p className="text-sm text-gray-700">
+                <p className="tf-body">
                   Do you want to download all selected resumes as a ZIP file?
                 </p>
               </div>

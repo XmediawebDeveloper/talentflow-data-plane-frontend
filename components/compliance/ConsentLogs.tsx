@@ -220,11 +220,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-gray-900">Candidate Consent Logs</h2>
+              <h2 className="tf-section-title">Candidate Consent Logs</h2>
               {/* The count moved to the toolbar's badge, which also states what
                   the filters narrowed away ("12 of 340"). It stays here in
                   `compact`, where there is no toolbar to carry it. */}
-              <p className="text-sm text-gray-500">
+              <p className="tf-body-muted">
                 {compact
                   ? `${total} consent records`
                   : 'Every consent a candidate has given or declined, with the record behind it.'}
@@ -380,15 +380,15 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           <table className={`w-full table-auto ${showAssessmentColumns ? 'min-w-[1200px]' : 'min-w-[960px]'}`}>
             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">JD ID</th>}
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
-                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Assessment Version</th>}
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Feature</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Status</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Device</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">IP Address</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Date</th>
+                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">JD ID</th>}
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
+                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">Assessment Version</th>}
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">Candidate</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">Feature</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">Status</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">Device</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">IP Address</th>
+                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 tf-th whitespace-nowrap align-middle">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -442,7 +442,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                         <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={log.candidate_name || 'Unknown'}>
                           {log.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={log.candidate_email}>{log.candidate_email}</p>
+                        <p className="tf-meta truncate" title={log.candidate_email}>{log.candidate_email}</p>
                       </div>
                     </div>
                   </td>
@@ -469,19 +469,19 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                     )}
                   </td>
                   <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                    <div className="flex items-center gap-2 tf-card-desc">
                       <Monitor className="w-4 h-4 flex-shrink-0" />
                       {log.device_type || 'Unknown'} / {log.browser_name || 'Unknown'}
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                    <div className="flex items-center gap-2 tf-card-desc">
                       <Globe className="w-4 h-4 flex-shrink-0" />
                       {log.ip_address}
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                    <div className="flex items-center gap-2 tf-card-desc">
                       <Calendar className="w-4 h-4 flex-shrink-0" />
                       {new Date(log.created_at).toLocaleDateString()}
                     </div>
@@ -522,7 +522,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             />
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[85dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Consent Log Details</h3>
+                <h3 className="tf-section-title">Consent Log Details</h3>
                 <button
                   onClick={() => {
                     setSelectedLog(null);
@@ -537,43 +537,43 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 [&>div]:min-w-0">
                   <div>
-                    <p className="text-sm text-gray-500">Candidate</p>
+                    <p className="tf-body-muted">Candidate</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 break-all">{selectedLog.candidate_email}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Feature</p>
+                    <p className="tf-body-muted">Feature</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">{selectedLog.feature_name}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Status</p>
+                    <p className="tf-body-muted">Status</p>
                     <p className={`text-sm sm:text-base font-medium ${selectedLog.consent_status ? 'text-success' : 'text-destructive'}`}>
                       {selectedLog.consent_status ? 'Accepted' : 'Declined'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Proctoring Consent</p>
+                    <p className="tf-body-muted">Proctoring Consent</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
                       {selectedLog.proctoring_consent ? 'Yes' : 'No'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">IP Address</p>
+                    <p className="tf-body-muted">IP Address</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">{selectedLog.ip_address}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Device</p>
+                    <p className="tf-body-muted">Device</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">
                       {selectedLog.device_type} / {selectedLog.browser_name} {selectedLog.browser_version}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">OS</p>
+                    <p className="tf-body-muted">OS</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
                       {selectedLog.os_name} {selectedLog.os_version}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Date</p>
+                    <p className="tf-body-muted">Date</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
                       {formatIST(selectedLog.created_at)}
                     </p>
@@ -591,7 +591,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                           <span className="font-medium text-gray-900">{audit.action}</span>
-                          <span className="text-gray-500 text-xs">
+                          <span className="tf-meta">
                             {formatIST(audit.created_at)}
                           </span>
                         </div>

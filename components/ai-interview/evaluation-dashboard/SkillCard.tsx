@@ -52,7 +52,7 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
                 {cluster.priority} Priority
               </span>
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="tf-body-muted">
               Weight: <span style={{ fontFamily: 'var(--font-mono)' }}>{cluster.weight}%</span> • {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -65,7 +65,7 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
           return (
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-sm text-gray-500 mb-1">Coverage</div>
+                <div className="tf-body-muted mb-1">Coverage</div>
                 <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)', color: priorityStyle.border }}>
                   {coveragePct}%
                 </div>
