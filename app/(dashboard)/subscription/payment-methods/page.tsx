@@ -371,8 +371,8 @@ export default function PaymentMethodsPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <CreditCard className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No payment methods</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add a payment method to manage your subscription</p>
+            <h3 className="tf-section-title">No payment methods</h3>
+            <p className="mt-1 tf-body-muted">Add a payment method to manage your subscription</p>
             <button
               onClick={() => {
                 if (!canAdd) return;
@@ -421,7 +421,7 @@ export default function PaymentMethodsPage() {
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">
+                      <p className="mt-1 tf-body-muted">
                         {method.cardholder_name} · Expires {String(method.expiry_month).padStart(2, '0')}/{method.expiry_year}
                       </p>
                     </div>
@@ -477,8 +477,8 @@ export default function PaymentMethodsPage() {
               <ShieldCheck className="h-5 w-5 text-brand-teal" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Secure Payments</h3>
-              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+              <h3 className="tf-subsection-title">Secure Payments</h3>
+              <p className="mt-1 tf-card-desc">
                 All payment information is securely processed and stored. We use industry-standard encryption to protect your data.
               </p>
             </div>
@@ -535,7 +535,7 @@ export default function PaymentMethodsPage() {
                     }`}
                   />
                   {formErrors.cardholderName && (
-                    <p className="mt-1 text-xs text-destructive">{formErrors.cardholderName}</p>
+                    <p className="mt-1 tf-error">{formErrors.cardholderName}</p>
                   )}
                 </label>
 
@@ -558,7 +558,7 @@ export default function PaymentMethodsPage() {
                     />
                   </div>
                   {formErrors.cardNumber && (
-                    <p className="mt-1 text-xs text-destructive">{formErrors.cardNumber}</p>
+                    <p className="mt-1 tf-error">{formErrors.cardNumber}</p>
                   )}
                 </label>
 
@@ -579,7 +579,7 @@ export default function PaymentMethodsPage() {
                       }`}
                     />
                     {formErrors.expiryMonth && (
-                      <p className="mt-1 text-xs text-destructive">{formErrors.expiryMonth}</p>
+                      <p className="mt-1 tf-error">{formErrors.expiryMonth}</p>
                     )}
                   </label>
                   <label className="block">
@@ -597,7 +597,7 @@ export default function PaymentMethodsPage() {
                       }`}
                     />
                     {formErrors.expiryYear && (
-                      <p className="mt-1 text-xs text-destructive">{formErrors.expiryYear}</p>
+                      <p className="mt-1 tf-error">{formErrors.expiryYear}</p>
                     )}
                   </label>
                   <label className="block">
@@ -615,7 +615,7 @@ export default function PaymentMethodsPage() {
                       }`}
                     />
                     {formErrors.cvv && (
-                      <p className="mt-1 text-xs text-destructive">{formErrors.cvv}</p>
+                      <p className="mt-1 tf-error">{formErrors.cvv}</p>
                     )}
                   </label>
                 </div>

@@ -1659,9 +1659,9 @@ export default function AITalentMatchPage({
     const detail = byId?.[scoreId];
     if (!detail) {
       return byId ? (
-        <p className="text-sm text-gray-500 dark:text-slate-400">Score details aren't available for this candidate.</p>
+        <p className="tf-body-muted">Score details aren't available for this candidate.</p>
       ) : (
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 tf-body-muted">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading score...
         </div>
@@ -2807,12 +2807,12 @@ export default function AITalentMatchPage({
                 ]}
               />
               {scoreDetailsByJd[scoreDetailView.jdId] ? (
-                <div className="text-sm text-gray-600">
+                <div className="tf-card-desc">
                   This score could not be found.{' '}
                   <button type="button" onClick={close} className="text-brand-blue hover:underline">Back to AI Talent Match</button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 tf-body-muted">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading scorecard...
                 </div>
@@ -2879,8 +2879,8 @@ export default function AITalentMatchPage({
                   <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
                     <XCircle className="w-6 h-6 text-destructive" />
                   </div>
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching failed</h2>
-                  <p className="text-sm text-gray-600 mb-4">{matchError}</p>
+                  <h2 className="tf-section-title mb-2">Matching failed</h2>
+                  <p className="tf-card-desc mb-4">{matchError}</p>
                   <Button variant="primary" size="md" onClick={() => selectedJob && handleRunAIMatch(selectedJob)} disabled={!selectedJob}>
                     Run AI Match
                   </Button>
@@ -3460,7 +3460,7 @@ export default function AITalentMatchPage({
               className="block text-left space-y-0.5 rounded-md -m-1 p-1 hover:bg-brand-blue/5 transition-colors"
             >
               {titles.slice(0, 2).map(title => (
-                <span key={title} className="block text-sm text-gray-700 dark:text-slate-300">{title}</span>
+                <span key={title} className="block tf-body">{title}</span>
               ))}
               {hidden > 0 && (
                 <span className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 whitespace-nowrap">
@@ -3478,13 +3478,13 @@ export default function AITalentMatchPage({
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">
                 All ({titles.length})
               </span>
-              <span className="text-xs text-gray-500 dark:text-slate-400">
+              <span className="tf-meta">
                 {row.jobs.length} job {row.jobs.length === 1 ? 'version' : 'versions'}
               </span>
             </div>
             <ul className="max-h-72 overflow-y-auto py-1">
               {titles.map(title => (
-                <li key={title} className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm text-gray-700 dark:text-slate-300">
+                <li key={title} className="flex items-center justify-between gap-3 px-3 py-1.5 tf-body">
                   <span className="min-w-0 truncate" title={title}>{title}</span>
                   {(versionsByTitle.get(title) ?? 0) > 1 && (
                     <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-2xs font-semibold tabular-nums bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30">
@@ -4034,7 +4034,7 @@ export default function AITalentMatchPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     {candidateLocations.length > 0 && (
                       <div>
-                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
+                        <label className="block tf-label mb-1.5">Location</label>
                         <FilterSelect
                           value={candidateFilterLocation}
                           onChange={(v) => candidateSearch.setFilter('location', v)}
@@ -4049,19 +4049,19 @@ export default function AITalentMatchPage({
                     )}
 
                     <div>
-                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Job Count</label>
+                      <label className="block tf-label mb-1.5">Job Count</label>
                       <label className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer bg-white dark:bg-slate-900">
                         <input
                           type="checkbox"
                           checked={candidateFilterMultiJob}
                           onChange={(e) => candidateSearch.setFilter('multiJob', e.target.checked)}
                         />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Matched 2+ jobs</span>
+                        <span className="tf-body">Matched 2+ jobs</span>
                       </label>
                     </div>
 
                     <div>
-                      <label htmlFor="candidate-phone" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Mobile No</label>
+                      <label htmlFor="candidate-phone" className="block tf-label mb-1.5">Mobile No</label>
                       <input
                         id="candidate-phone"
                         type="text"
@@ -4073,7 +4073,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div>
-                      <label htmlFor="candidate-matched-from" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched From</label>
+                      <label htmlFor="candidate-matched-from" className="block tf-label mb-1.5">Last Matched From</label>
                       <DateField
                         id="candidate-matched-from"
                         aria-label="Last matched from"
@@ -4084,7 +4084,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div>
-                      <label htmlFor="candidate-matched-to" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched To</label>
+                      <label htmlFor="candidate-matched-to" className="block tf-label mb-1.5">Last Matched To</label>
                       <DateField
                         id="candidate-matched-to"
                         aria-label="Last matched to"
@@ -4095,7 +4095,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (years)</label>
+                      <label className="block tf-label mb-1.5">Experience (years)</label>
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="number"
@@ -4198,10 +4198,10 @@ export default function AITalentMatchPage({
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
                   <User className="w-5 h-5" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">
+                <h3 className="tf-section-title mb-2">
                   {candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                <p className="tf-card-desc max-w-md mx-auto">
                   {candidateFiltersApplied
                     ? 'Try a different name, job, location, or lower the minimum match.'
                     : 'Run AI Match on a job to see matched candidates here.'}
@@ -4225,7 +4225,7 @@ export default function AITalentMatchPage({
                     <table className="w-full min-w-[900px]">
                       <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                         <tr>
-                          <th className="w-10 pl-4 pr-1 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">
+                          <th className="w-10 pl-4 pr-1 py-3 tf-th">
                             {(() => {
                               const allPage = pageCandKeys.length > 0 && pageCandKeys.every(k => selectedCandKeys.has(k));
                               return (
@@ -4252,7 +4252,7 @@ export default function AITalentMatchPage({
                           {candidateSortHeader('scored', 'Scored', 'center')}
                           {candidateSortHeader('titles', 'Job Titles')}
                           {candidateSortHeader('date', 'Latest Matched')}
-                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                          <th className="text-left py-3 px-4 tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4305,7 +4305,7 @@ export default function AITalentMatchPage({
                                       >
                                         {row.name || 'Candidate'}
                                       </button>
-                                      {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
+                                      {row.email && <div className="tf-meta truncate">{row.email}</div>}
                                     </div>
                                   </div>
                                 </td>
@@ -4338,7 +4338,7 @@ export default function AITalentMatchPage({
                                 </td>
                                 <td className="px-4 py-4 align-top whitespace-nowrap">
                                   <div className="text-sm text-gray-900 dark:text-slate-100">{formatISTDate(latestJob.matchedAt.toISOString())}</div>
-                                  <div className="text-xs text-gray-500 dark:text-slate-500">{formatISTTime(latestJob.matchedAt.toISOString())}</div>
+                                  <div className="tf-meta">{formatISTTime(latestJob.matchedAt.toISOString())}</div>
                                 </td>
                                 <td className="px-4 py-4 align-top" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex items-center gap-1.5">
@@ -4392,7 +4392,7 @@ export default function AITalentMatchPage({
                                             {innerJobSortHeader(row.key, 'scored', 'Scored Status', 'left')}
                                             {innerJobSortHeader(row.key, 'date', 'Matched By / Date', 'left')}
                                             {innerJobSortHeader(row.key, 'resumeVersion', 'Resume Version', 'center')}
-                                            <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
+                                            <th className="text-left py-2 px-4 tf-th whitespace-nowrap tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4448,7 +4448,7 @@ export default function AITalentMatchPage({
                                                     ? <JobIdBadge className="inline-flex h-6 items-center">{jobRecord.jobId}</JobIdBadge>
                                                     : <span className="text-sm text-gray-400">-</span>}
                                                 </td>
-                                                <td className="py-2.5 px-4 align-middle text-sm text-gray-700 dark:text-slate-300">{job.jobTitle}</td>
+                                                <td className="py-2.5 px-4 align-middle tf-td">{job.jobTitle}</td>
                                                 <td className="text-center py-2.5 px-4 align-middle whitespace-nowrap">
                                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
                                                     v{jobVersion ?? 1}
@@ -4468,8 +4468,8 @@ export default function AITalentMatchPage({
                                                   )}
                                                 </td>
                                                 <td className="py-2.5 px-4 align-middle whitespace-nowrap">
-                                                  <div className="text-sm text-gray-700 dark:text-slate-300">{job.matchedByName || 'System'}</div>
-                                                  <div className="text-xs text-gray-500 dark:text-slate-500">
+                                                  <div className="tf-body">{job.matchedByName || 'System'}</div>
+                                                  <div className="tf-meta">
                                                     {formatISTDate(job.matchedAt.toISOString())} · {formatISTTime(job.matchedAt.toISOString())}
                                                   </div>
                                                 </td>
@@ -4595,7 +4595,7 @@ export default function AITalentMatchPage({
                             >
                               {row.name || 'Candidate'}
                             </button>
-                            {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
+                            {row.email && <div className="tf-meta truncate">{row.email}</div>}
                           </div>
                         </div>
 
@@ -4606,7 +4606,7 @@ export default function AITalentMatchPage({
                           {/* Scored — of this candidate's matched jobs, how many have been
                               scored against that job in Resume Scoring. */}
                           {scoredResumeIdsByJd && (
-                            <span className="text-xs text-gray-600 dark:text-slate-400">
+                            <span className="tf-meta-strong">
                               <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>{' '}
                               {row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length} of {row.jobs.length}
                             </span>
@@ -4620,7 +4620,7 @@ export default function AITalentMatchPage({
                         {/* Footer (Resume Scoring's grid card): Latest Matched on the
                             left, ▾ (open this candidate's jobs) and ⋮ on the right. */}
                         <div className="mt-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex-1 min-w-0 text-xs text-gray-500 dark:text-slate-500">
+                          <div className="flex-1 min-w-0 tf-meta">
                             <div className="text-gray-400 uppercase tracking-wide text-2xs">Latest Matched</div>
                             <div className="truncate">
                               <span className="text-gray-700 dark:text-slate-300">{formatISTDate(latestJob.matchedAt.toISOString())}</span>{' '}
@@ -4723,7 +4723,7 @@ export default function AITalentMatchPage({
                                             </span>
                                           )}
                                         </div>
-                                        <div className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500">
+                                        <div className="mt-1 flex items-center gap-1 tf-meta">
                                           <Calendar className="w-3 h-3" />
                                           <span className="truncate">{job.matchedByName || 'System'} · {formatISTDate(job.matchedAt.toISOString())} <span className="text-gray-400">{formatISTTime(job.matchedAt.toISOString())}</span></span>
                                         </div>
@@ -4838,7 +4838,7 @@ export default function AITalentMatchPage({
                   row's right end via ml-auto, same treatment the single-job
                   results toolbar's own Score/Invite group uses. */}
               <div className="flex items-center gap-2 flex-wrap mb-3">
-                <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                <span className="tf-card-desc">Show:</span>
                 {([
                   // This copy renders only while historyPageView === 'resumes' —
                   // see the "candidates" copy's comment for why the other two
@@ -4958,7 +4958,7 @@ export default function AITalentMatchPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     {candidateLocations.length > 0 && (
                       <div>
-                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
+                        <label className="block tf-label mb-1.5">Location</label>
                         <FilterSelect
                           value={candidateFilterLocation}
                           onChange={(v) => candidateSearch.setFilter('location', v)}
@@ -4974,7 +4974,7 @@ export default function AITalentMatchPage({
 
                     {candidateJobTitles.length > 0 && (
                       <div>
-                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched Job</label>
+                        <label className="block tf-label mb-1.5">Matched Job</label>
                         <FilterSelect
                           value={candidateFilterJob}
                           onChange={(v) => candidateSearch.setFilter('job', v)}
@@ -4989,7 +4989,7 @@ export default function AITalentMatchPage({
                     )}
 
                     <div>
-                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Minimum Match</label>
+                      <label className="block tf-label mb-1.5">Minimum Match</label>
                       <FilterSelect
                         value={String(candidateFilterMinScore)}
                         onChange={(v) => candidateSearch.setFilter('minScore', Number(v))}
@@ -5006,19 +5006,19 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div>
-                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Job Count</label>
+                      <label className="block tf-label mb-1.5">Job Count</label>
                       <label className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer bg-white dark:bg-slate-900">
                         <input
                           type="checkbox"
                           checked={candidateFilterMultiJob}
                           onChange={(e) => candidateSearch.setFilter('multiJob', e.target.checked)}
                         />
-                        <span className="text-sm text-gray-700 dark:text-slate-300">Matched 2+ jobs</span>
+                        <span className="tf-body">Matched 2+ jobs</span>
                       </label>
                     </div>
 
                     <div>
-                      <label htmlFor="resume-phone" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Mobile No</label>
+                      <label htmlFor="resume-phone" className="block tf-label mb-1.5">Mobile No</label>
                       <input
                         id="resume-phone"
                         type="text"
@@ -5030,7 +5030,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div>
-                      <label htmlFor="resume-matched-from" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched From</label>
+                      <label htmlFor="resume-matched-from" className="block tf-label mb-1.5">Last Matched From</label>
                       <DateField
                         id="resume-matched-from"
                         aria-label="Last matched from"
@@ -5041,7 +5041,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div>
-                      <label htmlFor="resume-matched-to" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched To</label>
+                      <label htmlFor="resume-matched-to" className="block tf-label mb-1.5">Last Matched To</label>
                       <DateField
                         id="resume-matched-to"
                         aria-label="Last matched to"
@@ -5052,7 +5052,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (years)</label>
+                      <label className="block tf-label mb-1.5">Experience (years)</label>
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="number"
@@ -5098,10 +5098,10 @@ export default function AITalentMatchPage({
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
                   <FileText className="w-5 h-5" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">
+                <h3 className="tf-section-title mb-2">
                   {candidateFiltersApplied ? 'No resumes match your filters' : 'No matched resumes yet'}
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                <p className="tf-card-desc max-w-md mx-auto">
                   {candidateFiltersApplied
                     ? 'Try a different name, job, location, or lower the minimum match.'
                     : 'Run AI Match on a job to see matched resumes here.'}
@@ -5142,7 +5142,7 @@ export default function AITalentMatchPage({
                         <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || '—'}</p>
+                          <p className="tf-meta truncate">{row.email || '—'}</p>
                         </div>
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
@@ -5182,7 +5182,7 @@ export default function AITalentMatchPage({
                         )}
                       </div>
 
-                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between tf-meta pt-2 border-t border-gray-100 dark:border-slate-800">
                         <span>{row.experience || '—'}</span>
                         <div
                           onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
@@ -5223,7 +5223,7 @@ export default function AITalentMatchPage({
                             on top of the first instead of beside it), so Match
                             Rating gets its own explicit offset equal to this
                             checkbox column's fixed width instead. */}
-                        <th className="w-12 px-3 py-3 align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-0 z-[8] text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="w-12 px-3 py-3 align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-0 z-[8] tf-th">
                           <input
                             type="checkbox"
                             aria-label="Select all"
@@ -5233,7 +5233,7 @@ export default function AITalentMatchPage({
                             }}
                           />
                         </th>
-                        <th className="text-center py-3 px-4 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)] font-semibold">
+                        <th className="text-center py-3 px-4 tf-th whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)]">
                           Match Rating
                         </th>
                         {['Candidate Name', 'Email', 'Phone', 'Location', 'Job ID', 'Job Title', 'Job Version', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
@@ -5244,7 +5244,7 @@ export default function AITalentMatchPage({
                             {label}
                           </th>
                         ))}
-                        <th className="text-left py-3 px-4 text-xs text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-sticky-col font-semibold">
+                        <th className="text-left py-3 px-4 tf-th whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-sticky-col">
                           Actions
                         </th>
                       </tr>
@@ -5288,10 +5288,10 @@ export default function AITalentMatchPage({
                               </span>
                             </div>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
                             {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
                             {(() => {
                               const numbers = splitPhoneNumbers(row.phone, 2);
                               return numbers.length > 0
@@ -5299,7 +5299,7 @@ export default function AITalentMatchPage({
                                 : <span className="text-gray-400 dark:text-slate-500">-</span>;
                             })()}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
                             {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
                           {/* Job ID — the job this match ran against, its JD code
@@ -5352,13 +5352,13 @@ export default function AITalentMatchPage({
                               />
                             </div>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
                             {row.experience || '-'}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
                             {formatUploadedBy(row.best.uploadedByName, row.best.uploadedBy)}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
                             {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
                           <td className="text-center py-3 px-4 align-middle whitespace-nowrap">
@@ -5481,14 +5481,14 @@ export default function AITalentMatchPage({
                           />
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
+                            <div className="tf-meta truncate">{job.jobTitle}</div>
                           </div>
                         </div>
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta-strong">
                         {row.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.email}</span></span>}
                         {row.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{row.phone}</span>}
                         {row.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.location}</span></span>}
@@ -5691,7 +5691,7 @@ export default function AITalentMatchPage({
                     </div>
                   </div>
                   <div className="sm:col-span-2 lg:col-span-3 flex items-end justify-between gap-3">
-                    <p className="text-xs text-gray-500 dark:text-slate-500">
+                    <p className="tf-meta">
                       Candidate filters keep a job when any of its candidates matches.
                       {resolvingHistoryCandidates ? ' Loading candidates...' : ''}
                     </p>
@@ -5993,12 +5993,12 @@ export default function AITalentMatchPage({
                   className="mt-3 pt-3 pl-3 sm:pl-6 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
                 >
                   {!loaded ? (
-                    <div className="flex items-center gap-2 py-3 text-sm text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-2 py-3 tf-body-muted">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading candidates...
                     </div>
                   ) : panelCandidates.length === 0 ? (
-                    <p className="py-3 text-sm text-gray-500 dark:text-slate-400">
+                    <p className="py-3 tf-body-muted">
                       {candidateRatingBand ? 'No candidates in this rating for this job.' : 'No candidates matched for this job.'}
                     </p>
                   ) : (
@@ -6060,7 +6060,7 @@ export default function AITalentMatchPage({
                                       >
                                         {c.name || 'Candidate'}
                                       </button>
-                                      {c.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{c.email}</div>}
+                                      {c.email && <div className="tf-meta truncate">{c.email}</div>}
                                     </div>
                                     <span
                                       title="Rating"
@@ -6069,7 +6069,7 @@ export default function AITalentMatchPage({
                                       {toMatchRating(c.matchScore ?? 0)}
                                     </span>
                                   </div>
-                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-500 dark:text-slate-400">
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-meta">
                                     <span>Experience: <span className="text-gray-700 dark:text-slate-300">{c.experience || '-'}</span></span>
                                     <span className="inline-flex items-center gap-1">
                                       Resume
@@ -6113,7 +6113,7 @@ export default function AITalentMatchPage({
                           <table className="w-full min-w-[760px]">
                             <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900 shadow-[0_1px_0_0_var(--border)]">
                               <tr>
-                                <th className="w-10 px-3 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">
+                                <th className="w-10 px-3 py-2.5 tf-th">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -6133,9 +6133,9 @@ export default function AITalentMatchPage({
                                 {candSortHeader('rating', 'Rating', 'center')}
                                 {candSortHeader('candidate', 'Candidate', 'left')}
                                 {candSortHeader('experience', 'Experience', 'left')}
-                                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Resume Version</th>
+                                <th className="text-center py-2.5 px-3 tf-th whitespace-nowrap">Resume Version</th>
                                 {candSortHeader('scored', 'Scored Status', 'left')}
-                                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
+                                <th className="text-right py-2.5 px-3 tf-th tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -6183,11 +6183,11 @@ export default function AITalentMatchPage({
                                           >
                                             {c.name || 'Candidate'}
                                           </button>
-                                          {c.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]">{c.email}</div>}
+                                          {c.email && <div className="tf-meta truncate max-w-[16rem]">{c.email}</div>}
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{c.experience || '-'}</td>
+                                    <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{c.experience || '-'}</td>
                                     <td className="text-center px-3 py-2.5 align-middle whitespace-nowrap">
                                       <span className="inline-flex px-2 py-0.5 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
                                         v{c.resumeVersion ?? 1}
@@ -6339,7 +6339,7 @@ export default function AITalentMatchPage({
                       {/* "By: name  Matched: date" — Resume Scoring's meta
                           line. The JD's own details are left to the Job
                           Descriptions page. */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-2">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-card-desc mb-2">
                         <span className="flex items-center gap-1">
                           <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
                           <span className="font-normal text-gray-500 dark:text-slate-400">{item.matchedByName || 'System'}</span>
@@ -6470,7 +6470,7 @@ export default function AITalentMatchPage({
                           modules' version history reads as one pattern. */}
                       <div className="flex items-center gap-2 mb-2.5">
                         <FileText className="w-4 h-4 text-brand-blue" />
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
+                        <p className="tf-cell-name">Version History</p>
                       </div>
                       <AIMatchVersionHistoryTable
                         loading={!hasHistoryVersionsToShow && loadingHistoryJobId === historyKey}
@@ -6574,15 +6574,15 @@ export default function AITalentMatchPage({
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className="text-sm text-gray-600 dark:text-slate-400">{item.matchedByName || 'System'}</span>
+                      <span className="tf-card-desc">{item.matchedByName || 'System'}</span>
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                      <div className="flex items-center gap-2 tf-body-muted">
                         <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{item.totalMatches}</span>
+                      <span className="tf-cell-name tabular-nums">{item.totalMatches}</span>
                     </td>
                     {/* Rating: one column per band (10 / 9–7 / Below 7), as Resume
                         Scoring's Exact / Partial / No Match columns. */}
@@ -6648,15 +6648,15 @@ export default function AITalentMatchPage({
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job ID</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matched By</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Date &amp; Time</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Matched</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Rating 10</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Rating 9–7</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Below 7</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Job ID</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Matched By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Date &amp; Time</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Matched</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Rating 10</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Rating 9–7</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Below 7</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -6874,7 +6874,7 @@ export default function AITalentMatchPage({
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-bold text-gray-900 dark:text-slate-50">AI Talent Match History</h3>
-                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate max-w-[360px]">
+                    <p className="tf-body-muted truncate max-w-[360px]">
                       {modalItem.jobTitle}
                       {modalJobData?.jobId && ` (${modalJobData.jobId})`}
                     </p>
@@ -6940,7 +6940,7 @@ export default function AITalentMatchPage({
                             <div className={`h-7 w-7 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
                               <card.icon className={`w-3.5 h-3.5 ${card.iconColor}`} />
                             </div>
-                            <span className="text-xs text-gray-600 dark:text-slate-400">{card.label}</span>
+                            <span className="tf-meta-strong">{card.label}</span>
                           </div>
                           <div className={`text-xl font-bold ${card.valueColor}`}>{card.value}</div>
                         </div>
@@ -7074,13 +7074,13 @@ export default function AITalentMatchPage({
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 z-10">
                               <tr className="text-left bg-white dark:bg-slate-900">
-                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Version</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Matched By</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Date</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Candidates</th>
-                                <th colSpan={3} className="py-1.5 px-3 font-semibold text-gray-600 dark:text-slate-300 text-center border-b border-gray-200 dark:border-slate-700 text-xs">Rating Breakdown</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-xs">Status</th>
-                                <th rowSpan={2} className="py-2.5 px-3 font-semibold text-gray-600 dark:text-slate-300 align-bottom text-right text-xs">Action</th>
+                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Version</th>
+                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Matched By</th>
+                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Date</th>
+                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Candidates</th>
+                                <th colSpan={3} className="py-1.5 px-3 tf-th text-center border-b border-gray-200 dark:border-slate-700">Rating Breakdown</th>
+                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Status</th>
+                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom text-right">Action</th>
                               </tr>
                               <tr className="text-left bg-white dark:bg-slate-900">
                                 <th className="py-1.5 px-3 font-semibold text-success text-xs">10</th>
@@ -7143,7 +7143,7 @@ export default function AITalentMatchPage({
                             Same ~4-cards-then-scroll cap as the table. */}
                         <div className="md:hidden space-y-2 overflow-y-auto max-h-[520px]">
                           {filteredVersionRows.length === 0 ? (
-                            <p className="text-center text-xs text-gray-500 dark:text-slate-500 py-4">
+                            <p className="text-center tf-meta py-4">
                               No match runs found for the selected filters.
                             </p>
                           ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount, matchedBy }) => {
@@ -7196,16 +7196,16 @@ export default function AITalentMatchPage({
                             unfiltered (its own heading says so). */}
                         <div className="mt-4 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
                           <div className="flex items-center justify-between mb-1">
-                            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Rating Distribution (All Versions)</h4>
+                            <h4 className="tf-subsection-title">Rating Distribution (All Versions)</h4>
                             <BarChart3 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                           </div>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mb-3">Total candidates: {totalMatched}</p>
+                          <p className="tf-meta mb-3">Total candidates: {totalMatched}</p>
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
                             {distributionRows.map(row => {
                               const pct = ratingPct(row.value);
                               return (
                                 <div key={row.label}>
-                                  <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-400 mb-1">
+                                  <div className="flex items-center justify-between tf-meta-strong mb-1">
                                     <span>{row.label}</span>
                                     <span className={`font-medium ${row.textClass}`}>{row.value} ({pct}%)</span>
                                   </div>
@@ -7230,7 +7230,7 @@ export default function AITalentMatchPage({
                             <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                               <PieChart className="w-4 h-4" />
                             </div>
-                            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Rating Breakdown</span>
+                            <span className="tf-cell-name truncate">Rating Breakdown</span>
                           </div>
                           <FilterSelect
                             value={breakdownVersion ? String(breakdownVersion.session.id) : 'all'}
@@ -7272,7 +7272,7 @@ export default function AITalentMatchPage({
                             )}
                             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                               <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{breakdownTotal}</span>
-                              <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
+                              <span className="tf-meta mt-1 leading-tight">Total<br />Candidates</span>
                             </div>
                           </div>
                           {/* Legend: names in the left half, values in the right
@@ -7287,7 +7287,7 @@ export default function AITalentMatchPage({
                                 </span>
                                 <span className="flex items-baseline gap-1.5 pl-3 pr-1">
                                   <span className="tabular-nums font-semibold text-gray-900 dark:text-slate-100">{row.value}</span>
-                                  <span className="tabular-nums text-xs text-gray-500 dark:text-slate-400">({breakdownPct(row.value)}%)</span>
+                                  <span className="tabular-nums tf-meta">({breakdownPct(row.value)}%)</span>
                                 </span>
                               </li>
                             ))}
@@ -7300,7 +7300,7 @@ export default function AITalentMatchPage({
               </div>
 
               <div className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0">
-                <p className="text-xs text-gray-500 dark:text-slate-500 flex items-start sm:items-center gap-1.5">
+                <p className="tf-meta flex items-start sm:items-center gap-1.5">
                   <Info className="w-3.5 h-3.5 flex-shrink-0" />
                   Match rating is based on AI similarity between candidate resumes and the job description (1 - 10 scale).
                 </p>
@@ -7596,7 +7596,7 @@ export default function AITalentMatchPage({
                     {resultsJobCode && (
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 [overflow-wrap:anywhere] sm:truncate">{resultsJobTitle}</h1>
+                    <h1 className="tf-page-title min-w-0 [overflow-wrap:anywhere] sm:truncate">{resultsJobTitle}</h1>
                     {/* Disabled / Archived — same badge as the job list row. */}
                     {!canRunAgainHere && (() => {
                       const label = resultsJobStatus === 'archived' ? 'Archived' : 'Disabled';
@@ -7682,7 +7682,7 @@ export default function AITalentMatchPage({
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-2 tf-meta-strong">
                     <span className="inline-flex items-center gap-1">
                       <User className="w-3.5 h-3.5" />
                       {matchedCandidates.length} matches
@@ -8046,8 +8046,8 @@ export default function AITalentMatchPage({
                 height={144}
                 className="mb-4 h-32 w-32 object-contain mx-auto sm:h-36 sm:w-36"
               />
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No AI Match Results Yet</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto mb-4">
+              <h3 className="tf-section-title mb-2">No AI Match Results Yet</h3>
+              <p className="tf-card-desc max-w-md mx-auto mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
               <Button
@@ -8073,7 +8073,7 @@ export default function AITalentMatchPage({
             <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
               <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
-                  <th className="w-12 px-4 py-3 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="w-12 px-4 py-3 tf-sticky-col-left tf-th">
                     <input
                       type="checkbox"
                       checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
@@ -8087,73 +8087,73 @@ export default function AITalentMatchPage({
                       className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-center tf-th">
                     Matched Rating
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Candidate Name
                   </th>
                   {isResultColumnVisible('email') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Email
                   </th>
                   )}
                   {isResultColumnVisible('phone') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Phone
                   </th>
                   )}
                   {isResultColumnVisible('location') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Location
                   </th>
                   )}
                   {isResultColumnVisible('jobTitle') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Job Title
                   </th>
                   )}
                   {isResultColumnVisible('jobVersion') && (
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-center tf-th">
                     Job Version
                   </th>
                   )}
                   {isResultColumnVisible('skills') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Skills
                   </th>
                   )}
                   {isResultColumnVisible('experience') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Experience
                   </th>
                   )}
                   {isResultColumnVisible('uploadedBy') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Uploaded By
                   </th>
                   )}
                   {isResultColumnVisible('uploadDate') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Uploaded Date
                   </th>
                   )}
                   {isResultColumnVisible('resumeVersion') && (
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-center tf-th">
                     Resume Version
                   </th>
                   )}
                   {isResultColumnVisible('attachments') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Attachments
                   </th>
                   )}
                   {isResultColumnVisible('scoredStatus') && (
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  <th className="px-4 py-3 text-left tf-th">
                     Scored Status
                   </th>
                   )}
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">
+                  <th className="px-4 py-3 text-right tf-th tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -8205,12 +8205,12 @@ export default function AITalentMatchPage({
                       </div>
                     </td>
                     {isResultColumnVisible('email') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                    <td className="px-4 py-3 tf-td">
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('phone') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                    <td className="px-4 py-3 tf-td">
                       {(() => {
                         const numbers = splitPhoneNumbers(candidate.phone, 2);
                         return numbers.length > 0
@@ -8220,12 +8220,12 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('location') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                    <td className="px-4 py-3 tf-td">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('jobTitle') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                    <td className="px-4 py-3 tf-td">
                       <span className="block max-w-[220px] truncate">
                         {resultsJobTitle || '-'}
                       </span>
@@ -8258,15 +8258,15 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('experience') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">{candidate.experience}</td>
+                    <td className="px-4 py-3 tf-td">{candidate.experience}</td>
                     )}
                     {isResultColumnVisible('uploadedBy') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                    <td className="px-4 py-3 tf-td">
                       {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                     </td>
                     )}
                     {isResultColumnVisible('uploadDate') && (
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                    <td className="px-4 py-3 tf-td">
                       {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     )}
@@ -8400,10 +8400,10 @@ export default function AITalentMatchPage({
                       />
                       <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                       <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate" title={candidate.name || 'Unknown'}>
+                        <p className="tf-cell-name truncate" title={candidate.name || 'Unknown'}>
                           {candidate.name || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 truncate mt-0.5" title={candidate.email || ''}>
+                        <p className="tf-meta truncate mt-0.5" title={candidate.email || ''}>
                           {candidate.email || '—'}
                         </p>
                       </div>
@@ -8428,7 +8428,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     {/* Contact + experience, one per line */}
-                    <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-slate-400">
+                    <div className="mt-3 space-y-2 tf-meta-strong">
                       <div className="flex items-center gap-2 min-w-0">
                         <Phone className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                         <span className="truncate">{splitPhoneNumbers(candidate.phone, 1)[0] || '—'}</span>
@@ -8541,7 +8541,7 @@ export default function AITalentMatchPage({
                       <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 truncate">
+                        <div className="tf-meta truncate">
                           {resultsJobTitle || '-'}
                         </div>
                       </div>
@@ -8550,7 +8550,7 @@ export default function AITalentMatchPage({
                       {candidate.rank || '-'}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400 mb-2">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta-strong mb-2">
                     {candidate.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.email}</span></span>}
                     {candidate.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{candidate.phone}</span>}
                     {candidate.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.location}</span></span>}
@@ -8563,7 +8563,7 @@ export default function AITalentMatchPage({
                       moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
                     />
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="flex items-center justify-between gap-2 tf-meta">
                     <span className="truncate">
                       {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                       {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}

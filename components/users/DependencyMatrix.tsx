@@ -148,7 +148,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
       subtitle="Which permissions need other permissions to work"
       bodyClassName="!p-0 sm:!p-0 flex flex-col"
       footerStart={
-          <div className="text-xs text-gray-600 flex items-center gap-2 flex-wrap">
+          <div className="tf-meta-strong flex items-center gap-2 flex-wrap">
             <Badge variant="info">
               {(matrix?.features || Object.keys(matrix?.feature_names || {})).length || 0} permissions
             </Badge>
@@ -168,7 +168,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
             <div className="flex-1 overflow-auto p-3 sm:p-6">
               {/* Tree View */}
               <div className="space-y-4 sm:space-y-6">
-                <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-3 sm:p-4 text-sm max-sm:text-[13px] text-gray-700 flex items-start gap-2">
+                <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-3 sm:p-4 tf-body max-sm:text-[13px] flex items-start gap-2">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-semibold text-gray-900">How it works</p>
@@ -187,7 +187,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                     </div>
                     Turning these off turns off other sections
                   </h3>
-                  <p className="mb-3 text-xs text-gray-500">
+                  <p className="mb-3 tf-meta">
                     The number is how many permissions in that section stop working. Turning it back on offers Only this / Restore previous / Turn on all.
                   </p>
                   <div className="space-y-2.5">
@@ -196,7 +196,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                         <button type="button" onClick={() => setSelectedFeature(selectedFeature === rule.code ? null : rule.code)}>
                           <Badge variant="info" className="text-xs">{getPermissionLabel(rule.code)}</Badge>
                         </button>
-                        <span className="mt-0.5 text-xs text-gray-500">off →</span>
+                        <span className="mt-0.5 tf-meta">off →</span>
                         <div className="flex flex-wrap gap-1.5">
                           {rule.sections.map(([section, count]) => (
                             <span key={section} className="text-xs px-2 py-0.5 rounded-full font-medium ring-1 bg-gray-50 text-gray-700 ring-gray-200">
@@ -217,7 +217,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                     </div>
                     Permissions that work on their own
                   </h3>
-                  <p className="-mt-1 mb-3 text-xs text-gray-500">The number shows how many other permissions need it.</p>
+                  <p className="-mt-1 mb-3 tf-meta">The number shows how many other permissions need it.</p>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {dependencyTree
                       .filter(n => n.dependencies.length === 0)
@@ -257,7 +257,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                     </div>
                     Can also be started from other sections
                   </h3>
-                  <p className="mb-3 text-xs text-gray-500">
+                  <p className="mb-3 tf-meta">
                     An entry point only works while its main permission is on. Turning the main permission on offers to turn these on too; turning it off turns them off.
                   </p>
                   <div className="space-y-2.5">
@@ -360,7 +360,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 <div className="w-8 h-8 rounded-lg bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
                   <Layers className="w-4 h-4 text-white" />
                 </div>
-                <h3 className="font-semibold text-gray-900 text-base max-sm:text-sm truncate">{selectedFeatureInfo.name}</h3>
+                <h3 className="tf-card-title max-sm:text-sm truncate">{selectedFeatureInfo.name}</h3>
               </div>
 
               {selectedFeatureInfo.dependencies.length > 0 && (
@@ -372,7 +372,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                   </h4>
                   <ul className="space-y-1.5">
                     {selectedFeatureInfo.dependencies.map(dep => (
-                      <li key={dep} className="text-sm max-sm:text-[13px] text-gray-700 pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] transition-colors">
+                      <li key={dep} className="tf-body max-sm:text-[13px] pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] transition-colors">
                         {matrix?.feature_names[dep] || dep}
                       </li>
                     ))}
@@ -393,7 +393,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                   </h4>
                   <ul className="space-y-1.5">
                     {selectedFeatureInfo.dependents.map(dep => (
-                      <li key={dep} className="text-sm max-sm:text-[13px] text-gray-700 pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-cyan/30 hover:bg-brand-cyan/[0.03] transition-colors">
+                      <li key={dep} className="tf-body max-sm:text-[13px] pl-3 py-1.5 px-2 rounded-md bg-white border border-gray-200 hover:border-brand-cyan/30 hover:bg-brand-cyan/[0.03] transition-colors">
                         {matrix?.feature_names[dep] || dep}
                       </li>
                     ))}
@@ -406,7 +406,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               )}
 
               {selectedFeatureInfo.dependencies.length === 0 && selectedFeatureInfo.dependents.length === 0 && (
-                <div className="p-3 bg-white border border-gray-200 rounded-lg text-sm max-sm:text-[13px] text-gray-600 flex items-start gap-2">
+                <div className="p-3 bg-white border border-gray-200 rounded-lg tf-card-desc max-sm:text-[13px] flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                   <span>This permission works on its own, and no other permission needs it.</span>
                 </div>

@@ -566,7 +566,7 @@ export default function JDListPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-6">
           <div>
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Job Descriptions</h1>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="tf-card-desc mt-1">
               Manage your job descriptions ({total} total)
             </p>
           </div>
@@ -723,7 +723,7 @@ export default function JDListPage() {
               />
             </div>
             {/* Results count */}
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 tf-body-muted">
               <span className="px-2 py-1 bg-gray-100 rounded">
                 {total} results
               </span>
@@ -833,12 +833,12 @@ export default function JDListPage() {
                             {jd.job_id}
                           </span>
                         )}
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words min-w-0">{jd.title}</h3>
+                        <h3 className="tf-section-title break-words min-w-0">{jd.title}</h3>
                         {getStatusBadge(jd.status, jd.current_version)}
                         {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
                       {/* FIX-008: Responsive metadata - primary info visible, secondary hidden on mobile */}
-                      <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
+                      <div className="flex items-center gap-4 tf-body-muted mb-3 flex-wrap">
                         <span className="flex items-center gap-1">
                           <FileText className="w-4 h-4" />
                           {jd.industry_type || '-'}
@@ -879,7 +879,7 @@ export default function JDListPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-600 text-sm line-clamp-2">
+                      <p className="tf-card-desc line-clamp-2">
                         {jd.description?.substring(0, 200)}...
                       </p>
                       {/* Stats */}
@@ -1114,12 +1114,12 @@ export default function JDListPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
-            <p className="text-sm text-gray-600">
+            <p className="tf-card-desc">
               Showing {(currentPage - 1) * 20 + 1} to {Math.min(currentPage * 20, total)} of {total}
             </p>
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="tf-card-desc whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}

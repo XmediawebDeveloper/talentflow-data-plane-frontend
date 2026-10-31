@@ -2239,7 +2239,7 @@ function CurrentPlanContent() {
                 ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
                   <>
                     <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlanPrice, currentPlanCurrency)}</span>
-                    <span className="text-sm text-gray-500 dark:text-slate-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
+                    <span className="tf-body-muted">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
                   </>
                 ) : currentPlan?.price ? (
                   <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlan.price, currentPlan.currency)}</span>
@@ -2622,7 +2622,7 @@ function CurrentPlanContent() {
             </span>
             <div className="flex-1">
               <p className="text-sm font-semibold text-brand-orange-deep">Plan Changes Pending</p>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">
+              <p className="mt-0.5 tf-card-desc">
                 {daysRemaining !== null && (
                   <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
                 )}
@@ -2718,7 +2718,7 @@ function CurrentPlanContent() {
                 {purchaseHold.message}
               </p>
               {purchaseHold.paymentReference && (
-                <p className="text-xs text-gray-600 dark:text-slate-400 mt-2">
+                <p className="tf-meta-strong mt-2">
                   Payment reference: <span className="font-mono">{purchaseHold.paymentReference}</span>
                 </p>
               )}
@@ -2812,7 +2812,7 @@ function CurrentPlanContent() {
                         const correctedReason = fromPlan
                           ? `User ${direction} from ${fromPlan}${fromPeriod ? ` (${fromPeriod})` : ''} to ${upgrade.new_plan_name}${toPeriod ? ` (${toPeriod})` : ''}`
                           : upgrade.reason.replace(/\b(upgrade|downgrade)\b/gi, (m: string) => m[0] === m[0].toUpperCase() ? (isQueuedDowngrade ? 'Downgrade' : 'Upgrade') : direction);
-                        return <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Reason: {correctedReason}</p>;
+                        return <p className="tf-meta mt-2">Reason: {correctedReason}</p>;
                       })()}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -2966,7 +2966,7 @@ function CurrentPlanContent() {
                                 plan.currency
                               )}
                             </span>
-                            <span className="text-gray-500 dark:text-slate-500 text-sm">
+                            <span className="tf-body-muted">
                               {/* Show correct billing period based on what's available */}
                               {isYearly
                                 ? (plan.annualPrice ? '/year' : '/month')
@@ -3000,13 +3000,13 @@ function CurrentPlanContent() {
                           )}
                           {/* Show monthly equivalent hint when viewing yearly and both exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-meta mt-1">
                               {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
                             </p>
                           )}
                           {/* Show yearly option hint when viewing monthly and both exist */}
                           {!isYearly && plan.annualPrice && plan.monthlyPrice && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-meta mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
                                 <span className="text-brand-teal font-semibold"> (Save {Math.round(plan.discountPercentage)}%)</span>
@@ -3200,7 +3200,7 @@ function CurrentPlanContent() {
                           </span>
                           <div className="min-w-0">
                             <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-base">{section.label}</h3>
-                            <p className="text-xs text-gray-500 dark:text-slate-400">{section.description}</p>
+                            <p className="tf-meta">{section.description}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -3277,7 +3277,7 @@ function CurrentPlanContent() {
                         )}
                       </div>
                       {modalStep !== 'result' && selectedPlanForPayment.description && (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-slate-500">{selectedPlanForPayment.description}</p>
+                        <p className="mt-0.5 line-clamp-1 tf-meta">{selectedPlanForPayment.description}</p>
                       )}
                     </div>
                   </div>
@@ -3346,7 +3346,7 @@ function CurrentPlanContent() {
                       {/* Left: billing summary + add-on */}
                       <div className="flex min-w-0 flex-col gap-3">
                         <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
-                          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-slate-50">Billing Summary</h3>
+                          <h3 className="mb-1 tf-subsection-title">Billing Summary</h3>
                           <div className="divide-y divide-gray-100 text-[13px] dark:divide-slate-700/60">
                             <div className="flex items-center justify-between gap-3 py-1.5">
                               <span className="text-gray-600 dark:text-slate-400">Plan</span>
@@ -3393,7 +3393,7 @@ function CurrentPlanContent() {
                           {/* Total */}
                           <div className="mt-2 flex flex-col gap-1.5 rounded-xl bg-brand-blue/[0.05] px-3 py-2.5 ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:ring-slate-700 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Total (incl. GST)</p>
+                              <p className="tf-cell-name">Total (incl. GST)</p>
                               <p className="text-[11px] text-gray-500 dark:text-slate-400">
                                 {(isYearly && plan.annualPrice) || (!plan.monthlyPrice && plan.annualPrice)
                                   ? 'Billed annually (12× quotas)'
@@ -3437,7 +3437,7 @@ function CurrentPlanContent() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Dedicated Database</span>
+                                <span className="tf-cell-name">Dedicated Database</span>
                                 <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-semibold text-brand-blue">Add-on</span>
                                 {hasDedicatedDatabase && (
                                   <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-[11px] font-semibold text-warning">Active</span>
@@ -3449,7 +3449,7 @@ function CurrentPlanContent() {
                                 </span>
                               )}
                             </div>
-                            <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                            <p className="mt-0.5 tf-meta">
                               {hasDedicatedDatabase
                                 ? 'Your organization already uses a dedicated database. This cannot be changed.'
                                 : 'Get your own dedicated database for enhanced isolation and performance'}
@@ -3477,7 +3477,7 @@ function CurrentPlanContent() {
 
                       {/* Right: what's included */}
                       <div className="flex min-w-0 flex-col rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">What&apos;s included</h3>
+                        <h3 className="tf-subsection-title">What&apos;s included</h3>
                         <p className="text-[11px] text-gray-500 dark:text-slate-400">Everything you need to scale your hiring.</p>
 
                         {includedRows.length > 0 && (
@@ -3788,7 +3788,7 @@ function CurrentPlanContent() {
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">
                     {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     {isQueuedDowngrade ? 'Downgrade' : 'Upgrade'} to {selectedQueuedUpgrade.new_plan_name}
                   </p>
                 </div>
@@ -3848,7 +3848,7 @@ function CurrentPlanContent() {
               {/* Terms & Conditions */}
               <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 dark:text-slate-50 mb-3">Terms & Conditions</h4>
-                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 text-sm text-gray-600 dark:text-slate-400 space-y-2 max-h-40 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 tf-card-desc space-y-2 max-h-40 overflow-y-auto">
                   <p>1. Any unused credits, quotas, or features from your current subscription will be immediately terminated and cannot be recovered.</p>
                   <p>2. Your new plan will start immediately upon confirmation and will be valid for the billing period you selected ({selectedQueuedUpgrade.billing_interval}).</p>
                   <p>3. No prorated refunds will be issued for the remaining period of your current plan.</p>
@@ -3869,7 +3869,7 @@ function CurrentPlanContent() {
                 />
                 <div className="flex-1">
                   <span className="font-medium text-gray-900 dark:text-slate-50">I accept the terms and conditions</span>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     I understand that remaining credits on my current plan will be forfeited and my new plan will start immediately.
                   </p>
                 </div>

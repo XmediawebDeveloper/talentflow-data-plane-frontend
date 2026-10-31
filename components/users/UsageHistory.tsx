@@ -272,7 +272,7 @@ function Pagination({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Go to — tablets and up; phones page with ‹ › */}
         <div className="hidden items-center gap-1.5 sm:flex">
-          <span className="text-sm max-sm:text-[13px] text-gray-600 whitespace-nowrap">Go to</span>
+          <span className="tf-card-desc max-sm:text-[13px] whitespace-nowrap">Go to</span>
           <Input
             type="number"
             min={1}
@@ -346,7 +346,7 @@ function ExportModal({
       ) : null}
     >
         <div className="space-y-3">
-          <p className="text-sm max-sm:text-[13px] text-gray-500">Choose export format:</p>
+          <p className="tf-body-muted max-sm:text-[13px]">Choose export format:</p>
           <button
             onClick={() => onExport('csv')}
             disabled={isExporting}
@@ -356,8 +356,8 @@ function ExportModal({
               <FileText className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 group-hover:text-brand-blue">CSV File</p>
-              <p className="text-xs text-gray-500">Comma-separated values (.csv)</p>
+              <p className="tf-cell-name max-sm:text-[13px] group-hover:text-brand-blue">CSV File</p>
+              <p className="tf-meta">Comma-separated values (.csv)</p>
             </div>
           </button>
           <button
@@ -369,8 +369,8 @@ function ExportModal({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900 group-hover:text-brand-blue">Excel Spreadsheet</p>
-              <p className="text-xs text-gray-500">Microsoft Excel format (.xlsx)</p>
+              <p className="tf-cell-name max-sm:text-[13px] group-hover:text-brand-blue">Excel Spreadsheet</p>
+              <p className="tf-meta">Microsoft Excel format (.xlsx)</p>
             </div>
           </button>
         </div>
@@ -596,13 +596,13 @@ function FeatureWiseTab({
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Feature</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">User</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Entity</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Units</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Status</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Balance After</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Date & Time</th>
+              <th className="text-left px-4 py-3 tf-th">Feature</th>
+              <th className="text-left px-4 py-3 tf-th">User</th>
+              <th className="text-left px-4 py-3 tf-th">Entity</th>
+              <th className="text-right px-4 py-3 tf-th">Units</th>
+              <th className="text-left px-4 py-3 tf-th">Status</th>
+              <th className="text-right px-4 py-3 tf-th">Balance After</th>
+              <th className="text-left px-4 py-3 tf-th">Date & Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -785,7 +785,7 @@ function UserWiseTab({
             <div className="flex items-center gap-2.5">
               <NameAvatar name={u.userName} fallback={u.userEmail} userId={u.userId} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{u.userName}</p>
+                <p className="truncate tf-cell-name max-sm:text-[13px]">{u.userName}</p>
                 <p className="truncate text-xs text-gray-400">{u.userEmail}</p>
               </div>
               <div className="shrink-0 text-right">
@@ -821,15 +821,15 @@ function UserWiseTab({
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">#</th>
-              <th aria-sort={ariaSort(tableSort, 'userName')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th className="text-left px-4 py-3 tf-th">#</th>
+              <th aria-sort={ariaSort(tableSort, 'userName')} className="text-left px-4 py-3 tf-th">
                 <SortableHeader label="User" column="userName" sort={tableSort} />
               </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 tf-th">
                     <SortableHeader
                       label={
                         <span className="inline-flex items-center gap-1">
@@ -844,13 +844,13 @@ function UserWiseTab({
                   </th>
                 );
               })}
-              <th aria-sort={ariaSort(tableSort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'total')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="Total" column="total" sort={tableSort} align="right" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'successCount')} className="text-center px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'successCount')} className="text-center px-4 py-3 tf-th">
                 <SortableHeader label="Success / Failed" column="successCount" sort={tableSort} align="center" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="text-left px-4 py-3 tf-th">
                 <SortableHeader label="Last Active" column="lastUsed" sort={tableSort} />
               </th>
             </tr>
@@ -989,7 +989,7 @@ function TeamWiseTab({
                     <Users className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</p>
+                    <p className="truncate tf-cell-name max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
                     <p className="truncate text-xs text-gray-400">
                       {team.jds_created ?? 0} JDs · {team.assessments_created ?? 0} assessments
                     </p>
@@ -1033,15 +1033,15 @@ function TeamWiseTab({
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">#</th>
-              <th aria-sort={ariaSort(tableSort, 'team_name')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th className="text-left px-4 py-3 tf-th">#</th>
+              <th aria-sort={ariaSort(tableSort, 'team_name')} className="text-left px-4 py-3 tf-th">
                 <SortableHeader label="Team" column="team_name" sort={tableSort} />
               </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 tf-th">
                     <SortableHeader
                       label={
                         <span className="inline-flex items-center gap-1">
@@ -1056,10 +1056,10 @@ function TeamWiseTab({
                   </th>
                 );
               })}
-              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="JDs Created" column="jds_created" sort={tableSort} align="right" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="Assessments" column="assessments_created" sort={tableSort} align="right" />
               </th>
             </tr>
@@ -1127,7 +1127,7 @@ function TeamWiseTab({
                 <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
               </td>
               {(['RS', 'AS', 'AIU', 'RU'] as const).map((key) => (
-                <td key={key} className="px-4 py-3 text-right text-sm max-sm:text-[13px] font-semibold tabular-nums text-gray-900">
+                <td key={key} className="px-4 py-3 text-right tf-cell-name max-sm:text-[13px] tabular-nums">
                   {grandTotals[key].toLocaleString()}
                 </td>
               ))}
@@ -1221,7 +1221,7 @@ function InlineTeamMembersUsage({
 
   if (!members.length) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm max-sm:text-[13px] text-gray-500 shadow-sm">
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 tf-body-muted max-sm:text-[13px] shadow-sm">
         No usage found for users in {teamName} during the selected date range.
       </div>
     );
@@ -1236,7 +1236,7 @@ function InlineTeamMembersUsage({
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 sm:text-base">{teamName} Users</p>
-            <p className="hidden text-xs text-gray-500 sm:block">Usage details for team members</p>
+            <p className="hidden tf-meta sm:block">Usage details for team members</p>
           </div>
         </div>
         <span className="shrink-0 text-xs font-medium text-brand-blue px-2.5 py-1 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
@@ -1257,7 +1257,7 @@ function InlineTeamMembersUsage({
               <div className="flex items-center gap-2.5">
                 <NameAvatar name={member.user_name} fallback={member.user_email} userId={member.user_id} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900">{member.user_name || 'Unknown User'}</p>
+                  <p className="truncate tf-cell-name max-sm:text-[13px]">{member.user_name || 'Unknown User'}</p>
                   <p className="truncate text-xs text-gray-400">
                     {member.last_activity ? `Last active ${formatIST(member.last_activity)}` : member.user_email || '—'}
                   </p>
@@ -1280,25 +1280,25 @@ function InlineTeamMembersUsage({
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 tf-th">
                 <SortableHeader label="User" column="user_name" sort={sort} />
               </th>
-              <th aria-sort={ariaSort(sort, 'RS')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'RS')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'AS')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'AS')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="Assessment" column="AS" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'AIU')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'AIU')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="AI Interview" column="AIU" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'RU')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'RU')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="Resume Storage" column="RU" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'total')} className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'total')} className="text-right px-4 py-3 tf-th">
                 <SortableHeader label="Total" column="total" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'last_activity')} className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">
+              <th aria-sort={ariaSort(sort, 'last_activity')} className="text-left px-4 py-3 tf-th">
                 <SortableHeader label="Last Active" column="last_activity" sort={sort} />
               </th>
             </tr>
@@ -1398,14 +1398,14 @@ function RefundsTab({
         <table className="w-full text-sm max-sm:text-[13px]">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Type</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Feature</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Units</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">Before</th>
-              <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs">After</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Actor</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Reason</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs">Date</th>
+              <th className="text-left px-4 py-3 tf-th">Type</th>
+              <th className="text-left px-4 py-3 tf-th">Feature</th>
+              <th className="text-right px-4 py-3 tf-th">Units</th>
+              <th className="text-right px-4 py-3 tf-th">Before</th>
+              <th className="text-right px-4 py-3 tf-th">After</th>
+              <th className="text-left px-4 py-3 tf-th">Actor</th>
+              <th className="text-left px-4 py-3 tf-th">Reason</th>
+              <th className="text-left px-4 py-3 tf-th">Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1428,11 +1428,11 @@ function RefundsTab({
                   <td className="px-4 py-3 text-right text-gray-500 text-sm max-sm:text-[13px]">{entry.balance_before.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right text-gray-700 text-sm max-sm:text-[13px] font-medium">{entry.balance_after.toLocaleString()}</td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-700 text-sm max-sm:text-[13px]">{entry.actor_name || entry.actor_email || '—'}</p>
+                    <p className="tf-body max-sm:text-[13px]">{entry.actor_name || entry.actor_email || '—'}</p>
                     <p className="text-gray-400 text-xs capitalize">{entry.actor_type?.toLowerCase()}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-gray-600 text-sm max-sm:text-[13px] max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
+                    <p className="tf-card-desc max-sm:text-[13px] max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
                     {entry.notes && <p className="text-gray-400 text-xs truncate max-w-[200px]" title={entry.notes}>{entry.notes}</p>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatISTDate(entry.created_at)}</td>
@@ -1558,7 +1558,7 @@ export default function UsageHistory() {
           <Shield className="w-8 h-8 text-brand-blue" />
         </div>
         <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 mb-2">Access Restricted</h2>
-        <p className="text-sm max-sm:text-[13px] text-gray-500 max-w-sm">Usage History is only accessible to Tenant Admins.</p>
+        <p className="tf-body-muted max-sm:text-[13px] max-w-sm">Usage History is only accessible to Tenant Admins.</p>
       </div>
     );
   }
@@ -1953,7 +1953,7 @@ export default function UsageHistory() {
       </div>
 
       {/* ── Audit note ── */}
-      <div className="flex items-start gap-3 text-xs text-gray-600 bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl p-4 border border-brand-blue/15 ring-1 ring-brand-blue/5">
+      <div className="flex items-start gap-3 tf-meta-strong bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl p-4 border border-brand-blue/15 ring-1 ring-brand-blue/5">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
           <Info className="w-3.5 h-3.5" />
         </div>

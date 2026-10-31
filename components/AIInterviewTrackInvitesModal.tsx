@@ -486,7 +486,7 @@ export default function AIInterviewTrackInvitesModal({
                   )}
                 </h2>
                 {/* JD ID · job title · job version */}
-                <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
                   {/* "Job title - V1   Interview Version - V1", as the AI
@@ -801,14 +801,14 @@ export default function AIInterviewTrackInvitesModal({
             count or page when nobody is invited, so embedded it goes too. */}
         {!(isUnstarted && embedded) && (
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+          <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
             {resultsLabel}
           </p>
           <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
             {totalPages > 1 && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -829,7 +829,7 @@ export default function AIInterviewTrackInvitesModal({
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className={pageBtn}>
                   Prev
                 </button>
-                <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                <span className="px-1 sm:px-2 tf-card-desc whitespace-nowrap">
                   Page {page} of {totalPages}
                 </span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className={pageBtn}>
@@ -901,13 +901,13 @@ export default function AIInterviewTrackInvitesModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
         <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+          <h3 className="tf-section-title">Edit Invitation</h3>
           <Button variant="secondary" size="sm" onClick={() => { if (!savingEdit) setEditTarget(null); }} aria-label="Close" className="px-2">
             <X className="w-5 h-5" />
           </Button>
         </div>
         <div className="px-5 sm:px-6 py-4 space-y-4">
-          <p className="text-sm text-gray-500 dark:text-slate-500">
+          <p className="tf-body-muted">
             Update the candidate&apos;s details below. Saving will send them a fresh invitation link automatically.
           </p>
           <div>
@@ -923,7 +923,7 @@ export default function AIInterviewTrackInvitesModal({
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {editNameError && <p className="mt-1 text-xs text-destructive">{editNameError}</p>}
+            {editNameError && <p className="mt-1 tf-error">{editNameError}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
@@ -938,7 +938,7 @@ export default function AIInterviewTrackInvitesModal({
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {editEmailError && <p className="mt-1 text-xs text-destructive">{editEmailError}</p>}
+            {editEmailError && <p className="mt-1 tf-error">{editEmailError}</p>}
           </div>
         </div>
         <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">

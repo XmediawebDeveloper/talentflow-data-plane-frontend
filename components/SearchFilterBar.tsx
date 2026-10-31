@@ -222,7 +222,7 @@ export default function SearchFilterBar({
                       onChange={() => handleSkillToggle(skill)}
                       className="text-gray-800 rounded"
                     />
-                    <span className="text-sm text-gray-700">{skill}</span>
+                    <span className="tf-body">{skill}</span>
                   </label>
                 ))}
               </div>
@@ -321,7 +321,7 @@ export default function SearchFilterBar({
                       onChange={() => setTempFilters({ ...tempFilters, education: level })}
                       className="text-gray-800"
                     />
-                    <span className="text-sm text-gray-700">{level}</span>
+                    <span className="tf-body">{level}</span>
                   </label>
                 ))}
                 {tempFilters.education && (
@@ -396,7 +396,7 @@ export default function SearchFilterBar({
                       onChange={() => setTempFilters({ ...tempFilters, noticePeriod: period })}
                       className="text-gray-800"
                     />
-                    <span className="text-sm text-gray-700">{period}</span>
+                    <span className="tf-body">{period}</span>
                   </label>
                 ))}
                 {tempFilters.noticePeriod && (
@@ -494,7 +494,7 @@ export default function SearchFilterBar({
                       onChange={() => setTempFilters({ ...tempFilters, source: source })}
                       className="text-gray-800"
                     />
-                    <span className="text-sm text-gray-700">{source}</span>
+                    <span className="tf-body">{source}</span>
                   </label>
                 ))}
                 {tempFilters.source && (
@@ -548,7 +548,7 @@ export default function SearchFilterBar({
               </div>
               <div>
                 <h3 className="text-gray-900 mb-1">Search Accuracy & Performance Guide</h3>
-                <p className="text-xs text-gray-600">Supports partial, exact, and multiple keyword searches</p>
+                <p className="tf-meta-strong">Supports partial, exact, and multiple keyword searches</p>
               </div>
             </div>
             <button
@@ -568,15 +568,15 @@ export default function SearchFilterBar({
                 </div>
                 <h4 className="text-sm text-gray-900">Partial Text Match</h4>
               </div>
-              <p className="text-xs text-gray-600 mb-3">Search with partial keywords to find candidates</p>
+              <p className="tf-meta-strong mb-3">Search with partial keywords to find candidates</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-gray-800">react</code>
-                  <p className="text-xs text-gray-500 mt-1">Finds: React, ReactJS, React Native</p>
+                  <p className="tf-meta mt-1">Finds: React, ReactJS, React Native</p>
                 </div>
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-gray-800">john</code>
-                  <p className="text-xs text-gray-500 mt-1">Finds: John, Johnson, Johnathan</p>
+                  <p className="tf-meta mt-1">Finds: John, Johnson, Johnathan</p>
                 </div>
               </div>
             </div>
@@ -589,15 +589,15 @@ export default function SearchFilterBar({
                 </div>
                 <h4 className="text-sm text-gray-900">Exact Match</h4>
               </div>
-              <p className="text-xs text-gray-600 mb-3">Use quotes for exact phrase matching</p>
+              <p className="tf-meta-strong mb-3">Use quotes for exact phrase matching</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-gray-800">"Senior Developer"</code>
-                  <p className="text-xs text-gray-500 mt-1">Finds only: Senior Developer</p>
+                  <p className="tf-meta mt-1">Finds only: Senior Developer</p>
                 </div>
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-gray-800">"5+ years"</code>
-                  <p className="text-xs text-gray-500 mt-1">Finds exact: 5+ years experience</p>
+                  <p className="tf-meta mt-1">Finds exact: 5+ years experience</p>
                 </div>
               </div>
             </div>
@@ -610,15 +610,15 @@ export default function SearchFilterBar({
                 </div>
                 <h4 className="text-sm text-gray-900">Multiple Keywords</h4>
               </div>
-              <p className="text-xs text-gray-600 mb-3">Combine keywords with spaces (AND logic)</p>
+              <p className="tf-meta-strong mb-3">Combine keywords with spaces (AND logic)</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-orange-600">react python aws</code>
-                  <p className="text-xs text-gray-500 mt-1">Finds: Candidates with ALL 3 skills</p>
+                  <p className="tf-meta mt-1">Finds: Candidates with ALL 3 skills</p>
                 </div>
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-orange-600">john senior</code>
-                  <p className="text-xs text-gray-500 mt-1">Finds: John + Senior level candidates</p>
+                  <p className="tf-meta mt-1">Finds: John + Senior level candidates</p>
                 </div>
               </div>
             </div>
@@ -638,7 +638,7 @@ export default function SearchFilterBar({
                 { label: 'Resume Source', icon: '📁' },
                 { label: 'All Fields', icon: '🔍' },
               ].map((field) => (
-                <div key={field.label} className="flex items-center gap-2 text-xs text-gray-600">
+                <div key={field.label} className="flex items-center gap-2 tf-meta-strong">
                   <span>{field.icon}</span>
                   <span>{field.label}</span>
                 </div>

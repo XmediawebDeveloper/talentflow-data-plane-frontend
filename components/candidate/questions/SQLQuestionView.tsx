@@ -237,7 +237,7 @@ export function SQLQuestionView({
               {question.output_format && (
                 <div>
                   <h4 className="font-medium text-gray-800 mb-2 text-sm">Expected Output</h4>
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                  <p className="tf-card-desc bg-gray-50 p-3 rounded-lg">
                     {question.output_format}
                   </p>
                 </div>
@@ -322,7 +322,7 @@ export function SQLQuestionView({
                                 {queryResult.columns?.map((column) => (
                                   <th
                                     key={column}
-                                    className="px-3 py-3 text-left text-xs font-semibold text-gray-600 break-words"
+                                    className="px-3 py-3 text-left tf-th break-words"
                                   >
                                     {column}
                                   </th>
@@ -335,7 +335,7 @@ export function SQLQuestionView({
                                   {queryResult.columns?.map((column) => (
                                     <td
                                       key={column}
-                                      className="px-3 py-3 align-top text-sm text-gray-700 break-words"
+                                      className="px-3 py-3 align-top tf-td break-words"
                                     >
                                       {String(row[column] ?? 'NULL')}
                                     </td>
@@ -394,10 +394,10 @@ export function SQLQuestionView({
                           <Table className="w-4 h-4 text-blue-500" />
                           <span className="font-medium text-gray-800">{table.tableName}</span>
                         </div>
-                        <span className="text-xs text-gray-500">{table.rowCount} rows</span>
+                        <span className="tf-meta">{table.rowCount} rows</span>
                       </div>
                       {table.columns && (
-                        <div className="mt-1 text-xs text-gray-500 truncate">
+                        <div className="mt-1 tf-meta truncate">
                           {table.columns.join(', ')}
                         </div>
                       )}
@@ -470,7 +470,7 @@ export function SQLQuestionView({
 
         {/* Quick Actions */}
         <div className="px-4 py-3 bg-gray-800 border-t border-gray-700 flex items-center gap-2">
-          <span className="text-xs text-gray-500">Quick:</span>
+          <span className="tf-meta">Quick:</span>
           <button
             onClick={() => setQuery('SELECT * FROM ')}
             className="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600"

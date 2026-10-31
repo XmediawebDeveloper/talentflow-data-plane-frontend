@@ -733,7 +733,7 @@ export default function ServerCandidatePicker({
           <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
+        <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center tf-card-desc">
           {counts && counts[source] === 0
             ? (source === 'talent-match' ? 'No AI Talent Match candidates for this job yet.'
               : source === 'score-resume' ? 'No scored resumes for this job outside AI Talent Match.'
@@ -785,7 +785,7 @@ export default function ServerCandidatePicker({
                       <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={r.name}>{shownName}</span>
                       {isDbTab(source) && versionChip(r)}
                     </span>
-                    <span className="flex items-center gap-1 min-w-0 text-xs text-gray-500 dark:text-slate-400">
+                    <span className="flex items-center gap-1 min-w-0 tf-meta">
                       {r.title && (
                         <>
                           <Briefcase className="w-3 h-3 shrink-0" aria-hidden="true" />
@@ -832,7 +832,7 @@ export default function ServerCandidatePicker({
             );
           })}
           {hasMore && (
-            <li ref={sentinelRef} className="flex items-center justify-center gap-2 px-3 py-2.5 text-xs text-gray-500 dark:text-slate-400">
+            <li ref={sentinelRef} className="flex items-center justify-center gap-2 px-3 py-2.5 tf-meta">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading more…
             </li>
           )}
@@ -842,7 +842,7 @@ export default function ServerCandidatePicker({
       </div>
 
       {filterModeHere && (
-        <p role="note" className="text-xs text-gray-600 dark:text-slate-400">
+        <p role="note" className="tf-meta-strong">
           Every candidate matching {describeFilters(selection.filters) || 'this tab'} is selected ({fmt(selectionCount(selection))}). Untick a row to leave them out; the list is re-checked when you send.
         </p>
       )}

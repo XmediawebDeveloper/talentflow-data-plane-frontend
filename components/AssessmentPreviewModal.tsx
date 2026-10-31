@@ -82,7 +82,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                   Configuration View
                 </span>
               </div>
-              <p className="text-gray-600 dark:text-slate-400 text-sm">
+              <p className="tf-card-desc">
                 Preview of assessment configuration and scoring
               </p>
             </div>
@@ -101,13 +101,13 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
         <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {/* Assessment Summary */}
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4 [overflow-wrap:anywhere]">{assessment.title}</h2>
+            <h2 className="tf-section-title mb-3 sm:mb-4 [overflow-wrap:anywhere]">{assessment.title}</h2>
             {jobContext && (() => {
               const assessmentVersion = typeof assessment.version === 'number'
                 ? assessment.version
                 : parseAssessmentTitle(assessment.title || '').version;
               return (
-                <div className="-mt-1 sm:-mt-2 mb-3 sm:mb-4 flex items-center gap-2 flex-wrap min-w-0 text-sm text-gray-600 dark:text-slate-400">
+                <div className="-mt-1 sm:-mt-2 mb-3 sm:mb-4 flex items-center gap-2 flex-wrap min-w-0 tf-card-desc">
                   {assessmentVersion ? <VersionPill kind="assessment" version={assessmentVersion} label="Assessment" /> : null}
                   {assessment.jd_short_id && <JobIdBadge>{assessment.jd_short_id}</JobIdBadge>}
                   {assessment.jd_title && <span className="min-w-0 [overflow-wrap:anywhere]">{assessment.jd_title}</span>}
@@ -117,7 +117,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
             })()}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg flex sm:block items-center justify-between">
-                <div className="text-sm text-gray-700 dark:text-slate-300 sm:mb-1">Total Duration</div>
+                <div className="tf-body sm:mb-1">Total Duration</div>
                 <div className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50">{assessment.duration_minutes || assessment.duration || 30} min</div>
               </div>
               <div className="p-3 sm:p-4 bg-brand-cyan/5 ring-1 ring-brand-cyan/15 rounded-lg flex sm:block items-center justify-between">
@@ -149,7 +149,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                 `*_enabled` flags, so a coding round is never assumed. */}
             {jobContext && (
               <div className="mt-3 sm:mt-4 flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-gray-700 dark:text-slate-300">Rounds:</span>
+                <span className="tf-body">Rounds:</span>
                 {ROUNDS.map((round) => {
                   const configured = !!assessment[`${round.key}_enabled`];
                   return (
@@ -195,7 +195,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
               <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
               <div className="min-w-0">
                 <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base mb-1 tracking-tight">Evaluation & Scoring Logic</h3>
-                <p className="text-sm text-gray-700 dark:text-slate-300">
+                <p className="tf-body">
                   How candidates will be evaluated when taking this assessment
                 </p>
               </div>
@@ -207,7 +207,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                 <div className="bg-white dark:bg-slate-900 rounded-lg p-3 sm:p-4 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">HR Section</h4>
+                    <h4 className="tf-subsection-title">HR Section</h4>
                     <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs font-medium whitespace-nowrap flex-shrink-0">
                       Not Scored
                     </span>
@@ -224,7 +224,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     {assessment.technical_enabled && <Brain className="w-4 h-4 text-brand-blue flex-shrink-0" />}
                     {assessment.coding_enabled && <Code className="w-4 h-4 text-brand-cyan flex-shrink-0" />}
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="tf-subsection-title">
                       {assessment.technical_enabled && assessment.coding_enabled
                         ? 'Technical + Coding'
                         : assessment.technical_enabled
@@ -299,7 +299,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment, jo
                     <div className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Topics Covered:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {section.topics.map((topic: any, tidx: number) => (
-                        <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg text-sm max-w-full [overflow-wrap:anywhere]">
+                        <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 tf-body rounded-lg max-w-full [overflow-wrap:anywhere]">
                           {typeof topic === 'string' ? topic : (topic?.text || topic?.name || '')}
                         </span>
                       ))}

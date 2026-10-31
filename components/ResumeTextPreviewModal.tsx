@@ -393,8 +393,8 @@ export default function ResumeTextPreviewModal({
               <Eye className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">{title}</h2>
-              {subtitle && <p className="text-sm text-gray-500 truncate">{subtitle}</p>}
+              <h2 className="tf-section-title truncate">{title}</h2>
+              {subtitle && <p className="tf-body-muted truncate">{subtitle}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -500,17 +500,17 @@ export default function ResumeTextPreviewModal({
                 }
 
                 if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                  return <p key={idx} className="text-sm text-gray-700 leading-relaxed pl-4 mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
+                  return <p key={idx} className="tf-body leading-relaxed pl-4 mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
                 }
 
-                return <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
+                return <p key={idx} className="tf-body leading-relaxed mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
               })}
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
               <FileText className="w-10 h-10 text-gray-400 mb-3" />
               <p className="text-sm font-medium text-gray-900">Preview not available</p>
-              <p className="text-sm text-gray-500 mt-1">Download the resume to view the original file.</p>
+              <p className="tf-body-muted mt-1">Download the resume to view the original file.</p>
             </div>
           )}
         </div>

@@ -240,7 +240,7 @@ function SkillsListView({ data }: { data: DashboardData }) {
         {/* Skill Weight / Score / Contribution */}
         <div className="@4xl:text-center">
           <div className={statLabel}>Skill Weight</div>
-          <div className="text-sm text-gray-700 tabular-nums">{tag.weight}</div>
+          <div className="tf-body tabular-nums">{tag.weight}</div>
         </div>
         <div className="@4xl:text-center">
           <div className={statLabel}>Score (10)</div>
@@ -438,15 +438,15 @@ function SkillsGridView({ data }: { data: DashboardData }) {
             </div>
             <div className="flex items-center gap-4 sm:gap-5 shrink-0 ml-auto">
               <div className="text-right">
-                <div className="text-xs text-gray-500">Score</div>
+                <div className="tf-meta">Score</div>
                 <div className="text-lg font-bold" style={{ color }}>{notAssessed ? '—' : formatSkillScore(s.score)}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-500">Weight</div>
+                <div className="tf-meta">Weight</div>
                 <div className="text-lg font-bold text-gray-500">{tag.weight}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-500">Contribution</div>
+                <div className="tf-meta">Contribution</div>
                 <div className={`text-lg font-bold ${notAssessed ? 'text-gray-400' : 'text-indigo-700'}`}>{notAssessed ? '—' : contribution}</div>
               </div>
               {isOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
@@ -460,7 +460,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
         {isOpen && notAssessed && (
           <div className="px-4 sm:px-5 pb-5">
             <hr className="border-gray-200 mb-4" />
-            <div className="p-4 rounded-xl bg-white border border-gray-200 text-sm text-gray-600 leading-relaxed">
+            <div className="p-4 rounded-xl bg-white border border-gray-200 tf-card-desc leading-relaxed">
               No question in this interview covered this skill, so it has no skill score. If its planned question was never reached (the interview ended early), that question still counts as 0 in the Section Score.
             </div>
           </div>
@@ -476,8 +476,8 @@ function SkillsGridView({ data }: { data: DashboardData }) {
               <hr className="border-gray-200 mb-4" />
               {!hasSplit && (
                 <div className="p-4 rounded-xl bg-gray-50 mb-4">
-                  <div className="text-sm font-semibold text-gray-900 mb-1.5">AI Analysis:</div>
-                  <div className="text-sm text-gray-700 leading-relaxed">
+                  <div className="tf-cell-name mb-1.5">AI Analysis:</div>
+                  <div className="tf-body leading-relaxed">
                     {s.feedback || 'No specific feedback captured for this skill.'}
                   </div>
                 </div>
@@ -547,7 +547,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
                 {/* The section score (question scores ÷ planned questions) —
                     the number Pass/Fail and the report use, not an average of
                     the skill cards below. */}
-                <div className="text-xs text-gray-500">
+                <div className="tf-meta">
                   {mhSkills.length} skill{mhSkills.length === 1 ? '' : 's'} · Section Score{' '}
                   <span className="font-semibold text-gray-900">{formatScore1(mhAvg)}</span>/10
                 </div>
@@ -566,7 +566,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
                     Information Only
                   </span>
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="tf-meta">
                   {nhSkills.length} skill{nhSkills.length === 1 ? '' : 's'} · Section Score{' '}
                   <span className="font-semibold text-gray-900">{formatScore1(nhAvg)}</span>/10
                 </div>
@@ -876,7 +876,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               <div className="text-xs font-medium text-gray-500 mb-1">
                 Score Rationale
               </div>
-              <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-warning-subtle/60 border border-warning-line rounded px-2.5 py-2 break-words leading-relaxed">
+              <div className="flex items-start gap-1.5 tf-body bg-warning-subtle/60 border border-warning-line rounded px-2.5 py-2 break-words leading-relaxed">
                 <Brain className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
                 <div className="space-y-1 flex-1">
                   {lines.map((line, li) => {
@@ -984,7 +984,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                             </div>
                             {/* Per-skill AI analysis (one_line_note) */}
                             {s.note && !s.is_unscored && (
-                              <div className="mt-1.5 flex items-start gap-1.5 text-xs text-gray-600 bg-white border border-gray-100 rounded px-2 py-1.5">
+                              <div className="mt-1.5 flex items-start gap-1.5 tf-meta-strong bg-white border border-gray-100 rounded px-2 py-1.5">
                                 <Brain className="w-3 h-3 text-brand-blue mt-0.5 shrink-0" />
                                 <span className="leading-relaxed">{s.note}</span>
                               </div>
@@ -1227,7 +1227,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               </span>
             )}
           </div>
-          <div className="text-sm font-semibold text-gray-900 leading-relaxed">
+          <div className="tf-cell-name leading-relaxed">
             {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
           </div>
           {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (() => {
@@ -1425,7 +1425,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
     <>
       <div className="text-base font-bold text-gray-900">{label}</div>
       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${chipCls}`}>{chipText}</span>
-      <span className="text-xs text-gray-500">· {count} question{count === 1 ? '' : 's'}</span>
+      <span className="tf-meta">· {count} question{count === 1 ? '' : 's'}</span>
     </>
   );
 
@@ -1492,7 +1492,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
           {viewMode === 'all' ? (
             <>
               <div className="text-base font-bold text-gray-900">All Questions</div>
-              <span className="text-xs text-gray-500">· {totalQs} question{totalQs === 1 ? '' : 's'}</span>
+              <span className="tf-meta">· {totalQs} question{totalQs === 1 ? '' : 's'}</span>
             </>
           ) : firstSection === 'mh' ? mhHeading()
             : firstSection === 'nh' ? nhHeading()
@@ -1691,7 +1691,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5" /></div>
           <div className="min-w-0 flex-1">
             <div className="text-xl font-bold mb-2">Question-by-Question Analysis</div>
-            <div className="text-sm text-gray-600 dark:text-slate-400 mb-3">
+            <div className="tf-card-desc mb-3">
               Detailed evaluation of each interview question with skill scoring, weighted contributions, and AI-derived rationale.
             </div>
             <div className="flex gap-6 flex-wrap text-sm">
@@ -1752,7 +1752,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                           <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
                             Question {q.qNum}
                           </span>
-                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                          <div className="flex items-center gap-1 tf-meta">
                             <Clock className="w-3.5 h-3.5" />
                             {(() => {
                               const r = data.interviewResponses[i];
@@ -1760,7 +1760,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                             })()}
                           </div>
                         </div>
-                        <div className="text-sm font-semibold text-gray-900 mb-2">{q.question || `Question ${q.qNum}`}</div>
+                        <div className="tf-cell-name mb-2">{q.question || `Question ${q.qNum}`}</div>
                         <div className="flex flex-wrap gap-1.5">
                           {q.skills.map((s, idx) => (
                             <span key={idx} className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
@@ -1771,7 +1771,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                       </div>
                       <div className="text-center min-w-[88px]">
                         <div className="text-3xl font-bold" style={{ color }}>{formatScore1(q.questionScore)}</div>
-                        <div className="text-xs text-gray-500">Final Score</div>
+                        <div className="tf-meta">Final Score</div>
                       </div>
                     </div>
                   </button>
@@ -1812,7 +1812,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                       </div>
 
                       {/* Skill scoring breakdown */}
-                      <div className="text-sm font-semibold text-gray-900 mb-2">Skill Scoring Breakdown</div>
+                      <div className="tf-cell-name mb-2">Skill Scoring Breakdown</div>
                       <div className="space-y-2 mb-4">
                         {q.skills.map((s, idx) => {
                           const tag = priorityTag(s.priority);
@@ -1821,14 +1821,14 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                             <div key={idx} className="p-3 rounded-xl bg-gray-50 border border-gray-200">
                               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                                 <div className="flex items-center gap-2">
-                                  <div className="text-sm font-semibold text-gray-900">{s.name}</div>
+                                  <div className="tf-cell-name">{s.name}</div>
                                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${tag.bg} ${tag.text}`}>
                                     {tag.tag}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-5">
                                   <div className="text-center">
-                                    <div className="text-xs text-gray-500">Score</div>
+                                    <div className="tf-meta">Score</div>
                                     <div className="flex items-center justify-center gap-1">
                                       <div
                                         className={`text-base font-bold ${s.is_skipped ? 'text-gray-400' : 'text-emerald-500'}`}
@@ -1853,11 +1853,11 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                                     </div>
                                   </div>
                                   <div className="text-center">
-                                    <div className="text-xs text-gray-500">Weight</div>
+                                    <div className="tf-meta">Weight</div>
                                     <div className="text-base font-bold text-gray-500">{s.weight}</div>
                                   </div>
                                   <div className="text-center">
-                                    <div className="text-xs text-gray-500">Contribution</div>
+                                    <div className="tf-meta">Contribution</div>
                                     <div className="text-base font-bold text-indigo-700">{contribution}</div>
                                   </div>
                                 </div>
@@ -2051,7 +2051,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
             <div className="p-6 overflow-y-auto">
               <div className="text-sm font-semibold text-indigo-600 mb-3">{transcriptOpen.question}</div>
               <hr className="border-gray-200 mb-3" />
-              <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+              <div className="tf-body leading-relaxed whitespace-pre-wrap">
                 {transcriptFor(transcriptOpen.qNum) || 'No transcript captured for this question.'}
               </div>
             </div>
@@ -2145,7 +2145,7 @@ export function FormulaView() {
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Calculator className="w-5 h-5" /></div>
           <div className="min-w-0 flex-1">
             <div className="text-xl font-bold mb-2">Scoring Formula & Example Scenarios</div>
-            <div className="text-sm text-gray-600 dark:text-slate-400">
+            <div className="tf-card-desc">
               Reference card explaining how skill scores roll up into question scores, section scores, and the final Pass/Fail decision — plus the worked scenarios from the evaluation spec.
             </div>
           </div>
@@ -2159,7 +2159,7 @@ export function FormulaView() {
             <div key={p.priority} className="p-4 rounded-xl border" style={{ borderColor: p.color, backgroundColor: `${p.color}0F` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: p.color }}>{p.priority}</div>
               <div className="text-3xl font-bold mb-1" style={{ color: p.color }}>{p.weight}</div>
-              <div className="text-xs text-gray-600">{p.description}</div>
+              <div className="tf-meta-strong">{p.description}</div>
             </div>
           ))}
         </div>
@@ -2196,7 +2196,7 @@ export function FormulaView() {
             <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
               <div>
                 <div className="text-base font-bold text-gray-900 mb-1">{sc.title}</div>
-                <div className="text-xs text-gray-600">{sc.description}</div>
+                <div className="tf-meta-strong">{sc.description}</div>
               </div>
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${resultChip}`}>
                 {sc.result}
@@ -2223,7 +2223,7 @@ export function FormulaView() {
               </div>
             </div>
 
-            <div className="mt-3 text-xs text-gray-600 italic leading-relaxed">{sc.insight}</div>
+            <div className="mt-3 tf-meta-strong italic leading-relaxed">{sc.insight}</div>
           </div>
         );
       })}
@@ -2233,7 +2233,7 @@ export function FormulaView() {
         <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
           <div>
             <div className="text-base font-bold text-gray-900 mb-1">Scenario 4: Full Must-Have Section (10 Questions)</div>
-            <div className="text-xs text-gray-600">How section score is computed from individual question scores</div>
+            <div className="tf-meta-strong">How section score is computed from individual question scores</div>
           </div>
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
             mhSectionAvg >= MHS_THRESHOLD
@@ -2260,7 +2260,7 @@ export function FormulaView() {
           {formatScore1(mhSectionAvg)} {mhSectionAvg >= MHS_THRESHOLD ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhSectionAvg >= MHS_THRESHOLD ? 'PASS ✓' : 'FAIL ✗'}
         </div>
 
-        <div className="mt-3 text-xs text-gray-600 italic leading-relaxed">
+        <div className="mt-3 tf-meta-strong italic leading-relaxed">
           Nice-to-Have (5 questions) is calculated the same way but only informational — it never affects Pass/Fail.
         </div>
       </div>

@@ -82,7 +82,7 @@ export default function ExportColumnsModal<F extends string>({
             </div>
             <div className="min-w-0">
               <h3 id="export-columns-title" className="text-lg font-bold text-gray-900">{title}</h3>
-              <p className="text-sm text-gray-500 mt-1 flex flex-wrap items-center gap-1.5">
+              <p className="tf-body-muted mt-1 flex flex-wrap items-center gap-1.5">
                 {recordCount != null && (
                   <>
                     {recordCount} {recordCount === 1 ? 'record' : 'records'}
@@ -117,7 +117,7 @@ export default function ExportColumnsModal<F extends string>({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-gray-900">{formatTitle}</div>
-                  <div className="text-sm text-gray-500">{description}</div>
+                  <div className="tf-body-muted">{description}</div>
                 </div>
                 <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                   format === key ? 'border-blue-600' : 'border-gray-300'
@@ -146,7 +146,7 @@ export default function ExportColumnsModal<F extends string>({
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
               {columns.map(col => (
-                <label key={col.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer min-w-0">
+                <label key={col.id} className="flex items-center gap-2 tf-body cursor-pointer min-w-0">
                   <input
                     type="checkbox"
                     checked={picked.has(col.id)}

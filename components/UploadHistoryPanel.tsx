@@ -70,7 +70,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-200 bg-gradient-to-r from-brand-blue/5 to-white">
           <div className="min-w-0">
             <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload History</h2>
-            <p className="text-sm text-gray-600">
+            <p className="tf-card-desc">
               View all past bulk upload reports for {currentSource === 'my-resumes' ? 'My Resumes' : 'Shared Database'}
             </p>
           </div>
@@ -90,7 +90,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                 <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
               </div>
               <h3 className="text-base sm:text-xl text-gray-900 mb-1.5 sm:mb-2">No Upload History</h3>
-              <p className="text-sm text-gray-500 text-center max-w-md px-4">
+              <p className="tf-body-muted text-center max-w-md px-4">
                 Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.
               </p>
             </div>
@@ -115,7 +115,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           </div>
                           <div className="min-w-0">
                             <h3 className="text-sm sm:text-base text-gray-900 mb-0.5 sm:mb-1 truncate">{record.fileName}</h3>
-                            <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-500">
+                            <div className="flex items-center gap-1.5 sm:gap-2 tf-body-muted">
                               <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               <span className="truncate">{formatDate(record.date)}</span>
                             </div>
@@ -137,7 +137,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           }`}>
                             {successRate}%
                           </div>
-                          <div className="text-xs text-gray-500">Success Rate</div>
+                          <div className="tf-meta">Success Rate</div>
                         </div>
                         <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                       </div>
@@ -214,7 +214,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
 
                     {/* Progress Bar */}
                     <div className="mt-3 sm:mt-5">
-                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5 sm:mb-2">
+                      <div className="flex items-center justify-between tf-meta-strong mb-1.5 sm:mb-2">
                         <span>Upload Progress</span>
                         <span>{record.completed} of {record.totalFiles} processed</span>
                       </div>
@@ -232,7 +232,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
 
                     {/* Click to view hint */}
                     <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200">
-                      <p className="text-xs text-gray-500 text-center">
+                      <p className="tf-meta text-center">
                         Click to view detailed file-by-file status
                       </p>
                     </div>
@@ -246,7 +246,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
         {/* Footer */}
         <div className="border-t border-gray-200 px-4 sm:px-6 lg:px-8 py-3 sm:py-5 bg-white">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0">
-            <p className="text-sm text-gray-600 text-center sm:text-left">
+            <p className="tf-card-desc text-center sm:text-left">
               Showing <span className="text-gray-900">{filteredRecords.length}</span> upload record{filteredRecords.length !== 1 ? 's' : ''}
             </p>
           </div>

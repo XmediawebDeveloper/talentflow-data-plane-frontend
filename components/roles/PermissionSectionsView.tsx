@@ -49,7 +49,7 @@ export const withAlwaysOnPermissions = (codes: Iterable<string>): string[] =>
 /** One-line explanation shown above a role's permission list. */
 export function AlwaysOnPermissionsNote() {
   return (
-    <p className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 px-3 py-2 text-xs text-gray-600 dark:text-slate-400">
+    <p className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 px-3 py-2 tf-meta-strong">
       <span className="font-semibold text-brand-blue">View Analytics</span> and{' '}
       <span className="font-semibold text-brand-blue">View Support</span>
       {' '}are always included for every user, whatever their role — they are counted here and can&apos;t be switched off.
@@ -107,7 +107,7 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
               <div>
                 <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   {showAll
                     ? `${grantedCount} of ${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`
                     : `${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`}

@@ -501,7 +501,7 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
   const label = jobVersionDisplayStatus(status, currentVersion);
   /* No status known yet (the JD lineage request is still in flight) - a dash,
      rather than asserting a state the table has not been told. */
-  if (!label) return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+  if (!label) return <span className="tf-body-muted">&mdash;</span>;
 
   const tone = getStatusConfig(label);
   return (
@@ -689,7 +689,7 @@ function MetricCell({ value, label }: { value: number; label: string }) {
   // The word stays as the hover title and the accessible name.
   return (
     <span
-      className="text-sm font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap"
+      className="tf-cell-name whitespace-nowrap"
       title={`${value} ${label}`}
       aria-label={`${value} ${label}`}
     >
@@ -743,7 +743,7 @@ function RoundWeightageCell({ assessment }: { assessment: AssessmentVersionRow }
     });
 
   if (rounds.length === 0) {
-    return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+    return <span className="tf-body-muted">&mdash;</span>;
   }
 
   return (
@@ -801,11 +801,11 @@ function CreatedCell({ createdOn, createdBy }: { createdOn?: string; createdBy?:
 
 /** A date over its time, both in IST. A missing date is a dash, never today. */
 function DateCell({ value }: { value?: string }) {
-  if (!value) return <span className="text-sm text-gray-500 dark:text-slate-400">—</span>;
+  if (!value) return <span className="tf-body-muted">—</span>;
   return (
     <>
-      <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{formatISTDate(value)}</div>
-      <div className="text-xs text-gray-500 dark:text-slate-400 uppercase">{formatISTTime(value)}</div>
+      <div className="tf-cell-name">{formatISTDate(value)}</div>
+      <div className="tf-meta uppercase">{formatISTTime(value)}</div>
     </>
   );
 }
@@ -1202,7 +1202,7 @@ export default function AssessmentVersionHistoryPanel({
             );
           })()
         ) : (
-          <span className="text-xs text-gray-500 dark:text-slate-400">{vocabulary.childNone}</span>
+          <span className="tf-meta">{vocabulary.childNone}</span>
         )}
         {/* …or last, beside the View Assessment button it
             belongs with. Same button either way. */}
@@ -1492,12 +1492,12 @@ export default function AssessmentVersionHistoryPanel({
           array, empty at worst), so the spinner never showed and the panel
           printed "No version history" until the lineage request landed. */}
       {loading && groups.length === 0 ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 py-2 tf-meta">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
         </div>
       ) : groups.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">
+        <p className="py-2 tf-meta">
           No version history for this assessment.
         </p>
       ) : (
@@ -1508,7 +1508,7 @@ export default function AssessmentVersionHistoryPanel({
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2 min-w-0">
               <FileText className="w-4 h-4 text-brand-blue flex-shrink-0" />
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+              <p className="tf-cell-name">
                 Job Versions{' '}
                 <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
               </p>
@@ -1572,7 +1572,7 @@ export default function AssessmentVersionHistoryPanel({
               corner, above the rows it acts on. */}
           {!jdStyle && (
           <div className="px-3 sm:px-4 pt-3 pb-2 flex flex-wrap items-center justify-between gap-2">
-            <h4 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
+            <h4 className="min-w-0 tf-subsection-title">
               Job Versions{' '}
               <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
             </h4>

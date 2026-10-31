@@ -239,7 +239,7 @@ export default function BrandingPage() {
             </span>
             <div>
               <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Logo</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500">Visual identity used across the portal.</p>
+              <p className="tf-meta">Visual identity used across the portal.</p>
             </div>
           </div>
           <div className="p-4 sm:p-6">
@@ -298,7 +298,7 @@ export default function BrandingPage() {
                   </button>
                 )}
               </div>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
+              <p className="tf-card-desc mt-2">Recommended: 200x200px, PNG, SVG, or JPG (max 2MB)</p>
             </div>
           </div>
           </div>
@@ -311,11 +311,11 @@ export default function BrandingPage() {
             </span>
             <div>
               <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Brand Colors</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500">Primary and secondary color used throughout your portal.</p>
+              <p className="tf-meta">Primary and secondary color used throughout your portal.</p>
             </div>
           </div>
           <div className="p-4 sm:p-6">
-          <p className="text-sm text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Color Presets</p>
+          <p className="tf-body mb-2 sm:mb-3">Color Presets</p>
           <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 sm:mb-6">
             {colorPresets.map((preset) => (
               <button
@@ -327,13 +327,13 @@ export default function BrandingPage() {
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full" style={{ backgroundColor: preset.primary }} />
                   <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full -ml-1.5 sm:-ml-2" style={{ backgroundColor: preset.secondary }} />
                 </div>
-                <span className="text-sm text-gray-700 dark:text-slate-300">{preset.name}</span>
+                <span className="tf-body">{preset.name}</span>
               </button>
             ))}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Primary Color</label>
+              <label className="block tf-label mb-1.5 sm:mb-2">Primary Color</label>
               <div className="flex items-center gap-2 sm:gap-3">
                 <input
                   type="color"
@@ -350,7 +350,7 @@ export default function BrandingPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Secondary Color</label>
+              <label className="block tf-label mb-1.5 sm:mb-2">Secondary Color</label>
               <div className="flex items-center gap-2 sm:gap-3">
                 <input
                   type="color"
@@ -377,7 +377,7 @@ export default function BrandingPage() {
             </span>
             <div className="flex-1">
               <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Custom Domain</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500">Use your own domain for the candidate portal.</p>
+              <p className="tf-meta">Use your own domain for the candidate portal.</p>
             </div>
             {domainVerified && branding.custom_domain && (
               <span className="flex items-center gap-1.5 text-xs font-medium text-brand-teal bg-brand-teal/10 ring-1 ring-brand-teal/15 px-2.5 py-1 rounded-full">
@@ -391,7 +391,7 @@ export default function BrandingPage() {
             )}
           </div>
           <div className="p-4 sm:p-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5 sm:mb-2">Domain URL</label>
+            <label className="block tf-label mb-1.5 sm:mb-2">Domain URL</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -425,7 +425,7 @@ export default function BrandingPage() {
             {/* DNS Instructions */}
             <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] border border-brand-blue/15 ring-1 ring-brand-blue/5">
               <p className="text-xs font-semibold text-brand-blue mb-2">DNS Setup Instructions:</p>
-              <div className="space-y-1 text-xs text-gray-600 dark:text-slate-400 font-mono">
+              <div className="space-y-1 tf-meta-strong font-mono">
                 <div className="flex gap-3">
                   <span className="text-gray-400 dark:text-slate-500 w-12">Type</span>
                   <span className="font-semibold text-gray-900 dark:text-slate-50">CNAME</span>
@@ -460,7 +460,7 @@ export default function BrandingPage() {
               </div>
             )}
             {!cloudflareProxied && domainError && (
-              <p className="mt-2 text-xs text-destructive flex items-center gap-1">
+              <p className="mt-2 tf-error flex items-center gap-1">
                 <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" />
                 {domainError}
               </p>
@@ -481,7 +481,7 @@ export default function BrandingPage() {
             </span>
             <div className="flex-1">
               <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Preview</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500">See your candidate-facing portal at a glance.</p>
+              <p className="tf-meta">See your candidate-facing portal at a glance.</p>
             </div>
             <button
               onClick={() => setShowPreviewModal(true)}
@@ -502,7 +502,7 @@ export default function BrandingPage() {
                 <span className="text-white text-xl sm:text-2xl font-bold">{branding.company_name?.[0] || 'T'}</span>
               </div>
               <p className="font-semibold text-sm sm:text-base text-gray-900 dark:text-slate-50">{branding.company_name || 'TalentFlow'}</p>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Your branded career portal</p>
+              <p className="tf-card-desc">Your branded career portal</p>
             </div>
           </div>
           </div>
@@ -517,8 +517,8 @@ export default function BrandingPage() {
             {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
               <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Branded Career Portal Preview</h3>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">How candidates will see your portal</p>
+                <h3 className="tf-card-title">Branded Career Portal Preview</h3>
+                <p className="tf-meta mt-0.5">How candidates will see your portal</p>
               </div>
               <Button
                 variant="secondary"
@@ -537,7 +537,7 @@ export default function BrandingPage() {
                 <div className="w-3 h-3 rounded-full bg-yellow-400" />
                 <div className="w-3 h-3 rounded-full bg-green-400" />
               </div>
-              <div className="flex-1 bg-white dark:bg-slate-900 rounded-md px-3 py-1 text-xs text-gray-500 dark:text-slate-500 border border-gray-200 dark:border-slate-700">
+              <div className="flex-1 bg-white dark:bg-slate-900 rounded-md px-3 py-1 tf-meta border border-gray-200 dark:border-slate-700">
                 {branding.custom_domain && domainVerified
                   ? `https://${branding.custom_domain}/careers`
                   : 'https://careers.talentflow.com'}
@@ -569,7 +569,7 @@ export default function BrandingPage() {
               {/* Hero */}
               <div className="px-6 py-10 text-center" style={{ background: `linear-gradient(135deg, ${branding.primary_color}15, ${branding.secondary_color}15)` }}>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-50 mb-2">Join Our Team</h1>
-                <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                <p className="tf-card-desc max-w-md mx-auto">
                   We're looking for talented people to help us build the future. Explore open roles below.
                 </p>
                 <div className="mt-5 flex justify-center gap-3">
@@ -593,10 +593,10 @@ export default function BrandingPage() {
                   <div key={i} className="flex items-center justify-between p-4 mb-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 hover:border-gray-300 transition-colors">
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{job.title}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{job.dept} · {job.loc}</p>
+                      <p className="tf-meta mt-0.5">{job.dept} · {job.loc}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{job.type}</span>
+                      <span className="tf-meta bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{job.type}</span>
                       <div className="text-xs font-medium px-3 py-1 rounded-lg text-white" style={{ backgroundColor: branding.primary_color }}>
                         Apply
                       </div>

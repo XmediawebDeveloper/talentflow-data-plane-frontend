@@ -71,12 +71,12 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 leading-tight">AI Interview Evaluation Report</div>
-              <div className="text-sm text-gray-500">Automated Technical Assessment & Skills Evaluation</div>
+              <div className="tf-body-muted">Automated Technical Assessment & Skills Evaluation</div>
             </div>
           </div>
           <div className="text-right">
             <div className="text-xs text-gray-400 mb-1">Report Generated</div>
-            <div className="text-sm font-semibold text-gray-900 mb-2">{reportGenerated}</div>
+            <div className="tf-cell-name mb-2">{reportGenerated}</div>
             <div className="text-xs text-gray-400">Evaluation ID: #{evalId}</div>
           </div>
         </div>
@@ -85,22 +85,22 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <div className="text-xs text-gray-500 mb-1">Candidate Name</div>
+            <div className="tf-meta mb-1">Candidate Name</div>
             <div className="text-xl font-bold text-gray-900">{candidate.name}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 mb-1">Position Applied</div>
+            <div className="tf-meta mb-1">Position Applied</div>
             <div className="text-xl font-bold text-gray-900">{candidate.role}</div>
           </div>
           {candidate.email && (
             <div>
-              <div className="text-xs text-gray-500 mb-1">Email Address</div>
-              <div className="text-sm font-semibold text-gray-900">{candidate.email}</div>
+              <div className="tf-meta mb-1">Email Address</div>
+              <div className="tf-cell-name">{candidate.email}</div>
             </div>
           )}
           <div>
-            <div className="text-xs text-gray-500 mb-1">Interview Date</div>
-            <div className="text-sm font-semibold text-gray-900">{interview.date || '—'}</div>
+            <div className="tf-meta mb-1">Interview Date</div>
+            <div className="tf-cell-name">{interview.date || '—'}</div>
           </div>
         </div>
 
@@ -231,7 +231,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           )}
           {sectionsPresent.niceToHave && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center px-5 py-4 gap-2">
-              <div className="text-sm font-semibold text-gray-900">Nice-to-Have Section Score</div>
+              <div className="tf-cell-name">Nice-to-Have Section Score</div>
               <div className="text-2xl font-bold text-indigo-500">{formatScore1(scores.niceToHave)}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-indigo-100 rounded-full overflow-hidden">
@@ -247,14 +247,14 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           )}
           {!isPartialEvaluation && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
-              <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
+              <div className="tf-cell-name">Overall Average Score</div>
               <div className="text-2xl font-bold text-indigo-700">{formatScore1((scores.final / 10))}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-gray-200 rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-700 rounded-full" style={{ width: `${scores.final}%` }} />
                 </div>
               </div>
-              <div className="text-xs italic text-gray-500">Reference only</div>
+              <div className="tf-meta italic">Reference only</div>
             </div>
           )}
         </div>
@@ -277,13 +277,13 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 const tagBg = s.tag === 'P1' ? 'bg-indigo-600' : s.tag === 'P2' ? 'bg-indigo-500' : 'bg-indigo-400';
                 return (
                   <div key={`mh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
+                    <div className="tf-cell-name truncate">{s.name}</div>
                     <div>
                       <span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
                         {s.tag}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">Weight: {s.weight}</div>
+                    <div className="tf-meta">Weight: {s.weight}</div>
                     <div className="pr-2">
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${sc.bar}`} style={{ width: `${(s.score / 10) * 100}%` }} />
@@ -308,13 +308,13 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 const tagBg = s.tag === 'P1' ? 'bg-amber-500' : 'bg-amber-400';
                 return (
                   <div key={`nh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
+                    <div className="tf-cell-name truncate">{s.name}</div>
                     <div>
                       <span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
                         {s.tag}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">Weight: {s.weight}</div>
+                    <div className="tf-meta">Weight: {s.weight}</div>
                     <div className="pr-2">
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${sc.bar}`} style={{ width: `${(s.score / 10) * 100}%` }} />
@@ -372,7 +372,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                       {sectionLabel} · Q{q.qNum}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
+                  <div className="tf-meta truncate">
                     {middleText}
                   </div>
                   {isHR ? (

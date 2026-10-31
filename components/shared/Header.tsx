@@ -119,22 +119,22 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <Book className="w-5 h-5 text-gray-700 mb-2" />
                       <div className="text-sm text-gray-900">Knowledge Base</div>
-                      <div className="text-xs text-gray-500">Browse articles</div>
+                      <div className="tf-meta">Browse articles</div>
                     </button>
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <Video className="w-5 h-5 text-gray-600 mb-2" />
                       <div className="text-sm text-gray-900">Video Tutorials</div>
-                      <div className="text-xs text-gray-500">Watch & learn</div>
+                      <div className="tf-meta">Watch & learn</div>
                     </button>
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <FileText className="w-5 h-5 text-gray-600 mb-2" />
                       <div className="text-sm text-gray-900">Documentation</div>
-                      <div className="text-xs text-gray-500">Full guides</div>
+                      <div className="tf-meta">Full guides</div>
                     </button>
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <MessageCircle className="w-5 h-5 text-gray-500 mb-2" />
                       <div className="text-sm text-gray-900">Live Chat</div>
-                      <div className="text-xs text-gray-500">Chat with us</div>
+                      <div className="tf-meta">Chat with us</div>
                     </button>
                   </div>
 
@@ -147,7 +147,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">Getting Started with TalentFlow</div>
-                            <div className="text-xs text-gray-500">5 min read</div>
+                            <div className="tf-meta">5 min read</div>
                           </div>
                         </div>
                       </button>
@@ -156,7 +156,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Parse Resumes with AI</div>
-                            <div className="text-xs text-gray-500">8 min read</div>
+                            <div className="tf-meta">8 min read</div>
                           </div>
                         </div>
                       </button>
@@ -165,7 +165,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">Creating & Managing Assessments</div>
-                            <div className="text-xs text-gray-500">10 min read</div>
+                            <div className="tf-meta">10 min read</div>
                           </div>
                         </div>
                       </button>
@@ -182,7 +182,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">Email Support</div>
-                          <div className="text-xs text-gray-500">support@talentflow.com</div>
+                          <div className="tf-meta">support@talentflow.com</div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-400" />
                       </button>
@@ -192,7 +192,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1">
                           <div className="text-sm text-gray-900">Phone Support</div>
-                          <div className="text-xs text-gray-500">+1 (800) 123-4567</div>
+                          <div className="tf-meta">+1 (800) 123-4567</div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-400" />
                       </button>
@@ -271,9 +271,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <p className="text-sm text-gray-900">Resume parsing completed</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">2m ago</span>
+                            <span className="tf-meta whitespace-nowrap">2m ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Successfully parsed 24 resumes from "Software Engineer" batch</p>
+                          <p className="tf-meta-strong">Successfully parsed 24 resumes from "Software Engineer" batch</p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs text-green-600 font-medium">View Results</span>
                           </div>
@@ -290,9 +290,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <p className="text-sm text-gray-900">New candidate applied</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">15m ago</span>
+                            <span className="tf-meta whitespace-nowrap">15m ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">John Smith applied for "Senior React Developer" position</p>
+                          <p className="tf-meta-strong">John Smith applied for "Senior React Developer" position</p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs text-gray-700 font-medium">Review Application</span>
                           </div>
@@ -309,9 +309,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <p className="text-sm text-gray-900">Assessment deadline approaching</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">1h ago</span>
+                            <span className="tf-meta whitespace-nowrap">1h ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Python Developer assessment closes in 24 hours</p>
+                          <p className="tf-meta-strong">Python Developer assessment closes in 24 hours</p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs text-orange-600 font-medium">Extend Deadline</span>
                           </div>
@@ -328,9 +328,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <p className="text-sm text-gray-900">Scheduled AI Interview starting soon</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">2h ago</span>
+                            <span className="tf-meta whitespace-nowrap">2h ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Interview with Sarah Johnson begins at 3:00 PM</p>
+                          <p className="tf-meta-strong">Interview with Sarah Johnson begins at 3:00 PM</p>
                         </div>
                       </div>
                     </button>
@@ -344,9 +344,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <p className="text-sm text-gray-900">Team member added</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">3h ago</span>
+                            <span className="tf-meta whitespace-nowrap">3h ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Mike Johnson joined your recruitment team</p>
+                          <p className="tf-meta-strong">Mike Johnson joined your recruitment team</p>
                         </div>
                       </div>
                     </button>
@@ -390,7 +390,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             <NameAvatar name={user.name} fallback={user.email} size="md" />
             <div className="text-left">
               <div className="text-sm text-gray-900">{user.name || user.email || 'User'}</div>
-              <div className="text-xs text-gray-500">{roleLabels[user.role]}</div>
+              <div className="tf-meta">{roleLabels[user.role]}</div>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-400" />
           </button>
@@ -409,12 +409,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       {roleLabels[user.role]}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+                  <p className="tf-meta">{user.email}</p>
                 </div>
 
                 {/* Permissions Summary */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                  <p className="tf-meta mb-2 flex items-center gap-1">
                     <Shield className="w-3 h-3" />
                     Your Permissions
                   </p>

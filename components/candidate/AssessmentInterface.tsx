@@ -1758,7 +1758,7 @@ export function AssessmentInterface({
               <p className="text-base sm:text-lg font-bold text-gray-900 mb-2 sm:mb-3">
                 Your assessment has been terminated
               </p>
-              <p className="text-sm text-gray-700">
+              <p className="tf-body">
                 This incident will be reported to the examiner. All answers submitted up to this point have been recorded.
               </p>
             </div>
@@ -1773,7 +1773,7 @@ export function AssessmentInterface({
             </Button>
 
             {/* Footer Notice */}
-            <p className="text-xs text-gray-500 mt-4 sm:mt-6">
+            <p className="tf-meta mt-4 sm:mt-6">
               Click "I Understand" to submit your assessment and view your completion status.
             </p>
           </div>
@@ -1841,7 +1841,7 @@ export function AssessmentInterface({
             </div>
 
             {/* Footer Warning */}
-            <p className="text-xs text-gray-600 mt-4">
+            <p className="tf-meta-strong mt-4">
               This incident will be reported to the examiner.
             </p>
           </div>
@@ -1924,7 +1924,7 @@ export function AssessmentInterface({
                   {autoSaveStatus === 'error' && (
                     <>
                       <AlertCircle className="w-3.5 h-3.5 text-destructive" />
-                      <span className="text-xs text-destructive">Save failed</span>
+                      <span className="tf-error">Save failed</span>
                     </>
                   )}
                 </div>
@@ -2014,7 +2014,7 @@ export function AssessmentInterface({
                             {candidateName || '-'}
                           </p>
                           {assessmentInfo.candidate_email && (
-                            <p className="mt-0.5 text-sm text-gray-600 truncate" title={assessmentInfo.candidate_email}>
+                            <p className="mt-0.5 tf-card-desc truncate" title={assessmentInfo.candidate_email}>
                               {assessmentInfo.candidate_email}
                             </p>
                           )}
@@ -2029,7 +2029,7 @@ export function AssessmentInterface({
                           <Clock className={`w-5 h-5 ${timerTone}`} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm text-gray-600">Time Remaining</p>
+                          <p className="tf-card-desc">Time Remaining</p>
                           <p className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight ${timerTone} ${globalTimeRemaining < 300 ? 'animate-pulse' : ''}`}>
                             {formatTime(globalTimeRemaining)}
                           </p>
@@ -2051,7 +2051,7 @@ export function AssessmentInterface({
 
                       <div className="flex items-center justify-between gap-2">
                         <p className={HEADING}>Question Progress</p>
-                        <span className="text-sm text-gray-700 tabular-nums whitespace-nowrap">
+                        <span className="tf-body tabular-nums whitespace-nowrap">
                           {currentQuestion.question_number} of {currentQuestion.total_questions}
                         </span>
                       </div>
@@ -2064,7 +2064,7 @@ export function AssessmentInterface({
                       <div className="mt-3.5 grid grid-cols-3 divide-x divide-gray-100">
                         {legend.map((item) => (
                           <div key={item.label} className="min-w-0 px-1 text-center">
-                            <p className="flex items-center justify-center gap-1.5 text-xs text-gray-600 whitespace-nowrap">
+                            <p className="flex items-center justify-center gap-1.5 tf-meta-strong whitespace-nowrap">
                               <span className={`w-2 h-2 rounded-full shrink-0 ${item.dot}`} />
                               {item.label}
                             </p>
@@ -2103,7 +2103,7 @@ export function AssessmentInterface({
                         {currentQuestion.tags.length > 0 && (
                           <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
                             {currentQuestion.tags.map((tag, idx) => (
-                              <span key={`${tag}-${idx}`} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                              <span key={`${tag}-${idx}`} className="px-2 py-1 bg-gray-100 tf-meta-strong rounded-full">
                                 {tag}
                               </span>
                             ))}
@@ -2261,7 +2261,7 @@ export function AssessmentInterface({
                   </div>
                   {/* A short tip instead of a legend — the Question Progress
                       card already explains the colours. */}
-                  <p className="flex items-center gap-1.5 shrink-0 md:pl-4 md:border-l md:border-gray-200 text-xs text-gray-500">
+                  <p className="flex items-center gap-1.5 shrink-0 md:pl-4 md:border-l md:border-gray-200 tf-meta">
                     <Info className="w-3.5 h-3.5 shrink-0 text-brand-blue" />
                     Click a number to jump — your answer is saved as you go.
                   </p>
@@ -2332,8 +2332,8 @@ export function AssessmentInterface({
                 )}
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-gray-900">Complete Assessment?</h3>
-                <p className="text-sm text-gray-500">
+                <h3 className="tf-section-title">Complete Assessment?</h3>
+                <p className="tf-body-muted">
                   {answeredCount === totalCount
                     ? "You've answered all questions"
                     : `You've answered ${answeredCount} of ${totalCount} questions`
@@ -2353,7 +2353,7 @@ export function AssessmentInterface({
                   <p className="text-sm font-semibold text-destructive-strong">
                     {unansweredCount} Unanswered Question{unansweredCount === 1 ? '' : 's'}
                   </p>
-                  <p className="text-xs text-gray-600 mb-3">These questions will be submitted without answers.</p>
+                  <p className="tf-meta-strong mb-3">These questions will be submitted without answers.</p>
                 </>
               ) : (
                 <p className="text-sm font-semibold text-success-strong mb-3">All questions answered!</p>
@@ -2381,7 +2381,7 @@ export function AssessmentInterface({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 mb-3">
               {statCards.map(({ key, label, count, Icon, tile, icon, num }) => (
                 <div key={key} className={`rounded-lg border bg-white px-3 py-2 min-w-0 ${tile}`}>
-                  <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 leading-snug whitespace-nowrap">
+                  <p className="flex items-center gap-1.5 tf-cell-name leading-snug whitespace-nowrap">
                     <Icon className={`w-4 h-4 shrink-0 ${icon}`} aria-hidden />
                     <span><span className={num}>{count}</span> {label}</span>
                   </p>
@@ -2392,7 +2392,7 @@ export function AssessmentInterface({
             <div className="flex items-start gap-3 p-3 sm:p-4 rounded-xl mb-3 border border-info-line bg-info-subtle">
               <Info className="w-5 h-5 text-info shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <h4 className="text-sm font-semibold text-gray-900">What happens next?</h4>
+                <h4 className="tf-subsection-title">What happens next?</h4>
                 <ul className="mt-1 space-y-0.5 text-sm text-gray-700 list-disc pl-4 marker:text-info">
                   <li>Your answered and draft responses will be submitted.</li>
                   <li>Unanswered questions will be submitted as blank.</li>
@@ -2406,7 +2406,7 @@ export function AssessmentInterface({
                 <p className="text-sm font-semibold text-destructive-strong">
                   Once submitted, you cannot modify your answers.
                 </p>
-                <p className="text-sm text-gray-600">Please review the summary above before continuing.</p>
+                <p className="tf-card-desc">Please review the summary above before continuing.</p>
               </div>
             </div>
 

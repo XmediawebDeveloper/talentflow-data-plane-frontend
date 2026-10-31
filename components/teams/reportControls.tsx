@@ -149,7 +149,7 @@ export function UnitStatCard({ label, value, icon: Icon, strong = false, loading
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs text-gray-600 dark:text-slate-400">{label}</span>
+        <span className="block truncate tf-meta-strong">{label}</span>
         {loading
           ? <span className="mt-1 block h-5 w-10 animate-pulse rounded bg-gray-100 dark:bg-slate-800" />
           : <span className="block text-lg max-sm:text-base font-semibold leading-tight tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{value}</span>}

@@ -184,7 +184,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                         <instruction.icon className={`w-3.5 h-3.5 shrink-0 ${critical ? 'text-destructive' : 'text-warning'}`} />
                         {instruction.title}
                       </p>
-                      <p className="mt-1 text-xs leading-relaxed text-gray-600">{instruction.text}</p>
+                      <p className="mt-1 tf-meta-strong leading-relaxed">{instruction.text}</p>
                     </li>
                   );
                 })}
@@ -199,16 +199,16 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   <Shield className="w-4 h-4 text-brand-cyan" />
                   AI proctoring
                 </h3>
-                <span className="text-xs text-gray-500">— this assessment is monitored to keep it fair</span>
+                <span className="tf-meta">— this assessment is monitored to keep it fair</span>
               </div>
               <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                 {proctoringFeatures.map((feature, index) => (
                   <li key={index} className="rounded-lg bg-brand-cyan/5 ring-1 ring-brand-cyan/15 px-3 py-2.5">
-                    <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                    <p className="flex items-center gap-1.5 tf-cell-name">
                       <feature.icon className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
                       {feature.label}
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-gray-600">{feature.description}</p>
+                    <p className="mt-1 tf-meta-strong leading-relaxed">{feature.description}</p>
                   </li>
                 ))}
               </ul>
@@ -297,7 +297,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 <span id="proctoring-desc">
                   <strong className={T_CARD_TITLE}>I consent to AI proctoring and monitoring</strong>
                   <br />
-                  <span className="text-gray-700 text-sm">I understand that my activity will be tracked to ensure test integrity.</span>
+                  <span className="tf-body">I understand that my activity will be tracked to ensure test integrity.</span>
                 </span>
               </label>
               </div>

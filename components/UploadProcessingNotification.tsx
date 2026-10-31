@@ -35,7 +35,7 @@ export default function UploadProcessingNotification({ totalFiles, onClose }: Up
             </p>
           </div>
 
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+          <div className="flex items-center justify-center gap-2 tf-body-muted mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
             <Clock className="w-4 h-4 text-blue-600" />
             <span className="text-gray-700">View detailed status in <span className="text-blue-600">Upload History</span></span>
           </div>

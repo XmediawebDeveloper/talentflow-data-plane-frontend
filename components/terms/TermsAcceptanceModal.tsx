@@ -179,7 +179,7 @@ export default function TermsAcceptanceModal() {
                 onChange={(e) => setCheckboxAgreed(e.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm text-gray-600">{meta.checkboxText}</span>
+              <span className="tf-card-desc">{meta.checkboxText}</span>
             </label>
           )}
 

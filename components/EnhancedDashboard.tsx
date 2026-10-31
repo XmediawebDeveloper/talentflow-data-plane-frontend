@@ -672,7 +672,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <Activity className="h-6 w-6 text-brand-blue" />
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50">No activity in the last 7 days</p>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Your daily activity will appear here</p>
+                <p className="tf-meta mt-1">Your daily activity will appear here</p>
               </div>
             ) : (
               <div className="h-64" aria-label="Line chart of daily activity over the last 7 days">
@@ -758,7 +758,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <Briefcase className="h-6 w-6 text-brand-orange-deep" />
                 </div>
                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50">No jobs yet</p>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Create your first job to see the breakdown</p>
+                <p className="tf-meta mt-1">Create your first job to see the breakdown</p>
               </div>
             ) : (
               <div className="h-64" aria-label="Bar chart of job descriptions grouped by status">
@@ -828,7 +828,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             ) : publishedJDs.length === 0 ? (
               <div className="text-center py-8">
                 <Briefcase className="h-10 w-10 text-gray-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-600 dark:text-slate-400">No published jobs yet</p>
+                <p className="tf-card-desc">No published jobs yet</p>
                 {canCreateJD && (
                   <Button
                     variant="outline"
@@ -862,7 +862,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                           Published
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-slate-400">
+                      <div className="flex items-center gap-3 tf-meta-strong">
                         {jd.department && (
                           <span className="flex items-center gap-1">
                             <Building2 className="h-3 w-3" />
@@ -930,7 +930,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             ) : draftJDs.length === 0 ? (
               <div className="text-center py-8">
                 <FileText className="h-10 w-10 text-gray-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-600 dark:text-slate-400">No drafts saved</p>
+                <p className="tf-card-desc">No drafts saved</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -953,7 +953,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                           Draft
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-slate-400">
+                      <div className="flex items-center gap-3 tf-meta-strong">
                         {jd.creation_stage && (
                           <span>Stage: {jd.creation_stage}</span>
                         )}
@@ -1095,7 +1095,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 <Activity className="h-6 w-6 text-brand-blue" />
               </div>
               <p className="text-sm font-medium text-gray-900 dark:text-slate-50">No activity in the last 24 hours</p>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Your recent actions will appear here</p>
+              <p className="tf-meta mt-1">Your recent actions will appear here</p>
             </div>
           ) : (
             <ul className="relative divide-y divide-gray-100 dark:divide-slate-700/60 max-h-[28rem] overflow-y-auto scrollbar-auto-hide">
@@ -1127,7 +1127,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                             {activity.action_display}
                           </p>
                           {detailText && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5 truncate">
+                            <p className="tf-meta mt-0.5 truncate">
                               {detailText}
                             </p>
                           )}

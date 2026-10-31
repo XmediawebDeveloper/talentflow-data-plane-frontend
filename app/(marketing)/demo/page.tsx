@@ -111,7 +111,7 @@ export default function DemoPage() {
                 Request Demo
               </Button>
 
-              <p className="text-sm text-gray-500 text-center">
+              <p className="tf-body-muted text-center">
                 Or start your{" "}
                 <a href="/signup" className="text-gray-800 hover:underline">
                   14-day free trial

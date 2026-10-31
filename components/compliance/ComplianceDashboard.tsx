@@ -94,8 +94,8 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 <Shield className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Compliance Dashboard</h2>
-                <p className="text-sm text-gray-500">
+                <h2 className="tf-section-title">Compliance Dashboard</h2>
+                <p className="tf-body-muted">
                   Immutable Audit Record Enforcement & Regulatory Compliance
                 </p>
               </div>
@@ -143,7 +143,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   {report?.immutability_status.all_records_immutable ? 'Enforced' : 'Check Required'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 DB Triggers: {report?.immutability_status.database_triggers_active ? 'Active' : 'Inactive'}
               </p>
             </div>
@@ -157,7 +157,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               <div className={`font-semibold text-2xl ${(modSummary?.total_attempts || 0) > 0 ? 'text-warning' : 'text-success'}`}>
                 {modSummary?.total_attempts || 0}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 Last 30 days
               </p>
             </div>
@@ -171,7 +171,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               <div className="font-semibold text-2xl text-gray-900">
                 {report?.summary.total_corrections || 0}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 Via new records (immutable)
               </p>
             </div>
@@ -185,7 +185,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               <div className="font-semibold text-2xl text-gray-900">
                 {report?.summary.records_under_legal_hold || 0}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 Records under retention hold
               </p>
             </div>
@@ -284,7 +284,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
               <h3 className="font-semibold text-gray-900">Blocked Modification Attempts</h3>
-              <span className="text-sm text-gray-500">({modSummary.total_attempts} total)</span>
+              <span className="tf-body-muted">({modSummary.total_attempts} total)</span>
             </div>
             {expandedSection === 'attempts' ? (
               <ChevronDown className="w-5 h-5 text-gray-400" />
@@ -298,13 +298,13 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 <table className="w-full">
                   <thead className="bg-white">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
+                      <th className="px-4 py-2 text-left tf-th">
                         Table
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
+                      <th className="px-4 py-2 text-left tf-th">
                         Attempts
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
+                      <th className="px-4 py-2 text-left tf-th">
                         Status
                       </th>
                     </tr>
@@ -316,7 +316,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                           <span className="text-sm font-medium text-gray-900">
                             {getTableDisplayName(table)}
                           </span>
-                          <p className="text-xs text-gray-500">{table}</p>
+                          <p className="tf-meta">{table}</p>
                         </td>
                         <td className="px-4 py-3">
                           <span className="text-sm text-warning font-semibold">{count}</span>
@@ -331,7 +331,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-gray-500 mt-4">
+              <p className="tf-meta mt-4">
                 All modification attempts were blocked by database triggers. Audit records remain immutable.
               </p>
             </div>
@@ -374,7 +374,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                         <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
                           {getCorrectionTypeName(correction.correction_type)}
                         </span>
-                        <span className="text-sm text-gray-500">
+                        <span className="tf-body-muted">
                           {getTableDisplayName(correction.original_table)}
                         </span>
                       </div>
@@ -382,8 +382,8 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                         {formatIST(correction.created_at)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700">{correction.correction_reason}</p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="tf-body">{correction.correction_reason}</p>
+                    <p className="tf-meta mt-1">
                       By {correction.corrected_by_email}
                       {correction.requires_approval && !correction.approved_at && (
                         <span className="ml-2 text-warning">(Pending Approval)</span>
@@ -407,7 +407,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-gray-500" />
               <h3 className="font-semibold text-gray-900">Audit Action Summary</h3>
-              <span className="text-sm text-gray-500">
+              <span className="tf-body-muted">
                 ({report.summary.total_audit_actions} actions)
               </span>
             </div>
@@ -425,12 +425,12 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   .slice(0, 8)
                   .map(([action, count]) => (
                     <div key={action} className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 truncate">{action}</p>
+                      <p className="tf-meta truncate">{action}</p>
                       <p className="text-lg font-semibold text-gray-900">{count}</p>
                     </div>
                   ))}
               </div>
-              <div className="mt-4 text-xs text-gray-500">
+              <div className="mt-4 tf-meta">
                 <p>Report Period: {formatISTDate(report.period.start_date)} - {formatISTDate(report.period.end_date)}</p>
                 <p>Generated: {formatIST(report.generated_at)}</p>
               </div>

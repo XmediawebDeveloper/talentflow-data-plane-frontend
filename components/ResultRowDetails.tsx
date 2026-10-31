@@ -45,14 +45,14 @@ export function RowDetailsPanel({ colSpan, fields }: { colSpan: number; fields: 
             <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 {fields.map((f) => (
-                  <th key={f.label} className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">{f.label}</th>
+                  <th key={f.label} className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">{f.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               <tr>
                 {fields.map((f) => (
-                  <td key={f.label} className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{f.value}</td>
+                  <td key={f.label} className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{f.value}</td>
                 ))}
               </tr>
             </tbody>

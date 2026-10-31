@@ -175,7 +175,7 @@ export default function InviteReviewStep({
   if (data && data.counts.all === 0) {
     return (
       <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-10 text-center space-y-3">
-        <p className="text-sm text-gray-600 dark:text-slate-400">
+        <p className="tf-card-desc">
           <b className="font-semibold text-gray-900 dark:text-slate-50">No candidates yet.</b> Go back to add them by typing, uploading a sheet, or picking from your lists.
         </p>
         {onAddCandidates && (
@@ -245,7 +245,7 @@ export default function InviteReviewStep({
       )}
 
       {counts && (
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm text-gray-700 dark:text-slate-300 tabular-nums">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 tf-body tabular-nums">
           <span>
             <b className="font-semibold text-gray-900 dark:text-slate-50">{selectedCount.toLocaleString()} of {counts.all.toLocaleString()} selected</b>
             {counts.skipped > 0 && <span className="text-gray-500 dark:text-slate-400"> · {counts.skipped.toLocaleString()} will be skipped</span>}
@@ -270,7 +270,7 @@ export default function InviteReviewStep({
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-8 text-center space-y-3">
-          <p className="text-sm text-gray-500 dark:text-slate-400">No candidates match these filters.</p>
+          <p className="tf-body-muted">No candidates match these filters.</p>
           <button
             type="button"
             onClick={() => { setSearchInput(''); setSearch(''); setGroup(''); setView('all'); setPage(1); }}
@@ -339,7 +339,7 @@ export default function InviteReviewStep({
                         </button>
                       )}
                     </span>
-                    <span className="block truncate text-xs text-gray-500 dark:text-slate-400 md:hidden">{r.email || 'No email'}</span>
+                    <span className="block truncate tf-meta md:hidden">{r.email || 'No email'}</span>
                   </td>
                   <td className="hidden md:table-cell px-3 py-2"><span className="block truncate" title={r.email}>{r.email || '—'}</span></td>
                   <td className="hidden md:table-cell px-3 py-2">

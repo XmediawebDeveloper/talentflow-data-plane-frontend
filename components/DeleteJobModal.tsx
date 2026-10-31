@@ -60,12 +60,12 @@ export default function DeleteJobModal({
               {/* The house grey pill, so the selection reads as a chip and not as body copy. */}
               <span className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 text-gray-500 dark:text-slate-400" />
-                <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+                <span className="truncate tf-cell-name">
                   {jobLabel}
                 </span>
               </span>
               {note && (
-                <p className="mt-3 rounded-lg border border-warning-line bg-warning-subtle/60 px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                <p className="mt-3 rounded-lg border border-warning-line bg-warning-subtle/60 px-3 py-2 tf-body">
                   {note}
                 </p>
               )}

@@ -50,7 +50,7 @@ export default function ZipDownloadConfirmModal({
               </div>
               <div>
                 <h3 id="zip-download-confirm-title" className="text-xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">Download as ZIP</h3>
-                <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">Multiple files selected</p>
+                <p className="tf-body-muted mt-0.5">Multiple files selected</p>
               </div>
             </div>
             <button
@@ -73,7 +73,7 @@ export default function ZipDownloadConfirmModal({
                 {count}
                 <span className="text-base font-semibold text-gray-900 dark:text-slate-100 ml-2">candidates selected</span>
               </p>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">
+              <p className="tf-body-muted mt-1">
                 All selected {itemLabel} will be downloaded and packed in a ZIP file.
               </p>
             </div>
@@ -84,7 +84,7 @@ export default function ZipDownloadConfirmModal({
             <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
               <Info className="w-4 h-4 text-brand-blue" />
             </div>
-            <p className="text-sm text-gray-700 dark:text-slate-300">
+            <p className="tf-body">
               Do you want to download all selected {itemLabel} as a ZIP file?
             </p>
           </div>

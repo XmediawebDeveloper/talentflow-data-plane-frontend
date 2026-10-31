@@ -15,7 +15,7 @@ export default function JdDetailsLegacyRedirect() {
   }, [router, searchParams]);
 
   return (
-    <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+    <div className="flex-1 flex items-center justify-center tf-body-muted">
       Redirecting…
     </div>
   );

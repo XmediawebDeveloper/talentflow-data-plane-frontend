@@ -861,7 +861,7 @@ function CategorySection({
             </div>
             {/* What the bucket is for, said once in the header rather than left
                 for the recruiter to infer from the cluster names inside it. */}
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="tf-meta mt-0.5">
               {category === 'mth'
                 ? 'Core skills required for the role. These are critical for candidate evaluation.'
                 : 'Additional skills that add value to the role.'}
@@ -1044,7 +1044,7 @@ function CategorySection({
             <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
               <Layers className="w-7 h-7 text-brand-blue" />
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="tf-card-desc">
               No clusters yet. Click <strong className="text-brand-blue">&quot;Regenerate with AI&quot;</strong> or add manually.
             </p>
           </div>
@@ -3141,7 +3141,7 @@ export default function AIInterviewClusters() {
     return (
       <div className="tf-loader-page bg-slate-50">
         <div className="text-center">
-          <p className="text-sm text-gray-500">No interview configuration found.</p>
+          <p className="tf-body-muted">No interview configuration found.</p>
           <button
             onClick={() => router.back()}
             className="mt-3 text-sm text-brand-blue hover:text-brand-blue-2 underline"
@@ -3202,7 +3202,7 @@ export default function AIInterviewClusters() {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
+                    <h1 className="tf-page-title">Skill Clusters</h1>
                     {/* Stealth dot — only the admin knows it's there. Click opens the
                       Question Distribution popover. Tiny (6×6), neutral gray, no hover ring,
                       sits flush with the heading so casual users don't register it. */}
@@ -3606,7 +3606,7 @@ export default function AIInterviewClusters() {
                         className="w-[440px] max-h-[70dvh] overflow-y-auto p-5 text-sm leading-relaxed"
                       >
                         <div className="space-y-3 text-gray-700">
-                          <div className="text-sm font-semibold text-gray-900">Skill Distribution</div>
+                          <div className="tf-cell-name">Skill Distribution</div>
                           <p className="italic text-gray-600">
                             Intelligently distribute refined skills across the allocated interview
                             questions so all important skills are evaluated efficiently within the
@@ -3652,7 +3652,7 @@ export default function AIInterviewClusters() {
                     </Popover>
                     */}
                   </div>
-                  <p className="text-sm text-gray-500 mt-0.5">
+                  <p className="tf-body-muted mt-0.5">
                     Organize skills into weighted clusters for focused interview coverage
                   </p>
                 </div>
@@ -4056,7 +4056,7 @@ export default function AIInterviewClusters() {
                         <Layers className="w-3.5 h-3.5 text-brand-blue" />
                       </div>
                       <div className="text-left">
-                        <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
+                        <div className="tf-cell-name">Question Distribution</div>
                         <div className="text-2xs text-gray-500">
                           {totalQ} question{totalQ !== 1 ? 's' : ''} · {totalSkillsCovered} skill{totalSkillsCovered !== 1 ? 's' : ''} covered
                         </div>
@@ -4076,7 +4076,7 @@ export default function AIInterviewClusters() {
                         </div>
                         <div>
                           <h2 className="text-base font-semibold text-gray-900 tracking-tight">Question Distribution</h2>
-                          <p className="text-xs text-gray-500 mt-0.5">
+                          <p className="tf-meta mt-0.5">
                             {totalQ} planned questions · {totalSkillsCovered} skills covered (primary + secondary)
                           </p>
                         </div>
@@ -4116,7 +4116,7 @@ export default function AIInterviewClusters() {
                       )}
 
                       {mthDist.length === 0 && nthDist.length === 0 && (
-                        <div className="text-sm text-gray-500 italic text-center py-6">
+                        <div className="tf-body-muted italic text-center py-6">
                           Generate clusters above to see how questions will be distributed.
                         </div>
                       )}
@@ -4154,36 +4154,36 @@ export default function AIInterviewClusters() {
                   </div>
                   <div className="divide-y divide-gray-50">
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
+                      <span className="tf-meta flex-shrink-0">Role Title</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_title || config.position || '—'}</span>
                     </div>
                     {config.jd_experience_level && (
                       <div className="px-3 py-2 flex items-start justify-between gap-2">
-                        <span className="text-xs text-gray-500 flex-shrink-0">Level</span>
+                        <span className="tf-meta flex-shrink-0">Level</span>
                         <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_experience_level}</span>
                       </div>
                     )}
                     {config.jd_location && (
                       <div className="px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
+                        <span className="tf-meta flex-shrink-0">Location</span>
                         <SummaryLocation value={config.jd_location} locations={clusterJdLocations} />
                       </div>
                     )}
                     {config.jd_version != null && (
                       <div className="px-3 py-2 flex items-start justify-between gap-2">
-                        <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
+                        <span className="tf-meta flex-shrink-0">JD Version</span>
                         <span className="text-xs font-semibold text-gray-900 text-right">v{config.jd_version}</span>
                       </div>
                     )}
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Interview Mode</span>
+                      <span className="tf-meta flex-shrink-0">Interview Mode</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">
                         {isFixed ? 'Timed' : 'Conversational'}
                       </span>
                     </div>
                     {config.duration_minutes != null && (
                       <div className="px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
+                        <span className="tf-meta flex-shrink-0">Total Duration</span>
                         <span className="text-xs font-semibold text-gray-900 text-right">{config.duration_minutes} min</span>
                       </div>
                     )}
@@ -4196,16 +4196,16 @@ export default function AIInterviewClusters() {
                 <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
                   <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                     <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
-                    <span className="text-xs text-gray-500">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
+                    <span className="tf-meta">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-100">
-                          <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Q</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
-                          <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
+                          <th className="px-3 py-1.5 text-left tf-th">Round</th>
+                          <th className="px-3 py-1.5 text-right tf-th">Q</th>
+                          <th className="px-3 py-1.5 text-right tf-th">Clusters</th>
+                          <th className="px-3 py-1.5 text-right tf-th">Time</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4255,7 +4255,7 @@ export default function AIInterviewClusters() {
                       return (
                         <div key={row.label}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-600">{row.label}</span>
+                            <span className="tf-meta-strong">{row.label}</span>
                             <span className={`text-xs font-semibold ${
                               complete ? 'text-advice-positive' : row.done > 0 ? 'text-gray-900' : 'text-gray-400'
                             }`}>

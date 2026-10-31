@@ -86,7 +86,7 @@ export default function UserPermissionsSummary({
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 sm:w-24 sm:flex-none dark:bg-slate-800">
             <div className="h-full rounded-full bg-brand-blue transition-all duration-500" style={{ width: `${coverage}%` }} />
           </div>
-          <span className="whitespace-nowrap text-xs text-gray-500 dark:text-slate-400">
+          <span className="whitespace-nowrap tf-meta">
             {isLoading ? '—' : (
               <>
                 <span className="font-semibold tabular-nums text-gray-900 dark:text-slate-100">{grantedCount}</span> of {totalCount}
@@ -151,7 +151,7 @@ export default function UserPermissionsSummary({
           ))}
         </div>
       ) : sections.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center text-sm max-sm:text-[13px] text-gray-500 dark:border-slate-700 dark:bg-slate-900">
+        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center tf-body-muted max-sm:text-[13px] dark:border-slate-700 dark:bg-slate-900">
           {q ? `No permissions match “${query.trim()}”` : 'No permissions granted'}
         </p>
       ) : (
@@ -170,7 +170,7 @@ export default function UserPermissionsSummary({
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{section.name}</span>
+                  <span className="min-w-0 flex-1 truncate tf-cell-name max-sm:text-[13px]">{section.name}</span>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums ${
                       section.grantedHere > 0
@@ -208,7 +208,7 @@ export default function UserPermissionsSummary({
         </div>
       )}
 
-      <p className="flex items-start gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+      <p className="flex items-start gap-1.5 tf-meta">
         <Info className="mt-px h-3.5 w-3.5 shrink-0 text-brand-blue/60" />
         <span>
           <span className="font-medium text-gray-700 dark:text-slate-300">View Analytics</span> and{' '}

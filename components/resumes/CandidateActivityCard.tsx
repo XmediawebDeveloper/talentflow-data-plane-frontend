@@ -154,7 +154,7 @@ function Row({
     <div className={`flex flex-col gap-2 ${gridFor(tab)} py-3 px-3 rounded-lg ring-1 ring-gray-100 hover:ring-brand-blue/20 hover:bg-brand-blue/[0.02] transition-all`}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-900">{title}</div>
-        <div className="mt-0.5 text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
+        <div className="mt-0.5 tf-meta flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:contents">
         {cells.map((cell, i) => (
@@ -264,7 +264,7 @@ export default function CandidateActivityCard({
         assessments: 'This candidate has not been invited to any AI Assessment yet.',
         interviews: 'This candidate has not been invited to any AI Interview yet.',
       };
-      return <p className="text-sm text-gray-500 py-6 text-center">{empty[active]}</p>;
+      return <p className="tf-body-muted py-6 text-center">{empty[active]}</p>;
     }
     const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
     const page = Math.min(pageByTab[active] ?? 1, totalPages);
@@ -420,14 +420,14 @@ export default function CandidateActivityCard({
         )}
         <div className="ml-auto flex items-center gap-3">
           {data && data.version_count > 1 && (
-            <span className="text-xs text-gray-500">Across all {data.version_count} resume versions</span>
+            <span className="tf-meta">Across all {data.version_count} resume versions</span>
           )}
           {headerAction}
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-8 text-sm text-gray-500 gap-2">
+        <div className="flex items-center justify-center py-8 tf-body-muted gap-2">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading activity…
         </div>
       ) : failed || !data ? (
@@ -472,9 +472,9 @@ export default function CandidateActivityCard({
             })}
           </div>
           {active ? renderRows() : noModules ? (
-            <p className="text-sm text-gray-500 py-6 text-center">You do not have access to this candidate&apos;s activity.</p>
+            <p className="tf-body-muted py-6 text-center">You do not have access to this candidate&apos;s activity.</p>
           ) : (
-            <p className="text-sm text-gray-500 py-6 text-center">{PLAN_LOCKED_MESSAGE}</p>
+            <p className="tf-body-muted py-6 text-center">{PLAN_LOCKED_MESSAGE}</p>
           )}
         </>
       )}

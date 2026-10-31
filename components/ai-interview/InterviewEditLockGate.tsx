@@ -75,7 +75,7 @@ export default function InterviewEditLockGate({ configId }: { configId: string |
       onCancel={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(lock.id)}`)}
       actions={[{ label: 'Take over', onClick: () => void takeOver(), loading: takingOver, disabled: takingOver }]}
     >
-      <p className="text-sm text-gray-700 dark:text-slate-300">
+      <p className="tf-body">
         <span className="font-semibold">{editor}</span> is editing this AI interview
         {since ? ` (last change ${since})` : ''}.
       </p>

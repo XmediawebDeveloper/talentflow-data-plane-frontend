@@ -860,10 +860,10 @@ export default function VersionInviteDialog({
                 <Icon className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h2 id="version-invite-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                <h2 id="version-invite-title" className="tf-section-title">
                   Invite to {label.singular}
                 </h2>
-                <p className="text-xs text-gray-500 dark:text-slate-400">Send the {label.singular.toLowerCase()} link to candidates</p>
+                <p className="tf-meta">Send the {label.singular.toLowerCase()} link to candidates</p>
               </div>
             </div>
             {!off && (
@@ -963,7 +963,7 @@ export default function VersionInviteDialog({
               </div>
             )}
             {off ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{off}</div>
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-card-desc">{off}</div>
             ) : !job ? (
               /* No job given: every published one, any job — the pick names
                  the job and the version. */
@@ -1009,7 +1009,7 @@ export default function VersionInviteDialog({
                         <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                         Choose a different {label.singular.toLowerCase()}
                       </button>
-                    ) : <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Select {label.singular.toLowerCase()} version</h4>}
+                    ) : <h4 className="tf-subsection-title">Select {label.singular.toLowerCase()} version</h4>}
                     {!error && <VersionUsage kind={kind} used={versions.length} />}
                   </div>
                   <VersionList
@@ -1033,7 +1033,7 @@ export default function VersionInviteDialog({
                 </div>
               </div>
             ) : current === 'candidates' ? null : current === 'review' && !perms.canInvite ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{deniedTitle}</div>
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-card-desc">{deniedTitle}</div>
             ) : current === 'review' && reviewRequest ? (
               <div className="space-y-4">
                 <div>
@@ -1103,7 +1103,7 @@ export default function VersionInviteDialog({
             {!off && job && !bulkJob && loaded && candidatesMounted && (
               <div className={current === 'candidates' ? 'space-y-4' : 'hidden'}>
                 {recipients.length > 0 && (
-                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 tf-body">
                     {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
                   </p>
                 )}
@@ -1201,7 +1201,7 @@ export default function VersionInviteDialog({
           </div>
 
           <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 shrink-0 ${inSteps ? 'max-sm:sticky max-sm:bottom-0 max-sm:z-10' : ''}`}>
-            <p className="min-w-0 sm:truncate text-sm text-gray-700 dark:text-slate-300">{footerText}</p>
+            <p className="min-w-0 sm:truncate tf-body">{footerText}</p>
             {/* Back / Cancel is as wide as its word; the main action takes the rest on phones. */}
             <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
               {bulkJob ? (
@@ -1250,8 +1250,8 @@ export default function VersionInviteDialog({
           {confirm && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-[1px] p-4 sm:p-6">
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
-                <h3 id="version-invite-confirm" className="text-base font-semibold text-gray-900 dark:text-slate-50">{confirm.title}</h3>
-                <p className="mt-1.5 text-sm text-gray-600 dark:text-slate-400">{confirm.message}</p>
+                <h3 id="version-invite-confirm" className="tf-card-title">{confirm.title}</h3>
+                <p className="mt-1.5 tf-card-desc">{confirm.message}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button variant="secondary" size="sm" onClick={() => setConfirm(null)} disabled={confirmBusy} className="w-full">{confirm.cancelText ?? 'Cancel'}</Button>
                   <Button

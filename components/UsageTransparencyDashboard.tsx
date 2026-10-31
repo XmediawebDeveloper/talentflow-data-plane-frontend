@@ -273,7 +273,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     {Array.from({ length: 8 }).map((_, i) => (
-                      <th key={i} className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">
+                      <th key={i} className="text-left py-3 px-4 tf-th">
                         <Skeleton className="h-3 w-20" />
                       </th>
                     ))}
@@ -310,7 +310,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <h1 className="text-2xl text-gray-900">Usage Transparency Dashboard</h1>
-                <p className="text-sm text-gray-600 mt-0.5">
+                <p className="tf-card-desc mt-0.5">
                   Detailed visibility of unit deductions: Full, Partial, and Non-Deductions
                 </p>
               </div>
@@ -367,7 +367,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         {/* Summary Cards */}
         {summary && (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <h2 className="tf-section-title mb-4 flex items-center gap-2">
               <Layers className="w-5 h-5" />
               Deduction Summary ({summary.period.days} Days)
             </h2>
@@ -413,7 +413,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <div className="text-3xl font-bold text-gray-800">
                   {summary.summary.by_category?.NON_DEDUCTION || 0}
                 </div>
-                <p className="text-xs text-gray-600 mt-1">0 units (failed/abandoned)</p>
+                <p className="tf-meta-strong mt-1">0 units (failed/abandoned)</p>
               </div>
             </div>
 
@@ -488,7 +488,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
               {/* Unit Type Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Unit Type</label>
+                <label className="block tf-label mb-2">Unit Type</label>
                 <FilterSelect
                   value={selectedUnitType}
                   onChange={(v) => search.setFilter('unitType', v as UnitType | '')}
@@ -505,7 +505,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
               {/* Category Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Deduction Category</label>
+                <label className="block tf-label mb-2">Deduction Category</label>
                 <FilterSelect
                   value={selectedCategory}
                   onChange={(v) => search.setFilter('category', v as DeductionCategory | '')}
@@ -522,7 +522,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
               {/* Time Period */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
+                <label className="block tf-label mb-2">Time Period</label>
                 <FilterSelect
                   value={String(days)}
                   onChange={(v) => search.setFilter('days', parseInt(v))}
@@ -547,7 +547,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                     onChange={(e) => search.setFilter('includePartialDeductions', e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
                   />
-                  <span className="text-sm text-gray-700">Include Partial Deductions</span>
+                  <span className="tf-body">Include Partial Deductions</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -556,7 +556,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                     onChange={(e) => search.setFilter('includeNonDeductions', e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
                   />
-                  <span className="text-sm text-gray-700">Include Non-Deductions (Failed/Abandoned)</span>
+                  <span className="tf-body">Include Non-Deductions (Failed/Abandoned)</span>
                 </label>
               </div>
             </div>
@@ -596,14 +596,14 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             <table className="w-full">
               <thead>
                 <tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Timestamp</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Unit Type</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Units</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Category</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Status</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">User</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Entity</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-gray-600">Score</th>
+                  <th className="text-left py-3 px-4 tf-th">Timestamp</th>
+                  <th className="text-left py-3 px-4 tf-th">Unit Type</th>
+                  <th className="text-center py-3 px-4 tf-th">Units</th>
+                  <th className="text-left py-3 px-4 tf-th">Category</th>
+                  <th className="text-left py-3 px-4 tf-th">Status</th>
+                  <th className="text-left py-3 px-4 tf-th">User</th>
+                  <th className="text-left py-3 px-4 tf-th">Entity</th>
+                  <th className="text-right py-3 px-4 tf-th">Score</th>
                 </tr>
               </thead>
               <tbody>
@@ -618,7 +618,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                       <div className="text-sm text-gray-900">
                         {formatISTDate(entry.created_at)}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="tf-meta">
                         {formatISTTime(entry.created_at)}
                       </div>
                     </td>
@@ -655,15 +655,15 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                         {entry.user_name || entry.user_email || '-'}
                       </div>
                       {entry.team_name && (
-                        <div className="text-xs text-gray-500">{entry.team_name}</div>
+                        <div className="tf-meta">{entry.team_name}</div>
                       )}
                     </td>
                     <td className="py-4 px-4">
-                      <div className="text-sm text-gray-700 truncate max-w-[200px]" title={entry.entity_name || undefined}>
+                      <div className="tf-body truncate max-w-[200px]" title={entry.entity_name || undefined}>
                         {entry.entity_name || '-'}
                       </div>
                       {entry.entity_type && (
-                        <div className="text-xs text-gray-500">{entry.entity_type}</div>
+                        <div className="tf-meta">{entry.entity_type}</div>
                       )}
                     </td>
                     <td className="py-4 px-4 text-right">
@@ -702,12 +702,12 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           {/* Pagination */}
           {data && data.total > limit && (
             <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-              <div className="text-sm text-gray-600">
+              <div className="tf-card-desc">
                 Showing {page * limit + 1} - {Math.min((page + 1) * limit, data.total)} of {data.total}
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -751,7 +751,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
         {/* Legend */}
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h4 className="text-sm font-semibold text-gray-900 mb-4">Deduction Categories Explained</h4>
+          <h4 className="tf-subsection-title mb-4">Deduction Categories Explained</h4>
           <div className="grid grid-cols-3 gap-4">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
@@ -759,7 +759,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <p className="font-medium text-gray-900">Full Deduction (1.0)</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="tf-meta mt-1">
                   Completed action: Resume scored, Assessment sent, AI Interview conducted
                 </p>
               </div>
@@ -770,7 +770,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <p className="font-medium text-gray-900">Partial Deduction (0.5)</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="tf-meta mt-1">
                   Partial completion: Session cutoff, incomplete assessment submission
                 </p>
               </div>
@@ -781,7 +781,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <p className="font-medium text-gray-900">Non-Deduction (0)</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="tf-meta mt-1">
                   No units charged: Failed operation, user abandoned, insufficient units
                 </p>
               </div>

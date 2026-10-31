@@ -223,8 +223,8 @@ export default function MyConsumptionHistory() {
               <User className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">My Consumption History</h2>
-              <p className="text-sm text-gray-500">View your personal unit usage across all features</p>
+              <h2 className="tf-section-title">My Consumption History</h2>
+              <p className="tf-body-muted">View your personal unit usage across all features</p>
             </div>
           </div>
           <button
@@ -249,9 +249,9 @@ export default function MyConsumptionHistory() {
             onClick={() => openListView('all')}
             className={`text-left w-full p-4 bg-gray-50 rounded-lg hover:shadow-md transition-all ${pageView === 'list' && selectedType === 'all' ? 'ring-2 ring-brand-blue' : ''}`}
           >
-            <p className="text-sm text-gray-600">Total Consumed</p>
+            <p className="tf-card-desc">Total Consumed</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{summary.total.toFixed(1)}</p>
-            <p className="text-xs text-gray-500 mt-1">Last {dateRange} days</p>
+            <p className="tf-meta mt-1">Last {dateRange} days</p>
           </button>
           {(['RS', 'AS', 'AIU'] as UnitType[]).map(type => {
             const Icon = UNIT_TYPE_ICONS[type];
@@ -268,7 +268,7 @@ export default function MyConsumptionHistory() {
                   <p className={`text-sm font-medium ${colors.text}`}>{getUnitTypeName(type)}</p>
                 </div>
                 <p className={`text-2xl font-bold ${colors.text} mt-1`}>{summary.byType[type].toFixed(1)}</p>
-                <p className="text-xs text-gray-600 mt-1">{type} units</p>
+                <p className="tf-meta-strong mt-1">{type} units</p>
               </button>
             );
           })}
@@ -281,7 +281,7 @@ export default function MyConsumptionHistory() {
           used to hold the left slot is gone, and the tally belongs on the
           right. */}
       <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-gray-500">
+        <span className="tf-meta">
           {filteredHistory.length} {filteredHistory.length === 1 ? 'entry' : 'entries'}
         </span>
       </div>
@@ -332,7 +332,7 @@ export default function MyConsumptionHistory() {
             className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
           />
 
-          <div className="ml-auto text-sm text-gray-600">
+          <div className="ml-auto tf-card-desc">
             {filteredHistory.length} records
           </div>
         </div>
@@ -344,11 +344,11 @@ export default function MyConsumptionHistory() {
           <table className="w-full">
             <thead className="bg-white border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Date & Time</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Units</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
+                <th className="px-6 py-3 text-left tf-th">Date & Time</th>
+                <th className="px-6 py-3 text-left tf-th">Type</th>
+                <th className="px-6 py-3 text-left tf-th">Action</th>
+                <th className="px-6 py-3 text-left tf-th">Units</th>
+                <th className="px-6 py-3 text-left tf-th">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -382,7 +382,7 @@ export default function MyConsumptionHistory() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td className="px-6 py-4 tf-card-desc">
                         {item.entity_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </td>
                       <td className="px-6 py-4">

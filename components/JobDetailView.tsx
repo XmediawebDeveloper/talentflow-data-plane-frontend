@@ -196,7 +196,7 @@ function QuickActionHeader({ icon, title, accent, open, onToggle, controls, titl
     return (
       <div className="flex items-center gap-2.5 mb-3">
         {disc}
-        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
+        <h3 className="tf-card-title">{title}</h3>
       </div>
     );
   }
@@ -2936,7 +2936,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate">
+                <h1 className="tf-page-title truncate">
                   <button
                     type="button"
                     onClick={handleShowOverview}
@@ -2953,7 +2953,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
 
               {/* Row 2: Location + Education + Employment Type + Work Mode + Posted Date + Posted By + Version */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+              <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
                 {/* Location */}
                 {formatLocationGroups(job.locations, job.location).length > 0 && (
                   <>
@@ -3082,16 +3082,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         className="absolute left-0 top-full mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
                       >
                         {versionMenuLoading ? (
-                          <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                          <div className="flex items-center gap-2 px-3 py-3 tf-meta">
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             Loading versions...
                           </div>
                         ) : versionMenuError ? (
-                          <div className="px-3 py-3 text-xs text-destructive">
+                          <div className="px-3 py-3 tf-error">
                             {versionMenuError}
                           </div>
                         ) : sortedLineageVersions.length === 0 ? (
-                          <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                          <div className="px-3 py-3 tf-meta">
                             No versions available
                           </div>
                         ) : (
@@ -3191,7 +3191,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <Upload className="w-4 h-4 text-gray-600" />
                     <div>
                       <div className="text-sm text-gray-900">Add Applications</div>
-                      <div className="text-xs text-gray-500">Upload new resumes</div>
+                      <div className="tf-meta">Upload new resumes</div>
                     </div>
                   </button>
                   <div className="border-t border-gray-100 my-1"></div>
@@ -3202,7 +3202,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <UserCheck className="w-4 h-4 text-gray-600" />
                     <div>
                       <div className="text-sm text-gray-900">Select Applicants</div>
-                      <div className="text-xs text-gray-500">Choose from existing resumes</div>
+                      <div className="tf-meta">Choose from existing resumes</div>
                     </div>
                   </button>
                 </div>
@@ -3530,7 +3530,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   </span>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+              <div className="flex flex-wrap items-center gap-4 tf-card-desc">
                 {job.department && (
                   <div className="flex items-center gap-1.5">
                     <Building2 className="w-4 h-4 text-blue-600" />
@@ -3603,7 +3603,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                           )}
                         </span>
                         {job.compensationType && (
-                          <span className="text-gray-500 text-sm">
+                          <span className="tf-body-muted">
                             / {job.compensationType === 'yearly' ? 'year' :
                                job.compensationType === 'monthly' ? 'month' :
                                job.compensationType === 'hourly' ? 'hour' :
@@ -3633,7 +3633,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   Visible to candidates
                 </span>
               </div>
-              <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">{job.additionalDetails}</p>
+              <p className="tf-card-desc whitespace-pre-wrap">{job.additionalDetails}</p>
             </div>
           )}
 
@@ -3644,7 +3644,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {/* Internal Recruiter Notes */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
               <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
-              <div className="text-sm text-gray-600 dark:text-slate-400 space-y-2">
+              <div className="tf-card-desc space-y-2">
                 {job.internalRecruiterComments && job.internalRecruiterComments.length > 0 ? (
                   <ul className="list-disc list-inside space-y-1">
                     {job.internalRecruiterComments.map((note, index) => (
@@ -3664,7 +3664,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 aria-disabled={assessmentPlanLocked || undefined}
                 className={`${assessmentPlanLocked ? 'opacity-60 cursor-not-allowed ' : ''}bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4`}>
                 <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
-                <div className="text-sm text-gray-600 dark:text-slate-400">
+                <div className="tf-card-desc">
                   {job.assessmentGuidance ? (
                     <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
                   ) : (
@@ -4269,7 +4269,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 events.sort((a, b) => sortTime(b) - sortTime(a));
 
                 if (events.length === 0) {
-                  return <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>;
+                  return <div className="tf-body-muted italic">No recent activity</div>;
                 }
                 const activityTotalPages = Math.max(1, Math.ceil(events.length / ACTIVITY_PAGE_SIZE));
                 const safeActivityPage = Math.min(activityPage, activityTotalPages);
@@ -4280,7 +4280,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <div className={`w-2 h-2 ${e.dot} rounded-full mt-1.5 flex-shrink-0`}></div>
                     <div>
                       <div className="text-sm text-gray-900 dark:text-slate-50">{e.title}</div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-500">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 tf-meta">
                         <span className="inline-flex items-center gap-1">
                           <Clock className="w-3 h-3" strokeWidth={1.75} />
                           {e.date ? formatISTDateTime(e.date) : 'N/A'}
@@ -4296,7 +4296,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {events.length > ACTIVITY_PAGE_SIZE && (
                   /* Compact pager — the shared Pagination is built for
                      full-width tables and overflows this narrow sidebar. */
-                  <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-400">
+                  <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between gap-2 tf-meta">
                     <span className="tabular-nums">
                       {(safeActivityPage - 1) * ACTIVITY_PAGE_SIZE + 1}–{Math.min(safeActivityPage * ACTIVITY_PAGE_SIZE, events.length)} of {events.length}
                     </span>
@@ -4360,7 +4360,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <tr>
                         <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
                         {['Candidate Name', 'Match Status', 'Score', 'Experience', 'Scored By / Date', 'Resume Version'].map((h) => (
-                          <th key={h} className="px-4 py-3 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                          <th key={h} className="px-4 py-3 text-left align-middle tf-th"><Skeleton className="h-3 w-20" /></th>
                         ))}
                       </tr>
                     </thead>
@@ -4559,7 +4559,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                       <tr>
                         {['CID', 'Candidate', 'Email', 'Status', 'Score', 'Duration', 'Started At', 'Completed At', 'Proctoring Risk', 'Actions'].map((h) => (
-                          <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                          <th key={h} className="text-left px-4 py-3 tf-th"><Skeleton className="h-3 w-20" /></th>
                         ))}
                       </tr>
                     </thead>
@@ -4585,7 +4585,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </div>
           ) : aiInterviewConfigError ? (
             <div className="text-center py-16">
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{aiInterviewConfigError}</p>
+              <p className="tf-card-desc mb-4">{aiInterviewConfigError}</p>
               <Button
                 variant="primary"
                 onClick={loadAIInterviewConfig}
@@ -4757,7 +4757,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <p className="text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
                       {draftTitle}
                     </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-gray-500 dark:text-slate-400">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 tf-body-muted">
                       <span className="inline-flex items-center gap-1.5">
                         <Clock className="w-4 h-4 flex-shrink-0" />
                         {draftAssessment.duration_minutes || 30} min
@@ -4796,7 +4796,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
                       {readyToPublish ? 'Ready to publish' : 'Setup incomplete'}
                     </p>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    <p className="tf-card-desc mt-1 leading-relaxed">
                       {readyToPublish
                         ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
                             assessment live for {job.title}.</>
@@ -4900,7 +4900,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <p className="text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
                       {draftTitle}
                     </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-gray-500 dark:text-slate-400">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 tf-body-muted">
                       <span className="inline-flex items-center gap-1.5">
                         <Clock className="w-4 h-4 flex-shrink-0" />
                         {draftAIInterview.duration_minutes || 30} min
@@ -4939,7 +4939,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
                       {readyToPublish ? 'Ready to publish' : 'Setup incomplete'}
                     </p>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
+                    <p className="tf-card-desc mt-1 leading-relaxed">
                       {readyToPublish
                         ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
                             interview live for {job.title}.</>
@@ -5603,9 +5603,9 @@ function AIMatchTabContent({
               <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
                   {/* Empty select-column header (no Select-All checkbox). */}
-                  <th className="px-3 py-2.5 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                  <th className="px-3 py-2.5 w-10 align-middle tf-th" aria-label="Select" />
                   {['Rating', 'Candidate', 'Experience', 'Resume Version', 'Scored Status', 'Actions'].map((h) => (
-                    <th key={h} className="px-3 py-2.5 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="px-3 py-2.5 text-left align-middle tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
@@ -5773,7 +5773,7 @@ function AIMatchTabContent({
                from it); gap-3 sm:gap-4 matches the master's field spacing. */
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0 pb-4">
               <div>
-                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Phone</label>
+                <label className="block tf-label mb-1.5">Phone</label>
                 <input
                   type="text"
                   value={filterPhone}
@@ -5783,7 +5783,7 @@ function AIMatchTabContent({
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
+                <label className="block tf-label mb-1.5">Location</label>
                 <input
                   type="text"
                   value={filterLocation}
@@ -5793,7 +5793,7 @@ function AIMatchTabContent({
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (min)</label>
+                <label className="block tf-label mb-1.5">Experience (min)</label>
                 <input
                   type="number"
                   value={filterExperienceMin}
@@ -5803,7 +5803,7 @@ function AIMatchTabContent({
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (max)</label>
+                <label className="block tf-label mb-1.5">Experience (max)</label>
                 <input
                   type="number"
                   value={filterExperienceMax}
@@ -5986,7 +5986,7 @@ function AIMatchTabContent({
         {displayMode === 'grid' ? (
           <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto p-4">
             {filteredCandidates.length === 0 ? (
-              <div className="px-4 py-12 text-center text-gray-500 dark:text-slate-500 text-sm">
+              <div className="px-4 py-12 text-center tf-body-muted">
                 No candidates match the current filters.
               </div>
             ) : (
@@ -6032,7 +6032,7 @@ function AIMatchTabContent({
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
                           {candidate.title && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{candidate.title}</p>
+                            <p className="tf-meta truncate">{candidate.title}</p>
                           )}
                         </div>
                         <div className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md font-bold text-xs shrink-0 ${
@@ -6045,7 +6045,7 @@ function AIMatchTabContent({
                         </div>
                       </div>
 
-                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate">
+                      <p className="tf-meta-strong truncate">
                         {candidate.email || '—'}{candidate.location ? ` · ${candidate.location}` : ''}
                       </p>
 
@@ -6118,13 +6118,13 @@ function AIMatchTabContent({
               <tr>
                 {/* Leading select column — an EMPTY header cell: no Select-All
                     checkbox here (that control lives in the toolbar above). */}
-                <th className="w-10 px-3 py-2.5 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
-                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Rating</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Experience</th>
-                <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Resume Version</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Scored Status</th>
-                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
+                <th className="w-10 px-3 py-2.5 align-middle tf-sticky-col-left tf-th" aria-label="Select" />
+                <th className="text-center py-2.5 px-3 tf-th whitespace-nowrap align-middle">Rating</th>
+                <th className="text-left py-2.5 px-3 tf-th whitespace-nowrap align-middle">Candidate</th>
+                <th className="text-left py-2.5 px-3 tf-th whitespace-nowrap align-middle">Experience</th>
+                <th className="text-center py-2.5 px-3 tf-th whitespace-nowrap align-middle">Resume Version</th>
+                <th className="text-left py-2.5 px-3 tf-th whitespace-nowrap align-middle">Scored Status</th>
+                <th className="text-right py-2.5 px-3 tf-th whitespace-nowrap align-middle tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
               </tr>
             </thead>
             )}
@@ -6197,10 +6197,10 @@ function AIMatchTabContent({
                           >
                             {formatCandidateFirstName(candidate.name)}
                           </p>
-                          {candidate.email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
+                          {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{candidate.experience || '-'}</td>
+                      <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{candidate.experience || '-'}</td>
                       <td className="text-center px-3 py-2.5 align-middle whitespace-nowrap">
                         <span className="inline-flex px-2 py-0.5 rounded-full text-xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
                           v{candidate.resumeVersion ?? 1}
@@ -6213,7 +6213,7 @@ function AIMatchTabContent({
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full tf-meta-strong bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
@@ -6339,17 +6339,17 @@ function AIMatchTabContent({
                             <table className="w-full min-w-[760px]">
                               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                                 <tr>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Phone</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Location</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Skills</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Uploaded By</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Uploaded Date</th>
-                                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Attachments</th>
+                                  <th className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">Phone</th>
+                                  <th className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">Location</th>
+                                  <th className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">Skills</th>
+                                  <th className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">Uploaded By</th>
+                                  <th className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">Uploaded Date</th>
+                                  <th className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">Attachments</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 <tr>
-                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                              <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">
                                 {(() => {
                                   const numbers = splitPhoneNumbers(candidate.phone, 2);
                                   if (numbers.length === 0) return '—';
@@ -6360,7 +6360,7 @@ function AIMatchTabContent({
                                   );
                                 })()}
                               </td>
-                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{candidate.location || '—'}</td>
+                              <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{candidate.location || '—'}</td>
                               <td className="px-3 py-2.5 align-middle min-w-[220px] max-w-[260px]">
                                 <div className="flex flex-nowrap items-center gap-1 overflow-hidden">
                                   <SkillsList
@@ -6371,8 +6371,8 @@ function AIMatchTabContent({
                                   />
                                 </div>
                               </td>
-                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
-                              <td className="px-3 py-2.5 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">{uploadDate}</td>
+                              <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
+                              <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{uploadDate}</td>
                               <td className="px-3 py-2.5 align-middle" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
@@ -6402,7 +6402,7 @@ function AIMatchTabContent({
         {/* Mobile: candidates render as cards instead of a 1450px-wide horizontal-scroll table (§10). */}
         <div className="md:hidden space-y-3">
           {filteredCandidates.length === 0 ? (
-            <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-sm text-gray-500 dark:text-slate-500">
+            <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center tf-body-muted">
               No candidates match the current filters.
             </div>
           ) : (
@@ -6441,9 +6441,9 @@ function AIMatchTabContent({
                     />
                     <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
-                      {candidate.title && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{candidate.title}</p>}
-                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate">{candidate.email || '—'}</p>
+                      <p className="tf-cell-name truncate">{formatCandidateFirstName(candidate.name)}</p>
+                      {candidate.title && <p className="tf-meta truncate">{candidate.title}</p>}
+                      <p className="tf-meta-strong truncate">{candidate.email || '—'}</p>
                     </div>
                     <div className={`inline-flex items-center justify-center px-2.5 py-1 rounded-md font-bold text-sm border flex-shrink-0 ${rankCls}`}>
                       {candidate.rank || '-'}

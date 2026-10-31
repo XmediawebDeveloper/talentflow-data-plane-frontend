@@ -796,7 +796,7 @@ export function MultiLanguageCodeEditor({
               <div key={`${section.label}-${idx}`}>
                 <h4 className={PROBLEM_HEADING_CLASS}>{section.label}</h4>
                 {section.body && (
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                  <p className="tf-card-desc bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
                     {section.body}
                   </p>
                 )}
@@ -807,7 +807,7 @@ export function MultiLanguageCodeEditor({
             {question.input_format && (
               <div>
                 <h4 className={PROBLEM_HEADING_CLASS}>Input Format</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                <p className="tf-card-desc bg-gray-50 p-3 rounded-lg">
                   {question.input_format}
                 </p>
               </div>
@@ -816,7 +816,7 @@ export function MultiLanguageCodeEditor({
             {question.output_format && (
               <div>
                 <h4 className={PROBLEM_HEADING_CLASS}>Output Format</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                <p className="tf-card-desc bg-gray-50 p-3 rounded-lg">
                   {question.output_format}
                 </p>
               </div>
@@ -839,7 +839,7 @@ export function MultiLanguageCodeEditor({
 
             {/* Sample Input/Output */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900">Example</h4>
+              <h4 className="tf-subsection-title">Example</h4>
 
               {question.sample_input && (
                 <div className="relative">
@@ -888,7 +888,7 @@ export function MultiLanguageCodeEditor({
               <div className="flex items-center justify-center py-8">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-gray-600">Compiling and running...</p>
+                  <p className="tf-card-desc">Compiling and running...</p>
                 </div>
               </div>
             ) : executionOutput ? (
@@ -957,7 +957,7 @@ export function MultiLanguageCodeEditor({
                         }`}>
                           {submissionResult.message}
                         </p>
-                        <p className="text-xs text-gray-600 mt-0.5">
+                        <p className="tf-meta-strong mt-0.5">
                           Score: {submissionResult.score_percentage.toFixed(0)}%
                         </p>
                       </div>

@@ -221,22 +221,22 @@ export function OverviewSectionV2({
 
         <div className="flex flex-wrap gap-8">
           <div>
-            <div className="text-sm text-gray-500 mb-1">Interview Date</div>
-            <div className="text-sm font-semibold text-gray-900">{interview.date || '—'}</div>
+            <div className="tf-body-muted mb-1">Interview Date</div>
+            <div className="tf-cell-name">{interview.date || '—'}</div>
           </div>
           {candidate.email && (
             <div>
-              <div className="text-sm text-gray-500 mb-1">Email</div>
-              <div className="text-sm font-semibold text-gray-900">{candidate.email}</div>
+              <div className="tf-body-muted mb-1">Email</div>
+              <div className="tf-cell-name">{candidate.email}</div>
             </div>
           )}
           <div>
-            <div className="text-sm text-gray-500 mb-1">Mode</div>
-            <div className="text-sm font-semibold text-gray-900">{interview.mode}</div>
+            <div className="tf-body-muted mb-1">Mode</div>
+            <div className="tf-cell-name">{interview.mode}</div>
           </div>
           <div>
-            <div className="text-sm text-gray-500 mb-1">Duration</div>
-            <div className="text-sm font-semibold text-gray-900">{interview.duration || '—'}</div>
+            <div className="tf-body-muted mb-1">Duration</div>
+            <div className="tf-cell-name">{interview.duration || '—'}</div>
           </div>
         </div>
       </div>
@@ -251,7 +251,7 @@ export function OverviewSectionV2({
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900 mb-0.5">{s.value}</div>
-                <div className="text-sm text-gray-500">{s.label}</div>
+                <div className="tf-body-muted">{s.label}</div>
               </div>
             </div>
           </div>
@@ -280,8 +280,8 @@ export function OverviewSectionV2({
                     {i + 1}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-gray-900">{skill.name}</div>
-                    <div className="text-xs text-gray-500">Level: {skill.level}</div>
+                    <div className="tf-cell-name">{skill.name}</div>
+                    <div className="tf-meta">Level: {skill.level}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -308,7 +308,7 @@ export function OverviewSectionV2({
             {sectionsPresent.mustHave && (
               <div className="mb-5">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold text-gray-900">Must-Have Section</div>
+                  <div className="tf-cell-name">Must-Have Section</div>
                   <span
                     className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                       mhCov.pct === 100
@@ -325,7 +325,7 @@ export function OverviewSectionV2({
                     style={{ width: `${mhCov.pct}%` }}
                   />
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="tf-meta">
                   {mhCov.covered} of {mhCov.total} skills covered across {mhCov.clusters} priority cluster{mhCov.clusters !== 1 ? 's' : ''}
                 </div>
               </div>
@@ -334,7 +334,7 @@ export function OverviewSectionV2({
             {sectionsPresent.niceToHave && (
               <div className="mb-3">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold text-gray-900">Nice-to-Have Section</div>
+                  <div className="tf-cell-name">Nice-to-Have Section</div>
                   <span
                     className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                       nhCov.pct === 100
@@ -351,7 +351,7 @@ export function OverviewSectionV2({
                     style={{ width: `${nhCov.pct}%` }}
                   />
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="tf-meta">
                   {nhCov.covered} of {nhCov.total} skills covered across {nhCov.clusters} priority cluster{nhCov.clusters !== 1 ? 's' : ''}
                 </div>
               </div>
@@ -397,7 +397,7 @@ export function OverviewSectionV2({
                 <div className="flex items-start justify-between mb-3 gap-3">
                   <div>
                     <div className="text-base font-semibold text-gray-900 mb-1">{item.label}</div>
-                    <div className="text-xs text-gray-500 leading-relaxed">{item.description}</div>
+                    <div className="tf-meta leading-relaxed">{item.description}</div>
                     {item.threshold !== null && !isPartialEvaluation && (
                       <div className="text-xs text-gray-600 font-semibold mt-1">
                         Pass Threshold: {item.threshold.toFixed(1)}
@@ -437,7 +437,7 @@ export function OverviewSectionV2({
 
           <div className="p-5 rounded-2xl bg-brand-blue/10">
             <div className="text-sm font-semibold text-brand-blue mb-1.5">Scoring Method</div>
-            <div className="text-xs text-gray-600 leading-relaxed space-y-1">
+            <div className="tf-meta-strong leading-relaxed space-y-1">
               <div>• <strong>Must-Have Section Score</strong> = Average of all Must-Have question scores</div>
               <div>• <strong>Nice-to-Have Section Score</strong> = Average of all Nice-to-Have question scores</div>
               <div>
