@@ -10,8 +10,10 @@ import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
 import ListPagination from '@/components/ListPagination';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 
-/** The backend takes at most this many typed-in candidates per send. */
-export const MAX_EXTRA_CANDIDATES = 500;
+/** The most candidates one send may carry — the backend's BULK_INVITE_MAX_ROWS
+ *  default. The real cap is usually lower: the host passes `maxRows` from the
+ *  assessment / interview units still available. */
+export const MAX_EXTRA_CANDIDATES = 10000;
 
 const PAGE_SIZE = 10;
 const INPUT = 'h-10 w-full min-w-0 px-3 border rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-50 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent disabled:opacity-60';
@@ -36,7 +38,7 @@ interface EntryRow {
 interface InvalidRow { row: number; email: string; problem: string }
 
 /** The last sheet uploaded: what came of it. */
-interface UploadSummary { file: string; added: number; repeated: number; over: number; invalid: InvalidRow[]; open: boolean }
+interface UploadSummary { file: string; added: number; repeated: number; over: number; limit: number; byUnits: boolean; invalid: InvalidRow[]; open: boolean }
 
 const newId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -115,6 +117,8 @@ export default function ExtraCandidatesInput({
   disabled = false,
   onCopyLink,
   takenEmail,
+  maxRows = MAX_EXTRA_CANDIDATES,
+  limitByUnits = false,
 }: {
   onChange: (next: BulkExtraCandidate[]) => void;
   /** Manual vs sheet rows that will be emailed, for the summary. */
@@ -125,6 +129,11 @@ export default function ExtraCandidatesInput({
   onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
   /** Where else this email is already picked (a list), if anywhere. */
   takenEmail?: (email: string) => string | null;
+  /** How many rows here may be emailed — the units left after the other
+   *  picks (or the backend cap on unlimited plans). Rows past it are not added. */
+  maxRows?: number;
+  /** True when `maxRows` comes from the units, for the wording. */
+  limitByUnits?: boolean;
 }) {
   const [rows, setRows] = useState<EntryRow[]>([]);
   const [name, setName] = useState('');
@@ -157,7 +166,12 @@ export default function ExtraCandidatesInput({
     if (!isValidEmailFormat(e)) { setError(EMAIL_FORMAT_ERROR); return; }
     const same = rows.find((r) => r.email === e);
     if (same) { setError(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
-    if (rows.length >= MAX_EXTRA_CANDIDATES) { setError(`At most ${MAX_EXTRA_CANDIDATES} candidates can be added directly.`); return; }
+    if (toCandidates(rows).length >= maxRows) {
+      setError(limitByUnits
+        ? `No units left for another candidate. ${maxRows.toLocaleString()} can be added with the units available.`
+        : `At most ${maxRows.toLocaleString()} candidates can be added directly.`);
+      return;
+    }
     const elsewhere = takenEmail?.(e);
     if (elsewhere) { setError(`${e} is already added from ${elsewhere}.`); return; }
     commit([{ id: newId(), name: n.replace(/\s+/g, ' '), email: e, origin: 'Manual' }, ...rows]);
@@ -234,9 +248,10 @@ export default function ExtraCandidatesInput({
         have.add(c.email);
         fresh.push({ id: newId(), name: c.name, email: c.email, origin: file.name });
       }
-      const kept = fresh.slice(0, Math.max(0, MAX_EXTRA_CANDIDATES - rows.length));
+      // Rows already invited by Copy Link are not emailed, so they don't count.
+      const kept = fresh.slice(0, Math.max(0, maxRows - toCandidates(rows).length));
       const over = fresh.length - kept.length;
-      setUpload({ file: file.name, added: kept.length, repeated, over, invalid, open: false });
+      setUpload({ file: file.name, added: kept.length, repeated, over, limit: maxRows, byUnits: limitByUnits, invalid, open: false });
       if (kept.length === 0) return;
       commit([...rows, ...kept]);
       setOrigin('all');
@@ -332,7 +347,7 @@ export default function ExtraCandidatesInput({
             <span className="font-medium text-success-strong tabular-nums">{upload.added.toLocaleString()} added</span>
             {upload.invalid.length > 0 && <span className="font-medium text-destructive tabular-nums">{upload.invalid.length.toLocaleString()} invalid</span>}
             {upload.repeated > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.repeated.toLocaleString()} repeated (already in the list)</span>}
-            {upload.over > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} over the {MAX_EXTRA_CANDIDATES} limit</span>}
+            {upload.over > 0 && <span className="text-gray-500 dark:text-slate-400 tabular-nums">{upload.over.toLocaleString()} {upload.byUnits ? `over your available units (${upload.limit.toLocaleString()})` : `over the ${upload.limit.toLocaleString()} limit`}</span>}
             {upload.invalid.length > 0 && (
               <button type="button" onClick={() => setUpload({ ...upload, open: !upload.open })} className="text-xs font-medium text-brand-blue hover:underline underline-offset-2">
                 {upload.open ? 'Hide' : 'View'} invalid rows
