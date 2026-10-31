@@ -1292,7 +1292,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             <div className="text-center p-6 select-none">
               <div className="text-5xl mb-3">👤</div>
               <p className="text-sm font-medium text-gray-300 mb-1">Avatar Not Loaded</p>
-              <p className="text-xs text-gray-500">Model must be from Ready Player Me or Avaturn</p>
+              <p className="tf-meta">Model must be from Ready Player Me or Avaturn</p>
             </div>
           </div>
         )}

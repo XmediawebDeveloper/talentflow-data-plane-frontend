@@ -145,10 +145,10 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">User Limit Exceeded</h3>
+              <h3 className="tf-card-title max-sm:text-sm">User Limit Exceeded</h3>
               <Badge variant="destructive">Action required</Badge>
             </div>
-            <p className="text-sm max-sm:text-[13px] text-gray-600 mt-1">
+            <p className="tf-card-desc max-sm:text-[13px] mt-1">
               You have {seatData.used} active users, but your plan allows only {seatData.limit}.
               Please deactivate {usersToDeactivate} user{usersToDeactivate > 1 ? 's' : ''} or upgrade your plan.
             </p>
@@ -192,10 +192,10 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">User Seats</h3>
+                <h3 className="tf-card-title max-sm:text-sm">User Seats</h3>
                 <Badge variant="destructive">At limit</Badge>
               </div>
-              <p className="text-xs text-gray-500 mt-0.5">{planName}</p>
+              <p className="tf-meta mt-0.5">{planName}</p>
             </div>
           </div>
 
@@ -204,7 +204,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
               {seatData.used}
               <span className="text-sm max-sm:text-[13px] text-gray-400">/{seatData.limit === -1 ? '∞' : seatData.limit}</span>
             </div>
-            <p className="text-xs text-gray-500">
+            <p className="tf-meta">
               {seatData.total_remaining === -1 ? 'Unlimited' : `${seatData.total_remaining} available`}
             </p>
           </div>
@@ -257,7 +257,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm max-sm:text-[13px] font-semibold text-brand-orange-deep">Not available on Free Trial</p>
-              <p className="text-sm max-sm:text-[13px] text-gray-600 mt-0.5">
+              <p className="tf-card-desc max-sm:text-[13px] mt-0.5">
                 Purchasing additional seats is only available for paid subscriptions.
               </p>
             </div>

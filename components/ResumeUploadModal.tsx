@@ -366,7 +366,7 @@ function ResumeUploadModalBody({ jobTitle, onClose, onSubmit }: ResumeUploadModa
           <div className="flex items-center justify-between p-6 border-b border-gray-200">
             <div>
               <h2 className="text-gray-900 dark:text-slate-50 mb-1">Upload Resumes</h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Add applicants to: <span className="text-gray-800 dark:text-slate-100">{jobTitle}</span></p>
+              <p className="tf-card-desc">Add applicants to: <span className="text-gray-800 dark:text-slate-100">{jobTitle}</span></p>
             </div>
             <button
               onClick={onClose}
@@ -394,7 +394,7 @@ function ResumeUploadModalBody({ jobTitle, onClose, onSubmit }: ResumeUploadModa
                 <Upload className="w-8 h-8 text-gray-800 dark:text-slate-100" />
               </div>
               <h3 className="text-gray-900 dark:text-slate-50 mb-2">Drop resumes here</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+              <p className="tf-card-desc mb-4">
                 or click to browse from your computer
               </p>
               <input
@@ -412,7 +412,7 @@ function ResumeUploadModalBody({ jobTitle, onClose, onSubmit }: ResumeUploadModa
                 <Upload className="w-5 h-5" />
                 Browse Files
               </label>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-4">
+              <p className="tf-meta mt-4">
                 Supported formats: PDF, DOC, DOCX, RTF, TXT (Max 3MB per file)
               </p>
             </div>
@@ -473,9 +473,9 @@ function ResumeUploadModalBody({ jobTitle, onClose, onSubmit }: ResumeUploadModa
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-gray-900 dark:text-slate-50 truncate">{fileWithStatus.file.name}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <p className="text-xs text-gray-500 dark:text-slate-500">{formatFileSize(fileWithStatus.file.size)}</p>
+                            <p className="tf-meta">{formatFileSize(fileWithStatus.file.size)}</p>
                             {fileWithStatus.existingResume && (
-                              <p className="text-xs text-gray-500 dark:text-slate-500">
+                              <p className="tf-meta">
                                 • Matches: {fileWithStatus.existingResume.candidate_name}
                               </p>
                             )}
@@ -620,7 +620,7 @@ function ResumeUploadModalBody({ jobTitle, onClose, onSubmit }: ResumeUploadModa
 
           {/* Footer */}
           <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-            <div className="text-sm text-gray-600">
+            <div className="tf-card-desc">
               {isCheckingQuota || isCheckingDuplicates ? (
                 <span className="text-gray-500 dark:text-slate-500 animate-pulse flex items-center gap-1">
                   <Loader2 className="w-4 h-4 animate-spin" />

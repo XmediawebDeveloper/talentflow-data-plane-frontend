@@ -208,7 +208,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
               <div className="text-sm text-gray-800 mb-2">Assessment Details</div>
               <div className="text-gray-900 mb-1">{assessment.title}</div>
-              <div className="text-sm text-gray-600">
+              <div className="tf-card-desc">
                 {assessment.jobTitle} • {assessment.companyName} • {assessment.duration} minutes
               </div>
             </div>
@@ -228,7 +228,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                       <FileText className="w-4 h-4 text-gray-800" />
                       <span className="text-sm text-gray-900">Terms & Conditions</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta-strong">
                       I agree to the assessment terms and conditions. I understand this is a formal evaluation and my responses will be recorded and reviewed by {assessment.companyName}.
                     </p>
                   </div>
@@ -248,7 +248,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                       <Lock className="w-4 h-4 text-gray-800" />
                       <span className="text-sm text-gray-900">Data Use & Privacy</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta-strong">
                       I consent to {assessment.companyName} collecting, processing, and storing my assessment data including responses, performance metrics, and AI analysis results for recruitment purposes. Data will be handled in accordance with GDPR and data protection laws.
                     </p>
                   </div>
@@ -268,7 +268,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                       <Video className="w-4 h-4 text-success" />
                       <span className="text-sm text-gray-900">AI Interview Recording</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta-strong">
                       I understand this assessment uses AI-powered interview technology. My text responses will be analyzed by AI and reviewed by human recruiters. No video/audio recording, only text-based interactions.
                     </p>
                   </div>
@@ -288,7 +288,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                       <CheckCircle2 className="w-4 h-4 text-gray-800" />
                       <span className="text-sm text-gray-900">Honesty & Integrity</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta-strong">
                       I commit to completing this assessment independently without external assistance. I understand that dishonest practices may result in disqualification from the recruitment process.
                     </p>
                   </div>
@@ -349,7 +349,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {/* Welcome Message */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
               <h3 className="text-base text-gray-900 mb-1">Welcome, {candidateName}!</h3>
-              <p className="text-sm text-gray-700">
+              <p className="tf-body">
                 You're about to begin your assessment for <strong>{assessment.jobTitle}</strong> at {assessment.companyName}. 
                 This AI-powered interview will adapt to your responses and ask relevant follow-up questions.
               </p>
@@ -362,17 +362,17 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <Clock className="w-5 h-5 text-gray-800 mb-1" />
                   <div className="text-xl text-gray-900">{assessment.duration} min</div>
-                  <div className="text-xs text-gray-600">Total Duration</div>
+                  <div className="tf-meta-strong">Total Duration</div>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <MessageSquare className="w-5 h-5 text-gray-800 mb-1" />
                   <div className="text-xl text-gray-900">{assessment.sections.length}</div>
-                  <div className="text-xs text-gray-600">Sections</div>
+                  <div className="tf-meta-strong">Sections</div>
                 </div>
                 <div className="p-3 bg-success-subtle rounded-lg border border-success-line">
                   <Sparkles className="w-5 h-5 text-success mb-1" />
                   <div className="text-xl text-gray-900">AI-Driven</div>
-                  <div className="text-xs text-gray-600">Interview Type</div>
+                  <div className="tf-meta-strong">Interview Type</div>
                 </div>
               </div>
 
@@ -383,7 +383,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-sm text-gray-900">{section.name} Section</div>
-                        <div className="text-xs text-gray-600">~{section.estimatedTime} minutes</div>
+                        <div className="tf-meta-strong">~{section.estimatedTime} minutes</div>
                       </div>
                       <div className="text-lg text-gray-800">{section.percentage}%</div>
                     </div>
@@ -496,11 +496,11 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                               <FileText className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
                               <span className="text-sm text-gray-800">Scenario:</span>
                             </div>
-                            <p className="text-sm text-gray-700 whitespace-pre-line ml-6">{currentQ.scenario}</p>
+                            <p className="tf-body whitespace-pre-line ml-6">{currentQ.scenario}</p>
                           </div>
                         )}
                         
-                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-gray-100 tf-meta-strong rounded-full">
                           {currentQ.type === 'behavioral' && '💭 Behavioral'}
                           {currentQ.type === 'technical' && '🔧 Technical'}
                         </div>
@@ -558,14 +558,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                                       </div>
                                       <span className="text-sm font-semibold text-gray-800">Problem Description</span>
                                     </div>
-                                    <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{currentQ.scenario}</p>
+                                    <p className="tf-body whitespace-pre-line leading-relaxed">{currentQ.scenario}</p>
                                   </div>
                                 )}
                                 
                                 {/* AI-Detected Language Info */}
                                 <div className="mt-6 flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-100 border border-gray-300 rounded-lg shadow-sm">
                                   <Sparkles className="w-4 h-4 text-gray-800" />
-                                  <span className="text-sm text-gray-700">Detected Language:</span>
+                                  <span className="tf-body">Detected Language:</span>
                                   <span className="text-sm font-bold text-gray-900 uppercase">
                                     {currentQ.programmingLanguage || 'python'}
                                   </span>
@@ -644,7 +644,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
 
                           {/* FIXED ACTION BUTTONS - Simplified & Elegant */}
                           <div className="mt-5 flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <div className="flex items-center gap-2 tf-body-muted">
                               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                               <span>Compiler ready</span>
                             </div>
@@ -681,7 +681,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                         className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none text-gray-900"
                       />
                       <div className="flex items-center justify-between mt-4">
-                        <div className="text-sm text-gray-500">
+                        <div className="tf-body-muted">
                           {answer.length} characters
                         </div>
                         <button
@@ -751,20 +751,20 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {/* Assessment Summary */}
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="text-gray-500 text-xs mb-1">Questions</div>
+                <div className="tf-meta mb-1">Questions</div>
                 <div className="text-xl text-gray-900">{aiQuestions.length}</div>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="text-gray-500 text-xs mb-1">Duration</div>
+                <div className="tf-meta mb-1">Duration</div>
                 <div className="text-xl text-gray-900">{assessment.duration}m</div>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="text-gray-500 text-xs mb-1">Status</div>
+                <div className="tf-meta mb-1">Status</div>
                 <div className="text-xl text-gray-900">✓</div>
               </div>
             </div>
 
-            <div className="text-xs text-gray-500">
+            <div className="tf-meta">
               Assessment ID: {assessmentId} • Submitted on {formatISTDate(new Date().toISOString())}
             </div>
           </div>

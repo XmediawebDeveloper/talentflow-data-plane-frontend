@@ -41,7 +41,7 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
             <tr>
               <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
               {headers.map((h) => (
-                <th key={h} className="px-4 py-3 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                <th key={h} className="px-4 py-3 text-left align-middle tf-th"><Skeleton className="h-3 w-20" /></th>
               ))}
             </tr>
           </thead>
@@ -661,7 +661,7 @@ export default function ResumeTable({
             {/* Drag handle column — pinned too, so it stays beside the ticks.
                 Same hard 40px as the body cell. */}
             {draggable && (
-              <th className="sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] px-2 py-3 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] px-2 py-3 align-middle tf-th">
                 <span className="sr-only">Drag</span>
               </th>
             )}
@@ -694,42 +694,42 @@ export default function ResumeTable({
                 </div>
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Candidate Name
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Role
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Email
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Phone
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Skills
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Experience
             </th>
             {getFolderName && (
-              <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+              <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
                 Folder
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Source
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Upload Date
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Uploaded By
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="px-4 py-3 text-left tf-th whitespace-nowrap align-middle">
               Files
             </th>
-            <th className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap align-middle tf-sticky-col font-semibold">
+            <th className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-3 text-right tf-th whitespace-nowrap align-middle tf-sticky-col">
               Actions
             </th>
           </tr>
@@ -798,19 +798,19 @@ export default function ResumeTable({
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap tf-td">
                 {resume.title
                   ? (highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap tf-td">
                 {resume.email && resume.email !== 'No email'
                   ? (highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap tf-td">
                 {(() => {
                   // Show each number on its own line; cap at two when a resume
                   // carries multiple numbers in a single field.
@@ -854,7 +854,7 @@ export default function ResumeTable({
                   />
                 </div>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">{resume.experience}</td>
+              <td className="px-4 py-3 align-middle whitespace-nowrap tf-td">{resume.experience}</td>
               {getFolderName && (
                 <td className="px-4 py-3 align-middle whitespace-nowrap">
                   {(() => {
@@ -891,11 +891,11 @@ export default function ResumeTable({
                   {resume.source}
                 </span>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="px-4 py-3 align-middle whitespace-nowrap tf-td">
                 {formatISTDate(resume.uploadDate)}
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap">
-                <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
+                <span className="tf-body">{resume.uploadedBy}</span>
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                 <button
@@ -961,6 +961,12 @@ export default function ResumeTable({
                         {openActionMenu === resume.id && typeof document !== 'undefined' && createPortal(
                           <div
                             ref={actionMenuRef}
+                            /* Tells TableScrollbars a popover is open so it
+                               hides the table's custom bars. Without it, the
+                               bar's occlusion probe hits this menu, reads its
+                               top as the table's visible bottom, and drags the
+                               horizontal bar + trough up over the rows. */
+                            data-tf-popover
                             /* `fixed` + portal: outside `.tf-table-shell`'s
                                `overflow-auto` box, so the menu is never clipped
                                regardless of z-index — overflow clipping isn't
@@ -972,6 +978,15 @@ export default function ResumeTable({
                                readable at the top of the overlay however little
                                room the menu was given. */
                             className="fixed w-52 flex flex-col bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] overflow-hidden"
+                            /* Tells TableScrollbars.tsx this is an open popover
+                               sitting over `.tf-table-shell`. Without it, that
+                               file's occlusion probe (sampled at the shell's
+                               right edge, which this end-aligned menu covers)
+                               reads the menu's top as the bottom of the visible
+                               table and drags the custom horizontal scrollbar
+                               up onto the first row(s) instead of standing the
+                               bar down the way it does for every other popup. */
+                            data-tf-popover
                             style={{
                               // Measured before paint by the layout effect;
                               // until then the panel sits at the origin with
@@ -1147,7 +1162,7 @@ export default function ResumeTable({
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-gray-500 truncate">{resume.title}</div>
+                <div className="tf-body-muted truncate">{resume.title}</div>
               </div>
             </div>
 
@@ -1252,7 +1267,7 @@ export default function ResumeTable({
                   </div>
                   <h2 className="text-gray-900">Edit Candidate Details</h2>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-card-desc">
                   Update information for {selectedResumeForAction.name}
                 </p>
               </div>
@@ -1260,7 +1275,7 @@ export default function ResumeTable({
             <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Full Name</label>
+                  <label className="block tf-body mb-2">Full Name</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.name}
@@ -1268,7 +1283,7 @@ export default function ResumeTable({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Job Title</label>
+                  <label className="block tf-body mb-2">Job Title</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.title}
@@ -1276,7 +1291,7 @@ export default function ResumeTable({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Email</label>
+                  <label className="block tf-body mb-2">Email</label>
                   <input
                     type="email"
                     defaultValue={selectedResumeForAction.email}
@@ -1284,7 +1299,7 @@ export default function ResumeTable({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Phone</label>
+                  <label className="block tf-body mb-2">Phone</label>
                   <input
                     type="tel"
                     defaultValue={selectedResumeForAction.phone}
@@ -1292,7 +1307,7 @@ export default function ResumeTable({
                   />
                 </div>
                 <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm text-gray-700 mb-2">Skills (comma separated)</label>
+                  <label className="block tf-body mb-2">Skills (comma separated)</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.skills.join(', ')}
@@ -1300,7 +1315,7 @@ export default function ResumeTable({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Experience</label>
+                  <label className="block tf-body mb-2">Experience</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.experience}
@@ -1308,7 +1323,7 @@ export default function ResumeTable({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Location</label>
+                  <label className="block tf-body mb-2">Location</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.location}
@@ -1365,7 +1380,7 @@ export default function ResumeTable({
                   </div>
                   <h2 className="text-gray-900">Archive Resume</h2>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-card-desc">
                   Archive {selectedResumeForAction.name}'s resume?
                 </p>
               </div>

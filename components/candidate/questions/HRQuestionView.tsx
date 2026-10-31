@@ -98,7 +98,7 @@ export function HRQuestionView({ question, answer, onAnswerChange, isLocked = fa
             }`}
           />
           <div className="flex items-center justify-end mt-2">
-            <p className="text-sm text-gray-500">
+            <p className="tf-body-muted">
               {isLocked ? 'Answer submitted' : `${3000 - (answer.text_response || '').length} characters remaining`}
             </p>
           </div>

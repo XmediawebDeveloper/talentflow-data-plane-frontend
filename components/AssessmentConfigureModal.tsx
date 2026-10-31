@@ -136,7 +136,7 @@ export default function AssessmentConfigureModal({
               {/* The job as JD ID · role · version, from the record's own
                   binding — the same row the Configure page's subtitle shows.
                   Wraps instead of truncating, so the version is never cut. */}
-              <p className="text-sm text-gray-600 dark:text-slate-400 min-w-0 break-words max-sm:mt-2 max-sm:leading-relaxed">
+              <p className="tf-card-desc min-w-0 break-words max-sm:mt-2 max-sm:leading-relaxed">
                 {readOnly ? 'Duration, section distribution, and topics for ' : 'Set duration, section distribution, and topics for '}
                 {assessment.jd_short_id || assessment.jd_title || assessment.job?.title || assessment.jd_version != null ? (
                   <AssessmentJobBinding

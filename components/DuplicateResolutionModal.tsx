@@ -239,12 +239,12 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 <AlertCircle className="w-5 h-5 text-brand-orange" />
               </div>
               <div>
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Duplicate Resume Detected</h2>
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <h2 className="tf-section-title mb-1">Duplicate Resume Detected</h2>
+                <p className="tf-card-desc">
                   This candidate already exists in the system. Choose how to handle this duplicate.
                 </p>
                 <div className="flex items-center gap-4 mt-3">
-                  <span className="text-xs text-gray-500 dark:text-slate-500">
+                  <span className="tf-meta">
                     File {currentIndex + 1} of {duplicateFiles.length}
                   </span>
                   <div className="flex-1 bg-gray-200 dark:bg-slate-800 rounded-full h-1.5 max-w-xs">
@@ -275,7 +275,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               </div>
               <div>
                 <h3 className="text-lg text-gray-900 dark:text-slate-50">{currentFile.candidateName}</h3>
-                <p className="text-sm text-gray-500 dark:text-slate-500">Duplicate detected during upload</p>
+                <p className="tf-body-muted">Duplicate detected during upload</p>
               </div>
             </div>
 
@@ -291,21 +291,21 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className="flex items-start gap-2">
                     <MapPin className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500">Location</div>
+                      <div className="tf-meta">Location</div>
                       <div className="text-sm text-gray-900 dark:text-slate-50">{currentFile.existingLocation}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500">Upload Date</div>
+                      <div className="tf-meta">Upload Date</div>
                       <div className="text-sm text-gray-900 dark:text-slate-50">{currentFile.existingResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500">File Size</div>
+                      <div className="tf-meta">File Size</div>
                       <div className="text-sm text-gray-900 dark:text-slate-50">{currentFile.existingResumeSize}</div>
                     </div>
                   </div>
@@ -401,13 +401,13 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className={`text-sm mb-1 ${selectedAction === 'discard' ? 'text-red-900' : 'text-gray-900 dark:text-slate-50'}`}>
                     1. Discard New Resume
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-slate-400">
+                  <p className="tf-meta-strong">
                     Keep existing resume unchanged. New resume will be deleted.
                   </p>
                   <div className="flex items-center gap-4 mt-2">
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• Old resume: Unchanged</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• New resume: Deleted</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• Storage: No impact</span>
+                    <span className="tf-meta">• Old resume: Unchanged</span>
+                    <span className="tf-meta">• New resume: Deleted</span>
+                    <span className="tf-meta">• Storage: No impact</span>
                   </div>
                 </div>
                 {selectedAction === 'discard' && (
@@ -439,12 +439,12 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className={`text-sm mb-1 ${selectedAction === 'overwrite' ? 'text-brand-orange-deep' : 'text-gray-900 dark:text-slate-50'}`}>
                     2. Overwrite Existing Resume
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-slate-400">
+                  <p className="tf-meta-strong">
                     Replace old resume with new one. Original will be permanently deleted.
                   </p>
                   <div className="flex items-center gap-4 mt-2">
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• Old resume: Deleted</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• New resume: Saved</span>
+                    <span className="tf-meta">• Old resume: Deleted</span>
+                    <span className="tf-meta">• New resume: Saved</span>
                     <span className="text-xs text-brand-orange-deep">• Consumes 1 upload unit</span>
                   </div>
                 </div>
@@ -477,12 +477,12 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className={`text-sm mb-1 ${selectedAction === 'version' ? 'text-brand-cyan' : 'text-gray-900 dark:text-slate-50'}`}>
                     3. Save as New Version
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-slate-400">
+                  <p className="tf-meta-strong">
                     Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
                   </p>
                   <div className="flex items-center gap-4 mt-2">
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• Old resume: Kept</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500">• New resume: Saved as v2</span>
+                    <span className="tf-meta">• Old resume: Kept</span>
+                    <span className="tf-meta">• New resume: Saved as v2</span>
                     <span className="text-xs text-brand-cyan">• Consumes 1 upload unit</span>
                   </div>
                 </div>
@@ -539,7 +539,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-brand-blue" />
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">{previewTitle}</h3>
+              <h3 className="tf-section-title">{previewTitle}</h3>
             </div>
             <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
               <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />

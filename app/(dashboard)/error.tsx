@@ -29,10 +29,10 @@ export default function DashboardError({
             <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
               We couldn&apos;t load this page
             </h1>
-            <p className="max-w-md text-sm text-gray-600 mb-1">
+            <p className="max-w-md tf-card-desc mb-1">
               Something unexpected happened while rendering this view.
             </p>
-            <p className="max-w-md text-sm text-gray-500 mb-6">
+            <p className="max-w-md tf-body-muted mb-6">
               You can retry, return to a previous page, or jump back to the dashboard.
             </p>
 

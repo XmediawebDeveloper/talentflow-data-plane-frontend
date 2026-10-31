@@ -48,7 +48,7 @@ export function SectionHeader({
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-gray-900 dark:text-slate-100 text-sm tracking-tight break-words">{title}</div>
-          {subtitle && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
+          {subtitle && <p className="tf-meta mt-0.5">{subtitle}</p>}
         </div>
       </div>
       {trailing && <div className="flex flex-wrap items-center gap-2">{trailing}</div>}

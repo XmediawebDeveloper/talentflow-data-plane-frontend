@@ -81,8 +81,8 @@ function HowItWorksCard({
       <div className="relative w-full max-w-[9rem] min-[380px]:max-w-none aspect-[156/123] rounded-xl bg-gradient-to-b from-brand-blue/5 to-brand-blue/10 border border-brand-blue/10 flex items-center justify-center overflow-hidden">
         {children}
       </div>
-      <p className="mt-2 text-sm font-semibold text-gray-900 leading-tight">{title}</p>
-      <p className="mt-0.5 text-xs text-gray-600 leading-snug">{subtitle}</p>
+      <p className="mt-2 tf-cell-name leading-tight">{title}</p>
+      <p className="mt-0.5 tf-meta-strong leading-snug">{subtitle}</p>
     </div>
   );
 }
@@ -803,8 +803,8 @@ export default function StepIdentity({
         <Lock className="w-4 h-4" />
       </span>
       <div className="min-w-0">
-        <h4 className="text-sm font-semibold text-gray-900 mb-1">Your privacy is protected</h4>
-        <p className="text-xs text-gray-600 leading-relaxed">
+        <h4 className="tf-subsection-title mb-1">Your privacy is protected</h4>
+        <p className="tf-meta-strong leading-relaxed">
           Your information is encrypted and stored securely under GDPR and DPDP regulations.
           Used only for interview verification purposes.
         </p>
@@ -825,7 +825,7 @@ export default function StepIdentity({
           </span>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Identity Verification</h1>
-            <p className="text-gray-600 mt-0.5 text-sm">
+            <p className="tf-card-desc mt-0.5">
               Confirm your details to proceed with the interview for <strong>{position}</strong>
             </p>
           </div>
@@ -986,7 +986,7 @@ export default function StepIdentity({
                     {/* Didn't receive the code — secondary hint, smaller text. */}
                     <div className="mt-3 pt-3 border-t border-brand-blue/10 flex items-start gap-2">
                       <Info className="w-3.5 h-3.5 text-brand-blue flex-shrink-0 mt-0.5" aria-hidden="true" />
-                      <p className="text-xs text-gray-600">
+                      <p className="tf-meta-strong">
                         <span className="font-semibold text-gray-700">Didn&apos;t receive the code?</span>{' '}
                         Check your spam or junk folder. The code will expire in{' '}
                         <span className="font-semibold text-brand-blue">10 minutes</span>.
@@ -1011,7 +1011,7 @@ export default function StepIdentity({
         <div ref={continueWrapRef} className="w-full max-w-3xl mx-auto flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4">
           {/* Why Continue is still disabled. */}
           {!submitting && !isFormValid && !name.trim() && (
-            <p id="identity-continue-hint" className="text-xs text-gray-500 text-center sm:text-right sm:mr-auto">
+            <p id="identity-continue-hint" className="tf-meta text-center sm:text-right sm:mr-auto">
               Enter your full name.
             </p>
           )}
@@ -1042,7 +1042,7 @@ export default function StepIdentity({
           <Camera className="w-3.5 h-3.5" /> Live Photo Capture
         </span>
         <h1 className="text-2xl font-bold text-gray-900">Identity Validation</h1>
-        <p className="text-gray-600 mt-1 text-sm">Take a live photo to verify your identity and prevent proxy interviews.</p>
+        <p className="tf-card-desc mt-1">Take a live photo to verify your identity and prevent proxy interviews.</p>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
@@ -1070,7 +1070,7 @@ export default function StepIdentity({
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">
                   <Camera className="w-10 h-10 text-gray-400" />
                   <p className="text-sm text-gray-300">Camera access denied</p>
-                  <p className="text-xs text-gray-500 text-center px-4">Allow camera access in your browser&apos;s address bar, then retry.</p>
+                  <p className="tf-meta text-center px-4">Allow camera access in your browser&apos;s address bar, then retry.</p>
                   <Button type="button" variant="secondary" size="sm" onClick={() => { void startCamera(); }} className="mt-1">
                     <RefreshCw className="w-4 h-4" /> Retry camera
                   </Button>
@@ -1155,14 +1155,14 @@ export default function StepIdentity({
               <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-xl px-3 py-2.5 sm:px-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Lightbulb className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  <h4 className="text-sm font-semibold text-gray-900">Tips for a clear photo</h4>
+                  <h4 className="tf-subsection-title">Tips for a clear photo</h4>
                 </div>
                 <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-brand-blue/15">
                   {[
                     { icon: Sun, text: 'Be in a well-lit place' },
                     { icon: User, text: 'Keep only yourself in the frame' },
                   ].map(({ icon: Icon, text }) => (
-                    <div key={text} className="flex items-center gap-2 text-sm text-gray-600 py-1.5 sm:py-0 sm:px-4 sm:first:pl-0">
+                    <div key={text} className="flex items-center gap-2 tf-card-desc py-1.5 sm:py-0 sm:px-4 sm:first:pl-0">
                       <Icon className="w-4 h-4 text-brand-blue flex-shrink-0" />
                       {text}
                     </div>
@@ -1184,8 +1184,8 @@ export default function StepIdentity({
                     <Shield className="w-4 h-4" />
                   </span>
                   <div className="min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-900 leading-tight">How it works</h4>
-                    <p className="text-xs text-gray-600">Follow the steps below to capture a clear photo.</p>
+                    <h4 className="tf-subsection-title leading-tight">How it works</h4>
+                    <p className="tf-meta-strong">Follow the steps below to capture a clear photo.</p>
                   </div>
                 </div>
                 {(() => {
@@ -1269,7 +1269,7 @@ export default function StepIdentity({
                         {/* Only a blocked camera is spelled out here — the face
                             hints already show on the camera itself. */}
                         {cameraError && (
-                          <p role="status" className="text-xs text-gray-600 text-center">
+                          <p role="status" className="tf-meta-strong text-center">
                             Camera access is blocked — allow it in the address bar, then retry.
                           </p>
                         )}

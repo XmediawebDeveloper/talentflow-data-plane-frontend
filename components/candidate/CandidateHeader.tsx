@@ -94,8 +94,8 @@ function HelpPopover() {
       </button>
       {open && (
         <div role="dialog" aria-label="Contact support" className="absolute right-0 top-full mt-3 w-72 max-w-[calc(100vw-1.5rem)] rounded-xl border border-gray-200 bg-white shadow-lg p-3 z-50">
-          <p className="text-sm font-semibold text-gray-900">Need help?</p>
-          <p className="mt-0.5 text-xs text-gray-500">
+          <p className="tf-cell-name">Need help?</p>
+          <p className="mt-0.5 tf-meta">
             Copy the address and email our support team. Opening a mail app now would take you out of the assessment window.
           </p>
           <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-gray-50 ring-1 ring-gray-100 px-2.5 py-2">

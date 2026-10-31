@@ -123,6 +123,36 @@ export const stripEmptyCertificationSections = (text: string): string =>
     .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
     .trim();
 
+// Same label set the backend's _is_experience_duration_line / strip_years_of_experience_lines
+// recognise as the JD's single "years of experience" slot (openai_service.py /
+// jd_generation_output_validation.py): the template's own "Years of Experience:", plus the
+// other labels the model writes just as often ("Required/Minimum/Overall/Total Experience:",
+// "Experience Required/Needed:"), and a bare "Experience:" bullet ONLY when it also states a
+// duration (a bare "Experience:" with no number is a real, non-duration requirement like
+// "Experience: Hands-on with CI/CD pipelines." and must stream through untouched).
+const EXPERIENCE_DURATION_LABEL_RE = /^[ \t]*[-*]?\s*(?:\*\*)?\s*(?:years?\s+of\s+experience|(?:required|minimum|min\.?|overall|total)\s+experience|experience\s+(?:required|needed))\s*(?:\*\*)?\s*:/i;
+const EXPERIENCE_BARE_LABEL_RE = /^[ \t]*[-*]?\s*(?:\*\*)?\s*experience\s*(?:\*\*)?\s*:/i;
+const LINE_STATES_A_DURATION_RE = /\d{1,2}(?:\.\d+)?\s*(?:\+|plus)?\s*(?:years?|yrs?|months?|mos?)\b/i;
+
+const isExperienceDurationLine = (line: string): boolean =>
+  EXPERIENCE_DURATION_LABEL_RE.test(line) ||
+  (EXPERIENCE_BARE_LABEL_RE.test(line) && LINE_STATES_A_DURATION_RE.test(line));
+
+/**
+ * Drop the JD body's own "Years of Experience" bullet when the same figure is already
+ * shown right next to it as a structured field (e.g. the Experience badge in the Step 3
+ * Review header, populated by extraction from this same body). The body stays the single
+ * source of truth everywhere else the badge isn't also on screen - this is display-only
+ * and never touches the stored/generated text.
+ */
+export const stripExperienceDurationLine = (text: string): string =>
+  (text || '')
+    .split('\n')
+    .filter((line) => !isExperienceDurationLine(line))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
 export const normalizeManualJDToMarkdown = (text: string): string => {
   const source = (text || '').replace(/\r\n/g, '\n').trim();
   if (!source) return '';

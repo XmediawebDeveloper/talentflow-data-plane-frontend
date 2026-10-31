@@ -1480,8 +1480,8 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
                       <Icon className="w-4.5 h-4.5" />
                     </span>
                     <div className="flex-1 min-w-[8rem]">
-                      <p className="text-sm font-semibold text-gray-900">{label}</p>
-                      <p className="text-xs text-gray-500 [overflow-wrap:anywhere]">{check.message}</p>
+                      <p className="tf-cell-name">{label}</p>
+                      <p className="tf-meta [overflow-wrap:anywhere]">{check.message}</p>
                     </div>
                     <div className="flex shrink-0 ml-auto items-center gap-2">
                       <StatusBadge status={check.status} />

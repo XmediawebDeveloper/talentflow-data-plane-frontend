@@ -890,7 +890,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
                           {row.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                        <p className="tf-meta truncate">
                           {row.candidate_email || '—'}
                         </p>
                       </div>
@@ -901,12 +901,12 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       )}
                     </div>
 
-                    <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={row._config_title}>
+                    <p className="tf-meta-strong truncate" title={row._config_title}>
                       {row._config_title}
                     </p>
 
                     {inviteSourceLabel(row) && (
-                      <p className="text-xs text-gray-600 dark:text-slate-400">
+                      <p className="tf-meta-strong">
                         <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
                       </p>
                     )}
@@ -950,7 +950,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
             </div>
             {filteredRows.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-400">
+                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
@@ -967,7 +967,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                    <span className="tf-body-muted whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}
@@ -1012,7 +1012,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
               <table className="w-full text-sm">
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                   <tr>
-<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left tf-th">
                       <button
                         type="button"
                         onClick={toggleAllOnPage}
@@ -1027,19 +1027,19 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         )}
                       </button>
                     </th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
-                    <th className="text-right px-4 py-3 font-semibold text-gray-600 dark:text-slate-300 text-xs tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                    <th className="text-right px-4 py-3 tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1059,7 +1059,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                                 <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={row.candidate_name || 'Unknown'}>
                                   {row.candidate_name || 'Unknown'}
                                 </p>
-                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={row.candidate_email || undefined}>
+                                <p className="tf-meta truncate" title={row.candidate_email || undefined}>
                                   {row.candidate_email || '—'}
                                 </p>
                               </div>
@@ -1226,7 +1226,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
 
             {filteredRows.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-400">
+                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
@@ -1243,7 +1243,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                    <span className="tf-body-muted whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}

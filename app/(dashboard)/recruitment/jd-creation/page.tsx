@@ -181,7 +181,7 @@ function AccessBlockedError({
                 AI Interview: {accessCheck.units.AIU?.available || 0} available {!accessCheck.units.AIU?.sufficient && '❌'}
               </p>
             </div>
-            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
+            <p className="tf-meta mt-2">
               Required unit types shown above, including AI Interview, are unavailable. Please purchase units to continue.
             </p>
           </div>
@@ -934,7 +934,7 @@ function JDCreationContent() {
           cancelDisabled={takingOver}
           actions={[{ label: 'Take over', onClick: handleTakeOver, loading: takingOver, disabled: takingOver }]}
         >
-          <p className="text-sm text-gray-700 dark:text-slate-300">
+          <p className="tf-body">
             <span className="font-semibold">{beingEdited.editorName ?? 'Another user'}</span> is editing this job
             description{since ? ` (last change ${since})` : ''}.
           </p>

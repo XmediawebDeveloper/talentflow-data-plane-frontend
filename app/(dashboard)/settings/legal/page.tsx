@@ -133,7 +133,7 @@ export default function LegalCompliancePage() {
           </span>
           <div>
             <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Acceptance History</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-500">Record of all legal document acceptances for your organization.</p>
+            <p className="tf-meta">Record of all legal document acceptances for your organization.</p>
           </div>
         </div>
 
@@ -179,12 +179,12 @@ export default function LegalCompliancePage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
-                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Version</th>
-                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Title</th>
-                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Accepted By</th>
-                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Accepted On</th>
-                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Status</th>
-                  <th className="text-left text-xs font-semibold text-gray-600 dark:text-slate-300 px-6 py-3">Document</th>
+                  <th className="text-left tf-th px-6 py-3">Version</th>
+                  <th className="text-left tf-th px-6 py-3">Title</th>
+                  <th className="text-left tf-th px-6 py-3">Accepted By</th>
+                  <th className="text-left tf-th px-6 py-3">Accepted On</th>
+                  <th className="text-left tf-th px-6 py-3">Status</th>
+                  <th className="text-left tf-th px-6 py-3">Document</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -193,14 +193,14 @@ export default function LegalCompliancePage() {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-slate-50">
                       <span className="inline-flex items-center rounded-full bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{record.terms_title || '—'}</td>
+                    <td className="px-6 py-4 tf-td">{record.terms_title || '—'}</td>
                     <td className="px-6 py-4">
                       <div>
                         <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{record.accepted_by || record.accepted_by_name}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500">{record.accepted_by_email}</p>
+                        <p className="tf-meta">{record.accepted_by_email}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">
+                    <td className="px-6 py-4 tf-card-desc">
                       {formatIST(record.accepted_at)}
                     </td>
                     <td className="px-6 py-4">
@@ -291,7 +291,7 @@ export default function LegalCompliancePage() {
 
             {/* Footer */}
             {viewingDoc && (
-              <div className="border-t border-gray-100 dark:border-slate-700/60 bg-white/50 dark:bg-slate-900/50 px-6 py-3 flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 shrink-0">
+              <div className="border-t border-gray-100 dark:border-slate-700/60 bg-white/50 dark:bg-slate-900/50 px-6 py-3 flex items-center justify-between tf-meta shrink-0">
                 <span>Version: <span className="font-semibold text-brand-blue">{viewingDoc.version}</span></span>
                 <span>Effective: {formatIST(viewingDoc.effective_date)}</span>
               </div>

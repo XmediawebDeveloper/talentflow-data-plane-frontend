@@ -136,7 +136,7 @@ export default function PlanChangeSuspendedBlock() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">What does this mean?</h3>
-                  <p className="text-gray-600 text-sm">
+                  <p className="tf-card-desc">
                     Your account access has been temporarily paused. You can restore full access by reviewing and accepting the plan changes, or contact support for assistance.
                   </p>
                 </div>
@@ -148,7 +148,7 @@ export default function PlanChangeSuspendedBlock() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">How to restore access?</h3>
-                  <p className="text-gray-600 text-sm">
+                  <p className="tf-card-desc">
                     Click &quot;Review & Accept Changes&quot; below to review the pending plan changes and accept them. Your account will be reactivated immediately.
                   </p>
                 </div>
@@ -185,7 +185,7 @@ export default function PlanChangeSuspendedBlock() {
 
             {/* Support Info */}
             <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-center text-sm text-gray-500">
+              <p className="text-center tf-body-muted">
                 Need immediate assistance? Email us at{' '}
                 <a
                   href="mailto:support@talentflow.com"
@@ -200,7 +200,7 @@ export default function PlanChangeSuspendedBlock() {
 
         {/* Additional Info */}
         <div className="mt-6 text-center">
-          <p className="text-gray-600 text-sm">
+          <p className="tf-card-desc">
             Your account data is safe and secure. Accepting the changes will restore full access immediately.
           </p>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { FileText, RefreshCw, Users } from 'lucide-react';
+import { CheckSquare, FileText, RefreshCw, Square, Users } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
@@ -217,6 +217,12 @@ interface JobVersionHistoryPanelProps {
   hideJdDetails?: boolean;
   /** The count column's heading ("Scored" on Resume Scoring). */
   applicantsLabel?: string;
+  /**
+   * Multi-select checkboxes in the Version cell, for bulk actions (Job
+   * Openings). Separate from the single-pick Select radio column above.
+   */
+  checkedVersionIds?: Set<string>;
+  onToggleVersionChecked?: (versionJob: Job) => void;
 }
 
 /**
@@ -258,6 +264,8 @@ export default function JobVersionHistoryPanel({
   stickyVersionColumn = false,
   hideJdDetails = false,
   applicantsLabel = 'Applicants',
+  checkedVersionIds,
+  onToggleVersionChecked,
 }: JobVersionHistoryPanelProps) {
   const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns, hideJdDetails, applicantsLabel);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
@@ -360,22 +368,39 @@ export default function JobVersionHistoryPanel({
         : hostVeto ?? (versionPlainStatus === 'Disabled' || versionPlainStatus === 'Archived'
           ? `This version is ${versionPlainStatus} — only published versions can be selected`
           : 'Only published versions can receive candidates');
-    return { version, isLatest, versionStatus, versionStatusConfig, versionPlainStatus, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason };
+    const isChecked = !!checkedVersionIds?.has(version.id);
+    return { isChecked, version, isLatest, versionStatus, versionStatusConfig, versionPlainStatus, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason };
   });
+
+  /* Same Square / CheckSquare icons as the job rows' own checkbox. */
+  const renderVersionCheckbox = (versionJob: Job, isChecked: boolean) => onToggleVersionChecked && (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggleVersionChecked(versionJob); }}
+      title={isChecked ? 'Deselect' : 'Select'}
+      aria-pressed={isChecked}
+      className="flex items-center flex-shrink-0"
+    >
+      {isChecked
+        ? <CheckSquare className="w-4 h-4 text-brand-blue" />
+        : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />}
+      <span className="sr-only">Select version v{versionJob.versionNumber ?? 1}</span>
+    </button>
+  );
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
       <div className="flex items-center gap-2 mb-2.5">
         <FileText className="w-4 h-4 text-brand-blue" />
-        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
+        <p className="tf-cell-name">Version History</p>
       </div>
       {loading && !versions ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 py-2 tf-meta">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
         </div>
       ) : jobVersions.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No versions recorded for this job.</p>
+        <p className="py-2 tf-meta">No versions recorded for this job.</p>
       ) : (
         /* One shell owns BOTH scroll axes (x on narrow screens, y past 3 rows),
            so header and body live in one <table> and their columns can never
@@ -395,7 +420,7 @@ export default function JobVersionHistoryPanel({
             jobVersions.length > 3 ? 'overflow-y-auto max-h-[360px] overscroll-contain' : ''
           }`}
         >
-          {rowModels.map(({ version, isLatest, versionStatus, versionStatusConfig, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
+          {rowModels.map(({ isChecked, version, isLatest, versionStatus, versionStatusConfig, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
             const scoredInfo = versionScoredBy ? versionScoredBy[version.id] : undefined;
             const scoredLoaded = !!versionScoredBy && Object.prototype.hasOwnProperty.call(versionScoredBy, version.id);
             /* Every value under a NAME — "Experience 2-4 years", not a bare
@@ -463,6 +488,7 @@ export default function JobVersionHistoryPanel({
                       <span className="sr-only">Select version v{version.version_number ?? 1}</span>
                     </label>
                   )}
+                  {renderVersionCheckbox(versionJob, isChecked)}
                   <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
                     <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                       v{version.version_number ?? 1}
@@ -554,7 +580,7 @@ export default function JobVersionHistoryPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-              {rowModels.map(({ version, isLatest, versionStatus, versionStatusConfig, versionPlainStatus, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
+              {rowModels.map(({ isChecked, version, isLatest, versionStatus, versionStatusConfig, versionPlainStatus, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
                 return (
                   /* NO transform on the row itself: a transformed <tr> becomes
                      the containing block for its cells, which silently kills
@@ -637,6 +663,7 @@ export default function JobVersionHistoryPanel({
                         : ''
                     }`}>
                       <span className="inline-flex items-center gap-1.5">
+                        {renderVersionCheckbox(versionJob, isChecked)}
                         <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                           v{version.version_number ?? 1}
                         </span>
@@ -715,11 +742,11 @@ export default function JobVersionHistoryPanel({
                         Industry runs through the same formatter as the job rows
                         so it never shows the raw snake_case value. */}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <div className="text-sm text-gray-700 dark:text-slate-300">
+                      <div className="tf-body">
                         {experienceText || '—'}
                       </div>
                       <div
-                        className="text-xs text-gray-500 dark:text-slate-400 max-w-[180px] truncate"
+                        className="tf-meta max-w-[180px] truncate"
                         title={detail?.industry_type ? formatIndustryType(detail.industry_type) : ''}
                       >
                         {detail?.industry_type ? formatIndustryType(detail.industry_type) : '—'}
@@ -728,7 +755,7 @@ export default function JobVersionHistoryPanel({
                     {/* Location — this version's own record; single field
                         first, else the cities from the locations list. */}
                     <td
-                      className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle"
+                      className="py-2.5 px-3 tf-td whitespace-nowrap max-w-[160px] truncate align-middle"
                       title={locationText || ''}
                     >
                       {locationText || '—'}
@@ -737,11 +764,11 @@ export default function JobVersionHistoryPanel({
                         mode, from this version's own record. A missing half
                         simply drops out; nothing is invented. */}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <div className="text-sm text-gray-700 dark:text-slate-300">
+                      <div className="tf-body">
                         {detail?.employment_type ? formatEmploymentType(detail.employment_type) : '—'}
                       </div>
                       {detail?.remote_type && (
-                        <div className="text-xs text-gray-500 dark:text-slate-400">
+                        <div className="tf-meta">
                           {formatEmploymentType(detail.remote_type)}
                         </div>
                       )}
@@ -749,14 +776,14 @@ export default function JobVersionHistoryPanel({
                     {/* Posted On / By — one column, date over author, so the
                         table stays narrower without dropping either fact. */}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <div className="text-sm text-gray-700 dark:text-slate-300">
+                      <div className="tf-body">
                         {postedOn ? formatISTDate(postedOn) : '—'}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={detail?.created_by_name || ''}>
+                      <div className="tf-meta max-w-[160px] truncate" title={detail?.created_by_name || ''}>
                         {detail?.created_by_name || '—'}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
+                    <td className="py-2.5 px-3 tf-td whitespace-nowrap align-middle">
                       {lastUpdated ? formatISTDate(lastUpdated) : '—'}
                     </td>
                     </>)}
@@ -769,11 +796,11 @@ export default function JobVersionHistoryPanel({
                       return (
                         <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                           {info ? (
-                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                            <div className="tf-body">
                               <div className="truncate max-w-[170px]" title={info.name}>
                                 Scored by {info.name}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-slate-400">
+                              <div className="tf-meta">
                                 {formatIST(info.scoredAt)}
                               </div>
                             </div>
@@ -786,7 +813,7 @@ export default function JobVersionHistoryPanel({
                       );
                     })()}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+                      <span className="inline-flex items-center gap-1.5 tf-body">
                         <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         {/* Resumes scored against this version. Dash only while
                             the count is still in flight (or if it failed) — a

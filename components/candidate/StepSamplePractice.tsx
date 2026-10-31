@@ -358,7 +358,7 @@ function PracticeTour({
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
           <span className="text-2xs font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
         </div>
-        <p className="text-sm text-gray-600 leading-relaxed">{step.body}</p>
+        <p className="tf-card-desc leading-relaxed">{step.body}</p>
         <div className="flex items-center justify-end gap-2 mt-3">
           <button type="button" onClick={onClose} className="min-h-10 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
             Skip tour
@@ -2099,7 +2099,7 @@ export default function StepSamplePractice({
           Practice &amp; Final Check
         </span>
         <h2 className="text-2xl font-bold text-gray-900">Let&apos;s Test Your Setup</h2>
-        <p className="text-gray-500 text-sm">Answer the practice question to verify your mic and camera — this won&apos;t be evaluated.</p>
+        <p className="tf-body-muted">Answer the practice question to verify your mic and camera — this won&apos;t be evaluated.</p>
       </div>
 
       {/* ── Main interview-like panel (the embedded "screen") ──
@@ -2381,7 +2381,7 @@ export default function StepSamplePractice({
                 <div className="w-14 h-14 rounded-full bg-violet-50 ring-1 ring-violet-200 dark:ring-violet-500/30 flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="w-7 h-7 text-violet-600" />
                 </div>
-                <h3 className="text-gray-900 text-lg font-semibold mb-1.5">Ready for a quick practice?</h3>
+                <h3 className="tf-section-title mb-1.5">Ready for a quick practice?</h3>
                 <p className="text-slate-600 text-sm leading-relaxed mb-5">
                   When you click Start, Bina will greet you and ask you to introduce yourself. Answer just like the real interview — nothing here is saved.
                 </p>
@@ -2924,7 +2924,7 @@ export default function StepSamplePractice({
               <CheckCircle className="w-7 h-7 text-success" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-1.5">Practice complete!</h3>
-            <p className="text-sm text-gray-600 leading-relaxed mb-5">
+            <p className="tf-card-desc leading-relaxed mb-5">
               Nice — that&apos;s exactly how the real interview flows. When you&apos;re ready, start your interview. All the best!
             </p>
             <div className="flex flex-col gap-2">

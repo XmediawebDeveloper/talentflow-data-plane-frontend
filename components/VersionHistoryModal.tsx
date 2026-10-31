@@ -145,10 +145,10 @@ export default function VersionHistoryModal({
               {comparison ? <GitCompare className="w-5 h-5 text-brand-blue" /> : <History className="w-5 h-5 text-brand-blue" />}
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+              <h2 className="tf-section-title">
                 {comparison ? 'Compare Versions' : 'Version History'}
               </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+              <p className="tf-card-desc mt-0.5">
                 {comparison
                   ? `${displayTitle} • ${labelForVersion(selectedIds[0])} vs ${labelForVersion(selectedIds[1])}`
                   : `${displayTitle} • ${sortedVersions.length} version${sortedVersions.length !== 1 ? 's' : ''}`}
@@ -209,7 +209,7 @@ export default function VersionHistoryModal({
                 Skills
               </p>
               {addedSkills.length === 0 && removedSkills.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-slate-400">No skill changes between these versions.</p>
+                <p className="tf-body-muted">No skill changes between these versions.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {addedSkills.map((s) => (
@@ -227,7 +227,7 @@ export default function VersionHistoryModal({
             </div>
 
             {changedFields.length === 0 && addedSkills.length === 0 && removedSkills.length === 0 && (
-              <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+              <p className="mt-4 tf-body-muted">
                 These two versions carry the same extracted details — the difference is in the file itself.
               </p>
             )}
@@ -243,7 +243,7 @@ export default function VersionHistoryModal({
           ) : (
             <div className="space-y-4">
               {canCompare && (
-                <p className="text-xs text-gray-500 dark:text-slate-400">
+                <p className="tf-meta">
                   Tick any two versions to see what changed between them.
                 </p>
               )}
@@ -303,7 +303,7 @@ export default function VersionHistoryModal({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-slate-400">
+                            <div className="flex items-center gap-3 tf-meta-strong">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {formatIST(version.uploadDate || version.date || version.timestamp)}
@@ -385,12 +385,12 @@ export default function VersionHistoryModal({
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-3 border-t border-gray-100 dark:border-slate-700/60">
                         <div className="flex items-center gap-2 min-w-0">
                           <User className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
-                          <span className="text-xs text-gray-600 dark:text-slate-400 truncate">
+                          <span className="tf-meta-strong truncate">
                             Uploaded by <span className="text-gray-900 dark:text-slate-50">{version.uploadedBy}</span>
                           </span>
                         </div>
                         <span className="text-gray-300">•</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-500">
+                        <span className="tf-meta">
                           {formatIST(version.uploadDate || version.date || version.timestamp)}
                         </span>
                       </div>
@@ -414,7 +414,7 @@ export default function VersionHistoryModal({
               Back to versions
             </button>
           ) : (
-            <div className="flex items-center gap-2 min-w-0 text-sm text-gray-600 dark:text-slate-400">
+            <div className="flex items-center gap-2 min-w-0 tf-card-desc">
               <FileText className="w-4 h-4 flex-shrink-0" />
               <span className="truncate">
                 {isJobVersion

@@ -343,7 +343,7 @@ export default function FeaturePermissionManager({
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Permission Expansion Blocked</h3>
-                  <p className="text-sm max-sm:text-[13px] text-gray-700 mt-1">
+                  <p className="tf-body max-sm:text-[13px] mt-1">
                     Users with the "{userRole}" role cannot have their permissions expanded.
                     This role is read-only by design.
                   </p>
@@ -359,10 +359,10 @@ export default function FeaturePermissionManager({
                     <Link2 className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900">
+                    <p className="tf-cell-name max-sm:text-[13px]">
                       Auto-enable dependencies
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="tf-meta mt-0.5">
                       Automatically enable required features when enabling a dependent feature
                     </p>
                   </div>
@@ -453,7 +453,7 @@ export default function FeaturePermissionManager({
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-xs text-gray-500 mt-0.5">
+                                  <p className="tf-meta mt-0.5">
                                     {feature.description}
                                   </p>
                                 </div>

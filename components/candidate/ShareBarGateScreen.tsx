@@ -81,7 +81,7 @@ export const ShareBarGateScreen = forwardRef<HTMLDivElement, ShareBarGateScreenP
               'Continue'
             )}
           </Button>
-          <p className="text-xs text-gray-500 text-center mt-3">
+          <p className="tf-meta text-center mt-3">
             We take one picture of your screen to verify the bar is hidden. It is stored with your assessment record.
           </p>
         </div>

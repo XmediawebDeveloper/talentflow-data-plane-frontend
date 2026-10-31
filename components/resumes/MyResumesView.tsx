@@ -230,12 +230,12 @@ function UnifiedFolderResumeSearch({
       {isOpen && query.trim() && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02]">
           {isLoading && !hasResults ? (
-            <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+            <div className="flex items-center justify-center py-8 tf-body-muted">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Searching...
             </div>
           ) : !hasResults ? (
-            <div className="py-8 text-center text-sm text-gray-500">
+            <div className="py-8 text-center tf-body-muted">
               No results found
             </div>
           ) : (
@@ -262,7 +262,7 @@ function UnifiedFolderResumeSearch({
                         </span>
                         <span className="min-w-0 truncate text-sm font-medium text-gray-900">{folder.name}</span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-gray-500">{path}</div>
+                      <div className="mt-0.5 truncate tf-meta">{path}</div>
                     </button>
                   ))}
                 </div>
@@ -292,7 +292,7 @@ function UnifiedFolderResumeSearch({
                           {resume.name || resume.candidate_name || resume.fileName || 'Resume'}
                         </span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-gray-500">
+                      <div className="mt-0.5 truncate tf-meta">
                         {[resume.title, resume.email, resume.location].filter(Boolean).join(' / ') || resume.fileName || resume.file_name}
                       </div>
                     </button>
@@ -577,10 +577,10 @@ function DroppableFolderCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm text-gray-900 truncate">
+          <h3 className="tf-subsection-title truncate">
             {isRoot ? 'Root (Default)' : folder.name}
           </h3>
-          <p className="text-xs text-gray-500">
+          <p className="tf-meta">
             {hasSubfolders && `${subfolders.length} subfolder${subfolders.length !== 1 ? 's' : ''} • `}
             {resumeCount} resume{resumeCount !== 1 ? 's' : ''}
           </p>
@@ -3944,7 +3944,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">My Resume Database</h1>
+              <h1 className="tf-page-title">My Resume Database</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                 {totalItems} Resumes
                 {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
@@ -3952,7 +3952,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 )}
               </span>
             </div>
-            <p className="text-sm text-gray-600">Resumes uploaded by you</p>
+            <p className="tf-card-desc">Resumes uploaded by you</p>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
@@ -4143,7 +4143,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
             {viewMode === 'card' && gridToolbarFilterChips.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-gray-500">Grid filters:</span>
+                <span className="tf-meta">Grid filters:</span>
                 {gridToolbarFilterChips.map((chip) => (
                   <span key={chip.key} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/5 px-2 py-0.5 text-xs text-brand-blue ring-1 ring-brand-blue/20">
                     {chip.label}
@@ -4167,7 +4167,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           <div className="px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-700">
+              <span className="tf-body">
                 Found <span className="font-semibold">{totalItems}</span> matching resume{totalItems !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
@@ -4535,12 +4535,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg truncate">
+                        <h2 className="tf-section-title truncate">
                           {currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                             ? 'Root (Default)'
                             : currentFolderData.name}
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="tf-body-muted">
                           {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
                           {foldersToDisplay.length > 0 && visibleFolderResumes.length > 0 && ' • '}
                           {visibleFolderResumes.length > 0 && `${visibleFolderResumes.length} resume${visibleFolderResumes.length !== 1 ? 's' : ''}`}
@@ -4565,7 +4565,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             New Subfolder
                           </button>
                         ) : currentFolderDepth >= MAX_FOLDER_DEPTH ? (
-                          <span className="text-sm text-gray-500 sm:self-start">
+                          <span className="tf-body-muted sm:self-start">
                             Maximum depth reached ({MAX_FOLDER_DEPTH} levels)
                           </span>
                         ) : null}
@@ -4591,8 +4591,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
-                        <p className="text-sm text-gray-500">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
+                        <h2 className="tf-section-title">All Resumes</h2>
+                        <p className="tf-body-muted">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
@@ -4642,8 +4642,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <LayoutGrid className="w-4 h-4 text-[var(--raw-155dfc)]" />
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <h3 className="font-semibold text-sm text-gray-900 truncate">All Resumes</h3>
-                                        <p className="text-xs text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
+                                        <h3 className="tf-subsection-title truncate">All Resumes</h3>
+                                        <p className="tf-meta">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                                       </div>
                                       <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                     </div>
@@ -4698,11 +4698,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               {visibleMyFolders.map(folder => renderFolderCard(folder))}
                             </div>
                           ) : myFolders.length > 0 && folderControlsActive ? (
-                            <p className="text-sm text-gray-500">No folders match the current search or filter.</p>
+                            <p className="tf-body-muted">No folders match the current search or filter.</p>
                           ) : systemFolders.length > 0 ? (
                             // Skipped when there are no folders at all — the
                             // page-level empty state below covers that case.
-                            <p className="text-sm text-gray-500">No folders yet. Create one to organize your resumes.</p>
+                            <p className="tf-body-muted">No folders yet. Create one to organize your resumes.</p>
                           ) : null}
                           </>
                         )
@@ -4726,7 +4726,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             </div>
                           )}
                           {foldersToDisplay.length > 0 && visibleFoldersToDisplay.length === 0 && folderControlsActive && (
-                            <p className="mt-3 text-sm text-gray-500">No subfolders match the current search or filter.</p>
+                            <p className="mt-3 tf-body-muted">No subfolders match the current search or filter.</p>
                           )}
                         </>
                       )}
@@ -5003,8 +5003,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   <AlertCircle className="w-6 h-6 text-yellow-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Already Scored - Duplicate Warning</h3>
-                  <p className="text-sm text-gray-500">{duplicateScoringWarning.jobTitle}</p>
+                  <h3 className="tf-section-title">Already Scored - Duplicate Warning</h3>
+                  <p className="tf-body-muted">{duplicateScoringWarning.jobTitle}</p>
                 </div>
               </div>
 
@@ -5016,7 +5016,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                 {/* List of duplicate candidates */}
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <h4 className="tf-subsection-title mb-3 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-red-600" />
                     Already Scored - Will NOT be Re-scored:
                   </h4>
@@ -5030,15 +5030,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <div className="min-w-0">
                             <div className="font-medium text-gray-900 truncate">{score.candidate_name}</div>
                             {score.scored_at && (
-                              <div className="text-xs text-gray-500">
+                              <div className="tf-meta">
                                 Scored on {formatDateTimeIST(score.scored_at)}
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className="text-sm font-semibold text-gray-900">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
-                          <div className="text-xs text-gray-500 capitalize">{score.match_status}</div>
+                          <div className="tf-cell-name">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
+                          <div className="tf-meta capitalize">{score.match_status}</div>
                         </div>
                       </div>
                     ))}
@@ -5047,13 +5047,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                 {duplicateScoringWarning.newCount > 0 ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-sm text-gray-700">
+                    <p className="tf-body">
                       <span className="font-semibold text-green-700">{duplicateScoringWarning.newCount} new candidate(s)</span> will be scored if you continue.
                     </p>
                   </div>
                 ) : (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="text-sm text-gray-600">
+                    <p className="tf-card-desc">
                       All selected candidates are already scored. No new candidates to score.
                     </p>
                   </div>
@@ -5102,7 +5102,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 tracking-tight">Download as ZIP</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Multiple files selected</p>
+                    <p className="tf-body-muted mt-0.5">Multiple files selected</p>
                   </div>
                 </div>
               </div>
@@ -5117,7 +5117,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     {selectedResumes.length}
                     <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     All selected resumes will be downloaded and packed in a ZIP file.
                   </p>
                 </div>
@@ -5128,7 +5128,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Info className="w-4 h-4 text-brand-blue" />
                 </div>
-                <p className="text-sm text-gray-700">
+                <p className="tf-body">
                   Do you want to download all selected resumes as a ZIP file?
                 </p>
               </div>
@@ -5184,7 +5184,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 tracking-tight">Archive Resumes</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Move selected resumes to archive</p>
+                    <p className="tf-body-muted mt-0.5">Move selected resumes to archive</p>
                   </div>
                 </div>
               </div>
@@ -5199,7 +5199,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     {selectedResumes.length}
                     <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     The selected resumes will be moved to archive and hidden from the active list.
                   </p>
                 </div>
@@ -5210,7 +5210,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Info className="w-4 h-4 text-brand-blue" />
                 </div>
-                <p className="text-sm text-gray-700">
+                <p className="tf-body">
                   Are you sure you want to archive all selected resumes?
                 </p>
               </div>
@@ -5294,7 +5294,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">Upload History</h2>
-                    <p className="text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
+                    <p className="tf-card-desc mt-0.5">View all past bulk upload reports</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -5482,7 +5482,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 <p className="text-sm font-medium text-gray-900">
                                   {uploadHistoryTab === 'current' ? 'No uploads in progress' : 'No completed uploads yet'}
                                 </p>
-                                <p className="text-xs text-gray-600">
+                                <p className="tf-meta-strong">
                                   {uploadHistoryTab === 'current'
                                     ? 'Upload resumes to see live progress and status counts here.'
                                     : 'Finished upload batches and their status counts will appear here.'}
@@ -5517,7 +5517,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
                                       <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                     </div>
-                                    <span className="text-xs text-gray-600 truncate">{label}</span>
+                                    <span className="tf-meta-strong truncate">{label}</span>
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
@@ -5533,7 +5533,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 </div>
-                                <span className="text-xs text-gray-600 truncate">Success Rate</span>
+                                <span className="tf-meta-strong truncate">Success Rate</span>
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
@@ -5545,7 +5545,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {/* Active Filter Indicator */}
                       {uploadHistoryFilter && (
                         <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white rounded-lg shadow-sm shadow-black/[0.03]">
-                          <span className="text-xs text-gray-500">Filtering by:</span>
+                          <span className="tf-meta">Filtering by:</span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                             uploadHistoryFilter === 'completed' ? 'bg-brand-blue/10 text-brand-blue' :
                             uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
@@ -5613,10 +5613,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {/* Upload History List */}
                       {!showFullEmptyState && (
                         <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-sm font-semibold text-gray-900">
+                          <h3 className="tf-subsection-title">
                             {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
                           </h3>
-                          <span className="text-xs text-gray-500">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
+                          <span className="tf-meta">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
                         </div>
                       )}
 
@@ -5648,7 +5648,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               so it reads as guidance rather than a warning. */}
                           <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
                             <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-gray-700 dark:text-slate-300">
+                            <p className="tf-body">
                               <span className="font-semibold">Tip:</span> You can upload a single resume or bulk upload multiple resumes at once.
                             </p>
                           </div>
@@ -5698,9 +5698,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="min-w-0">
-                                        <span className="font-semibold text-gray-900 text-sm block truncate">{record.fileName}</span>
+                                        <span className="tf-cell-name block truncate">{record.fileName}</span>
                                         {record.date && (
-                                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                          <span className="tf-meta flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
                                             <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
                                           </span>
@@ -5719,7 +5719,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                               ? `${m}m ${s}s`
                                               : `${s}s`;
                                           return (
-                                            <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                            <span className="tf-meta flex items-center gap-1 mt-0.5">
                                               <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
                                               <span className="truncate">
                                                 Finished {formatDateTimeIST(record.completedAt)}
@@ -5814,7 +5814,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                       const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                       if (processed <= 0 || elapsed <= 0) {
                                         return (
-                                          <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                                          <div className="flex items-center gap-1.5 mt-2 tf-meta">
                                             <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
                                             <span>Estimating time remaining…</span>
                                           </div>
@@ -5828,7 +5828,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                                         : `Approx. ${lowMins}–${highMins} mins remaining`;
                                       return (
-                                        <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                                        <div className="flex items-center gap-1.5 mt-2 tf-meta">
                                           <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
                                           <span>{etaText}</span>
                                           <span className="text-gray-300">·</span>
@@ -6072,7 +6072,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
                                               <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
-                                              <div className="text-xs text-gray-500 mt-0.5 truncate">
+                                              <div className="tf-meta mt-0.5 truncate">
                                                 {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
                                                 {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
                                                 {file.status === 'processing' && 'Processing…'}
@@ -6269,7 +6269,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <AlertDialogTitle className="text-2xl font-bold text-gray-900">
                   Cancel {cancelBatchConfirm.pendingCount} queued file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}?
                 </AlertDialogTitle>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 tf-body-muted">
                   This stops {cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''} that
                   {cancelBatchConfirm.pendingCount !== 1 ? ' have' : ' has'} not finished processing.
                 </p>
@@ -6313,7 +6313,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   Cancel this file?
                 </AlertDialogTitle>
                 <AlertDialogDescription asChild>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 tf-body-muted">
                     <span className="font-medium text-gray-900">{cancelItemConfirm.fileName}</span> will not
                     be processed. Its unit is refunded and you can re-queue it later with Retry.
                   </p>
@@ -6448,7 +6448,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                             Move to {parentIsRoot ? 'My Resumes (root)' : deleteFolderConfirm.parentFolderName}
                                           </span>
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="tf-meta mt-0.5">
                                           All resumes will be moved to {parentIsRoot ? 'the root folder' : 'the parent folder'}
                                         </p>
                                       </div>
@@ -6478,7 +6478,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                               Move to My Resumes (root)
                                             </span>
                                           </div>
-                                          <p className="text-xs text-gray-500 mt-0.5">
+                                          <p className="tf-meta mt-0.5">
                                             All resumes will be moved to the root folder
                                           </p>
                                         </div>

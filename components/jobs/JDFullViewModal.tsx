@@ -131,10 +131,10 @@ export default function JDFullViewModal({
               <Briefcase className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+              <h2 className="tf-section-title">
                 Job Description
               </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">
+              <p className="tf-card-desc truncate">
                 {jd?.title || jdTitle || 'Loading…'}
               </p>
             </div>
@@ -166,7 +166,7 @@ export default function JDFullViewModal({
           ) : !jd ? (
             <div className="py-10 text-center">
               <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 dark:text-slate-400">
+              <p className="tf-body-muted">
                 This job description could not be found.
               </p>
             </div>

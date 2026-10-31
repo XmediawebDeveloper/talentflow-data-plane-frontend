@@ -281,8 +281,8 @@ export default function ActivityLogsPage() {
               <Activity className="h-5 w-5 text-brand-blue" />
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}</h1>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}</p>
+              <h1 className="tf-page-title">{activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}</h1>
+              <p className="mt-0.5 tf-card-desc">{activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}</p>
             </div>
           </div>
           {activeTab === 'activity' && (
@@ -495,13 +495,13 @@ export default function ActivityLogsPage() {
                               <div className="min-w-0">
                                 {/* Line 1 — actor + role */}
                                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{log.user_name}</span>
+                                  <span className="tf-cell-name">{log.user_name}</span>
                                   {log.actor_role && (
                                     <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 text-2xs font-medium capitalize text-gray-500 dark:text-slate-400">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</span>
                                   )}
                                 </div>
                                 {/* Line 2 — action + entity */}
-                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm max-sm:text-xs text-gray-600 dark:text-slate-400">
+                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 tf-card-desc max-sm:text-xs">
                                   <span>{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/5 px-1.5 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
@@ -529,7 +529,7 @@ export default function ActivityLogsPage() {
 
                             {/* Details preview */}
                             {log.details && (log.details.name || log.details.email || log.details.title) && (
-                              <div className="mt-2 flex flex-wrap gap-x-4 max-sm:gap-x-3 gap-y-0.5 text-xs break-all text-gray-500 dark:text-slate-500">
+                              <div className="mt-2 flex flex-wrap gap-x-4 max-sm:gap-x-3 gap-y-0.5 tf-meta break-all">
                                 {log.details.name && (
                                   <span>Name: <span className="font-medium text-gray-700 dark:text-slate-300">{log.details.name}</span></span>
                                 )}

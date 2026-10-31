@@ -1030,7 +1030,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     )}
                   </div>
                   {subscriptionSummary.plan?.description && (
-                    <p className="text-sm text-gray-500 dark:text-slate-400">{subscriptionSummary.plan.description}</p>
+                    <p className="tf-body-muted">{subscriptionSummary.plan.description}</p>
                   )}
                 </div>
               </div>
@@ -1051,7 +1051,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                             Trial Expired
                           </div>
                         )}
-                        <p className="mt-1.5 text-xs text-gray-500 dark:text-slate-500">
+                        <p className="mt-1.5 tf-meta">
                           Upgrade to continue using all features
                         </p>
                       </>
@@ -1072,13 +1072,13 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                           </span>
                         </div>
                         {!remaining.isExpired && (
-                          <p className="mt-1.5 flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 lg:justify-end">
+                          <p className="mt-1.5 flex items-center gap-1 tf-meta lg:justify-end">
                             <Calendar className="h-3.5 w-3.5" />
                             Renews in {remaining.displayText}
                           </p>
                         )}
                         {remaining.isExpired && (
-                          <p className="mt-1.5 flex items-center gap-1 text-xs text-destructive lg:justify-end">
+                          <p className="mt-1.5 flex items-center gap-1 tf-error lg:justify-end">
                             <AlertTriangle className="h-3.5 w-3.5" />
                             Plan Expired
                           </p>
@@ -1128,7 +1128,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
           </div>
           <div className="flex items-start gap-3 rounded-lg bg-brand-blue/[0.04] px-3 py-2.5 ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700">
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-            <div className="min-w-0 text-xs text-gray-600 dark:text-slate-400 sm:text-[13px]">
+            <div className="min-w-0 tf-meta-strong sm:text-[13px]">
               <p>
                 <span className="font-semibold text-gray-900 dark:text-slate-100">Plan units and Add-on units are shown separately.</span>{' '}
                 Total available units = Plan units + Add-on units.
@@ -1145,7 +1145,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     <AlertTriangle className="h-[18px] w-[18px]" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Quota Running Low</h3>
+                    <h3 className="tf-subsection-title">Quota Running Low</h3>
                     <p className="mt-0.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">Some quotas are below 20%. Purchase add-on units to continue without interruption.</p>
                   </div>
                 </div>
@@ -1249,7 +1249,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                   <p className="text-xs text-gray-500 dark:text-slate-400 sm:text-sm">Current usage, plan units, add-on units and remaining units for each module.</p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />Plan units</span>
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />Add-on units</span>
                 <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-blue" />Used</span>
@@ -1323,7 +1323,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                   >
                     {/* Header: name + status chip */}
                     <div className="flex min-h-[22px] items-center gap-2.5">
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900 dark:text-slate-100" title={quota.name}>{quota.name}</span>
+                      <span className="min-w-0 flex-1 truncate tf-cell-name" title={quota.name}>{quota.name}</span>
                       {statusPill && (
                         <span className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-2xs font-semibold ${statusPill.cls}`}>
                           {statusPill.label}
@@ -1400,7 +1400,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 <p className="text-xs text-gray-500 dark:text-slate-400 sm:text-sm">Purchase additional units to extend your quota limits.</p>
               </div>
             </div>
-            <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 text-xs text-gray-600 ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:text-slate-400 dark:ring-slate-700 lg:self-auto">
+            <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 tf-meta-strong ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700 lg:self-auto">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
               <span>Purchased add-on units will be added to your <strong className="font-semibold text-gray-900 dark:text-slate-100">total available units</strong> shown above.</span>
             </div>
@@ -1524,8 +1524,8 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                       {/* Header: name + pack size */}
                       <div className="flex items-start gap-2.5">
                         <div className="min-w-0 flex-1">
-                          <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={displayName}>{displayName}</h3>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">{packUnits} units per pack</p>
+                          <h3 className="truncate tf-subsection-title" title={displayName}>{displayName}</h3>
+                          <p className="tf-meta">{packUnits} units per pack</p>
                         </div>
                       </div>
 
@@ -1561,7 +1561,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                           >
                             <Minus className="h-3.5 w-3.5" />
                           </button>
-                          <span className="w-9 text-center text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{qty}</span>
+                          <span className="w-9 text-center tf-cell-name tabular-nums">{qty}</span>
                           <button
                             type="button"
                             onClick={() => setQty(qty + 1)}
@@ -1572,7 +1572,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                             <Plus className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <span className="text-xs tabular-nums text-gray-500 dark:text-slate-400">{(packUnits * qty).toLocaleString()} units</span>
+                        <span className="tf-meta tabular-nums">{(packUnits * qty).toLocaleString()} units</span>
                       </div>
 
                       {/* Purchase button */}
@@ -1629,7 +1629,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Record Usage</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Track quota consumption</p>
+                    <p className="tf-card-desc">Track quota consumption</p>
                   </div>
                 </div>
                 <Button
@@ -1667,7 +1667,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
               {/* Quota Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Quota Type *
                 </label>
                 <FilterSelect
@@ -1687,7 +1687,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Amount (units)
                 </label>
                 <input
@@ -1701,7 +1701,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
               {/* Operation Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Operation Type (optional)
                 </label>
                 <input
@@ -1715,7 +1715,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
               {/* Resource ID */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Resource ID (optional)
                 </label>
                 <input
@@ -1787,7 +1787,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-slate-50">Purchase Add-on</h2>
                     <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-blue">Instant</span>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">Add units to your quota immediately</p>
+                  <p className="tf-meta">Add units to your quota immediately</p>
                 </div>
               </div>
               <button
@@ -1822,7 +1822,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                       <p className="text-sm font-semibold text-destructive-strong">
                         {paymentCaptured ? 'Activation Failed — Payment Was Captured' : 'Purchase Failed'}
                       </p>
-                      <p className="mt-0.5 text-xs text-destructive">{addonPurchaseError}</p>
+                      <p className="mt-0.5 tf-error">{addonPurchaseError}</p>
                       {paymentCaptured && (
                         <p className="mt-1 text-xs font-medium text-destructive">
                           Your payment was received. Please check Billing History to retry activation — you will not be charged again.
@@ -1838,8 +1838,8 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     <Zap className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={addonName}>{addonName}</h3>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{packUnits} units per pack</p>
+                    <h3 className="truncate tf-subsection-title" title={addonName}>{addonName}</h3>
+                    <p className="mt-0.5 tf-meta">{packUnits} units per pack</p>
                   </div>
                   <div className="flex-shrink-0 border-l border-gray-200 pl-3 text-right dark:border-slate-700 sm:pl-4">
                     <p className="text-[11px] text-gray-500 dark:text-slate-400 sm:text-xs">Per pack</p>
@@ -1851,7 +1851,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 <div>
                   <div className="mb-1.5 flex items-center justify-between">
                     <label className="text-sm font-semibold text-gray-900 dark:text-slate-50">Select Quantity</label>
-                    <span className="text-xs text-gray-500 dark:text-slate-400">Max 100 packs</span>
+                    <span className="tf-meta">Max 100 packs</span>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
                     <div className="flex items-center justify-between gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 dark:border-slate-700 dark:bg-slate-800 sm:justify-start">
@@ -1911,8 +1911,8 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                 {/* Order Summary */}
                 <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700">
                   <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/50">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Order Summary</h4>
-                    <span className="text-xs text-gray-500 dark:text-slate-400">{addonQuantity} pack{addonQuantity > 1 ? 's' : ''}</span>
+                    <h4 className="tf-subsection-title">Order Summary</h4>
+                    <span className="tf-meta">{addonQuantity} pack{addonQuantity > 1 ? 's' : ''}</span>
                   </div>
                   <div className="space-y-1.5 px-4 py-2.5 text-[13px]">
                     <div className="flex items-center justify-between">
@@ -1934,8 +1934,8 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                     {/* Total row */}
                     <div className="mt-1 flex items-center justify-between border-t border-gray-200 pt-2 dark:border-slate-700">
                       <div>
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Total Amount</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400">Incl. all taxes</p>
+                        <p className="tf-cell-name">Total Amount</p>
+                        <p className="tf-meta">Incl. all taxes</p>
                       </div>
                       <p className="text-xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">
                         ₹{(packPrice * addonQuantity * 1.18).toFixed(2)}

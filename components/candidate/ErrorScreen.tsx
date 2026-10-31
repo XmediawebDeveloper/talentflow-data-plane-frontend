@@ -57,7 +57,7 @@ export function ErrorScreen({ message, onRetry, variant = 'error' }: ErrorScreen
           </Button>
         )}
         {variant === 'error' && (
-          <p className="text-sm text-gray-500 mt-6">
+          <p className="tf-body-muted mt-6">
             If the problem persists, please contact support.
           </p>
         )}

@@ -331,8 +331,8 @@ export default function DisputeHistoryPage() {
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Dispute History</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+            <h1 className="tf-page-title">Dispute History</h1>
+            <p className="mt-1 tf-body-muted">
               Track chargebacks and payment disputes raised against your account, monitor deadlines, and download dispute records.
             </p>
           </div>
@@ -376,7 +376,7 @@ export default function DisputeHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Disputed</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{formatAmount(stats.total_amount)}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{stats.total_disputes} dispute{stats.total_disputes !== 1 ? 's' : ''}</p>
+                  <p className="mt-1 tf-meta">{stats.total_disputes} dispute{stats.total_disputes !== 1 ? 's' : ''}</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <AlertTriangle className="h-5 w-5 text-brand-orange-deep" />
@@ -392,7 +392,7 @@ export default function DisputeHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Open Disputes</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.open_count}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Under review</p>
+                  <p className="mt-1 tf-meta">Under review</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
                   <Clock className="h-5 w-5 text-brand-orange-deep" />
@@ -408,7 +408,7 @@ export default function DisputeHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Resolved</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.resolved_count}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Completed disputes</p>
+                  <p className="mt-1 tf-meta">Completed disputes</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                   <CheckCircle2 className="h-5 w-5 text-brand-teal" />
@@ -426,7 +426,7 @@ export default function DisputeHistoryPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
             </span>
-            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Filters</span>
+            <span className="tf-cell-name">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -536,8 +536,8 @@ export default function DisputeHistoryPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
               <Shield className="h-7 w-7 text-brand-teal" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No Disputes</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
+            <h3 className="tf-section-title">No Disputes</h3>
+            <p className="mx-auto mt-1 max-w-md tf-body-muted">
               {hasActiveFilters
                 ? 'No disputes match your filter criteria. Try adjusting your filters.'
                 : 'Great news! You have no payment disputes. Disputes will appear here if any payment issues are raised.'}
@@ -555,7 +555,7 @@ export default function DisputeHistoryPage() {
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-cyan/15 text-brand-cyan">
                   <MessageSquare className="h-4 w-4" />
                 </span>
-                <p className="text-sm text-gray-700 dark:text-slate-300">
+                <p className="tf-body">
                   <span className="font-semibold text-gray-900 dark:text-slate-50">Need help?</span> If you have concerns about a payment, please contact our support team.
                 </p>
               </div>
@@ -569,7 +569,7 @@ export default function DisputeHistoryPage() {
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Disputes</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   Showing {filteredDisputes.length} dispute{filteredDisputes.length !== 1 ? 's' : ''}
                   {hasActiveFilters && ` (filtered from ${disputes.length})`}
                 </p>
@@ -579,13 +579,13 @@ export default function DisputeHistoryPage() {
               <table className="w-full min-w-[800px] tf-premium-table">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Dispute #</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Date</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[150px]">Original Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[180px]">Reason</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Amount</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[120px]">Status</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 tf-th w-[160px]">Dispute #</th>
+                    <th className="px-5 py-4 tf-th w-[110px]">Date</th>
+                    <th className="px-5 py-4 tf-th w-[150px]">Original Invoice</th>
+                    <th className="px-5 py-4 tf-th w-[180px]">Reason</th>
+                    <th className="px-5 py-4 text-right tf-th w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center tf-th w-[120px]">Status</th>
+                    <th className="px-5 py-4 text-right tf-th w-[140px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -596,12 +596,12 @@ export default function DisputeHistoryPage() {
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15">
                             <AlertTriangle className="h-4 w-4 text-brand-orange-deep" />
                           </span>
-                          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.invoice_number || ''}>
+                          <span className="min-w-0 truncate tf-cell-name" title={dispute.invoice_number || ''}>
                             {dispute.invoice_number || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="whitespace-nowrap px-5 py-5 tf-td">
                         {formatISTDate(dispute.issue_date)}
                       </td>
                       <td className="px-5 py-5">
@@ -610,7 +610,7 @@ export default function DisputeHistoryPage() {
                         </div>
                       </td>
                       <td className="px-5 py-5">
-                        <div className="truncate text-sm text-gray-600 dark:text-slate-400" title={dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || ''}>
+                        <div className="truncate tf-card-desc" title={dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || ''}>
                           {dispute.metadata?.reason || dispute.reason || dispute.line_items?.[0]?.description || '-'}
                         </div>
                       </td>
@@ -685,11 +685,11 @@ export default function DisputeHistoryPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Issue Date</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.issue_date)}</p>
+                    <p className="mt-1 tf-cell-name">{formatISTDate(selectedDispute.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Deadline</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
+                    <p className="mt-1 tf-cell-name">{formatISTDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Dispute Status</p>
@@ -700,18 +700,18 @@ export default function DisputeHistoryPage() {
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Original Invoice</p>
-                    <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedDispute.metadata?.original_invoice_number || '-'}</p>
+                    <p className="mt-1 break-all font-mono tf-cell-name">{selectedDispute.metadata?.original_invoice_number || '-'}</p>
                   </div>
                   {selectedDispute.payment_method && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                       <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Payment Method</p>
-                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedDispute.payment_method}</p>
+                      <p className="mt-1 tf-cell-name capitalize">{selectedDispute.payment_method}</p>
                     </div>
                   )}
                   {selectedDispute.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                       <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Paid At</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.paid_at)}</p>
+                      <p className="mt-1 tf-cell-name">{formatISTDate(selectedDispute.paid_at)}</p>
                     </div>
                   )}
                 </div>
@@ -722,22 +722,22 @@ export default function DisputeHistoryPage() {
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Description</span>
+                      <span className="tf-card-desc">Description</span>
                       <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.line_items?.[0]?.description || '-'}</span>
                     </div>
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Reason</span>
+                      <span className="tf-card-desc">Reason</span>
                       <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.metadata?.reason || selectedDispute.reason || '-'}</span>
                     </div>
                     {(selectedDispute.metadata?.customer_claim || selectedDispute.customer_claim) && (
                       <div className="flex items-start justify-between gap-4">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Customer Claim</span>
+                        <span className="tf-card-desc">Customer Claim</span>
                         <span className="max-w-xs text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.metadata?.customer_claim || selectedDispute.customer_claim}</span>
                       </div>
                     )}
                     {selectedDispute.metadata?.bank_reference && (
                       <div className="flex items-start justify-between gap-4">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Bank Reference</span>
+                        <span className="tf-card-desc">Bank Reference</span>
                         <span className="break-all text-right font-mono text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.metadata.bank_reference}</span>
                       </div>
                     )}
@@ -767,7 +767,7 @@ export default function DisputeHistoryPage() {
                   </span>
                   <div>
                     <p className="text-sm font-semibold text-brand-orange-deep">Need Assistance?</p>
-                    <p className="mt-0.5 text-sm text-gray-700 dark:text-slate-300">
+                    <p className="mt-0.5 tf-body">
                       If you have questions about this dispute, please contact our support team for assistance.
                     </p>
                   </div>

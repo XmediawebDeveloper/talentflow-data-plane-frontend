@@ -24,10 +24,10 @@ export default function GlobalError({
         <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
           Something went wrong
         </h1>
-        <p className="text-sm text-gray-600 mb-1">
+        <p className="tf-card-desc mb-1">
           We hit an unexpected error and couldn&apos;t complete your request.
         </p>
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="tf-body-muted mb-6">
           Try again, or head back to the dashboard. If this keeps happening, please contact support.
         </p>
 

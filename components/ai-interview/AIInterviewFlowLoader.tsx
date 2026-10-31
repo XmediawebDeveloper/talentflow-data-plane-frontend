@@ -25,7 +25,7 @@ export default function AIInterviewFlowLoader({
     <div className="w-full min-h-[calc(100dvh-7rem)] flex items-center justify-center bg-slate-50 dark:bg-slate-950">
       <div className="flex flex-col items-center gap-3">
         <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-        <p className="text-sm text-gray-500 dark:text-slate-500">{message}</p>
+        <p className="tf-body-muted">{message}</p>
       </div>
     </div>
   );

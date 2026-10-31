@@ -46,7 +46,7 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
         </div>
         <div className="flex-1">
           <h2 className="text-2xl font-bold">Detailed Skills Table</h2>
-          <p className="text-sm text-gray-500">Comprehensive view of all evaluated skills</p>
+          <p className="tf-body-muted">Comprehensive view of all evaluated skills</p>
         </div>
         <ExportMenu
           title="Export Skill Coverage"
@@ -60,12 +60,12 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
         <table className="w-full">
           <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
-              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
-              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
-              <th className="text-center p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
-              <th className="text-center p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Level</th>
-              <th className="text-left p-4 text-xs text-gray-600 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>AI Feedback</th>
+              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
+              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
+              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
+              <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
+              <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Level</th>
+              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>AI Feedback</th>
             </tr>
           </thead>
           <tbody>
@@ -92,7 +92,7 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
                       <div className="px-3 py-1 rounded-lg text-lg font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
                         {Math.round(skill.score)}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">/ 10</div>
+                      <div className="tf-meta mt-1">/ 10</div>
                     </div>
                   </td>
                   <td className="p-4 text-center">
@@ -109,14 +109,14 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
       </div>
 
       <div className="p-4 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between flex-wrap gap-3">
-        <div className="text-sm text-gray-500">
+        <div className="tf-body-muted">
           Total Skills Evaluated: <span style={{ fontFamily: 'var(--font-mono)' }}>{allSkills.length}</span>
         </div>
         <div className="flex gap-4 flex-wrap">
           {(['High', 'Medium', 'Low'] as Level[]).map(lvl => (
             <div key={lvl} className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full" style={{ background: `var(--score-${lvl.toLowerCase()})` }}></div>
-              <span className="text-xs text-gray-500">{lvl}: {allSkills.filter(s => s.level === lvl).length}</span>
+              <span className="tf-meta">{lvl}: {allSkills.filter(s => s.level === lvl).length}</span>
             </div>
           ))}
         </div>

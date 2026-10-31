@@ -166,10 +166,10 @@ export default function UnitAdjustmentModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <h2 className="tf-section-title">
               Adjust Unit Pool
             </h2>
-            <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">
+            <p className="tf-body-muted mt-0.5">
               {tenantName}
               {tenantStatus && (
                 <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
@@ -238,11 +238,11 @@ export default function UnitAdjustmentModal({
                                 }`}>
                                   {isPositive ? '+' : ''}{entry.units_amount} {entry.unit_type}
                                 </span>
-                                <span className="text-xs bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-slate-400">
+                                <span className="tf-meta-strong bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                                   {entry.action_type}
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                              <p className="tf-card-desc mt-0.5">
                                 {entry.reason}
                               </p>
                               {entry.notes && (
@@ -297,7 +297,7 @@ export default function UnitAdjustmentModal({
                         <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 mt-2">
                           {pool?.available_units.toLocaleString() || 0}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500">
+                        <p className="tf-meta">
                           of {pool?.total_allocated.toLocaleString() || 0} allocated
                         </p>
                       </button>
@@ -308,7 +308,7 @@ export default function UnitAdjustmentModal({
 
               {/* Adjustment Mode */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Adjustment Type
                 </label>
                 <div className="flex gap-2">
@@ -349,7 +349,7 @@ export default function UnitAdjustmentModal({
 
               {/* Amount */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   {mode === 'set' ? 'New Balance' : 'Amount'}
                 </label>
                 <input
@@ -361,7 +361,7 @@ export default function UnitAdjustmentModal({
                   placeholder="Enter amount"
                 />
                 {amount > 0 && (
-                  <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">
+                  <p className="mt-2 tf-body-muted">
                     New balance will be:{' '}
                     <span className={`font-medium ${
                       projectedBalance < 0 ? 'text-red-600' : 'text-gray-900 dark:text-slate-50'
@@ -379,7 +379,7 @@ export default function UnitAdjustmentModal({
 
               {/* Reason (Required) */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Reason <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -394,7 +394,7 @@ export default function UnitAdjustmentModal({
 
               {/* Notes (Optional) */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Additional Notes
                 </label>
                 <textarea
@@ -410,7 +410,7 @@ export default function UnitAdjustmentModal({
               {/* Reference (Optional) */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-label mb-2">
                     Reference Type
                   </label>
                   <FilterSelect
@@ -428,7 +428,7 @@ export default function UnitAdjustmentModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-label mb-2">
                     Reference ID
                   </label>
                   <input

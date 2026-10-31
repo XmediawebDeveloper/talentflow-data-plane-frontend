@@ -97,8 +97,8 @@ export default function ContactCandidateModal({
               <Mail className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">Contact Candidate</h2>
-              <p className="text-sm text-gray-500 dark:text-slate-500 truncate">{candidateName}</p>
+              <h2 className="tf-section-title truncate">Contact Candidate</h2>
+              <p className="tf-body-muted truncate">{candidateName}</p>
             </div>
           </div>
           <button
@@ -155,7 +155,7 @@ export default function ContactCandidateModal({
             <div className="space-y-4">
               {/* Email Template Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Email Template
                 </label>
                 <FilterSelect
@@ -174,7 +174,7 @@ export default function ContactCandidateModal({
 
               {/* Recipient */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   To
                 </label>
                 <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800/50 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300">
@@ -184,7 +184,7 @@ export default function ContactCandidateModal({
 
               {/* Subject */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Subject
                 </label>
                 <input
@@ -198,7 +198,7 @@ export default function ContactCandidateModal({
 
               {/* Body */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Message
                 </label>
                 <textarea
@@ -226,7 +226,7 @@ export default function ContactCandidateModal({
 
               {/* Call Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Call Notes (Optional)
                 </label>
                 <textarea
@@ -240,7 +240,7 @@ export default function ContactCandidateModal({
 
               {/* Tips */}
               <div className="bg-brand-orange/5 ring-1 ring-brand-orange/20 rounded-lg p-4">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">Call Tips</h4>
+                <h4 className="tf-subsection-title mb-2">Call Tips</h4>
                 <ul className="space-y-1 text-sm text-gray-700 dark:text-slate-300">
                   <li>• Introduce yourself and your company</li>
                   <li>• Confirm their interest in the {jobTitle} position</li>
@@ -260,17 +260,17 @@ export default function ContactCandidateModal({
                   <Calendar className="w-5 h-5 text-brand-blue" />
                   <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Interview Details</span>
                 </div>
-                <div className="text-sm text-gray-700 dark:text-slate-300">
+                <div className="tf-body">
                   <strong>Position:</strong> {jobTitle}
                 </div>
-                <div className="text-sm text-gray-700 dark:text-slate-300">
+                <div className="tf-body">
                   <strong>Candidate:</strong> {candidateName}
                 </div>
               </div>
 
               {/* Date Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Interview Date
                 </label>
                 <DateField
@@ -283,7 +283,7 @@ export default function ContactCandidateModal({
 
               {/* Time Selection */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Interview Time
                 </label>
                 <input
@@ -296,7 +296,7 @@ export default function ContactCandidateModal({
 
               {/* Interview Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Interview Type
                 </label>
                 <FilterSelect
@@ -315,7 +315,7 @@ export default function ContactCandidateModal({
 
               {/* Additional Notes */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Additional Notes
                 </label>
                 <textarea
@@ -333,7 +333,7 @@ export default function ContactCandidateModal({
                   className="w-4 h-4 accent-brand-blue rounded focus:ring-brand-blue"
                   defaultChecked
                 />
-                <label htmlFor="sendConfirmation" className="text-sm text-gray-700 dark:text-slate-300">
+                <label htmlFor="sendConfirmation" className="tf-body">
                   Send email confirmation to candidate
                 </label>
               </div>

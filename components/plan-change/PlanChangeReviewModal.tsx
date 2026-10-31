@@ -61,14 +61,14 @@ function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeS
       </h4>
       <div className="flex items-center gap-4">
         <div className="text-center">
-          <p className="text-xs text-gray-500">Current</p>
+          <p className="tf-meta">Current</p>
           <p className="text-lg font-bold text-gray-900">
             ₹{oldPrice.toLocaleString()}
           </p>
         </div>
         <ArrowRight className={`w-5 h-5 ${increase ? 'text-red-500' : 'text-green-500'}`} />
         <div className="text-center">
-          <p className="text-xs text-gray-500">New</p>
+          <p className="tf-meta">New</p>
           <p className={`text-lg font-bold ${increase ? 'text-red-600' : 'text-green-600'}`}>
             ₹{newPrice.toLocaleString()}
           </p>
@@ -104,10 +104,10 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-white">
-              <th className="text-left px-3 py-2 font-semibold text-gray-600 text-xs">Quota</th>
-              <th className="text-center px-3 py-2 font-semibold text-gray-600 text-xs">Current</th>
-              <th className="text-center px-3 py-2 font-semibold text-gray-600 text-xs">New</th>
-              <th className="text-center px-3 py-2 font-semibold text-gray-600 text-xs">Change</th>
+              <th className="text-left px-3 py-2 tf-th">Quota</th>
+              <th className="text-center px-3 py-2 tf-th">Current</th>
+              <th className="text-center px-3 py-2 tf-th">New</th>
+              <th className="text-center px-3 py-2 tf-th">Change</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -274,14 +274,14 @@ export default function PlanChangeReviewModal() {
         {/* Notification message */}
         {currentChange.notification_message && (
           <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 shrink-0">
-            <p className="text-sm text-gray-700">{currentChange.notification_message}</p>
+            <p className="tf-body">{currentChange.notification_message}</p>
           </div>
         )}
 
         {/* Changes summary - scrollable */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {!hasChanges && (
-            <p className="text-gray-500 text-sm text-center py-8">No detailed change information available.</p>
+            <p className="tf-body-muted text-center py-8">No detailed change information available.</p>
           )}
 
           {summary.price_change && (
@@ -303,7 +303,7 @@ export default function PlanChangeReviewModal() {
           {/* Impact explanation */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
             <h4 className="text-sm font-semibold text-gray-700">What happens next?</h4>
-            <div className="space-y-1.5 text-xs text-gray-600">
+            <div className="space-y-1.5 tf-meta-strong">
               <p className="flex items-start gap-2">
                 <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" />
                 <span><strong>Accept:</strong> Your subscription continues with the updated plan terms from the next billing cycle.</span>

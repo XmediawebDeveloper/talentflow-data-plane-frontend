@@ -60,12 +60,12 @@ export function AnalysisView({ data }: { data: DashboardData }) {
             <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><Target size={20} className="text-emerald-600" /></div>
             <div>
               <h3 className="text-lg font-semibold">Must-Have Skills Coverage</h3>
-              <p className="text-xs text-gray-500">Critical competencies (70% weight)</p>
+              <p className="tf-meta">Critical competencies (70% weight)</p>
             </div>
           </div>
           <div className="flex items-end gap-3 mb-4">
             <div className="text-5xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(mthPct)}%</div>
-            <div className="text-sm text-gray-500 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{mthCov}/{mthTotal} skills</div>
+            <div className="tf-body-muted mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{mthCov}/{mthTotal} skills</div>
           </div>
           <div className="w-full h-4 bg-emerald-200 rounded-full overflow-hidden mb-4">
             <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-500" style={{ width: `${mthPct}%` }} />
@@ -82,12 +82,12 @@ export function AnalysisView({ data }: { data: DashboardData }) {
             <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center"><TrendingUp size={20} className="text-amber-600" /></div>
             <div>
               <h3 className="text-lg font-semibold">Nice-to-Have Skills Coverage</h3>
-              <p className="text-xs text-gray-500">Additional competencies (20% weight)</p>
+              <p className="tf-meta">Additional competencies (20% weight)</p>
             </div>
           </div>
           <div className="flex items-end gap-3 mb-4">
             <div className="text-5xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(nthPct)}%</div>
-            <div className="text-sm text-gray-500 mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{nthCov}/{nthTotal} skills</div>
+            <div className="tf-body-muted mb-2" style={{ fontFamily: 'var(--font-mono)' }}>{nthCov}/{nthTotal} skills</div>
           </div>
           <div className="w-full h-4 bg-amber-200 rounded-full overflow-hidden mb-4">
             <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600 transition-all duration-500" style={{ width: `${nthPct}%` }} />
@@ -105,7 +105,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl font-bold">Must-Have Skills Analysis</h2>
-            <p className="text-sm text-gray-500">Core competencies • {Math.round(mthPct)}% assessed</p>
+            <p className="tf-body-muted">Core competencies • {Math.round(mthPct)}% assessed</p>
           </div>
           <div className="space-y-4">
             {data.mustHaveClusters.map(c => (
@@ -119,7 +119,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-2xl font-bold">Nice-to-Have Skills Analysis</h2>
-            <p className="text-sm text-gray-500">Additional competencies • {Math.round(nthPct)}% assessed</p>
+            <p className="tf-body-muted">Additional competencies • {Math.round(nthPct)}% assessed</p>
           </div>
           <div className="space-y-4">
             {data.niceToHaveClusters.map(c => (
@@ -156,7 +156,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
       {allSkills.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
           <h2 className="text-2xl font-bold mb-6">Skills Coverage Status</h2>
-          <p className="text-sm text-gray-500 mb-6">Which skills were assessed during the interview</p>
+          <p className="tf-body-muted mb-6">Which skills were assessed during the interview</p>
           <div className="grid grid-cols-2 gap-4">
             {allSkills.map((skill, idx) => {
               const isCovered = skill.score > 0 || coveredSkillNames.has(skill.name.toLowerCase());
@@ -167,7 +167,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
                       {isCovered ? <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0" /> : <Circle size={18} className="text-gray-400 flex-shrink-0" />}
                       <div>
                         <div className="text-sm font-medium">{skill.name}</div>
-                        <div className="text-xs text-gray-500">{skill.clusterName}</div>
+                        <div className="tf-meta">{skill.clusterName}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">

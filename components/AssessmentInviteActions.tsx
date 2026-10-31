@@ -722,7 +722,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+          <h3 className="min-w-0 truncate tf-section-title">Edit Invitation</h3>
           <Button
             variant="secondary"
             size="sm"
@@ -734,7 +734,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
           </Button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
-          <p className="text-sm text-gray-500 dark:text-slate-500">
+          <p className="tf-body-muted">
             Update the candidate's details below. Saving will send them a fresh invitation link automatically.
           </p>
           <div>
@@ -750,7 +750,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {nameError && <p className="mt-1 text-xs text-destructive">{nameError}</p>}
+            {nameError && <p className="mt-1 tf-error">{nameError}</p>}
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
@@ -765,7 +765,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {emailError && <p className="mt-1 text-xs text-destructive">{emailError}</p>}
+            {emailError && <p className="mt-1 tf-error">{emailError}</p>}
           </div>
         </div>
         <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-2">
@@ -910,7 +910,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
                       <entry.Icon className="w-3.5 h-3.5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
+                      <p className="tf-meta">{formatIST(entry.at)}</p>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
                         {isCurrent && (
@@ -920,7 +920,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
                         )}
                       </div>
                       {TIMELINE_EVENT_DESCRIPTION[entry.label] && (
-                        <p className="text-xs text-gray-600 dark:text-slate-400 break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
+                        <p className="tf-meta-strong break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
                       )}
                     </div>
                   </li>
@@ -928,7 +928,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
               })}
             </ol>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
+            <p className="tf-body-muted py-6 text-center">No history recorded yet.</p>
           )}
         </div>
       </DialogContent>

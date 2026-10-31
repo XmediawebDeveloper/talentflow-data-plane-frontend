@@ -3,6 +3,9 @@
 import { AlertTriangle, Briefcase, Info, Loader2 } from 'lucide-react';
 import { getJDDisableImpactModules } from '@/lib/utils/jdUsageModules';
 import { Button } from '@/components/ui/button';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import type { Job } from '@/lib/types/types';
 
 export interface DisableJobModalProps {
   isOpen: boolean;
@@ -12,6 +15,12 @@ export interface DisableJobModalProps {
    * exactly as the archive confirm's chip does for the same job.
    */
   jobLabel: string;
+  /**
+   * The ONE job version being disabled. Given, the header names it the way the
+   * lists do — Job ID badge, job name, job version pill — in place of the grey
+   * `jobLabel` pill. Bulk disable has no single job and leaves it out.
+   */
+  job?: Pick<Job, 'job_id' | 'title' | 'versionNumber'> | null;
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
@@ -32,6 +41,7 @@ export interface DisableJobModalProps {
 export default function DisableJobModal({
   isOpen,
   jobLabel,
+  job,
   onConfirm,
   onCancel,
   isLoading = false,
@@ -56,21 +66,32 @@ export default function DisableJobModal({
               <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
                 Are you sure you want to disable the following job description?
               </p>
-              {/* The house grey pill, so the JD reads as a chip and not as body copy. */}
+              {job ? (
+                /* Wraps on a phone: the version pill drops below a long name. */
+                <div className="mt-3 flex flex-wrap items-center gap-2 min-w-0">
+                  {job.job_id && <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>}
+                  <span className="min-w-0 [overflow-wrap:anywhere] text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50">
+                    {job.title || 'Untitled'}
+                  </span>
+                  {job.versionNumber ? <VersionPill kind="job" version={job.versionNumber} /> : null}
+                </div>
+              ) : (
+              /* The house grey pill, so the JD reads as a chip and not as body copy. */
               <span className="mt-3 inline-flex max-w-full items-start sm:items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0 text-gray-500 dark:text-slate-400" />
                 {/* Wraps on a phone: truncating there cut even "1 Job Description Selected" short. */}
-                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-cell-name">
                   {jobLabel}
                 </span>
               </span>
+              )}
             </div>
           </div>
 
           {/* What stops */}
           <div className="mt-5 flex items-start gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/70 px-4 py-3">
             <Info className="w-5 h-5 shrink-0 text-destructive mt-0.5" />
-            <p className="text-sm text-gray-700 dark:text-slate-300">
+            <p className="tf-body">
               If you disable this JD, it will{' '}
               <span className="font-semibold text-destructive">not</span>{' '}
               be available to use in the following features:
@@ -79,7 +100,7 @@ export default function DisableJobModal({
 
           <ul className="mt-4 space-y-2.5">
             {modules.map(module => (
-              <li key={module.key} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+              <li key={module.key} className="flex items-start gap-2.5 tf-body">
                 <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-destructive shrink-0" aria-hidden="true" />
                 <span>
                   <span className="font-semibold text-gray-900 dark:text-slate-100">{module.name}</span>

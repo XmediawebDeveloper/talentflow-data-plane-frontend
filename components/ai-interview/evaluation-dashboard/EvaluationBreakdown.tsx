@@ -59,7 +59,7 @@ export function EvaluationBreakdown({
         </div>
         <div>
           <h2 className="text-2xl font-bold">Evaluation Breakdown</h2>
-          <p className="text-sm text-gray-500">Detailed scoring methodology and calculations</p>
+          <p className="tf-body-muted">Detailed scoring methodology and calculations</p>
         </div>
       </div>
 

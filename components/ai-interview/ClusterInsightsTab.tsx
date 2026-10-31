@@ -294,7 +294,7 @@ export default function ClusterInsightsTab({
 
   if (!clusterInsights || clusterInsights.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500 text-sm">
+      <div className="text-center py-16 tf-body-muted">
         No cluster insights available for this interview.
       </div>
     );
@@ -321,7 +321,7 @@ export default function ClusterInsightsTab({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-medium text-gray-300">Overall Capability Score</div>
-              <div className="text-xs text-gray-500 mt-0.5">
+              <div className="tf-meta mt-0.5">
                 Weighted across all sections
               </div>
             </div>
@@ -388,7 +388,7 @@ export default function ClusterInsightsTab({
                         className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors text-left"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">{cluster.cluster_name}</span>
+                          <span className="tf-cell-name">{cluster.cluster_name}</span>
                           <span className={`px-1.5 py-0.5 text-2xs rounded border ${
                             (cluster.priority_label === 'High' || cluster.priority >= 3) ? 'bg-success-subtle text-success border-success-line' :
                             (cluster.priority_label === 'Medium' || cluster.priority === 2) ? 'bg-warning-subtle text-warning border-warning-line' :

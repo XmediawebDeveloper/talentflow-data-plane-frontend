@@ -189,19 +189,19 @@ const helpArticles: Record<string, {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Active Job Openings</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Track open positions and their status</div>
+              <div className="tf-card-desc">Track open positions and their status</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Recent Candidates</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Latest applications and uploads</div>
+              <div className="tf-card-desc">Latest applications and uploads</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Pending Assessments</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Assessments awaiting completion</div>
+              <div className="tf-card-desc">Assessments awaiting completion</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Team Activity</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Recent actions by team members</div>
+              <div className="tf-card-desc">Recent actions by team members</div>
             </div>
           </div>
         </section>
@@ -255,23 +255,23 @@ const helpArticles: Record<string, {
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-3">
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Job Title</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">e.g., "Senior React Developer"</span>
+                <span className="tf-body-muted">e.g., "Senior React Developer"</span>
               </div>
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Department</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Select or create new</span>
+                <span className="tf-body-muted">Select or create new</span>
               </div>
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Employment Type</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Full-time, Part-time, Contract</span>
+                <span className="tf-body-muted">Full-time, Part-time, Contract</span>
               </div>
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Location</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Office location or "Remote"</span>
+                <span className="tf-body-muted">Office location or "Remote"</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Salary Range</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Optional but recommended</span>
+                <span className="tf-body-muted">Optional but recommended</span>
               </div>
             </div>
           </Step>
@@ -282,10 +282,10 @@ const helpArticles: Record<string, {
             <div className="mb-4">
               <h5 className="font-medium text-gray-800 dark:text-slate-200 mb-2">Experience Level</h5>
               <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Entry (0-2 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Mid (2-5 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Senior (5-8 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Lead (8+ yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Entry (0-2 yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Mid (2-5 yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Senior (5-8 yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Lead (8+ yrs)</span>
               </div>
             </div>
 
@@ -330,28 +330,28 @@ const helpArticles: Record<string, {
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Use clear, inclusive language</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Avoid jargon and gendered terms</div>
+                <div className="tf-card-desc">Avoid jargon and gendered terms</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Include salary range</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Increases application quality by 30%</div>
+                <div className="tf-card-desc">Increases application quality by 30%</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Highlight growth opportunities</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Mention career paths and learning</div>
+                <div className="tf-card-desc">Mention career paths and learning</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Describe your team</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Team size, reporting structure, collaboration style</div>
+                <div className="tf-card-desc">Team size, reporting structure, collaboration style</div>
               </div>
             </div>
           </div>
@@ -363,26 +363,26 @@ const helpArticles: Record<string, {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                  <th className="px-4 py-3 text-left tf-th">Action</th>
+                  <th className="px-4 py-3 text-left tf-th">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
                 <tr>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Edit JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Click on any JD to modify details</td>
+                  <td className="px-4 py-3 tf-card-desc">Click on any JD to modify details</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Clone JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Duplicate an existing JD as a template</td>
+                  <td className="px-4 py-3 tf-card-desc">Duplicate an existing JD as a template</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Archive JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Close positions no longer hiring</td>
+                  <td className="px-4 py-3 tf-card-desc">Close positions no longer hiring</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Delete JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Permanently remove (requires confirmation)</td>
+                  <td className="px-4 py-3 tf-card-desc">Permanently remove (requires confirmation)</td>
                 </tr>
               </tbody>
             </table>
@@ -457,19 +457,19 @@ const helpArticles: Record<string, {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Field</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                  <th className="px-4 py-3 text-left tf-th">Field</th>
+                  <th className="px-4 py-3 text-left tf-th">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Name</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Candidate's full name</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Email</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Contact email address</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Phone</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Phone number(s)</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Location</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">City, State, Country</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Experience</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Total years of experience</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Skills</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Technical and soft skills</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Education</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Degrees, institutions, years</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Work History</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Companies, roles, durations</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Name</td><td className="px-4 py-3 tf-card-desc">Candidate's full name</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Email</td><td className="px-4 py-3 tf-card-desc">Contact email address</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Phone</td><td className="px-4 py-3 tf-card-desc">Phone number(s)</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Location</td><td className="px-4 py-3 tf-card-desc">City, State, Country</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Experience</td><td className="px-4 py-3 tf-card-desc">Total years of experience</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Skills</td><td className="px-4 py-3 tf-card-desc">Technical and soft skills</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Education</td><td className="px-4 py-3 tf-card-desc">Degrees, institutions, years</td></tr>
+                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Work History</td><td className="px-4 py-3 tf-card-desc">Companies, roles, durations</td></tr>
               </tbody>
             </table>
           </div>
@@ -498,22 +498,22 @@ const helpArticles: Record<string, {
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <Search className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Search</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Find by name, skills, or experience</div>
+              <div className="tf-card-desc">Find by name, skills, or experience</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <BarChart3 className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Filter</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Filter by location, experience, skills</div>
+              <div className="tf-card-desc">Filter by location, experience, skills</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Folders</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Organize by position or stage</div>
+              <div className="tf-card-desc">Organize by position or stage</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <Upload className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Export</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Download candidate data</div>
+              <div className="tf-card-desc">Download candidate data</div>
             </div>
           </div>
         </section>
@@ -544,7 +544,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
               <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">1</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">Select JD</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Choose the position</div>
+              <div className="tf-card-desc mt-1">Choose the position</div>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
@@ -552,7 +552,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
               <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">2</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">Select Resumes</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Pick candidates to evaluate</div>
+              <div className="tf-card-desc mt-1">Pick candidates to evaluate</div>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
@@ -560,7 +560,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
               <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">3</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">AI Analysis</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">AI compares against requirements</div>
+              <div className="tf-card-desc mt-1">AI compares against requirements</div>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
@@ -568,7 +568,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-success-subtle rounded-xl ring-1 ring-success-line">
               <div className="w-12 h-12 bg-success-strong text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">4</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">Get Scores</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">View ranked results</div>
+              <div className="tf-card-desc mt-1">View ranked results</div>
             </div>
           </div>
         </section>
@@ -603,7 +603,7 @@ const helpArticles: Record<string, {
               <div className="text-2xl font-bold text-gray-500 dark:text-slate-400">Below 60</div>
               <div>
                 <div className="font-medium text-gray-700 dark:text-slate-300">Low Match</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">May not meet key requirements</div>
+                <div className="tf-card-desc">May not meet key requirements</div>
               </div>
             </div>
           </div>
@@ -640,19 +640,19 @@ const helpArticles: Record<string, {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Skills Match</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">How well technical skills align</div>
+              <div className="tf-card-desc">How well technical skills align</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Experience Match</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Years and relevance of experience</div>
+              <div className="tf-card-desc">Years and relevance of experience</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Education Match</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Qualifications alignment</div>
+              <div className="tf-card-desc">Qualifications alignment</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Overall Fit</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Combined assessment score</div>
+              <div className="tf-card-desc">Combined assessment score</div>
             </div>
           </div>
         </section>
@@ -684,28 +684,28 @@ const helpArticles: Record<string, {
                 <ClipboardCheck className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Technical Quiz</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Multiple choice, coding questions, and problem-solving tests</p>
+              <p className="tf-card-desc">Multiple choice, coding questions, and problem-solving tests</p>
             </div>
             <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Skill Assessment</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Practical tasks and hands-on exercises</p>
+              <p className="tf-card-desc">Practical tasks and hands-on exercises</p>
             </div>
             <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <MessageCircle className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">AI Interview</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Automated video interviews with AI analysis</p>
+              <p className="tf-card-desc">Automated video interviews with AI analysis</p>
             </div>
             <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <Settings className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Custom Assessment</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Your own evaluation criteria and scoring</p>
+              <p className="tf-card-desc">Your own evaluation criteria and scoring</p>
             </div>
           </div>
         </section>
@@ -875,19 +875,19 @@ const helpArticles: Record<string, {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Channels</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Create topic-based discussions</div>
+              <div className="tf-card-desc">Create topic-based discussions</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Direct Messages</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Private 1-on-1 conversations</div>
+              <div className="tf-card-desc">Private 1-on-1 conversations</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Share Candidates</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Discuss profiles with team</div>
+              <div className="tf-card-desc">Discuss profiles with team</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Notifications</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Stay updated on mentions</div>
+              <div className="tf-card-desc">Stay updated on mentions</div>
             </div>
           </div>
         </section>
@@ -910,42 +910,42 @@ const helpArticles: Record<string, {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-white dark:bg-slate-900">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Feature</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Starter</th>
+                  <th className="px-4 py-3 text-left tf-th border border-gray-200 dark:border-slate-700">Feature</th>
+                  <th className="px-4 py-3 text-center tf-th border border-gray-200 dark:border-slate-700">Starter</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-brand-blue/5 text-brand-blue">Professional</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Enterprise</th>
+                  <th className="px-4 py-3 text-center tf-th border border-gray-200 dark:border-slate-700">Enterprise</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Users</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">3</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">10</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Unlimited</td>
+                  <td className="px-4 py-3 tf-td border border-gray-200 dark:border-slate-700">Users</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">3</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">10</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Unlimited</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Resume Storage</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">100/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">500/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Unlimited</td>
+                  <td className="px-4 py-3 tf-td border border-gray-200 dark:border-slate-700">Resume Storage</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">100/mo</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">500/mo</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Unlimited</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Assessments</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">10/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">50/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Unlimited</td>
+                  <td className="px-4 py-3 tf-td border border-gray-200 dark:border-slate-700">Assessments</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">10/mo</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">50/mo</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Unlimited</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">AI Features</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Basic</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">Advanced</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Premium</td>
+                  <td className="px-4 py-3 tf-td border border-gray-200 dark:border-slate-700">AI Features</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Basic</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">Advanced</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Premium</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Support</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Email</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">Priority</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Dedicated</td>
+                  <td className="px-4 py-3 tf-td border border-gray-200 dark:border-slate-700">Support</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Email</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">Priority</td>
+                  <td className="px-4 py-3 tf-card-desc text-center border border-gray-200 dark:border-slate-700">Dedicated</td>
                 </tr>
               </tbody>
             </table>
@@ -1001,7 +1001,7 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Need Billing Help?</h2>
           <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
             <p className="mb-3 text-gray-900 dark:text-slate-50">Contact our billing support team:</p>
-            <div className="space-y-2 text-sm text-gray-600 dark:text-slate-400">
+            <div className="space-y-2 tf-card-desc">
               <div>Email: <span className="text-brand-blue">billing@talentflow.com</span></div>
               <div>Include your account ID for faster support</div>
             </div>
@@ -1068,20 +1068,20 @@ const helpArticles: Record<string, {
               </div>
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Match Score</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Overall compatibility rating (0-100)</div>
+                <div className="tf-card-desc">Overall compatibility rating (0-100)</div>
               </div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Key Strengths</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Why this candidate is a good fit for the role</div>
+              <div className="tf-card-desc">Why this candidate is a good fit for the role</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Potential Gaps</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Areas that may need attention or training</div>
+              <div className="tf-card-desc">Areas that may need attention or training</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Recommended Actions</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Suggested next steps for this candidate</div>
+              <div className="tf-card-desc">Suggested next steps for this candidate</div>
             </div>
           </div>
         </section>
@@ -1095,16 +1095,16 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Taking Action on Matches</h2>
           <p className="text-gray-600 dark:text-slate-400 mb-4">For each matched candidate, you can:</p>
           <div className="grid md:grid-cols-2 gap-3">
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">View Profile</span> - See full resume details
             </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">Score Resume</span> - Get detailed scoring
             </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">Invite to Assessment</span> - Send test invitation
             </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">Add to Shortlist</span> - Save for later
             </div>
           </div>
@@ -1162,11 +1162,11 @@ export default function HelpCenterPage() {
                 <selectedArticle.icon className="h-5 w-5 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{selectedArticle.title}</h1>
-                <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{selectedArticle.subtitle}</p>
+                <h1 className="tf-page-title">{selectedArticle.title}</h1>
+                <p className="mt-0.5 tf-card-desc">{selectedArticle.subtitle}</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-500">
+            <div className="flex flex-wrap items-center gap-3 tf-body-muted">
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {selectedArticle.readTime} read
@@ -1182,7 +1182,7 @@ export default function HelpCenterPage() {
 
           {/* Related articles */}
           <div className="mt-10">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-4">Related Articles</h3>
+            <h3 className="tf-section-title mb-4">Related Articles</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {Object.values(helpArticles)
                 .filter(a => a.id !== selectedArticle.id && a.category === selectedArticle.category)
@@ -1199,7 +1199,7 @@ export default function HelpCenterPage() {
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-semibold text-gray-900 dark:text-slate-50 group-hover:text-brand-blue">{article.title}</h4>
-                        <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">{article.readTime} read</p>
+                        <p className="tf-body-muted mt-0.5">{article.readTime} read</p>
                       </div>
                     </div>
                   </button>
@@ -1225,8 +1225,8 @@ export default function HelpCenterPage() {
               <LifeBuoy className="h-5 w-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Help Center</h1>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Find answers, guides, and tutorials to help you succeed</p>
+              <h1 className="tf-page-title">Help Center</h1>
+              <p className="mt-0.5 tf-card-desc">Find answers, guides, and tutorials to help you succeed</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1269,7 +1269,7 @@ export default function HelpCenterPage() {
           >
             <Lightbulb className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Quick Start Guide</div>
-            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
           </button>
           <button
             onClick={() => router.push('/support-tickets')}
@@ -1277,7 +1277,7 @@ export default function HelpCenterPage() {
           >
             <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Contact Support</div>
-            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Get personalized help</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">Get personalized help</div>
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
@@ -1285,7 +1285,7 @@ export default function HelpCenterPage() {
           >
             <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
             <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Settings</div>
-            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Configure your account</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">Configure your account</div>
           </button>
         </div>
 
@@ -1317,7 +1317,7 @@ export default function HelpCenterPage() {
                       <h3 className="font-semibold text-gray-900 dark:text-slate-50 group-hover:text-brand-blue mb-1 line-clamp-2">
                         {article.title}
                       </h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                      <div className="flex items-center gap-2 tf-body-muted">
                         <Clock className="w-3.5 h-3.5" />
                         {article.readTime}
                       </div>

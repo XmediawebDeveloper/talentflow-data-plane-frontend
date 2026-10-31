@@ -93,7 +93,7 @@ function SegmentedBar({
 function BarLegend({ nonDemonstrated, demonstrated, unit }: { nonDemonstrated: number; demonstrated: number; unit?: string }) {
   const suffix = unit ? ` ${unit}` : '';
   return (
-    <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+    <div className="flex items-center gap-x-3 gap-y-1 flex-wrap tf-meta">
       <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
         <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
         <span className="font-semibold text-gray-900 dark:text-slate-100 tabular-nums">{nonDemonstrated}</span>
@@ -143,7 +143,7 @@ function ClusterCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-sm font-semibold leading-relaxed text-gray-900 break-words">{cluster.name}</div>
+            <div className="tf-cell-name leading-relaxed break-words">{cluster.name}</div>
             {/* Same priority colours as the Interview Details → Skill Clusters badges. */}
             <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${priorityBadgeCls}`}>
               {priorityText}
@@ -263,7 +263,7 @@ function SkillListTable({
                     <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 text-xs font-bold tabular-nums ${pr.color}`}>
                       {String(ci + 1).padStart(2, '0')}
                     </div>
-                    <div className="text-sm font-semibold text-gray-900 break-words">{c.name}</div>
+                    <div className="tf-cell-name break-words">{c.name}</div>
                     <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${pr.color}`}>
                       {tag} · {c.priority} Priority
                     </span>
@@ -508,7 +508,7 @@ export function CoverageV2({ data }: Props) {
       <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
         <div className="mb-4">
           <div className="text-base font-bold">Coverage Summary</div>
-          <div className="text-sm text-gray-500 dark:text-slate-400">Skills asked during the interview, out of the skills configured for each section.</div>
+          <div className="tf-body-muted">Skills asked during the interview, out of the skills configured for each section.</div>
         </div>
         <div className={`grid grid-cols-1 gap-4 ${bothSections ? 'md:grid-cols-2' : ''}`}>
           {data.sectionsPresent.mustHave && (

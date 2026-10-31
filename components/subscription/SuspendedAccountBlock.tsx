@@ -75,7 +75,7 @@ export default function SuspendedAccountBlock({
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">What does this mean?</h3>
-                  <p className="text-gray-600 text-sm">
+                  <p className="tf-card-desc">
                     Your account access has been temporarily restricted. You cannot access any features or data until this suspension is resolved.
                   </p>
                 </div>
@@ -87,7 +87,7 @@ export default function SuspendedAccountBlock({
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">How to resolve this?</h3>
-                  <p className="text-gray-600 text-sm">
+                  <p className="tf-card-desc">
                     Please contact our support team for assistance. They will help you understand the reason for suspension and guide you through the resolution process.
                   </p>
                 </div>
@@ -116,7 +116,7 @@ export default function SuspendedAccountBlock({
 
             {/* Support Info */}
             <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-center text-sm text-gray-500">
+              <p className="text-center tf-body-muted">
                 Need immediate assistance? Email us at{' '}
                 <a
                   href={`mailto:${contactEmail}`}
@@ -131,7 +131,7 @@ export default function SuspendedAccountBlock({
 
         {/* Additional Info */}
         <div className="mt-6 text-center">
-          <p className="text-gray-600 text-sm">
+          <p className="tf-card-desc">
             This is an automated system message. Your account data is safe and secure.
           </p>
         </div>

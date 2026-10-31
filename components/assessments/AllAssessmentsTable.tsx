@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, ASSESSMENT_JOB_DISABLED_MESSAGE, ASSESSMENT_JOB_ARCHIVED_MESSAGE } from '@/lib/utils/assessmentJobLock';
 import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import {
   DropdownMenu,
@@ -223,7 +224,7 @@ function CreatedBy({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
-      <span className="truncate text-sm text-gray-600 dark:text-slate-400" title={name}>
+      <span className="truncate tf-card-desc" title={name}>
         {name}
       </span>
     </span>
@@ -458,6 +459,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows]);
+  /* Keep those statuses live — a job disabled / archived / re-enabled
+     anywhere re-reads every row's job at once (see useJobStatusRefresh). */
+  useJobStatusRefresh(() => {
+    const ids = Array.from(new Set(rows.map((r) => r.jdId).filter((id): id is string => !!id)));
+    if (ids.length === 0) return;
+    loadJobVersionLineages(ids, { fresh: true })
+      .then((lineages) => {
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+        setJobLineageById((prev) => ({ ...prev, ...lineages }));
+      })
+      .catch(() => { /* keep what is shown; the next trigger tries again */ });
+  });
   /** The row's job badge: its linked job version's status, judged on the whole
    *  job. Nothing until that status has loaded. */
   const jobBadge = (row: AssessmentRow) => {
@@ -912,12 +925,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       version: row.assessmentVersion,
       createdAt: row.createdAt,
     })) return;
-    void runStatusAction(row, 'archive', () => assessmentService.update(row.id, { status: 'archived' }), 'Assessment archived');
+    void runStatusAction(row, 'archive', () => assessmentService.archive(row.id), 'Assessment archived');
   };
 
-  /* No dedicated unarchive endpoint exists for assessments: Archive is a
-     status write through PUT /assessments/{id}, so Unarchive is the same
-     write back to `published` — the Active status Archive is offered from. */
+  /* The dedicated /{id}/unarchive endpoint — restores the status the
+     assessment held right before it was archived, rather than hardcoding one. */
   const unarchiveRow = async (row: AssessmentRow) => {
     if (!canDeleteAssessment) return;
     const jobLock = await checkAssessmentJobLock(row.jdId);
@@ -925,7 +937,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       toast.error(jobLock);
       return;
     }
-    void runStatusAction(row, 'unarchive', () => assessmentService.update(row.id, { status: 'published' }), 'Assessment restored to Active');
+    void runStatusAction(row, 'unarchive', () => assessmentService.unarchive(row.id), 'Assessment restored to Active');
   };
 
   /* The page's own delete rules: drafts only (the endpoint's), and never once
@@ -995,8 +1007,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     const verb = bulkVerb;
     const { eligible, skippedCount } = bulkPlan(verb);
     const call = (row: AssessmentRow) =>
-      verb === 'archive' ? assessmentService.update(row.id, { status: 'archived' })
-        : verb === 'unarchive' ? assessmentService.update(row.id, { status: 'published' })
+      verb === 'archive' ? assessmentService.archive(row.id)
+        : verb === 'unarchive' ? assessmentService.unarchive(row.id)
           : assessmentService.delete(row.id);
     setBulkRunning(true);
     let done = 0;
@@ -1207,6 +1219,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       key: 'results', label: 'View Results', icon: BarChart, iconClassName: 'text-menu-icon-score',
       run: () => router.push(`/recruitment/assessments/${row.id}/results`),
     };
+    /* View Results is gated on the COMPLETED count, not invitations: with
+       nobody invited there's nothing to score either, so that case is folded
+       into the same disabled state with its own reason. */
+    const hasCompleted = row.completed > 0;
+    const resultsReason = hasCompleted
+      ? 'View results'
+      : row.invitations > 0
+        ? 'No candidates have completed this assessment yet'
+        : row.rawStatus === 'draft'
+          ? 'Publish the assessment to view results'
+          : 'Share the assessment to view results';
+    const gatedResults: RowAction = { ...results, disabled: !hasCompleted, title: resultsReason };
 
     /* With the host's extras (every tab on the Assessments page), the Total
        Jobs menu for the row's status, in its order: View, Edit, Share/Invite,
@@ -1214,14 +1238,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
        Unarchive, then Delete. Without them, the menu as it was, below. */
     const extra = extraRowActions?.(row.raw);
     if (extra) {
-      const shared = row.invitations > 0;
-      const gatedResults: RowAction = {
-        ...results,
-        disabled: !shared,
-        title: shared ? 'View results'
-          : row.rawStatus === 'draft' ? 'Publish the assessment to view results'
-          : 'Share the assessment to view results',
-      };
       const archive: RowAction = {
         key: 'archive', label: 'Archive', icon: Archive, iconClassName: 'text-menu-icon-archive',
         disabled: !canDeleteAssessment || !!jobLock,
@@ -1272,7 +1288,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             : jobLock ?? undefined,
           run: () => void archiveRow(row),
         };
-        actions.push(archive, view, results);
+        actions.push(archive, view, gatedResults);
         break;
       }
       case 'draft':
@@ -1306,13 +1322,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             run: () => void unarchiveRow(row),
           },
           view,
+          gatedResults,
         );
-        if (row.completed > 0) actions.push(results);
         break;
       default:
         // Completed (`closed`): nothing to change, only to read.
-        actions.push(view);
-        if (row.completed > 0) actions.push(results);
+        actions.push(view, gatedResults);
     }
     /* All tab: Edit on every row, following Track — the invitations sent
        (`invitations_count`) are what enable Track, so while none have gone
@@ -1375,10 +1390,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-7 h-7 text-destructive" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+      <h3 className="tf-card-title mb-1">
         Unable to load assessments
       </h3>
-      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+      <p className="tf-card-desc mb-4 max-w-md mx-auto">
         Something went wrong while loading the assessment list. Please try again.
       </p>
       <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
@@ -1401,14 +1416,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           carried over verbatim from the empty state the
           Archived tab used before it moved into this table,
           so the tab reads exactly as it did. */}
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+      <h3 className="tf-card-title mb-1">
         {isNarrowed
           ? 'No assessments found'
           : fixedStatus === 'archived'
             ? 'No archived assessments found.'
             : 'No assessments yet'}
       </h3>
-      <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
+      <p className="tf-card-desc mb-4 max-w-md mx-auto">
         {isNarrowed
           ? 'No assessments match your current search or filter criteria.'
           : fixedStatus === 'archived'
@@ -1497,10 +1512,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight">
+              <h1 className="tf-page-title mb-0.5">
                 {heading}
               </h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <p className="tf-card-desc">
                 {subheading}
               </p>
             </div>
@@ -1752,7 +1767,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {/* Select All — this page's rows. */}
-                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
+                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle tf-th">
                       {isLoading ? (
                         <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                       ) : (
@@ -1804,7 +1819,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     })}
                     <th
                       scope="col"
-                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"
+                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right tf-th tf-sticky-col"
                     >
                       {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                     </th>
@@ -2011,7 +2026,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               disabled: bulkRunning || eligible.length === 0,
             }]}
           >
-            <div className="space-y-3 text-sm text-gray-700 dark:text-slate-300">
+            <div className="space-y-3 tf-body">
               <p>
                 <span className="font-semibold">{eligible.length}</span> assessment{eligible.length === 1 ? '' : 's'} will be {copy.past}.
                 {bulkVerb === 'delete' && ' This cannot be undone.'}

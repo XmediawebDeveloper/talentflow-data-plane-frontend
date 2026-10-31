@@ -57,8 +57,8 @@ function InfoTile({ icon, label, children }: { icon: ReactNode; label: string; c
     <div className="flex items-start gap-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-gray-100 dark:bg-slate-800/50 dark:ring-slate-700/60">
       <span className="mt-0.5 shrink-0">{icon}</span>
       <div className="min-w-0">
-        <p className="text-xs text-gray-500 dark:text-slate-400">{label}</p>
-        <div className="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{children}</div>
+        <p className="tf-meta">{label}</p>
+        <div className="mt-0.5 truncate tf-cell-name">{children}</div>
       </div>
     </div>
   );
@@ -67,7 +67,7 @@ function InfoTile({ icon, label, children }: { icon: ReactNode; label: string; c
 function Section({ icon, title, children, className = '' }: { icon: ReactNode; title: string; children: ReactNode; className?: string }) {
   return (
     <section className={`overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ${className}`}>
-      <h3 className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-900 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-50">
+      <h3 className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2.5 tf-subsection-title dark:border-slate-700/60 dark:bg-slate-800/50">
         <span className="text-gray-500 dark:text-slate-400">{icon}</span>
         {title}
       </h3>
@@ -160,7 +160,7 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
               <div className="flex min-w-0 items-center gap-3">
                 <Package className="h-6 w-6 shrink-0 text-brand-blue" />
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-500 dark:text-slate-400">Plan</p>
+                  <p className="tf-meta">Plan</p>
                   <p className="truncate text-sm font-semibold text-brand-blue">{invoice.plan_name?.trim()}</p>
                 </div>
               </div>
@@ -182,8 +182,8 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
                   ...(invoice.next_billing_date ? [{ label: 'Next Billing', value: invoice.next_billing_date }] : []),
                 ].map((p, i) => (
                   <div key={p.label} className={`py-2 sm:py-0 ${i > 0 ? 'sm:pl-5' : ''}`}>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">{p.label}</p>
-                    <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(p.value)}</p>
+                    <p className="tf-meta">{p.label}</p>
+                    <p className="mt-0.5 tf-cell-name">{formatISTDate(p.value)}</p>
                   </div>
                 ))}
               </div>

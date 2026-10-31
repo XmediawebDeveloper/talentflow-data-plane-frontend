@@ -356,13 +356,13 @@ export default function PermissionsPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm truncate">{role.name}</p>
+                    <p className="tf-cell-name truncate">{role.name}</p>
                     {(role.is_system || role.code === 'recruiter') && (
                       <span className="text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
-                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-xs text-gray-500 dark:text-slate-500">
+                  <p className="tf-body-muted mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
+                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 tf-meta">
                     <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3 text-brand-blue/70" />{role.permission_count || role.permissions?.length || 0} perms</span>
                     <span className="inline-flex items-center gap-1"><Users className="w-3 h-3 text-brand-cyan/70" />{role.user_count} users</span>
                   </div>
@@ -378,7 +378,7 @@ export default function PermissionsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{selectedRole.name} Permissions</h2>
-                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate">{selectedRole.description || 'No description'}</p>
+                    <p className="tf-body-muted truncate">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                     {!selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
@@ -446,7 +446,7 @@ export default function PermissionsPage() {
                               }`}
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{permission.name}</p>
+                                <p className="tf-cell-name">{permission.name}</p>
                               </div>
                               {isEditing && !selectedRole.is_system && selectedRole.code !== 'recruiter' ? (
                                 <button
@@ -481,7 +481,7 @@ export default function PermissionsPage() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center justify-center h-40 sm:h-64 text-gray-500 dark:text-slate-500 text-sm">
+              <div className="flex items-center justify-center h-40 sm:h-64 tf-body-muted">
                 Select a role to view its permissions
               </div>
             )}

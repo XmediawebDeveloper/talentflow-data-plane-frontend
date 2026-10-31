@@ -65,7 +65,7 @@ export default function ExpiredAccountBlock({ adminEmail }: ExpiredAccountBlockP
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">What should you do?</h3>
-                  <p className="text-gray-600 text-sm">
+                  <p className="tf-card-desc">
                     Contact your organization's administrator and ask them to renew the subscription plan.
                     Once the plan is renewed, you will regain full access automatically.
                   </p>
@@ -102,7 +102,7 @@ export default function ExpiredAccountBlock({ adminEmail }: ExpiredAccountBlockP
         </div>
 
         <div className="mt-6 text-center">
-          <p className="text-gray-600 text-sm">
+          <p className="tf-card-desc">
             Your data is safe. Access will be restored once your administrator renews the plan.
           </p>
         </div>

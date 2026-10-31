@@ -58,7 +58,7 @@ export const Step2SectionHeader = ({
           <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
           {badge}
         </div>
-        <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">{hint}</p>
+        <p className="tf-body-muted mt-0.5">{hint}</p>
       </div>
     </div>
     {/* inlineActions: a flex wrapper, so the action centres on the heading

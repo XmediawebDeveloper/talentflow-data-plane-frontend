@@ -172,10 +172,10 @@ export function usePermissionChangeDialog() {
       actions={actions}
     >
       {opts && (
-        <div className="space-y-3 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
+        <div className="space-y-3 tf-body max-sm:text-[13px]">
           <div>{opts.summary}</div>
           {detailCount > 0 && (
-            <p className="text-xs text-gray-500 dark:text-slate-400">
+            <p className="tf-meta">
               All {detailCount} are listed below{detailCount > 6 ? ' — scroll to see every one' : ''}.
             </p>
           )}
@@ -211,7 +211,7 @@ export function usePermissionChangeDialog() {
                                 <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${permissionBadgeClass(permissionActionOf(code))}`}>
                                   <span className="text-xs font-semibold uppercase">{label[0] || 'P'}</span>
                                 </span>
-                                <p className="min-w-0 break-words text-sm max-sm:text-[13px] font-semibold leading-snug text-gray-900 dark:text-slate-50">{label}</p>
+                                <p className="min-w-0 break-words tf-cell-name max-sm:text-[13px] leading-snug">{label}</p>
                               </div>
                             );
                           })}

@@ -43,6 +43,9 @@ export interface ServerInviteCandidate {
   /** The latest resume score for this job, or null when never scored. */
   score: { percent: number; match_status: ServerMatchStatus; scored_at: string | null } | null;
   already_invited: boolean;
+  /** This resume's version and how many the candidate has, when the server sends them. */
+  version?: number | null;
+  version_count?: number | null;
 }
 
 export interface InviteCandidatesPage {

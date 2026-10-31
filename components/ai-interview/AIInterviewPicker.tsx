@@ -15,7 +15,8 @@ import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { isJdDisabled } from '@/lib/services/aiInterviewService';
+import { jdActionLockReason } from '@/lib/services/aiInterviewService';
+import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
 
@@ -210,10 +211,17 @@ export default function AIInterviewPicker({
   /* Active interview versions, newest first, searchable by job title, Job ID
      or interview ID. */
   const q = search.trim().toLowerCase();
-  // A disabled job's interviews can't take invites until it is enabled again.
+  // A disabled or archived job's interviews can't take invites until the job
+  // is enabled / unarchived again.
   const activeConfigs = configs
-    .filter((c) => normalizeConfigStatus(c.status) === 'published' && !isJdDisabled(c.jd_status))
+    .filter((c) => normalizeConfigStatus(c.status) === 'published' && !jdActionLockReason(c.jd_status))
     .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
+  /* The linked job version's Disabled / Archived / Draft badge beside the job
+     name — the AI Interview list's badge, so the picker reads the same. */
+  const jobBadge = (c: AIInterviewResponse) => {
+    const kind = jobStatusBadgeKind(c.jd_status);
+    return kind ? <JobStatusBadge kind={kind} title={jdActionLockReason(c.jd_status) ?? undefined} /> : null;
+  };
   const pickerRows = activeConfigs.filter((c) =>
     !q ||
     `${c.jd_title || ''} ${c.position || ''} ${c.display_id || ''} ${c.jd_short_id || ''}`
@@ -378,7 +386,7 @@ export default function AIInterviewPicker({
             />
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <span className="tf-card-desc">View:</span>
             {/* The Job Openings page's All / AI Generated / Manual segmented
                 toggle: tinted track, the active option a white chip. */}
             <div className={SEGMENT_TOGGLE}>
@@ -424,7 +432,7 @@ export default function AIInterviewPicker({
               <table className="w-full table-auto text-sm">
                 <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left tf-th" aria-label="Select" />
                     <th className={PICKER_TH}>JD ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>
@@ -465,9 +473,12 @@ export default function AIInterviewPicker({
                           {config.jd_short_id ? <JobIdBadge>{config.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 align-middle max-w-[16rem]">
-                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
-                            {config.jd_title || config.position || 'Untitled'}
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
+                              {config.jd_title || config.position || 'Untitled'}
+                            </span>
+                            {jobBadge(config)}
+                          </div>
                         </td>
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-blue bg-brand-blue/10 ring-brand-blue/20">
@@ -568,6 +579,7 @@ export default function AIInterviewPicker({
                     <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0" title={config.jd_title || config.position || 'Untitled'}>
                       {config.jd_title || config.position || 'Untitled'}
                     </h3>
+                    {jobBadge(config)}
                   </div>
 
                   {/* Status */}
@@ -584,7 +596,7 @@ export default function AIInterviewPicker({
                       <div key={key} className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                          <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{value}</span>
+                          <span className="tf-cell-name truncate">{value}</span>
                         </div>
                         <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                       </div>
@@ -654,7 +666,7 @@ export default function AIInterviewPicker({
                       /* Mode and Rounds — the Active tab's two columns. */
                       renderChildDetail={(child) => {
                         const source = configOf(child.id, child.jd_id);
-                        if (!source) return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+                        if (!source) return <span className="tf-body-muted">&mdash;</span>;
                         const mode = modeFromConfig(source.special_instructions, source.duration_minutes);
                         return (
                           <span className="text-sm font-medium text-gray-900 dark:text-slate-100">

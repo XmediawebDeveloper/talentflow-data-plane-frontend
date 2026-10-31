@@ -58,7 +58,7 @@ export function OverallSummary({ finalScore, mustHaveScore, niceToHaveScore }: O
 
         <div className="ml-12 flex flex-col items-center">
           <CircularProgress value={finalScore} max={100} size={220} strokeWidth={14} />
-          <p className="text-xs text-gray-500 mt-4 text-center max-w-[220px]">
+          <p className="tf-meta mt-4 text-center max-w-[220px]">
             Weighted average across all evaluation criteria
           </p>
         </div>

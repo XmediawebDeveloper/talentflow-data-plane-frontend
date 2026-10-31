@@ -503,7 +503,7 @@ export default function PricingPage() {
         {error && (
           <div className="text-center mb-8 p-6 bg-red-50 dark:bg-red-900/20 rounded-xl">
             <p className="text-red-600 dark:text-red-400">Failed to load pricing plans</p>
-            <p className="text-sm text-gray-500 mt-2">{error}</p>
+            <p className="tf-body-muted mt-2">{error}</p>
           </div>
         )}
 
@@ -721,7 +721,7 @@ export default function PricingPage() {
                           {isTrialPlan ? (
                             <div className="flex items-baseline gap-2">
                               <span className="text-3xl font-bold text-gray-900 dark:text-white">Free</span>
-                              <span className="text-gray-500 text-sm">for {plan.trialDays} {plan.trialDays === 1 ? 'day' : 'days'}</span>
+                              <span className="tf-body-muted">for {plan.trialDays} {plan.trialDays === 1 ? 'day' : 'days'}</span>
                             </div>
                           ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
                             <>
@@ -1004,7 +1004,7 @@ export default function PricingPage() {
           {addonsError && (
             <div className="text-center mb-8 p-6 bg-red-50 dark:bg-red-900/20 rounded-xl">
               <p className="text-red-600 dark:text-red-400">Failed to load add-ons</p>
-              <p className="text-sm text-gray-500 mt-2">{addonsError}</p>
+              <p className="tf-body-muted mt-2">{addonsError}</p>
             </div>
           )}
 

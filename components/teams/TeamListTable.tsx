@@ -40,8 +40,8 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
               className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
             >
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
-                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                <span className="block truncate tf-cell-name max-sm:text-[13px]">{team.name}</span>
+                <span className="mt-0.5 flex min-w-0 items-center gap-1 tf-meta">
                   {team.team_lead ? (
                     <>
                       <Crown className="h-3 w-3 shrink-0 text-brand-blue/60 dark:text-blue-300/70" />

@@ -59,7 +59,7 @@ export default function DashboardRecentActivity({ loading, items }: Props) {
       <header className="mb-5 flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Activity</h2>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-500">What&apos;s happened across your workspace.</p>
+          <p className="mt-0.5 tf-meta">What&apos;s happened across your workspace.</p>
         </div>
         <Link
           href="/audits/activity"
@@ -88,7 +88,7 @@ export default function DashboardRecentActivity({ loading, items }: Props) {
             <Activity className="h-5 w-5" />
           </div>
           <p className="text-sm font-medium text-gray-700 dark:text-slate-300">No recent activity yet</p>
-          <p className="mt-0.5 max-w-[220px] text-xs text-gray-500 dark:text-slate-500">
+          <p className="mt-0.5 max-w-[220px] tf-meta">
             Your team&apos;s actions will show up here as they happen.
           </p>
         </div>

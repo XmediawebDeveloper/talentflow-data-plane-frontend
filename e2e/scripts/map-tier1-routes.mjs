@@ -591,7 +591,7 @@ const ASSERT_BY_ROUTE = {
  * documented columns over real rows.
  */
 const ASSERT_BY_ROUTE_CARD = {
-  "/audits/trail": { kind: "all_text_visible", value: "Timestamp|Action|Error Origin|Refund Flag|Units",
+  "/audits/trail": { kind: "all_text_visible", value: "Timestamp|Action|Status|Refund Flag|Units",
     note: "Row-specific audit_logs column values are a Tier-2 database assertion; this pins the trail's rendered columns" },
   "/recruitment/resume-scoring": { kind: "all_text_visible", value: "Candidate Name|Match Status|Score %" },
   "/recruitment/resume-database": { kind: "all_text_visible", value: "Candidate Name|Skills|Experience" },
